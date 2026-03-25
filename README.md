@@ -1,7 +1,9 @@
 # FantasyLeague
 
 ## Description
-Target audience is players and watchers of Kanaliiga, but the design can be made general enough to function league agnostic. Idea of a Fantasy league typically is that the participating **Users** are building their dream team (**Roster**) with some limitations and over the season they are tracking the progression of their team and the results between different users **Rosters** are made visible to other **Users** via **Leaderboards**.
+Idea of a Fantasy league typically is that the participating **Users** are building their dream team (**Roster**) with some limitations and over the season they are tracking the progression of their team and the results between different users **Rosters** are made visible to other **Users** via **Leaderboards**.
+
+Target audience is players and watchers of Kanaliiga, but the design can be made general enough to function league agnostic. 
 
 ## Key Features
 - Simple login and account management
