@@ -7,40 +7,48 @@ Target audience is players and watchers of Kanaliiga, but the design can be made
 - Simple login and account management
 - Functionality for **User** to obtain **Card** from **Deck**
 - Ability for **User** to set **Cards** as their **Roster**
-- Visibility and trackability 
+- Leaderboard for both **Player** and **Roster** performances
 
 ## Terminology
-### League
+#### League
 League that the matches take place in. This is the single id that is combining all of the players, teams and matches. It is the initial value that is used to create the database required
 
 Relevant endpoints:
 https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id
 https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id_select_matches
 
-### Match
-A single played map as part of a tournament. Contains two teams, 10 players and a lot of additional data from the OpenDota API endpoint
+#### Match
+A single played map as part of a tournament. Contains two teams, 10 players and a lot of additional data from the OpenDota API endpoint. Match endpoint also has extremely robust players performance metrics that can be used to determine the fantasy points
 
 Relevant endpoint:
 https://docs.opendota.com/#tag/matches/operation/get_matches_by_match_id
 
-### Team
-Team that is taking part in the league and consists of players. Not immediately needed, but should be included to enable future team based metrics and leaderboards
-### Player
+#### Weight
+Predetermined factor that assigns a weight to each attribute from **Match** to **Player** in order to fairly determine how "valuable" performance metrics are in relation to each other.
+
+#### Fantasy Points
+Amount of points accumulated by a **Player** over a single **Match** according to predermined **Weights**
+
+#### Player
 Player that has participated in a match that is tied to the current tournament
 
 Endpoint:
 https://docs.opendota.com/#tag/players/operation/get_players_by_account_id
 
-### User
+#### Team
+Team that is taking part in the league and consists of players. Not immediately needed, but should be included to enable future team based metrics and leaderboards
+
+
+#### User
 User of the fantasy league, this is not necessarily limited only to the players as ideally the fantasy league is for watchers as well
 
-### Card
+#### Card
 Player instance that is "owned"/"assigned" to a User that determines their "Roster" for the fantasyleague
 
-### Deck
+#### Deck
 Bankend existing containing "cards" in a table. Deck is mostly a documentation reference and card table should be called cards for naming consistency. In initial stages the deck is likely just populated from a json, but later should be automated at the start of season once the players and teams are enrolled to the league.
 
-### Roster
+#### Roster
 Active "Cards" that "User" has set that will be determining how they are scoring on the fantasy league. This part is the most UX intensive and hopefully someone more experienced can actually build this.
 
 ## Architecture
