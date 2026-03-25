@@ -9,6 +9,26 @@ Target audience is players and watchers of Kanaliiga, but the design can be made
 - Ability for **User** to set **Cards** as their **Roster**
 - Leaderboard for both **Player** and **Roster** performances
 
+### Next steps
+#### MVP User
+1. Create DB table for users
+2. populate it with test users
+
+#### MVP Card
+1. Create DB table for cards
+2. Create json to populate the table
+
+#### FrontEnd proto
+Frontend built on simple stack to enable having buttons for rest of the features
+
+#### User creation
+1. Field for username
+2. Field for password
+3. Button for saving the values to User -table
+
+#### Obtaining Card
+Button for randomizing from **Deck** and returning the **Card** information. **UserID** needs to be marked in the same transaction so the card is claimed.
+
 ## Terminology
 #### League
 League that the matches take place in. This is the single id that is combining all of the players, teams and matches. It is the initial value that is used to create the database required
@@ -37,7 +57,6 @@ https://docs.opendota.com/#tag/players/operation/get_players_by_account_id
 
 #### Team
 Team that is taking part in the league and consists of players. Not immediately needed, but should be included to enable future team based metrics and leaderboards
-
 
 #### User
 User of the fantasy league, this is not necessarily limited only to the players as ideally the fantasy league is for watchers as well
