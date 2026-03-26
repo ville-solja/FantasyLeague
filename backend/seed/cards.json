@@ -1,0 +1,10 @@
+[
+  { "id": 1, "player_id": 972354862, "owner_id": null, "card_type": "legendary", "league_id": 19369 },
+  { "id": 2, "player_id": 507194,    "owner_id": null, "card_type": "common",    "league_id": 19369 },
+  { "id": 3, "player_id": 19839266,  "owner_id": null, "card_type": "rare",      "league_id": 19369 },
+  { "id": 4, "player_id": 55671631,  "owner_id": null, "card_type": "epic",      "league_id": 19369 },
+  { "id": 5, "player_id": 12031716,  "owner_id": null, "card_type": "common",    "league_id": 19369 },
+  { "id": 6, "player_id": 36901921,  "owner_id": null, "card_type": "rare",      "league_id": 19369 },
+  { "id": 7, "player_id": 43306438,  "owner_id": null, "card_type": "common",    "league_id": 19369 },
+  { "id": 8, "player_id": 18133352,  "owner_id": null, "card_type": "legendary", "league_id": 19369 }
+]
