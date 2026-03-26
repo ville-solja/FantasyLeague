@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from models import Player, PlayerMatchStats
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
+from enrich import run_enrichment
+
 
 app = FastAPI()
 
@@ -14,7 +16,9 @@ def root():
 @app.post("/ingest/league/{league_id}")
 def ingest_league_endpoint(league_id: int):
     ingest_league(league_id)
+    run_enrichment()
     return {"status": "ok", "league_id": league_id}
+
 
 @app.get("/leaderboard/{division}")
 def leaderboard(division: str):

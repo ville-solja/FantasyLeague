@@ -13,8 +13,8 @@ class Match(Base):
     __tablename__ = "matches"
 
     match_id = Column(BigInteger, primary_key=True)  # use match_id directly
-    radiant_team_id = Column(BigInteger, ForeignKey("teams.id"))
-    dire_team_id = Column(BigInteger, ForeignKey("teams.id"))
+    radiant_team_id = Column(BigInteger)
+    dire_team_id = Column(BigInteger)
     league_id = Column(BigInteger, ForeignKey("leagues.id"))
 
 
