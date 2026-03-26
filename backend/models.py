@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Float, ForeignKey
+from sqlalchemy import Column, BigInteger, Integer, String, Float, ForeignKey
 from database import Base
 
 
@@ -12,7 +12,7 @@ class Player(Base):
 class Match(Base):
     __tablename__ = "matches"
 
-    match_id = Column(BigInteger, primary_key=True)  # use match_id directly
+    match_id = Column(BigInteger, primary_key=True)
     radiant_team_id = Column(BigInteger)
     dire_team_id = Column(BigInteger)
     league_id = Column(BigInteger, ForeignKey("leagues.id"))
@@ -27,6 +27,15 @@ class PlayerMatchStats(Base):
     team_id = Column(BigInteger, ForeignKey("teams.id"))
     fantasy_points = Column(Float)
 
+    # Raw stats stored so fantasy points can be recalculated without re-fetching
+    kills = Column(Integer, default=0)
+    assists = Column(Integer, default=0)
+    deaths = Column(Integer, default=0)
+    gold_per_min = Column(Float, default=0)
+    obs_placed = Column(Integer, default=0)
+    sen_placed = Column(Integer, default=0)
+    tower_damage = Column(Integer, default=0)
+
 
 class Team(Base):
     __tablename__ = "teams"
@@ -40,8 +49,8 @@ class Card(Base):
 
     id = Column(BigInteger, primary_key=True)
     player_id = Column(BigInteger, ForeignKey("players.id"))
-    owner_id = Column(BigInteger, ForeignKey("users.id"))  # user_id of the card owner
-    card_type = Column(String)  # e.g., "common", "rare", "epic", "legendary"
+    owner_id = Column(BigInteger, ForeignKey("users.id"))
+    card_type = Column(String)  # "common", "rare", "epic", "legendary"
     league_id = Column(BigInteger, ForeignKey("leagues.id"))
 
 
@@ -58,3 +67,11 @@ class League(Base):
 
     id = Column(BigInteger, primary_key=True)  # OpenDota league_id
     name = Column(String)
+
+
+class Weight(Base):
+    __tablename__ = "weights"
+
+    key = Column(String, primary_key=True)
+    label = Column(String)
+    value = Column(Float)

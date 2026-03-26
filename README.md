@@ -12,17 +12,6 @@ Target audience is players and watchers of Kanaliiga, but the design can be made
 - Leaderboard for both **Player** and **Roster** performances
 
 ### Next steps
-#### MVP User
-1. Create DB table for users
-2. populate it with test users
-
-#### MVP Card
-1. Create DB table for cards
-2. Create json to populate the table
-
-#### FrontEnd proto
-Frontend built on simple stack to enable having buttons for rest of the features
-
 #### User creation
 1. Field for username
 2. Field for password

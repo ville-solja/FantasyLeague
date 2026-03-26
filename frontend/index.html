@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Kanaliiga Fantasy</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; padding: 24px; }
+    h1 { color: #c84b11; margin-bottom: 8px; font-size: 1.4rem; letter-spacing: 2px; text-transform: uppercase; }
+    h2 { color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+    #userDisplay { font-size: 0.8rem; color: #555; margin-bottom: 20px; }
+
+    /* TABS */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a2a; }
+    .tab { padding: 8px 18px; font-family: monospace; font-size: 0.85rem; cursor: pointer;
+           background: none; border: none; color: #555; border-bottom: 2px solid transparent;
+           margin-bottom: -1px; }
+    .tab:hover { color: #aaa; }
+    .tab.active { color: #c84b11; border-bottom-color: #c84b11; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .panel { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 20px; }
+    .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    input, select { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 4px;
+                    padding: 6px 10px; font-family: monospace; font-size: 0.9rem; flex: 1; }
+    button { background: #c84b11; color: #fff; border: none; border-radius: 4px; padding: 7px 14px;
+             font-family: monospace; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    button:hover { background: #e05a1a; }
+    button.secondary { background: #2a2a2a; color: #aaa; }
+    button.secondary:hover { background: #333; color: #e0e0e0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { color: #555; font-weight: normal; text-align: left; padding: 6px 8px; border-bottom: 1px solid #222; }
+    td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 0.75rem; }
+    .common    { background: #2a2a2a; color: #aaa; }
+    .rare      { background: #1a2a3a; color: #6ab0e0; }
+    .epic      { background: #2a1a3a; color: #b06ae0; }
+    .legendary { background: #3a2a0a; color: #e0a030; }
+    .status { font-size: 0.8rem; color: #555; margin-top: 10px; min-height: 18px; }
+    .status.ok  { color: #4caf50; }
+    .status.err { color: #e05050; }
+  </style>
+</head>
+<body>
+
+<h1>Kanaliiga Fantasy</h1>
+<div id="userDisplay">Active user: <span id="activeUserLabel">none</span></div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('team')">My Team</button>
+  <button class="tab" onclick="switchTab('leaderboard')">Leaderboards</button>
+  <button class="tab" onclick="switchTab('admin')">Admin</button>
+</div>
+
+<!-- TAB: MY TEAM -->
+<div id="tab-team" class="tab-content active">
+  <div class="grid">
+
+    <div class="panel">
+      <h2>User</h2>
+      <div class="row">
+        <select id="userSelect"><option value="">Loading...</option></select>
+        <button onclick="selectUser()">Set active</button>
+      </div>
+      <div class="status" id="userStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Deck (unclaimed cards)</h2>
+      <button class="secondary" onclick="loadDeck()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>#</th><th>Player</th><th>Rarity</th><th></th></tr></thead>
+        <tbody id="deckBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="deckStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>My Roster</h2>
+      <button class="secondary" onclick="loadRoster()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>#</th><th>Player</th><th>Rarity</th><th>Total pts</th></tr></thead>
+        <tbody id="rosterBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="rosterStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TAB: LEADERBOARDS -->
+<div id="tab-leaderboard" class="tab-content">
+  <div class="grid">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Player average performance</h2>
+      <button class="secondary" onclick="loadLeaderboard()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>Rank</th><th>Player</th><th>Matches</th><th>Avg pts</th></tr></thead>
+        <tbody id="leaderboardBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="leaderboardStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Single match performance leaderboard</h2>
+      <button class="secondary" onclick="loadTop()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>Rank</th><th>Player</th><th>Fantasy pts</th></tr></thead>
+        <tbody id="topBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="topStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TAB: ADMIN -->
+<div id="tab-admin" class="tab-content">
+  <div class="grid">
+
+    <div class="panel">
+      <h2>Ingest League</h2>
+      <div class="row">
+        <input id="leagueId" type="number" placeholder="League ID e.g. 19369" />
+        <button onclick="ingestLeague()">Ingest</button>
+      </div>
+      <div class="status" id="ingestStatus"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Recalculate Fantasy Points</h2>
+      <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
+      <button onclick="recalculate()">Recalculate</button>
+      <div class="status" id="recalcStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Scoring Weights</h2>
+      <table>
+        <thead><tr><th>Stat</th><th>Weight</th><th></th></tr></thead>
+        <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="weightsStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const API = "http://localhost:8000";
+
+  let activeUserId = localStorage.getItem("user_id");
+  let activeUsername = localStorage.getItem("username");
+
+  function updateUserDisplay() {
+    document.getElementById("activeUserLabel").textContent =
+      activeUsername ? `${activeUsername} (id: ${activeUserId})` : "none";
+  }
+
+  function setStatus(id, msg, ok = true) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = "status " + (ok ? "ok" : "err");
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
+    document.getElementById(`tab-${name}`).classList.add("active");
+    event.target.classList.add("active");
+    if (name === "leaderboard") {
+      loadLeaderboard();
+      loadTop();
+    }
+    if (name === "admin") {
+      loadWeights();
+    }
+  }
+
+  // --- USERS ---
+  async function loadUsers() {
+    const res = await fetch(`${API}/users`);
+    const users = await res.json();
+    const sel = document.getElementById("userSelect");
+    sel.innerHTML = users.map(u =>
+      `<option value="${u.id}" data-name="${u.username}">${u.username}</option>`
+    ).join("");
+    if (activeUserId) sel.value = activeUserId;
+  }
+
+  function selectUser() {
+    const sel = document.getElementById("userSelect");
+    activeUserId = sel.value;
+    activeUsername = sel.options[sel.selectedIndex].dataset.name;
+    localStorage.setItem("user_id", activeUserId);
+    localStorage.setItem("username", activeUsername);
+    updateUserDisplay();
+    setStatus("userStatus", `Active user set to ${activeUsername}`);
+    loadRoster();
+  }
+
+  // --- INGEST ---
+  async function ingestLeague() {
+    const id = document.getElementById("leagueId").value;
+    if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
+    setStatus("ingestStatus", "Ingesting... this may take a while");
+    try {
+      const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST" });
+      const data = await res.json();
+      setStatus("ingestStatus", res.ok ? `Done. League ${data.league_id} ingested.` : data.detail, res.ok);
+      if (res.ok) { loadDeck(); loadRoster(); }
+    } catch (e) {
+      setStatus("ingestStatus", e.message, false);
+    }
+  }
+
+  // --- DECK ---
+  async function loadDeck() {
+    try {
+      const res = await fetch(`${API}/deck`);
+      const cards = await res.json();
+      const tbody = document.getElementById("deckBody");
+      if (!cards.length) {
+        tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No unclaimed cards</td></tr>";
+        setStatus("deckStatus", "");
+        return;
+      }
+      tbody.innerHTML = cards.map(c => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.player_name}</td>
+          <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
+          <td><button onclick="claimCard(${c.id})">Claim</button></td>
+        </tr>`).join("");
+      setStatus("deckStatus", `${cards.length} cards available`);
+    } catch (e) {
+      setStatus("deckStatus", e.message, false);
+    }
+  }
+
+  async function claimCard(cardId) {
+    if (!activeUserId) return setStatus("deckStatus", "Select a user first", false);
+    try {
+      const res = await fetch(`${API}/claim/${cardId}?user_id=${activeUserId}`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("deckStatus", `Card ${cardId} claimed`);
+        loadDeck();
+        loadRoster();
+      } else {
+        setStatus("deckStatus", data.detail, false);
+      }
+    } catch (e) {
+      setStatus("deckStatus", e.message, false);
+    }
+  }
+
+  // --- ROSTER ---
+  async function loadRoster() {
+    if (!activeUserId) return;
+    try {
+      const res = await fetch(`${API}/roster/${activeUserId}`);
+      const cards = await res.json();
+      const tbody = document.getElementById("rosterBody");
+      if (!cards.length) {
+        tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No cards claimed yet</td></tr>";
+        setStatus("rosterStatus", "");
+        return;
+      }
+      tbody.innerHTML = cards.map(c => `
+        <tr>
+          <td>${c.id}</td>
+          <td>${c.player_name}</td>
+          <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
+          <td>${Number(c.total_points).toFixed(1)}</td>
+        </tr>`).join("");
+      setStatus("rosterStatus", `${cards.length} cards in roster`);
+    } catch (e) {
+      setStatus("rosterStatus", e.message, false);
+    }
+  }
+
+  // --- LEADERBOARD (avg) ---
+  async function loadLeaderboard() {
+    try {
+      const res = await fetch(`${API}/leaderboard`);
+      const rows = await res.json();
+      const tbody = document.getElementById("leaderboardBody");
+      if (!rows.length) {
+        tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>";
+        return;
+      }
+      tbody.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.name}</td>
+          <td>${r.matches}</td>
+          <td>${Number(r.avg_points).toFixed(1)}</td>
+        </tr>`).join("");
+      setStatus("leaderboardStatus", "");
+    } catch (e) {
+      setStatus("leaderboardStatus", e.message, false);
+    }
+  }
+
+  // --- TOP (single match) ---
+  async function loadTop() {
+    try {
+      const res = await fetch(`${API}/top`);
+      const rows = await res.json();
+      document.getElementById("topBody").innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.name}</td>
+          <td>${Number(r.fantasy_points).toFixed(1)}</td>
+        </tr>`).join("");
+      setStatus("topStatus", "");
+    } catch (e) {
+      setStatus("topStatus", e.message, false);
+    }
+  }
+
+  // --- WEIGHTS ---
+  async function loadWeights() {
+    try {
+      const res = await fetch(`${API}/weights`);
+      const weights = await res.json();
+      document.getElementById("weightsBody").innerHTML = weights.map(w => `
+        <tr>
+          <td>${w.label}</td>
+          <td><input type="number" step="any" id="w_${w.key}" value="${w.value}" style="width:100px;flex:none;" /></td>
+          <td><button onclick="saveWeight('${w.key}')">Save</button></td>
+        </tr>`).join("");
+      setStatus("weightsStatus", "");
+    } catch (e) {
+      setStatus("weightsStatus", e.message, false);
+    }
+  }
+
+  async function saveWeight(key) {
+    const value = parseFloat(document.getElementById(`w_${key}`).value);
+    if (isNaN(value)) return setStatus("weightsStatus", "Invalid value", false);
+    try {
+      const res = await fetch(`${API}/weights/${key}?value=${value}`, { method: "PUT" });
+      const data = await res.json();
+      setStatus("weightsStatus", res.ok ? `Saved ${key} = ${data.value}` : data.detail, res.ok);
+    } catch (e) {
+      setStatus("weightsStatus", e.message, false);
+    }
+  }
+
+  // --- RECALCULATE ---
+  async function recalculate() {
+    setStatus("recalcStatus", "Recalculating...");
+    try {
+      const res = await fetch(`${API}/recalculate`, { method: "POST" });
+      const data = await res.json();
+      setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
+    } catch (e) {
+      setStatus("recalcStatus", e.message, false);
+    }
+  }
+
+  // --- INIT ---
+  updateUserDisplay();
+  loadUsers();
+  loadDeck();
+  if (activeUserId) loadRoster();
+</script>
+</body>
+</html>

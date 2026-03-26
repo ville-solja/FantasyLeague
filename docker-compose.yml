@@ -20,6 +20,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./frontend:/app/frontend
     environment:
       DATABASE_URL: postgresql://dota:dota@db:5432/fantasy
 

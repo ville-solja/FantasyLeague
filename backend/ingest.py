@@ -1,7 +1,7 @@
 import requests
 import time
 from database import SessionLocal
-from models import Match, Player, PlayerMatchStats, League, Team
+from models import Match, Player, PlayerMatchStats, League, Team, Weight
 from scoring import fantasy_score
 
 OPEN_DOTA_URL = "https://api.opendota.com/api"
@@ -25,6 +25,19 @@ def get_league_info(league_id: int):
     return res.json()
 
 
+def fetch_match_with_retry(match_id: int, retries=3, backoff=5):
+    for attempt in range(retries):
+        res = requests.get(f"{OPEN_DOTA_URL}/matches/{match_id}")
+        if res.status_code == 429:
+            wait = backoff * (attempt + 1)
+            print(f"[RATE LIMIT] Match {match_id}, waiting {wait}s")
+            time.sleep(wait)
+            continue
+        res.raise_for_status()
+        return res.json()
+    raise Exception(f"Match {match_id} failed after {retries} retries")
+
+
 # -----------------------
 # INGESTION ENTRYPOINT
 # -----------------------
@@ -37,7 +50,6 @@ def ingest_league(league_id: int):
 
     print(f"[LEAGUE] {league_name}")
 
-    # Upsert league
     league = db.get(League, league_id)
     if not league:
         league = League(id=league_id, name=league_name)
@@ -47,15 +59,27 @@ def ingest_league(league_id: int):
 
     db.commit()
 
-    matches = get_league_matches(league_id)
-    print(f"[LEAGUE] {len(matches)} matches")
+    match_ids = get_league_matches(league_id)
+    print(f"[LEAGUE] {len(match_ids)} matches")
 
-    for match_id in matches:
-        if db.get(Match, match_id):
+    # Pre-fetch already-ingested match IDs in one query
+    existing = {
+        row[0] for row in
+        db.query(Match.match_id).filter(Match.match_id.in_(match_ids)).all()
+    }
+
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    print(f"[INGEST] Loaded {len(weights)} weights")
+
+    seen_players = set()
+    seen_teams = set()
+
+    for match_id in match_ids:
+        if match_id in existing:
             continue
 
         print(f"[MATCH] Ingesting {match_id}")
-        ingest_match(db, match_id, league_id)
+        ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
 
         time.sleep(0.5)
 
@@ -66,30 +90,26 @@ def ingest_league(league_id: int):
 # MATCH INGESTION
 # -----------------------
 
-def ingest_match(db, match_id: int, league_id: int):
-    res = requests.get(f"{OPEN_DOTA_URL}/matches/{match_id}")
-    res.raise_for_status()
-    data = res.json()
+def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict):
+    data = fetch_match_with_retry(match_id)
 
     if data.get("duration", 0) < 900:
         print(f"[SKIP] Match {match_id} too short")
         return
 
-    # Correct extraction
     radiant_team_id = data.get("radiant_team_id")
     dire_team_id = data.get("dire_team_id")
+    radiant_name = data.get("radiant_name")
+    dire_name = data.get("dire_name")
 
-    print(f"[MATCH] {match_id} | {radiant_team_id} vs {dire_team_id}")
+    print(f"[MATCH] {match_id} | {radiant_name} vs {dire_name}")
 
-    if radiant_team_id:
-        if not db.get(Team, radiant_team_id):
-            db.add(Team(id=radiant_team_id))
+    for team_id, team_name in ((radiant_team_id, radiant_name), (dire_team_id, dire_name)):
+        if team_id and team_id not in seen_teams:
+            if not db.get(Team, team_id):
+                db.add(Team(id=team_id, name=team_name))
+            seen_teams.add(team_id)
 
-    if dire_team_id:
-        if not db.get(Team, dire_team_id):
-            db.add(Team(id=dire_team_id))
-
-    # Insert match
     match = Match(
         match_id=match_id,
         radiant_team_id=radiant_team_id,
@@ -98,9 +118,6 @@ def ingest_match(db, match_id: int, league_id: int):
     )
     db.add(match)
 
-    seen_players = set()
-
-    # Process players
     for p in data.get("players", []):
         account_id = p.get("account_id")
 
@@ -108,14 +125,10 @@ def ingest_match(db, match_id: int, league_id: int):
             continue
 
         if account_id not in seen_players:
-            player = db.get(Player, account_id)
-
-            if not player:
+            if not db.get(Player, account_id):
                 db.add(Player(id=account_id, name=None))
-
             seen_players.add(account_id)
-                    
-        # Determine team
+
         is_radiant = p.get("isRadiant")
         if is_radiant is None:
             player_slot = p.get("player_slot")
@@ -127,14 +140,18 @@ def ingest_match(db, match_id: int, league_id: int):
 
         print(f"[PLAYER] {account_id} -> {team_id}")
 
-        # Insert stats
-        score = fantasy_score(p)
-
         stat = PlayerMatchStats(
             player_id=account_id,
             match_id=match_id,
             team_id=team_id,
-            fantasy_points=score
+            kills=p.get("kills", 0),
+            assists=p.get("assists", 0),
+            deaths=p.get("deaths", 0),
+            gold_per_min=p.get("gold_per_min", 0),
+            obs_placed=p.get("obs_placed", 0),
+            sen_placed=p.get("sen_placed", 0),
+            tower_damage=p.get("tower_damage", 0),
+            fantasy_points=fantasy_score(p, weights)
         )
         db.add(stat)
 
