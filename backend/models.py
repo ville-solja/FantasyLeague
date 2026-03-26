@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, BigInteger, Integer, String, Float, Boolean, ForeignKey
 from database import Base
 
 
@@ -60,6 +60,7 @@ class User(Base):
     id = Column(BigInteger, primary_key=True)
     username = Column(String, unique=True)
     email = Column(String, unique=True)
+    is_admin = Column(Boolean, default=False)
 
 
 class League(Base):

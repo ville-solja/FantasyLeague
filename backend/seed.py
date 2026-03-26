@@ -13,7 +13,7 @@ def seed_users():
 
     for u in users:
         if not db.get(User, u["id"]):
-            db.add(User(id=u["id"], username=u["username"], email=u["email"]))
+            db.add(User(id=u["id"], username=u["username"], email=u["email"], is_admin=u.get("is_admin", False)))
             print(f"[SEED] User {u['username']}")
 
     db.commit()

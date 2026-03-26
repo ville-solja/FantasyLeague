@@ -1,5 +1,5 @@
 [
-  { "id": 1, "username": "tester1", "email": "tester1@example.com" },
-  { "id": 2, "username": "tester2", "email": "tester2@example.com" },
-  { "id": 3, "username": "tester3", "email": "tester3@example.com" }
+  { "id": 1, "username": "tester1", "email": "tester1@example.com", "is_admin": true },
+  { "id": 2, "username": "tester2", "email": "tester2@example.com", "is_admin": false },
+  { "id": 3, "username": "tester3", "email": "tester3@example.com", "is_admin": false }
 ]

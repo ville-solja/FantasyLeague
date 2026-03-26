@@ -1,3 +1,4 @@
+import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +39,7 @@ def ingest_league_endpoint(league_id: int):
 def get_users():
     db = SessionLocal()
     users = db.query(User).all()
-    data = [{"id": u.id, "username": u.username} for u in users]
+    data = [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]
     db.close()
     return data
 
@@ -47,30 +48,35 @@ def get_users():
 def get_deck():
     db = SessionLocal()
     results = db.execute(text("""
+        SELECT c.card_type, COUNT(*) as count
+        FROM cards c
+        WHERE c.owner_id IS NULL
+        GROUP BY c.card_type
+    """)).fetchall()
+    db.close()
+    return {r.card_type: r.count for r in results}
+
+
+@app.post("/draw")
+def draw_card(user_id: int):
+    db = SessionLocal()
+    unclaimed = db.execute(text("""
         SELECT c.id, c.card_type, p.name as player_name
         FROM cards c
         JOIN players p ON p.id = c.player_id
         WHERE c.owner_id IS NULL
-        ORDER BY c.id
     """)).fetchall()
-    db.close()
-    return [dict(r._mapping) for r in results]
 
+    if not unclaimed:
+        db.close()
+        raise HTTPException(status_code=404, detail="No cards left in deck")
 
-@app.post("/claim/{card_id}")
-def claim_card(card_id: int, user_id: int):
-    db = SessionLocal()
-    card = db.get(Card, card_id)
-    if not card:
-        db.close()
-        raise HTTPException(status_code=404, detail="Card not found")
-    if card.owner_id is not None:
-        db.close()
-        raise HTTPException(status_code=409, detail="Card already claimed")
+    chosen = random.choice(unclaimed)
+    card = db.get(Card, chosen.id)
     card.owner_id = user_id
     db.commit()
     db.close()
-    return {"status": "ok", "card_id": card_id, "owner_id": user_id}
+    return {"id": chosen.id, "card_type": chosen.card_type, "player_name": chosen.player_name}
 
 
 @app.get("/roster/{user_id}")
