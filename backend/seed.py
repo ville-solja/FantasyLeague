@@ -1,7 +1,9 @@
 import json
 import os
+from sqlalchemy import text
 from database import SessionLocal
 from models import User, Card, Weight
+from auth import hash_password
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
 
@@ -13,9 +15,18 @@ def seed_users():
 
     for u in users:
         if not db.get(User, u["id"]):
-            db.add(User(id=u["id"], username=u["username"], email=u["email"], is_admin=u.get("is_admin", False)))
+            db.add(User(
+                id=u["id"],
+                username=u["username"],
+                email=u["email"],
+                password_hash=hash_password(u["password"]),
+                is_admin=u.get("is_admin", False),
+            ))
             print(f"[SEED] User {u['username']}")
 
+    db.commit()
+    # Sync the sequence so auto-generated IDs don't collide with seeded ones
+    db.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), MAX(id)) FROM users"))
     db.commit()
     db.close()
 

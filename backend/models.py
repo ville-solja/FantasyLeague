@@ -61,6 +61,7 @@ class User(Base):
     id = Column(BigInteger, primary_key=True)
     username = Column(String, unique=True)
     email = Column(String, unique=True)
+    password_hash = Column(String)
     is_admin = Column(Boolean, default=False)
 
 

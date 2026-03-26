@@ -92,12 +92,33 @@
 <body>
 
 <!-- LOGIN MODAL -->
-<div class="modal-overlay" id="loginModal">
+<div class="modal-overlay hidden" id="loginModal">
   <div class="modal">
-    <h2>Kanaliiga Fantasy</h2>
-    <select id="loginUserSelect"><option value="">Loading...</option></select>
-    <button style="width:100%;" onclick="login()">Login</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin-bottom:0;">Login</h2>
+      <button class="ghost" onclick="closeLoginModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <input id="loginUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') login()" />
+    <input id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') login()" />
+    <button style="width:100%;margin-bottom:10px;" onclick="login()">Login</button>
+    <button class="secondary" style="width:100%;" onclick="showRegister()">Create new account</button>
     <div class="status" id="loginStatus"></div>
+  </div>
+</div>
+
+<!-- REGISTER MODAL -->
+<div class="modal-overlay hidden" id="registerModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin-bottom:0;">Create account</h2>
+      <button class="ghost" onclick="closeLoginModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <input id="regUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') register()" />
+    <input id="regEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') register()" />
+    <input id="regPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') register()" />
+    <button style="width:100%;margin-bottom:10px;" onclick="register()">Create account</button>
+    <button class="ghost" style="width:100%;" onclick="showLogin()">Back to login</button>
+    <div class="status" id="registerStatus"></div>
   </div>
 </div>
 
@@ -116,7 +137,8 @@
   <h1>Kanaliiga Fantasy</h1>
   <div class="header-right">
     <span id="headerUserLabel"></span>
-    <button class="ghost" onclick="logout()">Logout</button>
+    <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
+    <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
   </div>
 </div>
 
@@ -264,8 +286,9 @@
   function applyAuthState() {
     const loggedIn = !!activeUserId;
 
-    document.getElementById("loginModal").classList.toggle("hidden", loggedIn);
     document.getElementById("headerUserLabel").textContent = loggedIn ? activeUsername : "";
+    document.getElementById("headerLoginBtn").style.display  = loggedIn ? "none" : "";
+    document.getElementById("headerLogoutBtn").style.display = loggedIn ? "" : "none";
 
     document.getElementById("tab-btn-team").style.display  = loggedIn ? "" : "none";
     document.getElementById("tab-btn-admin").style.display = (loggedIn && activeIsAdmin) ? "" : "none";
@@ -273,24 +296,73 @@
     if (!loggedIn) switchTab("leaderboard");
   }
 
+  function showLogin() {
+    document.getElementById("registerModal").classList.add("hidden");
+    document.getElementById("loginModal").classList.remove("hidden");
+    document.getElementById("loginStatus").textContent = "";
+  }
+
+  function closeLoginModal() {
+    document.getElementById("loginModal").classList.add("hidden");
+  }
+
+  function showRegister() {
+    document.getElementById("loginModal").classList.add("hidden");
+    document.getElementById("registerModal").classList.remove("hidden");
+    document.getElementById("registerStatus").textContent = "";
+  }
+
   async function login() {
-    const sel = localStorage.getItem;
-    const select = document.getElementById("loginUserSelect");
-    const option = select.options[select.selectedIndex];
-    if (!option || !option.value) return setStatus("loginStatus", "Select a user", false);
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    if (!username || !password) return setStatus("loginStatus", "Enter username and password", false);
 
-    activeUserId   = option.value;
-    activeUsername = option.dataset.name;
-    activeIsAdmin  = option.dataset.admin === "true";
+    try {
+      const res = await fetch(`${API}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) return setStatus("loginStatus", data.detail, false);
 
-    localStorage.setItem("user_id",   activeUserId);
-    localStorage.setItem("username",  activeUsername);
-    localStorage.setItem("is_admin",  activeIsAdmin);
+      activeUserId   = String(data.id);
+      activeUsername = data.username;
+      activeIsAdmin  = data.is_admin;
 
-    applyAuthState();
-    switchTab("team");
-    loadDeck();
-    loadRoster();
+      localStorage.setItem("user_id",  activeUserId);
+      localStorage.setItem("username", activeUsername);
+      localStorage.setItem("is_admin", activeIsAdmin);
+
+      document.getElementById("loginModal").classList.add("hidden");
+      document.getElementById("loginPassword").value = "";
+      applyAuthState();
+      switchTab("team");
+      loadDeck();
+      loadRoster();
+    } catch (e) {
+      setStatus("loginStatus", e.message, false);
+    }
+  }
+
+  async function register() {
+    const username = document.getElementById("regUsername").value.trim();
+    const email    = document.getElementById("regEmail").value.trim();
+    const password = document.getElementById("regPassword").value;
+    if (!username || !email || !password) return setStatus("registerStatus", "All fields required", false);
+
+    try {
+      const res = await fetch(
+        `${API}/register?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) return setStatus("registerStatus", data.detail, false);
+
+      setStatus("registerStatus", "Account created — you can now log in");
+      document.getElementById("regUsername").value = "";
+      document.getElementById("regEmail").value    = "";
+      document.getElementById("regPassword").value = "";
+      setTimeout(showLogin, 1200);
+    } catch (e) {
+      setStatus("registerStatus", e.message, false);
+    }
   }
 
   function logout() {
@@ -313,8 +385,9 @@
     const btn = document.getElementById(`tab-btn-${name}`);
     if (btn) btn.classList.add("active");
 
+    if (name === "team")        { loadDeck(); loadRoster(); }
     if (name === "leaderboard") { loadRosterLeaderboard(); loadLeaderboard(); loadTop(); }
-    if (name === "admin") loadWeights();
+    if (name === "admin")         loadWeights();
   }
 
   // -------------------------------------------------------
@@ -573,14 +646,14 @@
   // INIT
   // -------------------------------------------------------
 
-  async function init() {
-    const res = await fetch(`${API}/users`);
-    const users = await res.json();
-    document.getElementById("loginUserSelect").innerHTML = users.map(u =>
-      `<option value="${u.id}" data-name="${u.username}" data-admin="${u.is_admin}">${u.username}</option>`
-    ).join("");
-
+  function init() {
     applyAuthState();
+    if (!activeUserId) {
+      showLogin();
+    } else {
+      loadDeck();
+      loadRoster();
+    }
     loadLeaderboard();
     loadTop();
   }

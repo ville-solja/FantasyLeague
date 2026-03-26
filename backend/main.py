@@ -9,6 +9,7 @@ from ingest import ingest_league
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score
+from auth import hash_password, verify_password
 
 ROSTER_LIMIT = 5
 
@@ -37,11 +38,36 @@ def ingest_league_endpoint(league_id: int):
     return {"status": "ok", "league_id": league_id}
 
 
-@app.get("/users")
-def get_users():
+@app.post("/login")
+def login(username: str, password: str):
     db = SessionLocal()
-    users = db.query(User).all()
-    data = [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not verify_password(password, user.password_hash):
+        db.close()
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin}
+    db.close()
+    return data
+
+
+@app.post("/register")
+def register(username: str, password: str, email: str):
+    db = SessionLocal()
+    if db.query(User).filter(User.username == username).first():
+        db.close()
+        raise HTTPException(status_code=409, detail="Username already taken")
+    if db.query(User).filter(User.email == email).first():
+        db.close()
+        raise HTTPException(status_code=409, detail="Email already registered")
+    user = User(
+        username=username,
+        email=email,
+        password_hash=hash_password(password),
+        is_admin=False,
+    )
+    db.add(user)
+    db.commit()
+    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin}
     db.close()
     return data
 

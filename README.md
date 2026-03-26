@@ -17,8 +17,8 @@ Target audience is players and watchers of Kanaliiga, but the design can be made
 2. Field for password
 3. Button for saving the values to User -table
 
-#### Obtaining Card
-Button for randomizing from **Deck** and returning the **Card** information. **UserID** needs to be marked in the same transaction so the card is claimed.
+#### Obtaining cards? 
+Solve how Users obtain cards and what limitations there are. These could be later tied to twitch drops or something
 
 ## Terminology
 #### League
@@ -27,6 +27,8 @@ League that the matches take place in. This is the single id that is combining a
 Relevant endpoints:
 https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id
 https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id_select_matches
+
+**Players are hardcoded to be for the Kanaliiga S15 Lower division, so any other league won't have matching players to the once found in the deck**
 
 #### Match
 A single played map as part of a tournament. Contains two teams, 10 players and a lot of additional data from the OpenDota API endpoint. Match endpoint also has extremely robust players performance metrics that can be used to determine the fantasy points
@@ -64,12 +66,6 @@ Active "Cards" that "User" has set that will be determining how they are scoring
 ## Architecture
 ### Phase 1 - MVP 
 Version of the app should be easy to host and manage, and likely will be contained in single container
-
-#### Ingestion
-With just the tournament id the postgresql in populated with the matches, players, teams and the results
-
-#### Steps
-Ingestion of league data -> Storage in PostgreSQL -> Visualization of the leaderboard data in a website
 
 ### Phase 2 - Stability
 Postgresql should be hosted outside of the container in order to enable permanence in the data. This should be done to make the user experience and long term traceablitiy doable.
