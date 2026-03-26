@@ -25,9 +25,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.get("/")
-def root():
-    return {"status": "running"}
 
 
 @app.post("/ingest/league/{league_id}")
@@ -272,4 +269,4 @@ def recalculate():
     return {"status": "ok", "recalculated": count}
 
 
-app.mount("/ui", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
