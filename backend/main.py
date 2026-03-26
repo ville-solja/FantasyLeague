@@ -1,3 +1,4 @@
+import os
 import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -11,6 +12,7 @@ from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score
 from auth import hash_password, verify_password
+from schedule import get_schedule, bust_cache
 
 ROSTER_LIMIT = 5
 
@@ -52,6 +54,18 @@ def require_admin(user_id: int, db):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
+        if "avatar_url" not in cols:
+            conn.execute(text("ALTER TABLE players ADD COLUMN avatar_url TEXT"))
+            conn.commit()
+        match_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(matches)")).fetchall()]
+        if "start_time" not in match_cols:
+            conn.execute(text("ALTER TABLE matches ADD COLUMN start_time INTEGER"))
+            conn.commit()
+        if "radiant_win" not in match_cols:
+            conn.execute(text("ALTER TABLE matches ADD COLUMN radiant_win BOOLEAN"))
+            conn.commit()
     seed_users()
     seed_weights()
     yield
@@ -67,7 +81,7 @@ def ingest_league_endpoint(league_id: int, body: AdminBody):
     db.close()
     ingest_league(league_id)
     run_enrichment()
-    seed_cards()
+    seed_cards(league_id)
     return {"status": "ok", "league_id": league_id}
 
 
@@ -122,9 +136,15 @@ def get_deck():
 def draw_card(body: DrawBody):
     db = SessionLocal()
     unclaimed = db.execute(text("""
-        SELECT c.id, c.card_type, p.name as player_name
+        SELECT c.id, c.card_type, p.name as player_name, p.avatar_url, t.name as team_name
         FROM cards c
         JOIN players p ON p.id = c.player_id
+        LEFT JOIN (
+            SELECT player_id, team_id, MAX(match_id) as latest_match
+            FROM player_match_stats
+            GROUP BY player_id
+        ) latest ON latest.player_id = p.id
+        LEFT JOIN teams t ON t.id = latest.team_id
         WHERE c.owner_id IS NULL
     """)).fetchall()
 
@@ -148,6 +168,8 @@ def draw_card(body: DrawBody):
         "id": chosen.id,
         "card_type": chosen.card_type,
         "player_name": chosen.player_name,
+        "avatar_url": chosen.avatar_url,
+        "team_name": chosen.team_name,
         "is_active": is_active,
     }
 
@@ -156,13 +178,13 @@ def draw_card(body: DrawBody):
 def get_roster(user_id: int):
     db = SessionLocal()
     results = db.execute(text("""
-        SELECT c.id, c.card_type, c.is_active, p.name as player_name,
+        SELECT c.id, c.card_type, c.is_active, p.name as player_name, p.avatar_url,
                COALESCE(SUM(s.fantasy_points), 0) as total_points
         FROM cards c
         JOIN players p ON p.id = c.player_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         WHERE c.owner_id = :user_id
-        GROUP BY c.id, c.card_type, c.is_active, p.name
+        GROUP BY c.id, c.card_type, c.is_active, p.name, p.avatar_url
         ORDER BY c.is_active DESC, total_points DESC
     """), {"user_id": user_id}).fetchall()
 
@@ -216,7 +238,7 @@ def deactivate_card(card_id: int, body: RosterActionBody):
 def top_performances():
     db = SessionLocal()
     results = db.execute(text("""
-        SELECT p.name, s.fantasy_points
+        SELECT p.name, p.avatar_url, s.fantasy_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
         ORDER BY s.fantasy_points DESC
@@ -230,10 +252,10 @@ def top_performances():
 def leaderboard():
     db = SessionLocal()
     results = db.execute(text("""
-        SELECT p.name, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
+        SELECT p.name, p.avatar_url, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
-        GROUP BY p.id, p.name
+        GROUP BY p.id, p.name, p.avatar_url
         ORDER BY avg_points DESC
     """)).fetchall()
     db.close()
@@ -245,16 +267,21 @@ def roster_leaderboard():
     db = SessionLocal()
     results = db.execute(text("""
         SELECT u.username,
-               COUNT(c.id) as active_cards,
+               COALESCE(owned.total, 0) as total_cards,
                COALESCE(SUM(pts.total), 0) as roster_value
         FROM users u
+        LEFT JOIN (
+            SELECT owner_id, COUNT(*) as total
+            FROM cards
+            GROUP BY owner_id
+        ) owned ON owned.owner_id = u.id
         LEFT JOIN cards c ON c.owner_id = u.id AND c.is_active = true
         LEFT JOIN (
             SELECT player_id, SUM(fantasy_points) as total
             FROM player_match_stats
             GROUP BY player_id
         ) pts ON pts.player_id = c.player_id
-        GROUP BY u.id, u.username
+        GROUP BY u.id, u.username, owned.total
         ORDER BY roster_value DESC
     """)).fetchall()
     db.close()
@@ -304,6 +331,50 @@ def recalculate(body: AdminBody):
     count = len(stats)
     db.close()
     return {"status": "ok", "recalculated": count}
+
+
+@app.get("/schedule")
+def schedule_endpoint():
+    db = SessionLocal()
+    data = get_schedule(db)
+    db.close()
+    return data
+
+
+@app.post("/schedule/refresh")
+def schedule_refresh(body: AdminBody):
+    db = SessionLocal()
+    require_admin(body.user_id, db)
+    bust_cache()
+    data = get_schedule(db)
+    db.close()
+    return data
+
+
+@app.get("/schedule/debug")
+def schedule_debug(user_id: int):
+    db = SessionLocal()
+    require_admin(user_id, db)
+    db.close()
+
+    url = os.getenv("SCHEDULE_SHEET_URL", "")
+    result = {"url_set": bool(url), "url_prefix": url[:60] + "..." if len(url) > 60 else url}
+
+    if not url:
+        result["error"] = "SCHEDULE_SHEET_URL is not set"
+        return result
+
+    try:
+        import requests as req
+        res = req.get(url, timeout=15, allow_redirects=True)
+        result["status_code"] = res.status_code
+        result["content_type"] = res.headers.get("content-type", "")
+        result["response_length"] = len(res.text)
+        result["first_200_chars"] = res.text[:200]
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
 
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

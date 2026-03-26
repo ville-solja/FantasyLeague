@@ -7,3 +7,5 @@ services:
       - ./backend:/app
       - ./frontend:/app/frontend
       - ./data:/app/data
+    environment:
+      - SCHEDULE_SHEET_URL=${SCHEDULE_SHEET_URL}

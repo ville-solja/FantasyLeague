@@ -7,6 +7,7 @@ class Player(Base):
 
     id = Column(Integer, primary_key=True)  # OpenDota account_id
     name = Column(String)
+    avatar_url = Column(String)
 
 
 class Match(Base):
@@ -16,6 +17,8 @@ class Match(Base):
     radiant_team_id = Column(Integer)
     dire_team_id = Column(Integer)
     league_id = Column(Integer, ForeignKey("leagues.id"))
+    start_time = Column(Integer)   # Unix timestamp from OpenDota
+    radiant_win = Column(Boolean)  # from OpenDota
 
 
 class PlayerMatchStats(Base):

@@ -1,10 +1,17 @@
 import json
 import os
 from database import SessionLocal
-from models import User, Card, Weight
+from models import User, Card, Weight, PlayerMatchStats, Match
 from auth import hash_password
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
+
+CARD_SCHEMA = [
+    ("legendary", 1),
+    ("epic",      2),
+    ("rare",      4),
+    ("common",    8),
+]
 
 
 def seed_users():
@@ -27,24 +34,39 @@ def seed_users():
     db.close()
 
 
-def seed_cards():
+def seed_cards(league_id: int):
     db = SessionLocal()
-    with open(os.path.join(SEED_DIR, "cards.json")) as f:
-        cards = json.load(f)
 
-    for c in cards:
-        if not db.get(Card, c["id"]):
-            db.add(Card(
-                id=c["id"],
-                player_id=c["player_id"],
-                owner_id=c["owner_id"],
-                card_type=c["card_type"],
-                league_id=c["league_id"],
-            ))
-            print(f"[SEED] Card {c['id']} ({c['card_type']}) -> player {c['player_id']}")
+    player_ids = (
+        db.query(PlayerMatchStats.player_id)
+        .join(Match, Match.match_id == PlayerMatchStats.match_id)
+        .filter(Match.league_id == league_id)
+        .distinct()
+        .all()
+    )
+    player_ids = [r[0] for r in player_ids]
+
+    count = 0
+    for player_id in player_ids:
+        already_seeded = db.query(Card).filter(
+            Card.player_id == player_id,
+            Card.league_id == league_id,
+        ).count()
+        if already_seeded:
+            continue
+        for card_type, quantity in CARD_SCHEMA:
+            for _ in range(quantity):
+                db.add(Card(
+                    player_id=player_id,
+                    owner_id=None,
+                    card_type=card_type,
+                    league_id=league_id,
+                ))
+                count += 1
 
     db.commit()
     db.close()
+    print(f"[SEED] {count} cards generated for league {league_id} across {len(player_ids)} players")
 
 
 DEFAULT_WEIGHTS = [

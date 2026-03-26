@@ -33,9 +33,14 @@ def fetch_match_with_retry(match_id: int, retries=3, backoff=5):
             print(f"[RATE LIMIT] Match {match_id}, waiting {wait}s")
             time.sleep(wait)
             continue
+        if res.status_code >= 500:
+            wait = backoff * (attempt + 1)
+            print(f"[ERROR] Match {match_id} got {res.status_code}, retrying in {wait}s")
+            time.sleep(wait)
+            continue
         res.raise_for_status()
         return res.json()
-    raise Exception(f"Match {match_id} failed after {retries} retries")
+    return None
 
 
 # -----------------------
@@ -79,7 +84,10 @@ def ingest_league(league_id: int):
             continue
 
         print(f"[MATCH] Ingesting {match_id}")
-        ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
+        try:
+            ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
+        except Exception as e:
+            print(f"[SKIP] Match {match_id} failed: {e}")
 
         time.sleep(0.5)
 
@@ -92,6 +100,9 @@ def ingest_league(league_id: int):
 
 def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict):
     data = fetch_match_with_retry(match_id)
+    if data is None:
+        print(f"[SKIP] Match {match_id} unavailable after retries")
+        return
 
     if data.get("duration", 0) < 900:
         print(f"[SKIP] Match {match_id} too short")
@@ -114,7 +125,9 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
         match_id=match_id,
         radiant_team_id=radiant_team_id,
         dire_team_id=dire_team_id,
-        league_id=league_id
+        league_id=league_id,
+        start_time=data.get("start_time"),
+        radiant_win=data.get("radiant_win"),
     )
     db.add(match)
 

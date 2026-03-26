@@ -14,6 +14,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
+## Reset database
+Stops the container, deletes the database file, and restarts from scratch (re-runs migrations and seed on next startup):
+```
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down 
+rm -f data/fantasy.db 
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
 ## Ingestion
 ```
 curl -X POST http://localhost:8000/ingest/league/19369

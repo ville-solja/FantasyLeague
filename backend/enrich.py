@@ -15,7 +15,9 @@ def enrich_players(batch_size=50):
 
     players = (
         db.query(Player)
-        .filter(Player.name.is_(None))
+        .filter(
+            Player.name.is_(None) | Player.avatar_url.is_(None)
+        )
         .limit(batch_size)
         .all()
     )
@@ -51,8 +53,10 @@ def enrich_players(batch_size=50):
                 or str(account_id)
             )
 
+            avatar_url = profile.get("avatarfull")
             print(f"[PLAYER] {account_id} -> {name}")
             player.name = name
+            player.avatar_url = avatar_url
 
         except Exception as e:
             print(f"[ERROR] Player {account_id}: {e}")

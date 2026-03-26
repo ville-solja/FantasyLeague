@@ -87,6 +87,22 @@
     .modal h2 { color: #c84b11; font-size: 1rem; margin-bottom: 20px; }
     .modal select { width: 100%; margin-bottom: 16px; }
     .modal .status { margin-top: 8px; }
+
+    /* SCHEDULE */
+.badge-division { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+    .badge-division.div1 { background: #1a1a2a; color: #6a6aaa; }
+    .badge-division.div2 { background: #1a2a1a; color: #6aaa6a; }
+    .series-row { display: grid; grid-template-columns: 46px 1fr 52px 1fr 86px minmax(0, 150px);
+                  align-items: center; column-gap: 10px; padding: 7px 0; border-bottom: 1px solid #1a1a1a; font-size: 0.85rem; }
+    .series-row.past { opacity: 0.45; }
+    .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .series-team.right { text-align: right; }
+    .series-score { font-weight: bold; color: #e0e0e0; text-align: center; }
+    .series-score.no-result { color: #333; }
+    .series-meta { color: #555; font-size: 0.78rem; text-align: right; white-space: nowrap; }
+    .stream-link { color: #6ab0e0; text-decoration: none; }
+    .stream-link:hover { text-decoration: underline; }
+    .stale-notice { font-size: 0.75rem; color: #666; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -126,8 +142,10 @@
 <div class="reveal-overlay hidden" id="revealModal">
   <div class="reveal-card" id="revealCard">
     <div class="rarity-label" id="revealRarity"></div>
+    <img id="revealAvatar" style="width:80px;height:80px;border-radius:50%;margin-bottom:12px;display:none;" onerror="this.style.display='none'" />
     <div class="player-name" id="revealPlayer"></div>
-    <div id="revealDestination" style="font-size:0.75rem;color:#888;margin-bottom:20px;"></div>
+    <div id="revealTeam" style="font-size:0.85rem;color:#888;margin-bottom:12px;"></div>
+    <div id="revealDestination" style="font-size:0.75rem;color:#666;margin-bottom:20px;"></div>
     <button onclick="closeReveal()">Continue</button>
   </div>
 </div>
@@ -145,6 +163,7 @@
 <div class="tabs" id="tabBar">
   <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
   <button class="tab active" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">Leaderboards</button>
+  <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin</button>
 </div>
 
@@ -211,7 +230,7 @@
       <h2>Roster standings</h2>
       <button class="secondary" onclick="loadRosterLeaderboard()" style="margin-bottom:12px;">Refresh</button>
       <table>
-        <thead><tr><th>Rank</th><th>User</th><th>Active cards</th><th>Roster value</th></tr></thead>
+        <thead><tr><th>Rank</th><th>User</th><th>Cards owned</th><th>Roster value</th></tr></thead>
         <tbody id="rosterLeaderboardBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="rosterLeaderboardStatus"></div>
@@ -240,6 +259,19 @@
   </div>
 </div>
 
+<!-- TAB: SCHEDULE -->
+<div id="tab-schedule" class="tab-content">
+  <div class="grid">
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Season Schedule</h2>
+      <button class="secondary" onclick="loadSchedule()" style="margin-bottom:12px;">Refresh</button>
+      <div id="scheduleStale" class="stale-notice" style="display:none;"></div>
+      <div id="scheduleContent"></div>
+      <div class="status" id="scheduleStatus"></div>
+    </div>
+  </div>
+</div>
+
 <!-- TAB: ADMIN -->
 <div id="tab-admin" class="tab-content">
   <div class="grid">
@@ -251,6 +283,13 @@
         <button onclick="ingestLeague()">Ingest</button>
       </div>
       <div class="status" id="ingestStatus"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Refresh Schedule Cache</h2>
+      <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
+      <button onclick="refreshSchedule()">Refresh</button>
+      <div class="status" id="scheduleRefreshStatus"></div>
     </div>
 
     <div class="panel">
@@ -384,6 +423,7 @@
 
     if (name === "team")        { loadDeck(); loadRoster(); }
     if (name === "leaderboard") { loadRosterLeaderboard(); loadLeaderboard(); loadTop(); }
+    if (name === "schedule")      loadSchedule();
     if (name === "admin")         loadWeights();
   }
 
@@ -434,7 +474,11 @@
   function showReveal(card) {
     document.getElementById("revealCard").className = `reveal-card ${card.card_type}`;
     document.getElementById("revealRarity").textContent = card.card_type;
+    const revealAvatar = document.getElementById("revealAvatar");
+    if (card.avatar_url) { revealAvatar.src = card.avatar_url; revealAvatar.style.display = ""; }
+    else { revealAvatar.style.display = "none"; }
     document.getElementById("revealPlayer").textContent = card.player_name;
+    document.getElementById("revealTeam").textContent = card.team_name || "";
     document.getElementById("revealDestination").textContent =
       card.is_active ? "Added to active roster" : "Added to bench (roster full)";
     document.getElementById("revealModal").classList.remove("hidden");
@@ -462,7 +506,7 @@
       } else {
         activeBody.innerHTML = active.map(c => `
           <tr>
-            <td>${c.player_name}</td>
+            <td><img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${c.player_name}</td>
             <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
             <td>${Number(c.total_points).toFixed(1)}</td>
             <td><button class="secondary" onclick="deactivateCard(${c.id})">Bench</button></td>
@@ -477,7 +521,7 @@
         benchSection.style.display = "";
         benchBody.innerHTML = bench.map(c => `
           <tr>
-            <td>${c.player_name}</td>
+            <td><img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${c.player_name}</td>
             <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
             <td>${Number(c.total_points).toFixed(1)}</td>
             <td>${rosterFull
@@ -534,7 +578,7 @@
         <tr>
           <td>${i + 1}</td>
           <td>${r.username}</td>
-          <td>${r.active_cards}</td>
+          <td>${r.total_cards}</td>
           <td>${Number(r.roster_value).toFixed(1)}</td>
         </tr>`).join("");
       setStatus("rosterLeaderboardStatus", "");
@@ -553,7 +597,7 @@
       tbody.innerHTML = rows.map((r, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td>${r.name}</td>
+          <td><img src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${r.name}</td>
           <td>${r.matches}</td>
           <td>${Number(r.avg_points).toFixed(1)}</td>
         </tr>`).join("");
@@ -570,7 +614,7 @@
       document.getElementById("topBody").innerHTML = rows.map((r, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td>${r.name}</td>
+          <td><img src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${r.name}</td>
           <td>${Number(r.fantasy_points).toFixed(1)}</td>
         </tr>`).join("");
       setStatus("topStatus", "");
@@ -615,6 +659,19 @@
   // ADMIN — INGEST / RECALCULATE
   // -------------------------------------------------------
 
+  async function refreshSchedule() {
+    setStatus("scheduleRefreshStatus", "Refreshing...");
+    try {
+      const res = await fetch(`${API}/schedule/refresh`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
+      const data = await res.json();
+      if (!res.ok) return setStatus("scheduleRefreshStatus", data.detail, false);
+      const count = data.weeks?.length ?? 0;
+      setStatus("scheduleRefreshStatus", count > 0 ? `Done. ${count} weeks loaded.` : (data.error || "No data returned"), count > 0);
+    } catch (e) {
+      setStatus("scheduleRefreshStatus", e.message, false);
+    }
+  }
+
   async function ingestLeague() {
     const id = document.getElementById("leagueId").value;
     if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
@@ -636,6 +693,97 @@
       setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
     } catch (e) {
       setStatus("recalcStatus", e.message, false);
+    }
+  }
+
+  // -------------------------------------------------------
+  // SCHEDULE
+  // -------------------------------------------------------
+
+  async function loadSchedule() {
+    const content = document.getElementById("scheduleContent");
+    const staleEl = document.getElementById("scheduleStale");
+    content.innerHTML = "<span style='color:#444'>Loading...</span>";
+    staleEl.style.display = "none";
+    try {
+      const res = await fetch(`${API}/schedule`);
+      const data = await res.json();
+      if (!res.ok) { setStatus("scheduleStatus", data.detail || "Failed to load", false); content.innerHTML = ""; return; }
+
+      if (data.stale) {
+        staleEl.textContent = `Cached data from ${data.cached_at ? new Date(data.cached_at).toLocaleString() : "unknown"}`;
+        staleEl.style.display = "";
+      }
+      if (data.error && !data.weeks?.length) {
+        content.innerHTML = `<span style='color:#555'>${data.error}</span>`;
+        setStatus("scheduleStatus", "");
+        return;
+      }
+      if (!data.weeks?.length) {
+        content.innerHTML = "<span style='color:#555'>No schedule data available.</span>";
+        setStatus("scheduleStatus", "");
+        return;
+      }
+
+      // Flatten all weeks, both divisions; drop entries with no datetime
+      const allSeries = [];
+      for (const week of data.weeks) {
+        for (const s of (week.div1 || [])) if (s.datetime_iso) allSeries.push({...s, division: "div1"});
+        for (const s of (week.div2 || [])) if (s.datetime_iso) allSeries.push({...s, division: "div2"});
+      }
+
+      const upcoming = allSeries.filter(s => s.match_status !== "past")
+                                .sort((a, b) => b.datetime_iso.localeCompare(a.datetime_iso));
+      const past     = allSeries.filter(s => s.match_status === "past")
+                                .sort((a, b) => b.datetime_iso.localeCompare(a.datetime_iso));
+
+      const renderRow = s => {
+        const isPast = s.match_status === "past";
+        const divLabel = s.division === "div1"
+          ? `<span class="badge badge-division div1">Div 1</span>`
+          : `<span class="badge badge-division div2">Div 2</span>`;
+
+        const r = s.series_result;
+        const scoreHtml = r
+          ? `<span class="series-score">${r.team1_wins}–${r.team2_wins}</span>`
+          : `<span class="series-score no-result">vs</span>`;
+
+        let meta;
+        if (r && r.start_time) {
+          const d = new Date(r.start_time * 1000);
+          meta = d.toLocaleDateString("fi-FI", {day: "numeric", month: "numeric"})
+               + " " + d.toLocaleTimeString("fi-FI", {hour: "2-digit", minute: "2-digit"});
+        } else {
+          meta = `${s.date || ""}${s.date && s.time ? " " : ""}${s.time || ""}`;
+        }
+
+        const streamHtml = s.stream_url
+          ? `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Watch"} ↗</a>`
+          : (s.stream_label ? `<span style="color:#555;">${s.stream_label}</span>` : `<span></span>`);
+
+        return `<div class="series-row${isPast ? " past" : ""}">
+          ${divLabel}
+          <span class="series-team">${s.team1 || "—"}</span>
+          ${scoreHtml}
+          <span class="series-team right">${s.team2 || "—"}</span>
+          <span class="series-meta">${meta}</span>
+          ${streamHtml}
+        </div>`;
+      };
+
+      const upcomingHtml = upcoming.map(renderRow).join("");
+      const pastHtml     = past.map(renderRow).join("");
+      const divider      = upcoming.length && past.length
+        ? `<div style="border-top:1px solid #2a2a2a;margin:16px 0 12px;"></div>`
+        : "";
+
+      content.innerHTML = upcomingHtml + divider + pastHtml;
+      if (!allSeries.length) content.innerHTML = "<span style='color:#555'>No dated fixtures found.</span>";
+
+      setStatus("scheduleStatus", "");
+    } catch (e) {
+      setStatus("scheduleStatus", e.message, false);
+      content.innerHTML = "";
     }
   }
 
