@@ -1,16 +1,31 @@
 # Commands
 
 ## Docker
-docker compose down -v
-docker compose up --build
+
+### Production (server) — uses image from GHCR, no source code needed
+```
+docker compose up -d
+docker compose down
+```
+
+### Local development — builds image locally, mounts source for hot reload
+```
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```
 
 ## Ingestion
+```
 curl -X POST http://localhost:8000/ingest/league/19369
+```
 
-## Access DB
-docker exec -it dota-kanaliiga-fantasy-db-1 psql -U dota -d fantasy
+## Access DB (SQLite)
+```
+docker compose exec backend sqlite3 /app/data/fantasy.db
+```
 
 ### DB queries
+```sql
 SELECT COUNT(*) FROM matches;
 SELECT * FROM matches LIMIT 5;
 
@@ -31,3 +46,4 @@ SELECT pms.*
 FROM player_match_stats pms
 LEFT JOIN players p ON pms.player_id = p.id
 WHERE p.id IS NULL;
+```

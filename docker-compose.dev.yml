@@ -6,3 +6,4 @@ services:
     volumes:
       - ./backend:/app
       - ./frontend:/app/frontend
+      - ./data:/app/data

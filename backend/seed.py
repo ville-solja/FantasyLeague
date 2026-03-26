@@ -1,6 +1,5 @@
 import json
 import os
-from sqlalchemy import text
 from database import SessionLocal
 from models import User, Card, Weight
 from auth import hash_password
@@ -24,9 +23,6 @@ def seed_users():
             ))
             print(f"[SEED] User {u['username']}")
 
-    db.commit()
-    # Sync the sequence so auto-generated IDs don't collide with seeded ones
-    db.execute(text("SELECT setval(pg_get_serial_sequence('users', 'id'), MAX(id)) FROM users"))
     db.commit()
     db.close()
 
