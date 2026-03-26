@@ -1,0 +1,99 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: monospace; background: #0f0f0f; color: #e0e0e0; padding: 24px; }
+h1 { color: #c84b11; font-size: 1.4rem; letter-spacing: 2px; text-transform: uppercase; }
+h2 { color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+
+/* HEADER */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.header-right { display: flex; align-items: center; gap: 12px; font-size: 0.8rem; color: #555; }
+
+/* TABS */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2a2a2a; }
+.tab { padding: 8px 18px; font-family: monospace; font-size: 0.85rem; cursor: pointer;
+       background: none; border: none; color: #555; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: #aaa; }
+.tab.active { color: #c84b11; border-bottom-color: #c84b11; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.panel { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; padding: 20px; }
+.row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+input, select { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 4px;
+                padding: 6px 10px; font-family: monospace; font-size: 0.9rem; flex: 1; }
+button { background: #c84b11; color: #fff; border: none; border-radius: 4px; padding: 7px 14px;
+         font-family: monospace; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+button:hover { background: #e05a1a; }
+button.secondary { background: #2a2a2a; color: #aaa; }
+button.secondary:hover { background: #333; color: #e0e0e0; }
+button.ghost { background: none; color: #555; border: 1px solid #333; }
+button.ghost:hover { color: #aaa; border-color: #555; background: none; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { color: #555; font-weight: normal; text-align: left; padding: 6px 8px; border-bottom: 1px solid #222; }
+td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 0.75rem; }
+.common    { background: #2a2a2a; color: #aaa; }
+.rare      { background: #1a2a3a; color: #6ab0e0; }
+.epic      { background: #2a1a3a; color: #b06ae0; }
+.legendary { background: #3a2a0a; color: #e0a030; }
+.status { font-size: 0.8rem; color: #555; margin-top: 10px; min-height: 18px; }
+.status.ok  { color: #4caf50; }
+.status.err { color: #e05050; }
+
+/* DECK SUMMARY */
+.rarity-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+.rarity-box { background: #111; border: 1px solid #2a2a2a; border-radius: 4px;
+              padding: 12px 8px; text-align: center; }
+.rarity-box .count { font-size: 1.4rem; font-weight: bold; margin-bottom: 4px; }
+.rarity-box .label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+.rarity-box.common    { border-color: #3a3a3a; }
+.rarity-box.common    .count { color: #aaa; }
+.rarity-box.rare      { border-color: #1e3a5a; }
+.rarity-box.rare      .count { color: #6ab0e0; }
+.rarity-box.epic      { border-color: #3a1a5a; }
+.rarity-box.epic      .count { color: #b06ae0; }
+.rarity-box.legendary { border-color: #5a3a0a; }
+.rarity-box.legendary .count { color: #e0a030; }
+
+/* CARD REVEAL MODAL */
+.reveal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+                  display: flex; align-items: center; justify-content: center; z-index: 200; }
+.reveal-overlay.hidden { display: none; }
+.reveal-card { border-radius: 10px; padding: 40px 48px; text-align: center;
+               border: 2px solid; min-width: 260px; }
+.reveal-card.common    { background: #1a1a1a; border-color: #3a3a3a; }
+.reveal-card.rare      { background: #0d1e2e; border-color: #6ab0e0; box-shadow: 0 0 30px #6ab0e040; }
+.reveal-card.epic      { background: #1a0d2e; border-color: #b06ae0; box-shadow: 0 0 30px #b06ae040; }
+.reveal-card.legendary { background: #2e1a0d; border-color: #e0a030; box-shadow: 0 0 40px #e0a03060; }
+.reveal-card .rarity-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
+.reveal-card.common    .rarity-label { color: #aaa; }
+.reveal-card.rare      .rarity-label { color: #6ab0e0; }
+.reveal-card.epic      .rarity-label { color: #b06ae0; }
+.reveal-card.legendary .rarity-label { color: #e0a030; }
+.reveal-card .player-name { font-size: 1.5rem; margin-bottom: 24px; }
+
+/* LOGIN MODAL */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+                 display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal-overlay.hidden { display: none; }
+.modal { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+         padding: 32px; width: 320px; }
+.modal h2 { color: #c84b11; font-size: 1rem; margin-bottom: 20px; }
+.modal select { width: 100%; margin-bottom: 16px; }
+.modal .status { margin-top: 8px; }
+
+/* SCHEDULE */
+.badge-division { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+.badge-division.div1 { background: #1a1a2a; color: #6a6aaa; }
+.badge-division.div2 { background: #1a2a1a; color: #6aaa6a; }
+.series-row { display: grid; grid-template-columns: 46px 1fr 52px 1fr 86px minmax(0, 150px);
+              align-items: center; column-gap: 10px; padding: 7px 0; border-bottom: 1px solid #1a1a1a; font-size: 0.85rem; }
+.series-row.past { opacity: 0.45; }
+.series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.series-team.right { text-align: right; }
+.series-score { font-weight: bold; color: #e0e0e0; text-align: center; }
+.series-score.no-result { color: #333; }
+.series-meta { color: #555; font-size: 0.78rem; text-align: right; white-space: nowrap; }
+.stream-link { color: #6ab0e0; text-decoration: none; }
+.stream-link:hover { text-decoration: underline; }
+.stale-notice { font-size: 0.75rem; color: #666; margin-bottom: 12px; }
