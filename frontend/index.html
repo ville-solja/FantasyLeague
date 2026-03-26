@@ -318,7 +318,7 @@
     if (!username || !password) return setStatus("loginStatus", "Enter username and password", false);
 
     try {
-      const res = await fetch(`${API}/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`, { method: "POST" });
+      const res = await fetch(`${API}/login`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username, password}) });
       const data = await res.json();
       if (!res.ok) return setStatus("loginStatus", data.detail, false);
 
@@ -348,10 +348,7 @@
     if (!username || !email || !password) return setStatus("registerStatus", "All fields required", false);
 
     try {
-      const res = await fetch(
-        `${API}/register?username=${encodeURIComponent(username)}&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
-        { method: "POST" }
-      );
+      const res = await fetch(`${API}/register`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username, email, password}) });
       const data = await res.json();
       if (!res.ok) return setStatus("registerStatus", data.detail, false);
 
@@ -423,7 +420,7 @@
 
   async function drawCard() {
     try {
-      const res = await fetch(`${API}/draw?user_id=${activeUserId}`, { method: "POST" });
+      const res = await fetch(`${API}/draw`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
       const data = await res.json();
       if (!res.ok) return setStatus("deckStatus", data.detail, false);
       showReveal(data);
@@ -500,7 +497,7 @@
 
   async function activateCard(cardId) {
     try {
-      const res = await fetch(`${API}/roster/${cardId}/activate?user_id=${activeUserId}`, { method: "POST" });
+      const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
       const data = await res.json();
       if (res.ok) loadRoster();
       else setStatus("rosterStatus", data.detail, false);
@@ -511,7 +508,7 @@
 
   async function deactivateCard(cardId) {
     try {
-      const res = await fetch(`${API}/roster/${cardId}/deactivate?user_id=${activeUserId}`, { method: "POST" });
+      const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
       const data = await res.json();
       if (res.ok) loadRoster();
       else setStatus("rosterStatus", data.detail, false);
@@ -606,7 +603,7 @@
     const value = parseFloat(document.getElementById(`w_${key}`).value);
     if (isNaN(value)) return setStatus("weightsStatus", "Invalid value", false);
     try {
-      const res = await fetch(`${API}/weights/${key}?value=${value}`, { method: "PUT" });
+      const res = await fetch(`${API}/weights/${key}`, { method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({value}) });
       const data = await res.json();
       setStatus("weightsStatus", res.ok ? `Saved ${key} = ${data.value}` : data.detail, res.ok);
     } catch (e) {
@@ -623,7 +620,7 @@
     if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
     setStatus("ingestStatus", "Ingesting... this may take a while");
     try {
-      const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST" });
+      const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
       const data = await res.json();
       setStatus("ingestStatus", res.ok ? `Done. League ${data.league_id} ingested.` : data.detail, res.ok);
     } catch (e) {
@@ -634,7 +631,7 @@
   async function recalculate() {
     setStatus("recalcStatus", "Recalculating...");
     try {
-      const res = await fetch(`${API}/recalculate`, { method: "POST" });
+      const res = await fetch(`${API}/recalculate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
       const data = await res.json();
       setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
     } catch (e) {

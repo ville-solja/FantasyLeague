@@ -1,74 +1,81 @@
 # FantasyLeague
 
 ## Description
-Idea of a Fantasy league typically is that the participating **Users** are building their dream team (**Roster**) with some limitations and over the season they are tracking the progression of their team and the results between different users **Rosters** are made visible to other **Users** via **Leaderboards**.
+A fantasy league web app for [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league. Users build a roster from a deck of player cards and compete on leaderboards based on real match performance data fetched from the OpenDota API.
 
-Target audience is players and watchers of Kanaliiga, but the design can be made general enough to function league agnostic. 
+## Deployment
 
-## Key Features
-- Simple login and account management
-- Functionality for **User** to obtain **Card** from **Deck**
-- Ability for **User** to set **Cards** as their **Roster**
-- Leaderboard for both **Player** and **Roster** performances
+### Requirements
+- Docker and Docker Compose
+- A `.env` file based on `.env.example`
 
-### Next steps
-#### User creation
-1. Field for username
-2. Field for password
-3. Button for saving the values to User -table
+### Quick start
+```
+cp .env.example .env
+# Edit .env and set GITHUB_REPOSITORY to your repo (e.g. myusername/dota-kanaliiga-fantasy)
+docker compose up -d
+```
 
-#### Obtaining cards? 
-Solve how Users obtain cards and what limitations there are. These could be later tied to twitch drops or something
+The app is available at `http://localhost:8000`. The SQLite database is stored in `./data/fantasy.db` and persists across restarts.
+
+### Ingest league data
+After the app is running, trigger ingestion for the Kanaliiga league:
+```
+curl -X POST http://localhost:8000/ingest/league/19369
+```
+This fetches all matches from OpenDota, calculates fantasy points, and seeds player cards into the deck. Ingestion can take several minutes depending on match count and OpenDota rate limits.
+
+### Local development
+```
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+Source directories are mounted for hot reload.
+
+## Features
+- Register and log in — leaderboards are visible without an account
+- Draw a random player card from the deck (common / rare / epic / legendary)
+- Manage your roster — up to 5 active cards at a time, rest on bench
+- Leaderboards for roster value and individual player performance
+- Admin panel for league ingestion, weight adjustment, and points recalculation
+
+## Scoring
+
+Fantasy points per match are calculated from weighted player stats:
+
+| Stat | Default weight |
+|---|---|
+| Kills | 3.0 |
+| Assists | 2.0 |
+| Deaths | -1.0 |
+| Gold per minute | 0.02 |
+| Observer wards placed | 1.0 |
+| Sentry wards placed | 1.5 |
+| Tower damage | 0.002 |
+
+Weights are configurable at runtime via the Admin tab without re-ingesting data.
 
 ## Terminology
-#### League
-League that the matches take place in. This is the single id that is combining all of the players, teams and matches. It is the initial value that is used to create the database required
 
-Relevant endpoints:
-https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id
-https://docs.opendota.com/#tag/leagues/operation/get_leagues_by_league_id_select_matches
+**League** — A tournament in OpenDota. The single ID that ties together all players, teams, and matches. Cards are currently seeded for Kanaliiga S15 Lower division (league ID 19369) — ingesting a different league won't have matching players in the deck.
 
-**Players are hardcoded to be for the Kanaliiga S15 Lower division, so any other league won't have matching players to the once found in the deck**
+**Match** — A single played map. Contains two teams, 10 players, and per-player performance stats from the OpenDota API.
 
-#### Match
-A single played map as part of a tournament. Contains two teams, 10 players and a lot of additional data from the OpenDota API endpoint. Match endpoint also has extremely robust players performance metrics that can be used to determine the fantasy points
+**Player** — A participant in a match tied to the current league. Names are resolved from OpenDota player profiles after ingestion.
 
-Relevant endpoint:
-https://docs.opendota.com/#tag/matches/operation/get_matches_by_match_id
+**Team** — A team taking part in the league. Team names are extracted from match data since amateur teams are not in the OpenDota pro teams database.
 
-#### Weight
-Predetermined factor that assigns a weight to each attribute from **Match** to **Player** in order to fairly determine how "valuable" performance metrics are in relation to each other.
+**Card** — A player instance that can be owned by a user. Each player has 15 cards in the deck: 1 legendary, 2 epic, 4 rare, 8 common.
 
-#### Fantasy Points
-Amount of points accumulated by a **Player** over a single **Match** according to predermined **Weights**
+**Deck** — The pool of unowned cards available to draw from.
 
-#### Player
-Player that has participated in a match that is tied to the current tournament
+**Roster** — The active cards a user has selected (max 5). Roster value is the sum of fantasy points across all active cards.
 
-Endpoint:
-https://docs.opendota.com/#tag/players/operation/get_players_by_account_id
+**Weight** — A multiplier applied to a stat when calculating fantasy points. Stored in the database and adjustable via the admin panel.
 
-#### Team
-Team that is taking part in the league and consists of players. Not immediately needed, but should be included to enable future team based metrics and leaderboards
+**Fantasy Points** — Points earned by a player in a single match, calculated as the weighted sum of their performance stats.
 
-#### User
-User of the fantasy league, this is not necessarily limited only to the players as ideally the fantasy league is for watchers as well
-
-#### Card
-Player instance that is "owned"/"assigned" to a User that determines their "Roster" for the fantasyleague
-
-#### Deck
-Bankend existing containing "cards" in a table. Deck is mostly a documentation reference and card table should be called cards for naming consistency. In initial stages the deck is likely just populated from a json, but later should be automated at the start of season once the players and teams are enrolled to the league.
-
-#### Roster
-Active "Cards" that "User" has set that will be determining how they are scoring on the fantasy league. This part is the most UX intensive and hopefully someone more experienced can actually build this.
-
-## Architecture
-### Phase 1 - MVP 
-Version of the app should be easy to host and manage, and likely will be contained in single container
-
-### Phase 2 - Stability
-Postgresql should be hosted outside of the container in order to enable permanence in the data. This should be done to make the user experience and long term traceablitiy doable.
-
-### Phase 3 - Separation
-Ingestion and other backend scripts should be separated entirely from the frontend
+## Stack
+- **Backend** — FastAPI, SQLAlchemy, SQLite
+- **Frontend** — Vanilla HTML/CSS/JavaScript, served by FastAPI
+- **Data source** — OpenDota API
+- **Container** — Docker, published to GitHub Container Registry via GitHub Actions

@@ -2,6 +2,7 @@ import random
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy import text
 from models import Player, PlayerMatchStats, Card, User, Weight
 from database import SessionLocal, engine, Base
@@ -14,6 +15,40 @@ from auth import hash_password, verify_password
 ROSTER_LIMIT = 5
 
 
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterBody(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class DrawBody(BaseModel):
+    user_id: int
+
+
+class RosterActionBody(BaseModel):
+    user_id: int
+
+
+class WeightUpdateBody(BaseModel):
+    value: float
+
+
+class AdminBody(BaseModel):
+    user_id: int
+
+
+def require_admin(user_id: int, db):
+    user = db.get(User, user_id)
+    if not user or not user.is_admin:
+        db.close()
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -22,13 +57,14 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(lifespan=lifespan)
-
-
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.post("/ingest/league/{league_id}")
-def ingest_league_endpoint(league_id: int):
+def ingest_league_endpoint(league_id: int, body: AdminBody):
+    db = SessionLocal()
+    require_admin(body.user_id, db)
+    db.close()
     ingest_league(league_id)
     run_enrichment()
     seed_cards()
@@ -36,10 +72,10 @@ def ingest_league_endpoint(league_id: int):
 
 
 @app.post("/login")
-def login(username: str, password: str):
+def login(body: LoginBody):
     db = SessionLocal()
-    user = db.query(User).filter(User.username == username).first()
-    if not user or not verify_password(password, user.password_hash):
+    user = db.query(User).filter(User.username == body.username).first()
+    if not user or not verify_password(body.password, user.password_hash):
         db.close()
         raise HTTPException(status_code=401, detail="Invalid username or password")
     data = {"id": user.id, "username": user.username, "is_admin": user.is_admin}
@@ -48,18 +84,18 @@ def login(username: str, password: str):
 
 
 @app.post("/register")
-def register(username: str, password: str, email: str):
+def register(body: RegisterBody):
     db = SessionLocal()
-    if db.query(User).filter(User.username == username).first():
+    if db.query(User).filter(User.username == body.username).first():
         db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
-    if db.query(User).filter(User.email == email).first():
+    if db.query(User).filter(User.email == body.email).first():
         db.close()
         raise HTTPException(status_code=409, detail="Email already registered")
     user = User(
-        username=username,
-        email=email,
-        password_hash=hash_password(password),
+        username=body.username,
+        email=body.email,
+        password_hash=hash_password(body.password),
         is_admin=False,
     )
     db.add(user)
@@ -83,7 +119,7 @@ def get_deck():
 
 
 @app.post("/draw")
-def draw_card(user_id: int):
+def draw_card(body: DrawBody):
     db = SessionLocal()
     unclaimed = db.execute(text("""
         SELECT c.id, c.card_type, p.name as player_name
@@ -98,10 +134,10 @@ def draw_card(user_id: int):
 
     chosen = random.choice(unclaimed)
     card = db.get(Card, chosen.id)
-    card.owner_id = user_id
+    card.owner_id = body.user_id
 
     active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
+        Card.owner_id == body.user_id, Card.is_active == True
     ).count()
     is_active = active_count < ROSTER_LIMIT
     card.is_active = is_active
@@ -140,10 +176,10 @@ def get_roster(user_id: int):
 
 
 @app.post("/roster/{card_id}/activate")
-def activate_card(card_id: int, user_id: int):
+def activate_card(card_id: int, body: RosterActionBody):
     db = SessionLocal()
     card = db.get(Card, card_id)
-    if not card or card.owner_id != user_id:
+    if not card or card.owner_id != body.user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     if card.is_active:
@@ -151,7 +187,7 @@ def activate_card(card_id: int, user_id: int):
         raise HTTPException(status_code=409, detail="Card already active")
 
     active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
+        Card.owner_id == body.user_id, Card.is_active == True
     ).count()
     if active_count >= ROSTER_LIMIT:
         db.close()
@@ -164,10 +200,10 @@ def activate_card(card_id: int, user_id: int):
 
 
 @app.post("/roster/{card_id}/deactivate")
-def deactivate_card(card_id: int, user_id: int):
+def deactivate_card(card_id: int, body: RosterActionBody):
     db = SessionLocal()
     card = db.get(Card, card_id)
-    if not card or card.owner_id != user_id:
+    if not card or card.owner_id != body.user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     card.is_active = False
@@ -235,21 +271,22 @@ def get_weights():
 
 
 @app.put("/weights/{key}")
-def update_weight(key: str, value: float):
+def update_weight(key: str, body: WeightUpdateBody):
     db = SessionLocal()
     weight = db.get(Weight, key)
     if not weight:
         db.close()
         raise HTTPException(status_code=404, detail="Weight not found")
-    weight.value = value
+    weight.value = body.value
     db.commit()
     db.close()
-    return {"key": key, "value": value}
+    return {"key": key, "value": body.value}
 
 
 @app.post("/recalculate")
-def recalculate():
+def recalculate(body: AdminBody):
     db = SessionLocal()
+    require_admin(body.user_id, db)
     weights = {w.key: w.value for w in db.query(Weight).all()}
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
