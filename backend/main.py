@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from models import Player, PlayerMatchStats, Card, User, Weight
-from database import SessionLocal, engine, Base
+from database import SessionLocal, engine, Base, wait_for_db
 from ingest import ingest_league
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
@@ -16,6 +16,7 @@ ROSTER_LIMIT = 5
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    wait_for_db()
     Base.metadata.create_all(bind=engine)
     seed_users()
     seed_weights()

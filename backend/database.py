@@ -1,22 +1,23 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 import time
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Retry loop for DB connection
-for i in range(20):
-    try:
-        engine = create_engine(DATABASE_URL)
-        engine.connect()
-        print("Database connected!")
-        break
-    except Exception as e:
-        print(f"DB not ready, retrying... ({i+1}/10)")
-        time.sleep(3)
-else:
-    raise Exception("Could not connect to database")
-
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
+
+
+def wait_for_db(retries=20, delay=3):
+    for i in range(retries):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print("Database connected!")
+            return
+        except Exception:
+            print(f"DB not ready, retrying... ({i+1}/{retries})")
+            time.sleep(delay)
+    raise Exception("Could not connect to database")
