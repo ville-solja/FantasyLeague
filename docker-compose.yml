@@ -18,15 +18,12 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    image: ghcr.io/${GITHUB_REPOSITORY:-local/dota-kanaliiga-fantasy}:latest
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
-    volumes:
-      - ./backend:/app
-      - ./frontend:/app/frontend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
 

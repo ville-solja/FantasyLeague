@@ -6,7 +6,7 @@ import time
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Retry loop for DB connection
-for i in range(10):
+for i in range(20):
     try:
         engine = create_engine(DATABASE_URL)
         engine.connect()
@@ -14,7 +14,7 @@ for i in range(10):
         break
     except Exception as e:
         print(f"DB not ready, retrying... ({i+1}/10)")
-        time.sleep(2)
+        time.sleep(3)
 else:
     raise Exception("Could not connect to database")
 
