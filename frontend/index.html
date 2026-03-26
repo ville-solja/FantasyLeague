@@ -106,7 +106,8 @@
   <div class="reveal-card" id="revealCard">
     <div class="rarity-label" id="revealRarity"></div>
     <div class="player-name" id="revealPlayer"></div>
-    <button onclick="closeReveal()">Add to roster</button>
+    <div id="revealDestination" style="font-size:0.75rem;color:#888;margin-bottom:20px;"></div>
+    <button onclick="closeReveal()">Continue</button>
   </div>
 </div>
 
@@ -157,9 +158,23 @@
       <h2>My Roster</h2>
       <button class="secondary" onclick="loadRoster()" style="margin-bottom:12px;">Refresh</button>
       <table>
-        <thead><tr><th>#</th><th>Player</th><th>Rarity</th><th>Total pts</th></tr></thead>
-        <tbody id="rosterBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        <thead><tr><th>Player</th><th>Rarity</th><th>Pts</th><th></th></tr></thead>
+        <tbody id="rosterActive"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="color:#555;padding-top:8px;">Combined value</td>
+            <td id="rosterCombined" style="padding-top:8px;">—</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
+      <div id="benchSection" style="margin-top:20px;display:none;">
+        <h2 style="margin-bottom:10px;">Bench</h2>
+        <table>
+          <thead><tr><th>Player</th><th>Rarity</th><th>Pts</th><th></th></tr></thead>
+          <tbody id="rosterBench"></tbody>
+        </table>
+      </div>
       <div class="status" id="rosterStatus"></div>
     </div>
 
@@ -169,6 +184,16 @@
 <!-- TAB: LEADERBOARDS -->
 <div id="tab-leaderboard" class="tab-content active">
   <div class="grid">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Roster standings</h2>
+      <button class="secondary" onclick="loadRosterLeaderboard()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>Rank</th><th>User</th><th>Active cards</th><th>Roster value</th></tr></thead>
+        <tbody id="rosterLeaderboardBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="rosterLeaderboardStatus"></div>
+    </div>
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Player average performance</h2>
@@ -288,7 +313,7 @@
     const btn = document.getElementById(`tab-btn-${name}`);
     if (btn) btn.classList.add("active");
 
-    if (name === "leaderboard") { loadLeaderboard(); loadTop(); }
+    if (name === "leaderboard") { loadRosterLeaderboard(); loadLeaderboard(); loadTop(); }
     if (name === "admin") loadWeights();
   }
 
@@ -340,6 +365,8 @@
     document.getElementById("revealCard").className = `reveal-card ${card.card_type}`;
     document.getElementById("revealRarity").textContent = card.card_type;
     document.getElementById("revealPlayer").textContent = card.player_name;
+    document.getElementById("revealDestination").textContent =
+      card.is_active ? "Added to active roster" : "Added to bench (roster full)";
     document.getElementById("revealModal").classList.remove("hidden");
   }
 
@@ -355,21 +382,66 @@
     if (!activeUserId) return;
     try {
       const res = await fetch(`${API}/roster/${activeUserId}`);
-      const cards = await res.json();
-      const tbody = document.getElementById("rosterBody");
-      if (!cards.length) {
-        tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No cards claimed yet</td></tr>";
-        setStatus("rosterStatus", "");
-        return;
+      const data = await res.json();
+      const { active, bench, combined_value } = data;
+
+      const activeBody = document.getElementById("rosterActive");
+      if (!active.length) {
+        activeBody.innerHTML = "<tr><td colspan='4' style='color:#444'>No active cards</td></tr>";
+        document.getElementById("rosterCombined").textContent = "0.0";
+      } else {
+        activeBody.innerHTML = active.map(c => `
+          <tr>
+            <td>${c.player_name}</td>
+            <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
+            <td>${Number(c.total_points).toFixed(1)}</td>
+            <td><button class="secondary" onclick="deactivateCard(${c.id})">Bench</button></td>
+          </tr>`).join("");
+        document.getElementById("rosterCombined").textContent = Number(combined_value).toFixed(1);
       }
-      tbody.innerHTML = cards.map(c => `
-        <tr>
-          <td>${c.id}</td>
-          <td>${c.player_name}</td>
-          <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
-          <td>${Number(c.total_points).toFixed(1)}</td>
-        </tr>`).join("");
-      setStatus("rosterStatus", `${cards.length} cards in roster`);
+
+      const benchSection = document.getElementById("benchSection");
+      const benchBody = document.getElementById("rosterBench");
+      const rosterFull = active.length >= 5;
+      if (bench.length) {
+        benchSection.style.display = "";
+        benchBody.innerHTML = bench.map(c => `
+          <tr>
+            <td>${c.player_name}</td>
+            <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
+            <td>${Number(c.total_points).toFixed(1)}</td>
+            <td>${rosterFull
+              ? `<span style="color:#444;font-size:0.8rem;">Roster full</span>`
+              : `<button class="secondary" onclick="activateCard(${c.id})">Activate</button>`
+            }</td>
+          </tr>`).join("");
+      } else {
+        benchSection.style.display = "none";
+      }
+
+      setStatus("rosterStatus", `${active.length}/5 active`);
+    } catch (e) {
+      setStatus("rosterStatus", e.message, false);
+    }
+  }
+
+  async function activateCard(cardId) {
+    try {
+      const res = await fetch(`${API}/roster/${cardId}/activate?user_id=${activeUserId}`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) loadRoster();
+      else setStatus("rosterStatus", data.detail, false);
+    } catch (e) {
+      setStatus("rosterStatus", e.message, false);
+    }
+  }
+
+  async function deactivateCard(cardId) {
+    try {
+      const res = await fetch(`${API}/roster/${cardId}/deactivate?user_id=${activeUserId}`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) loadRoster();
+      else setStatus("rosterStatus", data.detail, false);
     } catch (e) {
       setStatus("rosterStatus", e.message, false);
     }
@@ -378,6 +450,29 @@
   // -------------------------------------------------------
   // LEADERBOARDS
   // -------------------------------------------------------
+
+  async function loadRosterLeaderboard() {
+    try {
+      const res = await fetch(`${API}/leaderboard/roster`);
+      const rows = await res.json();
+      const tbody = document.getElementById("rosterLeaderboardBody");
+      if (!rows.length) {
+        tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>";
+        return;
+      }
+      tbody.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.username}</td>
+          <td>${r.active_cards}</td>
+          <td>${Number(r.roster_value).toFixed(1)}</td>
+        </tr>`).join("");
+      setStatus("rosterLeaderboardStatus", "");
+    } catch (e) {
+      setStatus("rosterLeaderboardStatus", e.message, false);
+    }
+  }
+
 
   async function loadLeaderboard() {
     try {

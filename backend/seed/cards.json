@@ -1,10 +1,4307 @@
 [
-  { "id": 1, "player_id": 972354862, "owner_id": null, "card_type": "legendary", "league_id": 19369 },
-  { "id": 2, "player_id": 507194,    "owner_id": null, "card_type": "common",    "league_id": 19369 },
-  { "id": 3, "player_id": 19839266,  "owner_id": null, "card_type": "rare",      "league_id": 19369 },
-  { "id": 4, "player_id": 55671631,  "owner_id": null, "card_type": "epic",      "league_id": 19369 },
-  { "id": 5, "player_id": 12031716,  "owner_id": null, "card_type": "common",    "league_id": 19369 },
-  { "id": 6, "player_id": 36901921,  "owner_id": null, "card_type": "rare",      "league_id": 19369 },
-  { "id": 7, "player_id": 43306438,  "owner_id": null, "card_type": "common",    "league_id": 19369 },
-  { "id": 8, "player_id": 18133352,  "owner_id": null, "card_type": "legendary", "league_id": 19369 }
+  {
+    "id": 1,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 2,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 3,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 4,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 5,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 6,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 7,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 8,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 9,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 10,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 11,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 12,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 13,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 14,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 15,
+    "player_id": 507194,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 16,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 17,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 18,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 19,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 20,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 21,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 22,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 23,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 24,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 25,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 26,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 27,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 28,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 29,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 30,
+    "player_id": 7249517,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 31,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 32,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 33,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 34,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 35,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 36,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 37,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 38,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 39,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 40,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 41,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 42,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 43,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 44,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 45,
+    "player_id": 10364161,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 46,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 47,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 48,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 49,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 50,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 51,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 52,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 53,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 54,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 55,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 56,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 57,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 58,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 59,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 60,
+    "player_id": 11951830,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 61,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 62,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 63,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 64,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 65,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 66,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 67,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 68,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 69,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 70,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 71,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 72,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 73,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 74,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 75,
+    "player_id": 12031716,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 76,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 77,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 78,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 79,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 80,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 81,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 82,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 83,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 84,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 85,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 86,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 87,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 88,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 89,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 90,
+    "player_id": 12294577,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 91,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 92,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 93,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 94,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 95,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 96,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 97,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 98,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 99,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 100,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 101,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 102,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 103,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 104,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 105,
+    "player_id": 14364932,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 106,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 107,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 108,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 109,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 110,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 111,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 112,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 113,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 114,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 115,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 116,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 117,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 118,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 119,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 120,
+    "player_id": 15169690,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 121,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 122,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 123,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 124,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 125,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 126,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 127,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 128,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 129,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 130,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 131,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 132,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 133,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 134,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 135,
+    "player_id": 15197757,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 136,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 137,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 138,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 139,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 140,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 141,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 142,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 143,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 144,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 145,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 146,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 147,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 148,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 149,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 150,
+    "player_id": 16854840,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 151,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 152,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 153,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 154,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 155,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 156,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 157,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 158,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 159,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 160,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 161,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 162,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 163,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 164,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 165,
+    "player_id": 18133352,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 166,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 167,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 168,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 169,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 170,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 171,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 172,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 173,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 174,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 175,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 176,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 177,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 178,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 179,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 180,
+    "player_id": 19839266,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 181,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 182,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 183,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 184,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 185,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 186,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 187,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 188,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 189,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 190,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 191,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 192,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 193,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 194,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 195,
+    "player_id": 32468899,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 196,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 197,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 198,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 199,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 200,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 201,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 202,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 203,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 204,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 205,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 206,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 207,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 208,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 209,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 210,
+    "player_id": 32469140,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 211,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 212,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 213,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 214,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 215,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 216,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 217,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 218,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 219,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 220,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 221,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 222,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 223,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 224,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 225,
+    "player_id": 36901921,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 226,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 227,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 228,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 229,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 230,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 231,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 232,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 233,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 234,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 235,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 236,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 237,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 238,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 239,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 240,
+    "player_id": 39598626,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 241,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 242,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 243,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 244,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 245,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 246,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 247,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 248,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 249,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 250,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 251,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 252,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 253,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 254,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 255,
+    "player_id": 40022324,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 256,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 257,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 258,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 259,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 260,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 261,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 262,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 263,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 264,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 265,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 266,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 267,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 268,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 269,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 270,
+    "player_id": 43306438,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 271,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 272,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 273,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 274,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 275,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 276,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 277,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 278,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 279,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 280,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 281,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 282,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 283,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 284,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 285,
+    "player_id": 45045660,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 286,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 287,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 288,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 289,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 290,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 291,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 292,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 293,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 294,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 295,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 296,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 297,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 298,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 299,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 300,
+    "player_id": 45479015,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 301,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 302,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 303,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 304,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 305,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 306,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 307,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 308,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 309,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 310,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 311,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 312,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 313,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 314,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 315,
+    "player_id": 51004298,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 316,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 317,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 318,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 319,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 320,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 321,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 322,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 323,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 324,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 325,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 326,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 327,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 328,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 329,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 330,
+    "player_id": 51355407,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 331,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 332,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 333,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 334,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 335,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 336,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 337,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 338,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 339,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 340,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 341,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 342,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 343,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 344,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 345,
+    "player_id": 55671631,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 346,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 347,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 348,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 349,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 350,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 351,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 352,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 353,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 354,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 355,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 356,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 357,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 358,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 359,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 360,
+    "player_id": 55958788,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 361,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 362,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 363,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 364,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 365,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 366,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 367,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 368,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 369,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 370,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 371,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 372,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 373,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 374,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 375,
+    "player_id": 61130930,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 376,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 377,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 378,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 379,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 380,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 381,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 382,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 383,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 384,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 385,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 386,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 387,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 388,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 389,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 390,
+    "player_id": 66914783,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 391,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 392,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 393,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 394,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 395,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 396,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 397,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 398,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 399,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 400,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 401,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 402,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 403,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 404,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 405,
+    "player_id": 80164199,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 406,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 407,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 408,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 409,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 410,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 411,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 412,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 413,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 414,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 415,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 416,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 417,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 418,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 419,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 420,
+    "player_id": 83859612,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 421,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 422,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 423,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 424,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 425,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 426,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 427,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 428,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 429,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 430,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 431,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 432,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 433,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 434,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 435,
+    "player_id": 86947055,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 436,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 437,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 438,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 439,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 440,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 441,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 442,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 443,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 444,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 445,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 446,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 447,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 448,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 449,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 450,
+    "player_id": 89132561,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 451,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 452,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 453,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 454,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 455,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 456,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 457,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 458,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 459,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 460,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 461,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 462,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 463,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 464,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 465,
+    "player_id": 89866599,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 466,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 467,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 468,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 469,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 470,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 471,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 472,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 473,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 474,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 475,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 476,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 477,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 478,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 479,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 480,
+    "player_id": 93428385,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 481,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 482,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 483,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 484,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 485,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 486,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 487,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 488,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 489,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 490,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 491,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 492,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 493,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 494,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 495,
+    "player_id": 100699083,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 496,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 497,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 498,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 499,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 500,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 501,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 502,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 503,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 504,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 505,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 506,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 507,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 508,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 509,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 510,
+    "player_id": 117370317,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 511,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 512,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 513,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 514,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 515,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 516,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 517,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 518,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 519,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 520,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 521,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 522,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 523,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 524,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 525,
+    "player_id": 121408153,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 526,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 527,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 528,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 529,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 530,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 531,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 532,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 533,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 534,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 535,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 536,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 537,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 538,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 539,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 540,
+    "player_id": 128013198,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 541,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 542,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 543,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 544,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 545,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 546,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 547,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 548,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 549,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 550,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 551,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 552,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 553,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 554,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 555,
+    "player_id": 157518245,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 556,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 557,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 558,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 559,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 560,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 561,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 562,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 563,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 564,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 565,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 566,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 567,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 568,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 569,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 570,
+    "player_id": 160669811,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 571,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 572,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 573,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 574,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 575,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 576,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 577,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 578,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 579,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 580,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 581,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 582,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 583,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 584,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 585,
+    "player_id": 172501838,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 586,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 587,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 588,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 589,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 590,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 591,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 592,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 593,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 594,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 595,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 596,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 597,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 598,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 599,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 600,
+    "player_id": 229194762,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 601,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "legendary",
+    "league_id": 19369
+  },
+  {
+    "id": 602,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 603,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "epic",
+    "league_id": 19369
+  },
+  {
+    "id": 604,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 605,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 606,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 607,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "rare",
+    "league_id": 19369
+  },
+  {
+    "id": 608,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 609,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 610,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 611,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 612,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 613,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 614,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  },
+  {
+    "id": 615,
+    "player_id": 972354862,
+    "owner_id": null,
+    "card_type": "common",
+    "league_id": 19369
+  }
 ]

@@ -52,6 +52,7 @@ class Card(Base):
     owner_id = Column(BigInteger, ForeignKey("users.id"))
     card_type = Column(String)  # "common", "rare", "epic", "legendary"
     league_id = Column(BigInteger, ForeignKey("leagues.id"))
+    is_active = Column(Boolean, default=False)
 
 
 class User(Base):
