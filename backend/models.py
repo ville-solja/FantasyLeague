@@ -66,6 +66,7 @@ class User(Base):
     email = Column(String, unique=True)
     password_hash = Column(String)
     is_admin = Column(Boolean, default=False)
+    draw_limit = Column(Integer, default=7)
 
 
 class League(Base):

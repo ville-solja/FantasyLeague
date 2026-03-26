@@ -44,6 +44,12 @@ class AdminBody(BaseModel):
     user_id: int
 
 
+class GrantDrawsBody(BaseModel):
+    user_id: int        # admin
+    target_user_id: int
+    amount: int
+
+
 def require_admin(user_id: int, db):
     user = db.get(User, user_id)
     if not user or not user.is_admin:
@@ -65,6 +71,10 @@ async def lifespan(app: FastAPI):
             conn.commit()
         if "radiant_win" not in match_cols:
             conn.execute(text("ALTER TABLE matches ADD COLUMN radiant_win BOOLEAN"))
+            conn.commit()
+        user_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "draw_limit" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN draw_limit INTEGER DEFAULT 7"))
             conn.commit()
     seed_users()
     seed_weights()
@@ -135,6 +145,16 @@ def get_deck():
 @app.post("/draw")
 def draw_card(body: DrawBody):
     db = SessionLocal()
+    user = db.get(User, body.user_id)
+    if not user:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    draws_used = db.query(Card).filter(Card.owner_id == body.user_id).count()
+    draw_limit = user.draw_limit if user.draw_limit is not None else 7
+    if draws_used >= draw_limit:
+        db.close()
+        raise HTTPException(status_code=409, detail=f"Draw limit reached ({draws_used}/{draw_limit})")
+
     unclaimed = db.execute(text("""
         SELECT c.id, c.card_type, p.name as player_name, p.avatar_url, t.name as team_name
         FROM cards c
@@ -193,8 +213,13 @@ def get_roster(user_id: int):
     bench  = [c for c in cards if not c["is_active"]]
     combined = sum(c["total_points"] for c in active)
 
+    user = db.get(User, user_id)
+    draws_used  = len(cards)
+    draw_limit  = user.draw_limit if user and user.draw_limit is not None else 7
+
     db.close()
-    return {"active": active, "bench": bench, "combined_value": combined}
+    return {"active": active, "bench": bench, "combined_value": combined,
+            "draws_used": draws_used, "draw_limit": draw_limit}
 
 
 @app.post("/roster/{card_id}/activate")
@@ -308,6 +333,42 @@ def update_weight(key: str, body: WeightUpdateBody):
     db.commit()
     db.close()
     return {"key": key, "value": body.value}
+
+
+@app.get("/users")
+def list_users(user_id: int):
+    db = SessionLocal()
+    require_admin(user_id, db)
+    users = db.query(User).order_by(User.username).all()
+    result = []
+    for u in users:
+        draws_used = db.query(Card).filter(Card.owner_id == u.id).count()
+        result.append({
+            "id": u.id,
+            "username": u.username,
+            "draws_used": draws_used,
+            "draw_limit": u.draw_limit if u.draw_limit is not None else 7,
+        })
+    db.close()
+    return result
+
+
+@app.post("/grant-draws")
+def grant_draws(body: GrantDrawsBody):
+    db = SessionLocal()
+    require_admin(body.user_id, db)
+    target = db.get(User, body.target_user_id)
+    if not target:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    if body.amount < 1:
+        db.close()
+        raise HTTPException(status_code=422, detail="Amount must be at least 1")
+    target.draw_limit = (target.draw_limit or 7) + body.amount
+    db.commit()
+    new_limit = target.draw_limit
+    db.close()
+    return {"username": target.username, "draw_limit": new_limit}
 
 
 @app.post("/recalculate")

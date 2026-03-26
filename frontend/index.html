@@ -191,7 +191,10 @@
           <div class="label">Legendary</div>
         </div>
       </div>
-      <button onclick="drawCard()">Draw a card</button>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button onclick="drawCard()">Draw a card</button>
+        <span id="drawCounter" style="font-size:0.8rem;color:#555;"></span>
+      </div>
       <div class="status" id="deckStatus"></div>
     </div>
 
@@ -297,6 +300,16 @@
       <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
       <button onclick="recalculate()">Recalculate</button>
       <div class="status" id="recalcStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Draw Limits</h2>
+      <button class="secondary" onclick="loadUsers()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>User</th><th>Draws used</th><th>Limit</th><th>Grant extra draws</th></tr></thead>
+        <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="usersStatus"></div>
     </div>
 
     <div class="panel" style="grid-column: span 2;">
@@ -424,7 +437,7 @@
     if (name === "team")        { loadDeck(); loadRoster(); }
     if (name === "leaderboard") { loadRosterLeaderboard(); loadLeaderboard(); loadTop(); }
     if (name === "schedule")      loadSchedule();
-    if (name === "admin")         loadWeights();
+    if (name === "admin")       { loadWeights(); loadUsers(); }
   }
 
   // -------------------------------------------------------
@@ -497,7 +510,9 @@
     try {
       const res = await fetch(`${API}/roster/${activeUserId}`);
       const data = await res.json();
-      const { active, bench, combined_value } = data;
+      const { active, bench, combined_value, draws_used, draw_limit } = data;
+      const counter = document.getElementById("drawCounter");
+      if (counter) counter.textContent = draws_used !== undefined ? `${draws_used} / ${draw_limit} draws used` : "";
 
       const activeBody = document.getElementById("rosterActive");
       if (!active.length) {
@@ -658,6 +673,40 @@
   // -------------------------------------------------------
   // ADMIN — INGEST / RECALCULATE
   // -------------------------------------------------------
+
+  async function loadUsers() {
+    try {
+      const res = await fetch(`${API}/users?user_id=${activeUserId}`);
+      const rows = await res.json();
+      if (!res.ok) return setStatus("usersStatus", rows.detail, false);
+      document.getElementById("usersBody").innerHTML = rows.map(u => `
+        <tr>
+          <td>${u.username}</td>
+          <td>${u.draws_used}</td>
+          <td>${u.draw_limit}</td>
+          <td style="display:flex;gap:6px;align-items:center;">
+            <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
+            <button class="secondary" onclick="grantDraws(${u.id})">Grant</button>
+          </td>
+        </tr>`).join("");
+      setStatus("usersStatus", "");
+    } catch (e) {
+      setStatus("usersStatus", e.message, false);
+    }
+  }
+
+  async function grantDraws(targetId) {
+    const amount = parseInt(document.getElementById(`grant_${targetId}`).value);
+    if (!amount || amount < 1) return setStatus("usersStatus", "Enter a valid amount", false);
+    try {
+      const res = await fetch(`${API}/grant-draws`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), target_user_id: targetId, amount}) });
+      const data = await res.json();
+      setStatus("usersStatus", res.ok ? `${data.username} now has limit ${data.draw_limit}` : data.detail, res.ok);
+      if (res.ok) loadUsers();
+    } catch (e) {
+      setStatus("usersStatus", e.message, false);
+    }
+  }
 
   async function refreshSchedule() {
     setStatus("scheduleRefreshStatus", "Refreshing...");
