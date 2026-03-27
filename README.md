@@ -14,8 +14,8 @@ In a traditional fantasy sport (e.g. football), you pick players before a season
 
 1. **Cards are generated from real league data.** When an admin ingests a Kanaliiga season, every player who has competed gets a set of cards (common → legendary) whose value is based on that player's actual in-game stats across all matches.
 2. **You build a roster by drawing cards.** New users receive 7 draw attempts. Each draw gives you a random card from the shared deck — rarer cards belong to higher-performing players.
-3. **Your roster earns fantasy points automatically.** As the season progresses and new matches are ingested, your active roster's score updates in real time based on kills, assists, deaths, gold, warding, and tower damage.
-4. **Compete on the leaderboard.** The combined fantasy point total of your 5 active roster cards determines your ranking against all other participants.
+3. **Your roster earns fantasy points week by week.** The season is divided into weekly periods ending each Sunday. Whatever 5 cards are active when Sunday ends get locked in, and points are scored from matches played during that week only. Swap your cards freely before each Sunday lock to react to the upcoming match schedule.
+4. **Compete on the leaderboard.** Weekly leaderboards show who made the best calls each week. An all-time leaderboard tracks cumulative performance across the whole season.
 
 The season schedule, match results, and stream/VOD links are displayed in a unified timeline so you can follow the action that feeds your fantasy points.
 
@@ -45,15 +45,21 @@ The app is available at `http://localhost:8000`. The SQLite database is stored i
 |---|---|
 | `GITHUB_REPOSITORY` | Your repo in `owner/repo` format — used to pull the correct image from `ghcr.io` |
 | `SCHEDULE_SHEET_URL` | Google Sheets CSV export URL for the season fixture list (sheet must be publicly viewable) |
+| `AUTO_INGEST_LEAGUES` | Comma-separated OpenDota league IDs to ingest on startup. Defaults to `19368,19369`. Set empty to disable. |
+| `SEASON_LOCK_START` | ISO date of the first Sunday lock (e.g. `2026-03-08`). All weekly boundaries are derived from this. |
 
 ### Ingest league data
-After the app is running, log in as admin and use the **Admin → Ingest League** panel, or trigger via curl:
+League data is ingested automatically on startup in a background thread. The leagues to ingest are controlled by `AUTO_INGEST_LEAGUES` in `.env` (comma-separated OpenDota league IDs, defaults to `19368,19369`). Matches already in the database are skipped, so restarts are fast.
+
+To disable auto-ingest, set `AUTO_INGEST_LEAGUES=` (empty).
+
+To trigger a manual re-ingest (e.g. after a new match week), log in as admin and use the **Admin → Ingest League** panel, or via curl:
 ```
 curl -X POST http://localhost:8000/ingest/league/19368 \
   -H "Content-Type: application/json" \
   -d '{"user_id": 1}'
 ```
-Repeat for each division. Ingestion fetches all matches from OpenDota, calculates fantasy points, seeds player cards into the deck, and enriches player profiles with names and avatars. It can take several minutes depending on match count and OpenDota rate limits.
+Ingestion fetches all matches from OpenDota, calculates fantasy points, seeds player cards into the deck, and enriches player profiles with names and avatars. It can take several minutes depending on match count and OpenDota rate limits.
 
 ### Reset the database
 ```
@@ -94,6 +100,34 @@ The schedule pulls from a public Google Sheet CSV export. Both divisions are sho
 
 Team names are matched between the sheet and the database using normalised fuzzy matching (case-insensitive, parenthetical content stripped, substring fallback).
 
+## Weekly roster locks
+
+The season is divided into **weekly periods**, each ending on Sunday at midnight UTC. At that moment the server automatically snapshots every user's active roster and locks it for that week.
+
+### How points work
+
+Fantasy points are **scoped to the week they were earned**. A card's weekly score is the sum of fantasy points from matches played during that specific week — not from all time. This means:
+
+- A card that plays two matches in Week 3 only earns points in Week 3's leaderboard, regardless of what other weeks it has played in
+- The all-time leaderboard still shows cumulative totals across the whole season
+- The weekly leaderboard shows who made the best roster decisions for each individual week
+
+### How locking works
+
+1. **Before Sunday midnight** — freely swap cards in and out of your active roster. Whatever 5 cards are active when Sunday ends is your locked lineup for that week.
+2. **Sunday midnight** — the server snapshots all active rosters. The snapshot is immutable and used for scoring.
+3. **After Sunday** — the locked roster is shown as a read-only record. You can immediately start adjusting your roster for the following week's lock.
+
+Locks happen automatically — no admin action is required. Past weeks are viewable as historical snapshots alongside the current editable roster.
+
+### Viewing past weeks
+
+The My Team tab includes a week selector. Selecting a past week shows that week's locked roster and the points it earned during that period. The current editable roster is always available and represents what will be snapshotted at the next Sunday lock.
+
+### Season configuration
+
+The first lock date and all subsequent Sunday boundaries are controlled by `SEASON_LOCK_START` in `.env` (default `2026-03-08`). For a new season, update this value and reset the database.
+
 ## Card draw limits
 Each user starts with a draw limit of 7. Admins can grant additional draws per user from the **Admin → Draw Limits** panel. The limit is stored on the user record and enforced server-side.
 
@@ -129,7 +163,7 @@ Weights are configurable at runtime via the Admin tab without re-ingesting data.
 
 **Deck** — The pool of unowned cards available to draw from.
 
-**Roster** — The active cards a user has selected (max 5). Roster value is the sum of fantasy points across all active cards.
+**Roster** — The active cards a user has selected (max 5). The editable roster is snapshotted each Sunday midnight into a weekly locked roster. Weekly value is the sum of fantasy points earned by those locked cards during that week's matches only.
 
 **Weight** — A multiplier applied to a stat when calculating fantasy points. Stored in the database and adjustable via the admin panel.
 

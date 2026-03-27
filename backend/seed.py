@@ -3,6 +3,7 @@ import os
 from database import SessionLocal
 from models import User, Card, Weight, PlayerMatchStats, Match
 from auth import hash_password
+from weeks import generate_weeks, auto_lock_weeks
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
 
@@ -87,4 +88,18 @@ def seed_weights():
             db.add(Weight(key=w["key"], label=w["label"], value=w["value"]))
             print(f"[SEED] Weight {w['key']} = {w['value']}")
     db.commit()
+    db.close()
+
+
+def seed_weeks():
+    """Generate week rows and retroactively lock past weeks.
+
+    Safe to call multiple times (idempotent). Past weeks are snapshotted using
+    each user's current active roster, which is the fairest option when the
+    feature didn't exist during those weeks. Run this after cards are seeded so
+    the snapshots capture real active rosters.
+    """
+    db = SessionLocal()
+    generate_weeks(db)
+    auto_lock_weeks(db)
     db.close()

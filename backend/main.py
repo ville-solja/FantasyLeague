@@ -1,11 +1,14 @@
+import asyncio
 import os
 import random
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Card, User, Weight
+from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
@@ -13,8 +16,22 @@ from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score
 from auth import hash_password, verify_password
 from schedule import get_schedule, bust_cache
+from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
 
 ROSTER_LIMIT = 5
+_ingest_executor = ThreadPoolExecutor(max_workers=1)
+
+
+def _auto_ingest(league_ids: list[int]):
+    for league_id in league_ids:
+        try:
+            print(f"[AUTO-INGEST] League {league_id} starting")
+            ingest_league(league_id)
+            run_enrichment()
+            seed_cards(league_id)
+            print(f"[AUTO-INGEST] League {league_id} done")
+        except Exception as e:
+            print(f"[AUTO-INGEST] League {league_id} failed: {e}")
 
 
 class LoginBody(BaseModel):
@@ -50,6 +67,16 @@ class GrantDrawsBody(BaseModel):
     amount: int
 
 
+class UpdateUsernameBody(BaseModel):
+    user_id: int
+    username: str
+
+
+class UpdatePlayerIdBody(BaseModel):
+    user_id: int
+    player_id: int | None = None
+
+
 def require_admin(user_id: int, db):
     user = db.get(User, user_id)
     if not user or not user.is_admin:
@@ -76,8 +103,28 @@ async def lifespan(app: FastAPI):
         if "draw_limit" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN draw_limit INTEGER DEFAULT 7"))
             conn.commit()
+        if "player_id" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN player_id INTEGER"))
+            conn.commit()
     seed_users()
     seed_weights()
+    # Migrate: if the old epoch-0 Week 1 exists, the week structure is wrong.
+    # Wipe weeks + snapshots and regenerate with the corrected boundaries.
+    with engine.connect() as _mc:
+        _old = _mc.execute(text("SELECT id FROM weeks WHERE start_time = 0 LIMIT 1")).first()
+        if _old:
+            _mc.execute(text("DELETE FROM weekly_roster_entries"))
+            _mc.execute(text("DELETE FROM weeks"))
+            _mc.commit()
+            print("[MIGRATION] Reset weeks to corrected structure (lock-before-matches)")
+    _db = SessionLocal()
+    generate_weeks(_db)
+    auto_lock_weeks(_db)
+    _db.close()
+    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
+    _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
+    if _league_ids:
+        asyncio.get_event_loop().run_in_executor(_ingest_executor, _auto_ingest, _league_ids)
     yield
 
 
@@ -194,32 +241,101 @@ def draw_card(body: DrawBody):
     }
 
 
-@app.get("/roster/{user_id}")
-def get_roster(user_id: int):
+@app.get("/weeks")
+def get_weeks():
     db = SessionLocal()
-    results = db.execute(text("""
-        SELECT c.id, c.card_type, c.is_active, p.name as player_name, p.avatar_url,
-               COALESCE(SUM(s.fantasy_points), 0) as total_points
-        FROM cards c
-        JOIN players p ON p.id = c.player_id
-        LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-        WHERE c.owner_id = :user_id
-        GROUP BY c.id, c.card_type, c.is_active, p.name, p.avatar_url
-        ORDER BY c.is_active DESC, total_points DESC
-    """), {"user_id": user_id}).fetchall()
+    weeks = db.query(Week).order_by(Week.start_time).all()
+    data = [{"id": w.id, "label": w.label, "start_time": w.start_time,
+             "end_time": w.end_time, "is_locked": w.is_locked} for w in weeks]
+    db.close()
+    return data
 
-    cards = [dict(r._mapping) for r in results]
-    active = [c for c in cards if c["is_active"]]
-    bench  = [c for c in cards if not c["is_active"]]
+
+_LATEST_TEAM_SUBQUERY = """
+    LEFT JOIN (
+        SELECT s2.player_id, s2.team_id
+        FROM player_match_stats s2
+        INNER JOIN (
+            SELECT player_id, MAX(match_id) as max_match
+            FROM player_match_stats
+            GROUP BY player_id
+        ) mx ON mx.player_id = s2.player_id AND mx.max_match = s2.match_id
+    ) latest ON latest.player_id = p.id
+    LEFT JOIN teams t ON t.id = latest.team_id
+"""
+
+
+@app.get("/roster/{user_id}")
+def get_roster(user_id: int, week_id: int = None):
+    db = SessionLocal()
+
+    # Determine which week to scope points to
+    if week_id is not None:
+        week = db.get(Week, week_id)
+    else:
+        # Default: the next upcoming (editable) week — roster being prepared,
+        # no matches yet so points = 0 until the week starts.
+        week = get_next_editable_week(db)
+
+    now = int(time.time())
+
+    if week and week.is_locked:
+        # Locked week: return the immutable snapshot with week-scoped points
+        results = db.execute(text(f"""
+            SELECT c.id, c.card_type, 1 as is_active,
+                   p.id as player_id, p.name as player_name, p.avatar_url,
+                   t.name as team_name,
+                   COALESCE(SUM(CASE WHEN m.start_time BETWEEN :ws AND :we
+                                THEN s.fantasy_points ELSE 0 END), 0) as total_points
+            FROM weekly_roster_entries wre
+            JOIN cards c ON c.id = wre.card_id
+            JOIN players p ON p.id = c.player_id
+            LEFT JOIN player_match_stats s ON s.player_id = c.player_id
+            LEFT JOIN matches m ON m.match_id = s.match_id
+            {_LATEST_TEAM_SUBQUERY}
+            WHERE wre.week_id = :week_id AND wre.user_id = :user_id
+            GROUP BY c.id, c.card_type, p.id, p.name, p.avatar_url, t.name
+            ORDER BY total_points DESC
+        """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
+               "user_id": user_id}).fetchall()
+        cards = [dict(r._mapping) for r in results]
+        active = cards
+        bench = []
+    else:
+        # Current/active week: editable roster, points scoped to this week only
+        ws = week.start_time if week else 0
+        we = week.end_time if week else now
+        results = db.execute(text(f"""
+            SELECT c.id, c.card_type, c.is_active,
+                   p.id as player_id, p.name as player_name, p.avatar_url,
+                   t.name as team_name,
+                   COALESCE(SUM(CASE WHEN m.start_time BETWEEN :ws AND :we
+                                THEN s.fantasy_points ELSE 0 END), 0) as total_points
+            FROM cards c
+            JOIN players p ON p.id = c.player_id
+            LEFT JOIN player_match_stats s ON s.player_id = c.player_id
+            LEFT JOIN matches m ON m.match_id = s.match_id
+            {_LATEST_TEAM_SUBQUERY}
+            WHERE c.owner_id = :user_id
+            GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name
+            ORDER BY c.is_active DESC, total_points DESC
+        """), {"ws": ws, "we": we, "user_id": user_id}).fetchall()
+        cards = [dict(r._mapping) for r in results]
+        active = [c for c in cards if c["is_active"]]
+        bench  = [c for c in cards if not c["is_active"]]
+
     combined = sum(c["total_points"] for c in active)
-
     user = db.get(User, user_id)
-    draws_used  = len(cards)
-    draw_limit  = user.draw_limit if user and user.draw_limit is not None else 7
+    draws_used = db.query(Card).filter(Card.owner_id == user_id).count()
+    draw_limit = user.draw_limit if user and user.draw_limit is not None else 7
 
     db.close()
-    return {"active": active, "bench": bench, "combined_value": combined,
-            "draws_used": draws_used, "draw_limit": draw_limit}
+    return {
+        "active": active, "bench": bench, "combined_value": combined,
+        "draws_used": draws_used, "draw_limit": draw_limit,
+        "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
+                 "start_time": week.start_time, "end_time": week.end_time} if week else None,
+    }
 
 
 @app.post("/roster/{card_id}/activate")
@@ -259,11 +375,135 @@ def deactivate_card(card_id: int, body: RosterActionBody):
     return {"status": "ok", "card_id": card_id}
 
 
+@app.get("/players")
+def list_players():
+    db = SessionLocal()
+    results = db.execute(text("""
+        SELECT p.id, p.name, p.avatar_url,
+               t.name as team_name, t.id as team_id,
+               COUNT(s.id) as matches,
+               COALESCE(AVG(s.fantasy_points), 0) as avg_points,
+               COALESCE(SUM(s.fantasy_points), 0) as total_points
+        FROM players p
+        LEFT JOIN player_match_stats s ON s.player_id = p.id
+        LEFT JOIN (
+            SELECT s2.player_id, s2.team_id
+            FROM player_match_stats s2
+            INNER JOIN (
+                SELECT player_id, MAX(match_id) as max_match
+                FROM player_match_stats
+                GROUP BY player_id
+            ) mx ON mx.player_id = s2.player_id AND mx.max_match = s2.match_id
+        ) latest ON latest.player_id = p.id
+        LEFT JOIN teams t ON t.id = latest.team_id
+        GROUP BY p.id, p.name, p.avatar_url, t.name, t.id
+        ORDER BY total_points DESC
+    """)).fetchall()
+    db.close()
+    return [dict(r._mapping) for r in results]
+
+
+@app.get("/players/{player_id}")
+def get_player(player_id: int):
+    db = SessionLocal()
+    player = db.get(Player, player_id)
+    if not player:
+        db.close()
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    stats = db.execute(text("""
+        SELECT s.match_id, m.start_time, s.fantasy_points,
+               s.kills, s.assists, s.deaths, s.gold_per_min,
+               s.obs_placed, s.sen_placed, s.tower_damage,
+               t.id as team_id, t.name as team_name
+        FROM player_match_stats s
+        LEFT JOIN matches m ON m.match_id = s.match_id
+        LEFT JOIN teams t ON t.id = s.team_id
+        WHERE s.player_id = :player_id
+        ORDER BY COALESCE(m.start_time, 0) DESC
+    """), {"player_id": player_id}).fetchall()
+
+    history = [dict(r._mapping) for r in stats]
+    matches = len(history)
+    total_points = sum(r["fantasy_points"] for r in history)
+    avg_points = total_points / matches if matches else 0
+    best = max(history, key=lambda r: r["fantasy_points"], default=None)
+
+    team_name = history[0]["team_name"] if history else None
+    team_id = history[0]["team_id"] if history else None
+
+    db.close()
+    return {
+        "id": player.id,
+        "name": player.name,
+        "avatar_url": player.avatar_url,
+        "team_name": team_name,
+        "team_id": team_id,
+        "matches": matches,
+        "avg_points": avg_points,
+        "total_points": total_points,
+        "best_match": {
+            "match_id": best["match_id"],
+            "fantasy_points": best["fantasy_points"],
+            "start_time": best["start_time"],
+        } if best else None,
+        "match_history": history,
+    }
+
+
+@app.get("/teams")
+def list_teams():
+    db = SessionLocal()
+    results = db.execute(text("""
+        SELECT t.id, t.name,
+               COUNT(DISTINCT s.match_id) as matches,
+               COUNT(DISTINCT s.player_id) as player_count
+        FROM teams t
+        LEFT JOIN player_match_stats s ON s.team_id = t.id
+        GROUP BY t.id, t.name
+        ORDER BY matches DESC, t.name
+    """)).fetchall()
+    db.close()
+    return [dict(r._mapping) for r in results]
+
+
+@app.get("/teams/{team_id}")
+def get_team(team_id: int):
+    db = SessionLocal()
+    team = db.get(Team, team_id)
+    if not team:
+        db.close()
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    players = db.execute(text("""
+        SELECT p.id, p.name, p.avatar_url,
+               COUNT(s.id) as matches,
+               COALESCE(AVG(s.fantasy_points), 0) as avg_points,
+               COALESCE(SUM(s.fantasy_points), 0) as total_points
+        FROM players p
+        JOIN player_match_stats s ON s.player_id = p.id AND s.team_id = :team_id
+        GROUP BY p.id, p.name, p.avatar_url
+        ORDER BY total_points DESC
+    """), {"team_id": team_id}).fetchall()
+
+    match_count = db.execute(text("""
+        SELECT COUNT(DISTINCT match_id) as cnt FROM player_match_stats WHERE team_id = :team_id
+    """), {"team_id": team_id}).scalar()
+
+    db.close()
+    return {
+        "id": team.id,
+        "name": team.name,
+        "matches": match_count or 0,
+        "players": [dict(r._mapping) for r in players],
+    }
+
+
 @app.get("/top")
 def top_performances():
     db = SessionLocal()
     results = db.execute(text("""
-        SELECT p.name, p.avatar_url, s.fantasy_points
+        SELECT p.id, p.name, p.avatar_url, s.fantasy_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
         ORDER BY s.fantasy_points DESC
@@ -277,7 +517,7 @@ def top_performances():
 def leaderboard():
     db = SessionLocal()
     results = db.execute(text("""
-        SELECT p.name, p.avatar_url, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
+        SELECT p.id, p.name, p.avatar_url, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
         GROUP BY p.id, p.name, p.avatar_url
@@ -436,6 +676,64 @@ def schedule_debug(user_id: int):
     except Exception as e:
         result["error"] = str(e)
 
+    return result
+
+
+@app.get("/profile/{user_id}")
+def get_profile(user_id: int):
+    db = SessionLocal()
+    user = db.get(User, user_id)
+    if not user:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    result = {"id": user.id, "username": user.username, "player_id": user.player_id,
+              "player_name": None, "player_avatar_url": None}
+    if user.player_id:
+        player = db.get(Player, user.player_id)
+        if player:
+            result["player_name"] = player.name
+            result["player_avatar_url"] = player.avatar_url
+    db.close()
+    return result
+
+
+@app.put("/profile/username")
+def update_username(body: UpdateUsernameBody):
+    db = SessionLocal()
+    user = db.get(User, body.user_id)
+    if not user:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    username = body.username.strip()
+    if not username:
+        db.close()
+        raise HTTPException(status_code=422, detail="Username cannot be empty")
+    existing = db.query(User).filter(User.username == username, User.id != body.user_id).first()
+    if existing:
+        db.close()
+        raise HTTPException(status_code=409, detail="Username already taken")
+    user.username = username
+    db.commit()
+    db.close()
+    return {"username": username}
+
+
+@app.put("/profile/player-id")
+def update_player_id(body: UpdatePlayerIdBody):
+    db = SessionLocal()
+    user = db.get(User, body.user_id)
+    if not user:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    user.player_id = body.player_id
+    db.commit()
+    result = {"player_id": body.player_id, "player_name": None, "player_avatar_url": None}
+    if body.player_id:
+        player = db.get(Player, body.player_id)
+        if player:
+            result["player_name"] = player.name
+            result["player_avatar_url"] = player.avatar_url
+    db.close()
     return result
 
 

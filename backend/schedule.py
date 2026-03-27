@@ -258,6 +258,8 @@ def get_schedule(db):
         week["has_results_div2"] = bool(div2_teams & db_team_names)
 
         for series in week["div1"] + week["div2"]:
+            series["team1_id"] = _find_team_id(series.get("team1"), team_lookup)
+            series["team2_id"] = _find_team_id(series.get("team2"), team_lookup)
             series["series_result"] = resolve_series_result(
                 db, series.get("team1"), series.get("team2"), team_lookup
             )

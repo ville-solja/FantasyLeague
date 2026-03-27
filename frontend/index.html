@@ -50,6 +50,50 @@
   </div>
 </div>
 
+<!-- PLAYER DETAIL MODAL -->
+<div class="modal-overlay hidden" id="playerModal">
+  <div class="modal modal-wide">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <img id="playerModalAvatar" style="width:48px;height:48px;border-radius:50%;display:none;" onerror="this.style.display='none'" />
+        <div>
+          <div id="playerModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
+          <div id="playerModalTeam" style="font-size:0.8rem;color:#555;"></div>
+        </div>
+      </div>
+      <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="playerModalStats"></div>
+    <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th></tr></thead>
+        <tbody id="playerModalHistory"></tbody>
+      </table>
+    </div>
+    <div class="status" id="playerModalStatus"></div>
+  </div>
+</div>
+
+<!-- TEAM DETAIL MODAL -->
+<div class="modal-overlay hidden" id="teamModal" style="z-index:100;">
+  <div class="modal modal-wide">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
+      <div>
+        <div id="teamModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
+        <div id="teamModalMeta" style="font-size:0.8rem;color:#555;"></div>
+      </div>
+      <button class="ghost" onclick="closeTeamModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <h2 style="margin-bottom:8px;">Players</h2>
+    <table>
+      <thead><tr><th>Player</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
+      <tbody id="teamModalPlayers"></tbody>
+    </table>
+    <div class="status" id="teamModalStatus"></div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <div class="header">
   <h1>Kanaliiga Fantasy</h1>
@@ -62,9 +106,50 @@
 
 <div class="tabs" id="tabBar">
   <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
+  <button class="tab" id="tab-btn-profile"     onclick="switchTab('profile')">Profile</button>
   <button class="tab active" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">Leaderboards</button>
+  <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
+  <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin</button>
+</div>
+
+<!-- TAB: PROFILE -->
+<div id="tab-profile" class="tab-content">
+  <div class="grid">
+
+    <div class="panel">
+      <h2>Account</h2>
+      <div style="margin-bottom:24px;">
+        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Username</div>
+        <div class="row">
+          <input id="profileUsername" type="text" placeholder="Username" />
+          <button onclick="saveUsername()">Save</button>
+        </div>
+        <div class="status" id="usernameStatus"></div>
+      </div>
+      <div>
+        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Twitch</div>
+        <button class="ghost" disabled style="opacity:0.45;cursor:not-allowed;">Link Twitch account</button>
+        <div style="font-size:0.75rem;color:#444;margin-top:6px;">Coming soon</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Dota 2 Player</h2>
+      <p style="font-size:0.8rem;color:#555;margin-bottom:16px;">Link your OpenDota account ID. Future features may include granting you a card representing yourself as a player.</p>
+      <div class="row">
+        <input id="profilePlayerId" type="number" placeholder="OpenDota account ID" />
+        <button onclick="savePlayerId()">Save</button>
+      </div>
+      <div id="profilePlayerPreview" style="display:none;margin-top:12px;display:flex;align-items:center;gap:8px;">
+        <img id="profilePlayerAvatar" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'" />
+        <span id="profilePlayerName" style="font-size:0.9rem;color:#e0e0e0;"></span>
+      </div>
+      <div class="status" id="playerIdStatus"></div>
+    </div>
+
+  </div>
 </div>
 
 <!-- TAB: MY TEAM -->
@@ -100,13 +185,19 @@
 
     <div class="panel" style="grid-column: span 2;">
       <h2>My Roster</h2>
-      <button class="secondary" onclick="loadRoster()" style="margin-bottom:12px;">Refresh</button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="secondary" onclick="loadRoster(_rosterWeekId)">Refresh</button>
+        <label for="rosterWeekSelect" style="color:#555;font-size:0.85rem;">Week:</label>
+        <select id="rosterWeekSelect" onchange="onRosterWeekChange()"></select>
+        <span id="rosterWeekStatus" style="font-size:0.8rem;color:#555;"></span>
+      </div>
+      <div id="rosterLockedBanner" style="display:none;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem;color:#888;"></div>
       <table>
-        <thead><tr><th>Player</th><th>Rarity</th><th>Pts</th><th></th></tr></thead>
+        <thead><tr><th>Player</th><th>Rarity</th><th>Wk pts</th><th></th></tr></thead>
         <tbody id="rosterActive"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
         <tfoot>
           <tr>
-            <td colspan="2" style="color:#555;padding-top:8px;">Combined value</td>
+            <td colspan="2" style="color:#555;padding-top:8px;">This week</td>
             <td id="rosterCombined" style="padding-top:8px;">—</td>
             <td></td>
           </tr>
@@ -115,7 +206,7 @@
       <div id="benchSection" style="margin-top:20px;display:none;">
         <h2 style="margin-bottom:10px;">Bench</h2>
         <table>
-          <thead><tr><th>Player</th><th>Rarity</th><th>Pts</th><th></th></tr></thead>
+          <thead><tr><th>Player</th><th>Rarity</th><th>Wk pts</th><th></th></tr></thead>
           <tbody id="rosterBench"></tbody>
         </table>
       </div>
@@ -159,6 +250,39 @@
       <div class="status" id="topStatus"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- TAB: PLAYERS -->
+<div id="tab-players" class="tab-content">
+  <div class="grid">
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Players</h2>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <input type="text" id="playersSearch" placeholder="Filter by name or team..." oninput="filterPlayers()" style="max-width:280px;" />
+        <button class="secondary" onclick="loadPlayers()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Player</th><th>Team</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
+        <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="playersStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: TEAMS -->
+<div id="tab-teams" class="tab-content">
+  <div class="grid">
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Teams</h2>
+      <button class="secondary" onclick="loadTeams()" style="margin-bottom:12px;">Refresh</button>
+      <table>
+        <thead><tr><th>Team</th><th>Matches</th><th>Players</th></tr></thead>
+        <tbody id="teamsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="teamsStatus"></div>
+    </div>
   </div>
 </div>
 

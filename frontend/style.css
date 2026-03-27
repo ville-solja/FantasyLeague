@@ -97,3 +97,14 @@ td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
 .stream-link { color: #6ab0e0; text-decoration: none; }
 .stream-link:hover { text-decoration: underline; }
 .stale-notice { font-size: 0.75rem; color: #666; margin-bottom: 12px; }
+
+/* ENTITY LINKS */
+.entity-link { cursor: pointer; }
+.entity-link:hover { text-decoration: underline; color: #c84b11; }
+
+/* PLAYER / TEAM DETAIL MODALS */
+.modal-wide { width: 680px; max-width: calc(100vw - 48px); max-height: calc(100vh - 80px); overflow-y: auto; }
+.player-modal-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 4px; }
+.player-modal-stat { background: #111; border: 1px solid #2a2a2a; border-radius: 4px; padding: 10px 8px; text-align: center; }
+.player-modal-stat .val { font-size: 1.1rem; font-weight: bold; color: #e0e0e0; margin-bottom: 2px; }
+.player-modal-stat .lbl { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; }

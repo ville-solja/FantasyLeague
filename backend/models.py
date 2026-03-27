@@ -67,6 +67,7 @@ class User(Base):
     password_hash = Column(String)
     is_admin = Column(Boolean, default=False)
     draw_limit = Column(Integer, default=7)
+    player_id = Column(Integer, nullable=True)  # linked OpenDota account_id
 
 
 class League(Base):
@@ -82,3 +83,22 @@ class Weight(Base):
     key = Column(String, primary_key=True)
     label = Column(String)
     value = Column(Float)
+
+
+class Week(Base):
+    __tablename__ = "weeks"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    label      = Column(String)   # "Week 1", "Week 2", ...
+    start_time = Column(Integer)  # Unix timestamp — 0 for week 1, Monday 00:00 UTC thereafter
+    end_time   = Column(Integer)  # Unix timestamp — Sunday 23:59:59 UTC
+    is_locked  = Column(Boolean, default=False)
+
+
+class WeeklyRosterEntry(Base):
+    __tablename__ = "weekly_roster_entries"
+
+    id      = Column(Integer, primary_key=True, autoincrement=True)
+    week_id = Column(Integer, ForeignKey("weeks.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    card_id = Column(Integer, ForeignKey("cards.id"))
