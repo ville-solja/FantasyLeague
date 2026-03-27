@@ -1,5 +1,26 @@
 # FantasyLeague
 
+## What is this?
+
+FantasyLeague is a fantasy sports web app built around [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league.
+
+### What is a fantasy league?
+
+A fantasy league is a game where participants act as virtual team managers. Instead of rooting for a real team, you draft real players onto your own fantasy roster and score points based on how those players actually perform in real matches. The better your picked players do in real life, the higher you climb on the fantasy leaderboard.
+
+In a traditional fantasy sport (e.g. football), you pick players before a season and accumulate points week by week. This app follows the same idea — but for Dota 2 esports.
+
+### How does it work here?
+
+1. **Cards are generated from real league data.** When an admin ingests a Kanaliiga season, every player who has competed gets a set of cards (common → legendary) whose value is based on that player's actual in-game stats across all matches.
+2. **You build a roster by drawing cards.** New users receive 7 draw attempts. Each draw gives you a random card from the shared deck — rarer cards belong to higher-performing players.
+3. **Your roster earns fantasy points automatically.** As the season progresses and new matches are ingested, your active roster's score updates in real time based on kills, assists, deaths, gold, warding, and tower damage.
+4. **Compete on the leaderboard.** The combined fantasy point total of your 5 active roster cards determines your ranking against all other participants.
+
+The season schedule, match results, and stream/VOD links are displayed in a unified timeline so you can follow the action that feeds your fantasy points.
+
+---
+
 ## Description
 A fantasy league web app for [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league. Users build a roster from a deck of player cards and compete on leaderboards based on real match performance data fetched from the OpenDota API. The season schedule is pulled from a public Google Sheet and displayed as a unified timeline with live series results.
 

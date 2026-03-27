@@ -418,7 +418,8 @@ def schedule_debug(user_id: int):
     require_admin(user_id, db)
     db.close()
 
-    url = os.getenv("SCHEDULE_SHEET_URL", "")
+    from schedule import SCHEDULE_SHEET_URL as _DEFAULT_SCHEDULE_URL
+    url = os.getenv("SCHEDULE_SHEET_URL", _DEFAULT_SCHEDULE_URL)
     result = {"url_set": bool(url), "url_prefix": url[:60] + "..." if len(url) > 60 else url}
 
     if not url:
