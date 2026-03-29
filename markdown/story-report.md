@@ -1,75 +1,75 @@
 <!-- Generated automatically by scripts/story_report.py — do not edit by hand -->
-_Last updated: 2026-03-28 15:55 UTC_
+_Last updated: 2026-03-29 18:26 UTC_
 
 # Story Coverage Report
 
 | ID | Story | Status | Notes |
 |----|-------|--------|-------|
-| 1.1 | User Registration | ⚠️ Diverged | Registration works with unique email/username, but no initial Kana tokens are granted (AC says 5 tokens; see also 2.1 which says 8). No registration timestamp is recorded on the User model. |
-| 1.2 | User Login | ⚠️ Diverged | Login uses username + password (not email + username as AC states). Error message is "Invalid username or password" not "Login failed – Invalid credentials." No session/token mechanism exists—user_id is stored in localStorage with no server-side session. No redirect to dashboard; frontend just switches tab. |
-| 1.3 | User Logout | ⚠️ Diverged | Logout clears localStorage but there is no server-side session to invalidate. Logged-out users can still call authenticated API endpoints by passing any user_id (no auth middleware). |
-| 1.4 | Admin-only Access | ⚠️ Diverged | Admin routes check `require_admin(user_id)` but user_id is passed in request body/query—no real auth token. Any client can forge an admin request by guessing an admin user_id. Admin tab is hidden in UI but endpoints are unprotected. |
-| 2.1 | Grant Starter Tokens on Registration | 🔲 Not implemented | Story says 8 Kana tokens at registration. No token/Kana balance field exists on User model; `draw_limit` defaults to 7 which is a different concept. No Kana token system is implemented. |
-| 2.3 | View Reserve and Collection | ⚠️ Diverged | Roster endpoint returns active/bench cards but there is no separate "Collection" tab in the UI. Cards do not display two stats or quality as described—only card_type (rarity) is shown. No dedicated Reserve view; bench serves as reserve. |
-| 2.4 | View Weekly Rosters | ⚠️ Diverged | Week selector exists and upcoming week defaults, but active slots are not shown as empty by default—"No active cards" text is shown instead of 5 empty slot placeholders. Lock time is shown but described as "every Sunday 24:00" whereas implementation uses `start_time - 1` of the next week. |
-| 2.5 | View Current and Season Points | ⚠️ Diverged | Weekly points are shown per roster view, but there is no separate season-wide total point display for the user. No two separate point pools (weekly vs season) visible in UI. No dropdown for past weeks' points—a select element exists but doesn't show per-week point history summary. |
-| 3.1 | Generate Cards for League Players | ⚠️ Diverged | Admin can ingest league players and seed cards, but card distribution uses types "common/rare/epic/legendary" not "white/blue/purple/golden" as AC specifies. Deck ratio (1 golden, 2 purple, 4 blue, 8 white per player) cannot be verified from main.py alone—seed logic is in external `seed.py` not provided. |
-| 3.2 | Remove Cards from Pool | 🔲 Not implemented | No endpoint or UI to remove a player from the card pool. No Kana token compensation for removed cards. |
-| 3.3 | Assign Randomized Card Quality | ⚠️ Diverged | Card quality is determined by which pre-seeded card is drawn (random.choice from unclaimed pool), not by a probability roll at draw time. Quality names differ from story (common/rare/epic/legendary vs white/blue/purple/golden). |
-| 3.4 | Assign Two Randomized Stats | 🔲 Not implemented | Card model has no stats fields. No per-card stats are generated, stored, or displayed. No quality multiplier on points. |
-| 3.5 | View Seasonal Reserve Cards | ⚠️ Diverged | Bench cards are shown in roster view but there is no filtering/sorting capability. Card stats and per-card points are not displayed as specified. |
-| 3.6 | View Permanent Collection | 🔲 Not implemented | No collection tab, no cross-season card tracking, no duplicate replacement logic. |
-| 4.1 | Place Cards into Active Slots | ⚠️ Diverged | 5-slot limit enforced via `ROSTER_LIMIT`. Activate/deactivate endpoints exist. However, cards do not lock—no check against week lock state in activate/deactivate endpoints. |
-| 4.2 | Lock Active Cards | ⚠️ Diverged | `auto_lock_weeks` runs at startup and weekly_roster_entries snapshot exists, but activate/deactivate endpoints do not check `is_locked` status—users can modify roster even for locked weeks. UI hides buttons but API is unprotected. |
-| 4.3 | Resetting Cards | ⚠️ Diverged | Individual deactivate exists ("Bench" button), but no "reset all" button. No server-side lock check prevents reset on locked rosters. |
-| 4.5 | Preserve Points | ⚠️ Diverged | Weekly roster snapshots exist and past weeks can be viewed, but there is no cumulative season points total visible to the user. Past week data is accessible via week selector. |
-| 5.1 | Free Weekly Token | 🔲 Not implemented | No Kana token model, no weekly token grant mechanism, no history recording. |
-| 5.3 | Spend Token to Draw Card | ⚠️ Diverged | Drawing uses a `draw_limit` counter, not a Kana token balance. No confirmation popup before draw. No duplicate handling rules. |
+| 1.1 | User Registration | ⚠️ Diverged | Registration works with unique email/username. However, no initial Kana tokens are granted on registration (AC says 5 tokens). No timestamp of registration is recorded in the User model. |
+| 1.2 | User Login | ⚠️ Diverged | Login uses username + password, not email + username as AC specifies. Error message is "Invalid username or password" not "Login failed – Invalid credentials." No session/token mechanism; user_id stored in localStorage only. No redirect to dashboard; frontend stays on current tab. |
+| 1.3 | User Logout | ⚠️ Diverged | Logout clears localStorage but there is no server-side session to invalidate. Logged-out users can still call API endpoints directly (no auth middleware). Redirect to login screen not explicitly implemented (switches to leaderboard tab). |
+| 1.4 | Admin-only Access | ⚠️ Diverged | Admin routes check `require_admin` server-side. Admin tab hidden in UI for non-admins. However, admin auth is based on `is_admin` flag, not tied to specific login credentials. Some admin endpoints (e.g., PUT `/weights/{key}`) lack admin checks entirely. |
+| 2.1 | Grant Starter Tokens on Registration | 🔲 Not implemented | Story says 8 Kana tokens at registration. No token/Kana balance system exists in the codebase. The `draw_limit` field defaults to 7, which is a different concept (draw cap, not tokens). |
+| 2.3 | View Reserve and Collection | ⚠️ Diverged | Roster view shows active and bench cards with player name, rarity, and points. However: no two stats displayed per card, no quality shown on card detail, no separate Collection tab exists, no separate Reserve view. Bench ≈ reserve but no dedicated UI. |
+| 2.4 | View Weekly Rosters | ⚠️ Diverged | Week selector exists and upcoming week is default. Slots are not visually empty by default (just shows "No active cards"). Lock timing is shown but described as a date, not explicitly "every Sunday 24:00". |
+| 2.5 | View Current and Season Points | ⚠️ Diverged | Weekly points shown per roster. No separate season-total points displayed for the user. No two separate point pools (weekly vs season) visible in UI. No dropdown for past weeks' points (uses week selector instead). New user 0-point state not explicitly handled. |
+| 3.1 | Generate Cards for League Players | ⚠️ Diverged | Admin can ingest leagues and `seed_cards` generates cards. Card types are "common/rare/epic/legendary" not "white/blue/purple/golden" as in story. Deck distribution logic is in `seed.py` (not shown) so exact 1/2/4/8 ratio unverifiable. No explicit "reload deck before season start" or duplicate-avoidance in permanent pool visible. |
+| 3.2 | Remove Cards from Pool | 🔲 Not implemented | No endpoint or UI to remove a player from the card pool. No Kana token refund mechanism exists. |
+| 3.3 | Assign Randomized Card Quality | ⚠️ Diverged | Cards have a `card_type` (quality), drawn randomly from the pool. Quality names differ from story (common/rare/epic/legendary vs white/blue/purple/golden). Probability is based on pool composition, which may match distribution. Quality is stored but not prominently visible in card detail UI. |
+| 3.4 | Assign Two Randomized Stats | 🔲 Not implemented | Card model has no stat fields. No two-stat system exists. No stat-based point generation or quality multiplier. |
+| 3.5 | View Seasonal Reserve Cards | ⚠️ Diverged | Bench cards shown in roster view with player/rarity/points. No card stats displayed (stats not implemented). No filtering or sorting available on reserve cards. |
+| 3.6 | View Permanent Collection | 🔲 Not implemented | No collection tab or view exists. No cross-season card tracking. No quality-replacement logic. |
+| 4.1 | Place Cards into Active Slots | ⚠️ Diverged | 5-slot roster limit enforced. Activate/deactivate endpoints exist. However, no lock check on activate/deactivate—cards can be changed even for locked weeks. Slots are not individually defined (just a count). |
+| 4.2 | Lock Active Cards | ⚠️ Diverged | Weeks auto-lock via `auto_lock_weeks`. UI shows lock state and hides bench/deactivate buttons for locked weeks. However, backend activate/deactivate endpoints don't enforce lock state—cards can still be changed via API. |
+| 4.3 | Resetting Cards | ⚠️ Diverged | Deactivate (bench) individual cards exists. No "reset all" button. No lock enforcement on the backend for reset operations. |
+| 4.5 | Preserve Points | ⚠️ Diverged | Weekly roster snapshots exist via `WeeklyRosterEntry`. Past weeks return snapshot data. However, past week points are recalculated from live match data (not frozen), so they could change if data is re-ingested. No cumulative season point tracking. |
+| 5.1 | Free Weekly Token | 🔲 Not implemented | No Kana token system exists. No weekly token grant mechanism. No token history. |
+| 5.3 | Spend Token to Draw Card | 🔲 Not implemented | Drawing uses a `draw_limit` counter, not a token spend. No confirmation popup before draw. No token deduction. Duplicate rules not implemented. |
 | 5.4 | Redeem Kana Code | 🔲 Not implemented | No code redemption endpoint or UI. |
 | 5.5 | Generate Kana Codes (Admin) | 🔲 Not implemented | No admin code generation feature. |
-| 5.6 | View Token Balance | 🔲 Not implemented | No Kana token balance displayed. Draw counter shown instead. No min/max enforcement (0–100). |
-| 5.7 | Re-roll Stats | 🔲 Not implemented | No re-roll endpoint, no card stats to re-roll, no confirmation popup. |
-| 6.1 | Score Active Cards | ⚠️ Diverged | Scoring uses player_match_stats fantasy_points scoped by week time range. Only active (snapshotted) cards score for locked weeks. However, no explicit double-counting prevention per the scoring query. |
-| 6.2 | Configure Event Weights (Admin) | ⚠️ Diverged | Weight editing exists and recalculate endpoint reprocesses all stats—but it affects historical data too, not "only future scoring" as AC requires. No change logging. |
-| 6.3 | Card Stat Scoring | 🔲 Not implemented | Cards have no stats. Scoring is based on player match data, not card-specific stat mappings with bonus points. |
-| 6.4 | Track Season Points | ⚠️ Diverged | Roster leaderboard shows total roster value, but no dedicated per-user season point total visible in the user's own view. |
-| 6.5 | Track Points per Card | ⚠️ Diverged | Weekly points per card shown in roster view, but no historical per-card-per-week breakdown is available. |
-| 6.6 | Prevent Duplicate Scoring | ❓ Ambiguous | player_match_stats has a unique id and match_id FK, but there's no explicit unique constraint on (player_id, match_id). Story is vague on "safe retries." |
-| 7.1 | Fetch Player Data | ⚠️ Diverged | `ingest_league` and `run_enrichment` exist (imported from external modules). Validation/logging/retry details not visible in provided code. |
-| 7.2 | Import Match Data | ⚠️ Diverged | Match data imported via ingest pipeline. Details in external `ingest.py` not provided for full evaluation. |
-| 7.3 | Handle API Failures | ❓ Ambiguous | Auto-ingest wraps in try/except and prints errors. No admin visibility of failures in UI. Retry logic unclear. |
-| 8.1 | Season Leaderboard | ⚠️ Diverged | `/leaderboard/roster` ranks users by roster value, but this is current active card total—not a true season points leaderboard across all weeks. |
-| 8.2 | Scrollable Leaderboard | ⚠️ Diverged | Leaderboard is on a tab but no explicit scrollable container for long lists. No CSS overflow handling visible. |
-| 8.3 | Show User Rank | 🔲 Not implemented | User's own rank is not highlighted or always visible in the leaderboard. |
-| 8.4 | Weekly Leaderboard | 🔲 Not implemented | No weekly leaderboard endpoint or UI. Only season-total roster leaderboard exists. |
-| 9.1 | Generate Codes | 🔲 Not implemented | No Kana code system. |
-| 9.2 | Grant Tokens | ⚠️ Diverged | `/grant-draws` grants extra draw limit, not Kana tokens. Conceptually similar but different system. |
-| 9.3 | Configure Scoring | ⚠️ Diverged | Weight editing exists but affects all data (not just future). No audit logging. |
-| 9.4 | Manage Season Lifecycle | 🔲 Not implemented | No season start/end/reset management endpoints or UI. |
-| 9.5 | View System Status | ⚠️ Diverged | `/schedule/debug` exists for schedule diagnostics, but no general system status dashboard (ingestion status, user counts, etc.). |
-| 9.6 | Start New Season | 🔲 Not implemented | No new season endpoint or workflow. |
-| 10.1 | Explain Scoring | 🔲 Not implemented | No UI explanation of scoring rules, stat mappings, or quality multipliers. Weights table shown in admin only. |
-| 11.1 | Server-side Validation | ⚠️ Diverged | Some validation exists (duplicate username/email, roster limits), but no real authentication—user_id is trusted from client. Any user can impersonate another by sending their user_id. |
-| 11.2 | Audit Logs | 🔲 Not implemented | No audit log table or logging of registration rewards, token usage, draws, re-rolls, admin actions, or season resets. Only console prints exist. |
+| 5.6 | View Token Balance | 🔲 Not implemented | No token balance displayed. Draw counter shown instead (`draws_used / draw_limit`). No min/max enforcement (0–100). |
+| 5.7 | Re-roll Stats | 🔲 Not implemented | No re-roll mechanism. No card stats to re-roll. No token cost system. |
+| 6.1 | Score Active Cards | ⚠️ Diverged | Fantasy points computed from Dota 2 match data via `player_match_stats`. Only active card points displayed. However, scoring is on player level not card level; no card-specific scoring. Duplicate match scoring prevention not explicitly visible. |
+| 6.2 | Configure Event Weights (Admin) | ⚠️ Diverged | Weights editable in admin UI. Recalculate applies to all stats (not just future). PUT `/weights/{key}` has no admin check. No logging of weight changes. |
+| 6.3 | Card Stat Scoring | 🔲 Not implemented | Cards have no stats. Scoring is player-match-level, not card-stat-level. No bonus points from card stats. |
+| 6.4 | Track Season Points | ⚠️ Diverged | Combined weekly points shown in roster. No persistent season-total accumulation. No dedicated season points display. |
+| 6.5 | Track Points per Card | ⚠️ Diverged | Per-week points shown per card in roster view. No historical per-card breakdown across weeks. |
+| 6.6 | Prevent Duplicate Scoring | ❓ Ambiguous | `player_match_stats` has unique rows per player/match but no explicit unique constraint visible in model. Ingest deduplication logic is in `ingest.py` (not provided). |
+| 7.1 | Fetch Player Data | ❓ Ambiguous | `ingest.py` and `enrich.py` referenced but not provided. Player data exists in DB. Cannot fully verify validation/logging/retry. |
+| 7.2 | Import Match Data | ❓ Ambiguous | Match import referenced via `ingest_league`. Implementation not provided. |
+| 7.3 | Handle API Failures | ❓ Ambiguous | Auto-ingest has try/except with print logging. Full retry/failure handling in `ingest.py` not visible. |
+| 8.1 | Season Leaderboard | ⚠️ Diverged | Roster leaderboard exists ranked by roster_value (sum of active card player points). This is all-time, not strictly season-scoped. Leaderboard is for users, which aligns. |
+| 8.2 | Scrollable Leaderboard | ⚠️ Diverged | Leaderboard is on a separate tab. Not explicitly scrollable (standard HTML table, browser scroll). |
+| 8.3 | Show User Rank | 🔲 Not implemented | Current user's rank is not highlighted or persistently visible on the leaderboard or elsewhere. |
+| 8.4 | Weekly Leaderboard | 🔲 Not implemented | No weekly leaderboard. Roster leaderboard is all-time only. |
+| 9.1 | Generate Codes | 🔲 Not implemented | No Kana code generation. |
+| 9.2 | Grant Tokens | ⚠️ Diverged | Admin can grant extra draws (draw_limit), not Kana tokens. Different mechanism than specified. |
+| 9.3 | Configure Scoring | ✅ Aligned | Admin can edit scoring weights and recalculate. |
+| 9.4 | Manage Season Lifecycle | 🔲 Not implemented | No season start/end/reset controls in admin UI or backend. |
+| 9.5 | View System Status | 🔲 Not implemented | No system status dashboard. Schedule debug endpoint exists but not a general status view. |
+| 9.6 | Start New Season | 🔲 Not implemented | No new season endpoint or UI. |
+| 10.1 | Explain Scoring | 🔲 Not implemented | Scoring weights visible in admin panel only. No user-facing explanation of how stats map to points. |
+| 11.1 | Server-side Validation | ⚠️ Diverged | Some validation exists (duplicate username/email, draw limits). However, no auth tokens/sessions—user_id passed in request body is trusted without verification. Activate/deactivate not lock-checked server-side. Weight updates lack admin check. |
+| 11.2 | Audit Logs | 🔲 Not implemented | No audit log table or logging mechanism. Console prints exist for ingest but no structured audit trail for registration, token usage, draws, re-rolls, admin actions, or season resets. |
 
 ## Key divergences
 
-1. **Kana token system entirely missing**: The codebase uses a `draw_limit` integer instead of a Kana token balance; no token granting, spending, weekly rewards, codes, or balance tracking exists. — *Update implementation.*
+1. **No Kana token system exists** — The entire token economy (balance, spending, weekly grants, codes) is absent; the codebase uses a simple `draw_limit` counter instead. **Update implementation.**
 
-2. **Card stats not implemented**: Cards have no per-card stats (AC 3.4 requires exactly 2 stats per card with quality multipliers); scoring is based solely on player match data. — *Update implementation.*
+2. **Cards have no stats** — Stories 3.4, 5.7, and 6.3 require two randomized stats per card with quality multipliers; the Card model only has `card_type` and no stat fields. **Update implementation.**
 
-3. **Story 1.1 vs 2.1 token conflict**: Story 1.1 says 5 starter tokens, Story 2.1 says 8 starter tokens; neither is implemented. — *Clarify story* (resolve the contradiction), then *update implementation.*
+3. **No permanent Collection view** — Story 3.6 requires a cross-season collection tab with deduplication and quality replacement; nothing exists. **Update implementation.**
 
-4. **No real authentication or session management**: User identity is stored in localStorage and passed as a plain user_id; there are no tokens, sessions, or middleware—any API caller can impersonate any user. — *Update implementation.*
+4. **Registration grants no starter tokens** — Stories 1.1 (5 tokens) and 2.1 (8 tokens) both require tokens on signup; neither is implemented, and the two stories contradict each other on the amount (5 vs 8). **Clarify story** (resolve the 5 vs 8 conflict), then **update implementation.**
 
-5. **Permanent Collection not implemented**: No collection tab, no cross-season tracking, no duplicate-replacement logic (Stories 2.3, 3.6). — *Update implementation.*
+5. **No server-side authentication/session management** — Login returns a user object stored in localStorage; any API call can impersonate any user by passing a different `user_id`. Logout doesn't invalidate anything server-side. **Update implementation.**
 
-6. **Roster lock not enforced server-side**: Activate/deactivate endpoints do not check whether the current week is locked; only the UI hides buttons. — *Update implementation.*
+6. **Active roster lock not enforced on backend** — Activate/deactivate endpoints don't check whether the current week is locked, allowing roster changes for locked weeks via direct API calls. **Update implementation.**
 
-7. **Card quality naming mismatch**: Implementation uses "common/rare/epic/legendary" while stories specify "white/blue/purple/golden" with specific deck ratios (1/2/4/8 per player). — *Clarify story* (agree on naming) and *update implementation* (enforce ratios).
+7. **Card quality naming mismatch** — Implementation uses common/rare/epic/legendary; stories specify white/blue/purple/golden. **Clarify story** or **update implementation** to align naming.
 
-8. **No audit logging**: Stories require detailed audit trails for draws, re-rolls, admin actions, token usage, and season resets; only `print()` statements exist. — *Update implementation.*
+8. **No audit logging** — Story 11.2 requires structured audit logs for all key actions with timestamps and actors; only console prints exist. **Update implementation.**
 
-9. **Weekly and season leaderboards missing**: Only an all-time roster value leaderboard exists; no weekly ranking, no user-rank highlight, and no season points leaderboard per the story requirements (8.1–8.4). — *Update implementation.*
+9. **No weekly or season-scoped user leaderboard** — Stories 8.3 and 8.4 require the user's own rank to be always visible and a weekly leaderboard; neither exists. **Update implementation.**
 
-10. **Weight recalculation affects historical data**: Story 6.2 requires changed weights to affect only future scoring, but `/recalculate` rewrites all historical fantasy_points. — *Update implementation.*
+10. **Weight update endpoint lacks admin authorization** — `PUT /weights/{key}` has no `require_admin` check, allowing any user to modify scoring weights. **Update implementation.**
