@@ -66,8 +66,9 @@ class User(Base):
     email = Column(String, unique=True)
     password_hash = Column(String)
     is_admin = Column(Boolean, default=False)
-    draw_limit = Column(Integer, default=7)
+    tokens = Column(Integer, default=0)
     player_id = Column(Integer, nullable=True)  # linked OpenDota account_id
+    created_at = Column(Integer, nullable=True)  # Unix timestamp
 
 
 class League(Base):
@@ -83,6 +84,24 @@ class Weight(Base):
     key = Column(String, primary_key=True)
     label = Column(String)
     value = Column(Float)
+
+
+class PromoCode(Base):
+    __tablename__ = "promo_codes"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    code          = Column(String, unique=True)
+    token_amount  = Column(Integer)
+    created_by_id = Column(Integer, ForeignKey("users.id"))
+
+
+class CodeRedemption(Base):
+    __tablename__ = "code_redemptions"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    code_id     = Column(Integer, ForeignKey("promo_codes.id"))
+    user_id     = Column(Integer, ForeignKey("users.id"))
+    redeemed_at = Column(Integer)  # unix timestamp
 
 
 class Week(Base):
