@@ -86,10 +86,6 @@ def auto_lock_weeks(db):
         week.is_locked = True
         print(f"[WEEKS] Locked {week.label}")
     if unlocked:
-        users = db.query(User).all()
-        for u in users:
-            u.tokens = (u.tokens or 0) + 1
-        print(f"[WEEKS] Granted 1 token to {len(users)} users")
         db.commit()
 
 

@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption
+from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
@@ -18,9 +18,7 @@ from auth import hash_password, verify_password
 from schedule import get_schedule, bust_cache
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
 
-ROSTER_LIMIT    = 5
-TOKEN_NAME      = os.getenv("TOKEN_NAME", "Tokens")
-INITIAL_TOKENS  = int(os.getenv("INITIAL_TOKENS", "5"))
+ROSTER_LIMIT = 5
 _ingest_executor = ThreadPoolExecutor(max_workers=1)
 
 
@@ -63,7 +61,7 @@ class AdminBody(BaseModel):
     user_id: int
 
 
-class GrantTokensBody(BaseModel):
+class GrantDrawsBody(BaseModel):
     user_id: int        # admin
     target_user_id: int
     amount: int
@@ -77,23 +75,6 @@ class UpdateUsernameBody(BaseModel):
 class UpdatePlayerIdBody(BaseModel):
     user_id: int
     player_id: int | None = None
-
-
-class ChangePasswordBody(BaseModel):
-    user_id: int
-    current_password: str
-    new_password: str
-
-
-class CreateCodeBody(BaseModel):
-    user_id: int   # admin
-    code: str
-    token_amount: int
-
-
-class RedeemCodeBody(BaseModel):
-    user_id: int
-    code: str
 
 
 def require_admin(user_id: int, db):
@@ -119,20 +100,11 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE matches ADD COLUMN radiant_win BOOLEAN"))
             conn.commit()
         user_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "draw_limit" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN draw_limit INTEGER DEFAULT 7"))
+            conn.commit()
         if "player_id" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN player_id INTEGER"))
-            conn.commit()
-        if "tokens" not in user_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN tokens INTEGER DEFAULT 0"))
-            # Seed balance from remaining draw allowance for existing users
-            conn.execute(text("""
-                UPDATE users SET tokens = MAX(0, COALESCE(draw_limit, 7) - (
-                    SELECT COUNT(*) FROM cards WHERE owner_id = users.id
-                ))
-            """))
-            conn.commit()
-        if "created_at" not in user_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN created_at INTEGER"))
             conn.commit()
     seed_users()
     seed_weights()
@@ -177,8 +149,7 @@ def login(body: LoginBody):
     if not user or not verify_password(body.password, user.password_hash):
         db.close()
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
-            "tokens": user.tokens if user.tokens is not None else 0}
+    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin}
     db.close()
     return data
 
@@ -197,13 +168,10 @@ def register(body: RegisterBody):
         email=body.email,
         password_hash=hash_password(body.password),
         is_admin=False,
-        tokens=INITIAL_TOKENS,
-        created_at=int(time.time()),
     )
     db.add(user)
     db.commit()
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
-            "tokens": user.tokens}
+    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin}
     db.close()
     return data
 
@@ -228,9 +196,11 @@ def draw_card(body: DrawBody):
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
-    if (user.tokens or 0) <= 0:
+    draws_used = db.query(Card).filter(Card.owner_id == body.user_id).count()
+    draw_limit = user.draw_limit if user.draw_limit is not None else 7
+    if draws_used >= draw_limit:
         db.close()
-        raise HTTPException(status_code=409, detail="Not enough tokens")
+        raise HTTPException(status_code=409, detail=f"Draw limit reached ({draws_used}/{draw_limit})")
 
     unclaimed = db.execute(text("""
         SELECT c.id, c.card_type, p.name as player_name, p.avatar_url, t.name as team_name
@@ -252,7 +222,6 @@ def draw_card(body: DrawBody):
     chosen = random.choice(unclaimed)
     card = db.get(Card, chosen.id)
     card.owner_id = body.user_id
-    user.tokens = (user.tokens or 0) - 1
 
     active_count = db.query(Card).filter(
         Card.owner_id == body.user_id, Card.is_active == True
@@ -269,7 +238,6 @@ def draw_card(body: DrawBody):
         "avatar_url": chosen.avatar_url,
         "team_name": chosen.team_name,
         "is_active": is_active,
-        "tokens": user.tokens,
     }
 
 
@@ -358,17 +326,13 @@ def get_roster(user_id: int, week_id: int = None):
 
     combined = sum(c["total_points"] for c in active)
     user = db.get(User, user_id)
-
-    season_row = db.execute(text(
-        _SEASON_POINTS_SQL + " WHERE u.id = :uid GROUP BY u.id, u.username"
-    ), {"uid": user_id}).first()
-    season_points = float(season_row.season_points) if season_row else 0.0
+    draws_used = db.query(Card).filter(Card.owner_id == user_id).count()
+    draw_limit = user.draw_limit if user and user.draw_limit is not None else 7
 
     db.close()
     return {
         "active": active, "bench": bench, "combined_value": combined,
-        "tokens": (user.tokens or 0) if user else 0,
-        "season_points": season_points,
+        "draws_used": draws_used, "draw_limit": draw_limit,
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
                  "start_time": week.start_time, "end_time": week.end_time} if week else None,
     }
@@ -391,16 +355,6 @@ def activate_card(card_id: int, body: RosterActionBody):
     if active_count >= ROSTER_LIMIT:
         db.close()
         raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
-
-    duplicate = db.query(Card).filter(
-        Card.owner_id == body.user_id,
-        Card.is_active == True,
-        Card.player_id == card.player_id,
-        Card.id != card_id,
-    ).first()
-    if duplicate:
-        db.close()
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
 
     card.is_active = True
     db.commit()
@@ -599,52 +553,6 @@ def roster_leaderboard():
     return [dict(r._mapping) for r in results]
 
 
-_SEASON_POINTS_SQL = """
-    SELECT u.id, u.username,
-           COALESCE(SUM(s.fantasy_points), 0) as season_points
-    FROM users u
-    LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
-    LEFT JOIN weeks w ON w.id = wre.week_id AND w.is_locked = 1
-    LEFT JOIN cards c ON c.id = wre.card_id
-    LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-    LEFT JOIN matches m ON m.match_id = s.match_id
-      AND m.start_time BETWEEN w.start_time AND w.end_time
-"""
-
-
-@app.get("/leaderboard/season")
-def season_leaderboard():
-    db = SessionLocal()
-    results = db.execute(text(
-        _SEASON_POINTS_SQL + " GROUP BY u.id, u.username ORDER BY season_points DESC"
-    )).fetchall()
-    db.close()
-    return [dict(r._mapping) for r in results]
-
-
-@app.get("/leaderboard/weekly")
-def weekly_leaderboard(week_id: int):
-    db = SessionLocal()
-    week = db.get(Week, week_id)
-    if not week:
-        db.close()
-        raise HTTPException(status_code=404, detail="Week not found")
-    results = db.execute(text("""
-        SELECT u.id, u.username,
-               COALESCE(SUM(s.fantasy_points), 0) as week_points
-        FROM users u
-        LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
-        LEFT JOIN cards c ON c.id = wre.card_id
-        LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-        LEFT JOIN matches m ON m.match_id = s.match_id
-          AND m.start_time BETWEEN :ws AND :we
-        GROUP BY u.id, u.username
-        ORDER BY week_points DESC
-    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
-    db.close()
-    return [dict(r._mapping) for r in results]
-
-
 @app.get("/weights")
 def get_weights():
     db = SessionLocal()
@@ -674,17 +582,19 @@ def list_users(user_id: int):
     users = db.query(User).order_by(User.username).all()
     result = []
     for u in users:
+        draws_used = db.query(Card).filter(Card.owner_id == u.id).count()
         result.append({
             "id": u.id,
             "username": u.username,
-            "tokens": u.tokens if u.tokens is not None else 0,
+            "draws_used": draws_used,
+            "draw_limit": u.draw_limit if u.draw_limit is not None else 7,
         })
     db.close()
     return result
 
 
-@app.post("/grant-tokens")
-def grant_tokens(body: GrantTokensBody):
+@app.post("/grant-draws")
+def grant_draws(body: GrantDrawsBody):
     db = SessionLocal()
     require_admin(body.user_id, db)
     target = db.get(User, body.target_user_id)
@@ -694,11 +604,11 @@ def grant_tokens(body: GrantTokensBody):
     if body.amount < 1:
         db.close()
         raise HTTPException(status_code=422, detail="Amount must be at least 1")
-    target.tokens = (target.tokens or 0) + body.amount
+    target.draw_limit = (target.draw_limit or 7) + body.amount
     db.commit()
-    new_tokens = target.tokens
+    new_limit = target.draw_limit
     db.close()
-    return {"username": target.username, "tokens": new_tokens}
+    return {"username": target.username, "draw_limit": new_limit}
 
 
 @app.post("/recalculate")
@@ -825,105 +735,6 @@ def update_player_id(body: UpdatePlayerIdBody):
             result["player_avatar_url"] = player.avatar_url
     db.close()
     return result
-
-
-@app.put("/profile/password")
-def change_password(body: ChangePasswordBody):
-    db = SessionLocal()
-    user = db.get(User, body.user_id)
-    if not user:
-        db.close()
-        raise HTTPException(status_code=404, detail="User not found")
-    if not verify_password(body.current_password, user.password_hash):
-        db.close()
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
-    if len(body.new_password) < 6:
-        db.close()
-        raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
-    user.password_hash = hash_password(body.new_password)
-    db.commit()
-    db.close()
-    return {"status": "ok"}
-
-
-@app.post("/codes")
-def create_code(body: CreateCodeBody):
-    db = SessionLocal()
-    require_admin(body.user_id, db)
-    code = body.code.strip().upper()
-    if not code:
-        db.close()
-        raise HTTPException(status_code=422, detail="Code cannot be empty")
-    if body.token_amount < 1:
-        db.close()
-        raise HTTPException(status_code=422, detail="Token amount must be at least 1")
-    if db.query(PromoCode).filter(PromoCode.code == code).first():
-        db.close()
-        raise HTTPException(status_code=409, detail="Code already exists")
-    db.add(PromoCode(code=code, token_amount=body.token_amount, created_by_id=body.user_id))
-    db.commit()
-    db.close()
-    return {"status": "ok", "code": code, "token_amount": body.token_amount}
-
-
-@app.get("/codes")
-def list_codes(user_id: int):
-    db = SessionLocal()
-    require_admin(user_id, db)
-    codes = db.query(PromoCode).order_by(PromoCode.id).all()
-    result = []
-    for c in codes:
-        redemptions = db.query(CodeRedemption).filter(CodeRedemption.code_id == c.id).count()
-        result.append({"id": c.id, "code": c.code, "token_amount": c.token_amount,
-                        "redemptions": redemptions})
-    db.close()
-    return result
-
-
-@app.delete("/codes/{code_id}")
-def delete_code(code_id: int, user_id: int):
-    db = SessionLocal()
-    require_admin(user_id, db)
-    code = db.get(PromoCode, code_id)
-    if not code:
-        db.close()
-        raise HTTPException(status_code=404, detail="Code not found")
-    db.delete(code)
-    db.commit()
-    db.close()
-    return {"status": "ok"}
-
-
-@app.post("/redeem")
-def redeem_code(body: RedeemCodeBody):
-    db = SessionLocal()
-    user = db.get(User, body.user_id)
-    if not user:
-        db.close()
-        raise HTTPException(status_code=404, detail="User not found")
-    code = db.query(PromoCode).filter(PromoCode.code == body.code.strip().upper()).first()
-    if not code:
-        db.close()
-        raise HTTPException(status_code=404, detail="Invalid code")
-    already = db.query(CodeRedemption).filter(
-        CodeRedemption.code_id == code.id,
-        CodeRedemption.user_id == body.user_id,
-    ).first()
-    if already:
-        db.close()
-        raise HTTPException(status_code=409, detail="Code already redeemed")
-    user.tokens = (user.tokens or 0) + code.token_amount
-    db.add(CodeRedemption(code_id=code.id, user_id=body.user_id,
-                          redeemed_at=int(time.time())))
-    db.commit()
-    new_tokens = user.tokens
-    db.close()
-    return {"status": "ok", "token_amount": code.token_amount, "tokens": new_tokens}
-
-
-@app.get("/config")
-def get_config():
-    return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS}
 
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
