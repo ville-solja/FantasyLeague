@@ -13,8 +13,8 @@ In a traditional fantasy sport (e.g. football), you pick players before a season
 ### How does it work here?
 
 1. **Cards are generated from real league data.** When an admin ingests a Kanaliiga season, every player who has competed gets a set of cards (common → legendary) whose value is based on that player's actual in-game stats across all matches.
-2. **You build a roster by drawing cards.** New users receive 7 draw attempts. Each draw gives you a random card from the shared deck — rarer cards belong to higher-performing players.
-3. **Your roster earns fantasy points week by week.** The season is divided into weekly periods ending each Sunday. Whatever 5 cards are active when Sunday ends get locked in, and points are scored from matches played during that week only. Swap your cards freely before each Sunday lock to react to the upcoming match schedule.
+2. **You build a roster by drawing cards.** New users receive tokens on registration; each draw costs 1 token. Each draw gives you a random card from the shared deck — rarer cards belong to higher-performing players.
+3. **Your roster earns fantasy points week by week.** The season is divided into weekly periods. Rosters lock before each week's matches start (Sunday end-of-day), so you pick before games are played, not after. Swap your cards freely up until the lock to react to the upcoming match schedule.
 4. **Compete on the leaderboard.** Weekly leaderboards show who made the best calls each week. An all-time leaderboard tracks cumulative performance across the whole season.
 
 The season schedule, match results, and stream/VOD links are displayed in a unified timeline so you can follow the action that feeds your fantasy points.
@@ -47,6 +47,8 @@ The app is available at `http://localhost:8000`. The SQLite database is stored i
 | `SCHEDULE_SHEET_URL` | Google Sheets CSV export URL for the season fixture list (sheet must be publicly viewable) |
 | `AUTO_INGEST_LEAGUES` | Comma-separated OpenDota league IDs to ingest on startup. Defaults to `19368,19369`. Set empty to disable. |
 | `SEASON_LOCK_START` | ISO date of the first Sunday lock (e.g. `2026-03-08`). All weekly boundaries are derived from this. |
+| `TOKEN_NAME` | Display name for the in-game currency shown throughout the UI. Defaults to `Tokens`. Set to `Kana Tokens` for Kanaliiga. |
+| `INITIAL_TOKENS` | Tokens granted to each new user on registration. Defaults to `5`. |
 
 ### Ingest league data
 League data is ingested automatically on startup in a background thread. The leagues to ingest are controlled by `AUTO_INGEST_LEAGUES` in `.env` (comma-separated OpenDota league IDs, defaults to `19368,19369`). Matches already in the database are skipped, so restarts are fast.
@@ -82,13 +84,14 @@ sqlite3 data/fantasy.db
 - Leaderboards for roster standings and individual player performance (visible without an account)
 
 ### Registered users
-- Draw a random player card from the deck (common / rare / epic / legendary) — 7 draws granted on registration
+- Draw a random player card from the deck (common / rare / epic / legendary) — costs 1 token per draw; tokens granted on registration and weekly
 - Manage your roster — up to 5 active cards, remaining cards on bench
-- View your draw counter and combined roster value
+- Token balance visible on every tab in the header
+- View weekly and all-time roster performance
 
 ### Admin
 - Ingest league data by ID (supports multiple divisions simultaneously)
-- Grant additional card draws to specific users
+- Grant tokens to specific users
 - Adjust scoring weights at runtime and recalculate all historical fantasy points
 - Refresh the schedule cache manually
 
@@ -128,8 +131,8 @@ The My Team tab includes a week selector. Selecting a past week shows that week'
 
 The first lock date and all subsequent Sunday boundaries are controlled by `SEASON_LOCK_START` in `.env` (default `2026-03-08`). For a new season, update this value and reset the database.
 
-## Card draw limits
-Each user starts with a draw limit of 7. Admins can grant additional draws per user from the **Admin → Draw Limits** panel. The limit is stored on the user record and enforced server-side.
+## Token system
+Each user has a token balance (currency name configurable via `TOKEN_NAME`). Tokens are granted on registration (`INITIAL_TOKENS`, default 5) and can be awarded by admins. Each card draw costs 1 token. The balance is shown in the header on all tabs. Admins can grant tokens from **Admin → Token Balances**.
 
 ## Scoring
 
@@ -147,27 +150,14 @@ Fantasy points per match are calculated from weighted player stats:
 
 Weights are configurable at runtime via the Admin tab without re-ingesting data.
 
-## Terminology
+## Documentation
 
-**League** — A tournament in OpenDota. The ID that ties together all players, teams, and matches. Multiple leagues (divisions) can be ingested simultaneously — cards are generated per-league.
-
-**Series** — A best-of-N between two teams on a given fixture date. One row in the schedule sheet; one or more individual matches in the database.
-
-**Match** — A single played map. Contains two teams, 10 players, and per-player performance stats from the OpenDota API.
-
-**Player** — A participant tied to the current league. Names and avatar images are resolved from OpenDota player profiles after ingestion.
-
-**Team** — A team taking part in the league. Names are extracted from match data.
-
-**Card** — A player instance that can be owned by a user. Cards are generated dynamically per league on ingestion: 1 legendary, 2 epic, 4 rare, 8 common per player.
-
-**Deck** — The pool of unowned cards available to draw from.
-
-**Roster** — The active cards a user has selected (max 5). The editable roster is snapshotted each Sunday midnight into a weekly locked roster. Weekly value is the sum of fantasy points earned by those locked cards during that week's matches only.
-
-**Weight** — A multiplier applied to a stat when calculating fantasy points. Stored in the database and adjustable via the admin panel.
-
-**Fantasy Points** — Points earned by a player in a single match, calculated as the weighted sum of their performance stats.
+| Document | Description |
+|---|---|
+| [markdown/user_stories.md](markdown/user_stories.md) | Full product requirements and user stories |
+| [markdown/cards.md](markdown/cards.md) | Card creation, draw mechanics, scoring, and modifier design |
+| [markdown/commands.md](markdown/commands.md) | Useful development and admin commands |
+| [markdown/terminology.md](markdown/terminology.md) | Glossary of terms used throughout the project |
 
 ## Stack
 - **Backend** — FastAPI, SQLAlchemy, SQLite
