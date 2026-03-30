@@ -125,8 +125,6 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
         match_id=match_id,
         radiant_team_id=radiant_team_id,
         dire_team_id=dire_team_id,
-        radiant_name=radiant_name,
-        dire_name=dire_name,
         league_id=league_id,
         start_time=data.get("start_time"),
         radiant_win=data.get("radiant_win"),
