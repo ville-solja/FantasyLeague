@@ -4,9 +4,10 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption
 from database import SessionLocal, engine, Base
@@ -48,60 +49,35 @@ class RegisterBody(BaseModel):
     password: str
 
 
-class DrawBody(BaseModel):
-    user_id: int
-
-
-class RosterActionBody(BaseModel):
-    user_id: int
-
-
 class WeightUpdateBody(BaseModel):
     value: float
 
 
-class AdminBody(BaseModel):
-    user_id: int
-
-
 class GrantTokensBody(BaseModel):
-    user_id: int        # admin
     target_user_id: int
     amount: int
 
 
 class ChangePasswordBody(BaseModel):
-    user_id: int
     current_password: str
     new_password: str
 
 
 class CreateCodeBody(BaseModel):
-    user_id: int        # admin
     code: str
     token_amount: int
 
 
 class RedeemCodeBody(BaseModel):
-    user_id: int
     code: str
 
 
 class UpdateUsernameBody(BaseModel):
-    user_id: int
     username: str
 
 
 class UpdatePlayerIdBody(BaseModel):
-    user_id: int
     player_id: int | None = None
-
-
-def require_admin(user_id: int, db):
-    user = db.get(User, user_id)
-    if not user or not user.is_admin:
-        db.close()
-        raise HTTPException(status_code=403, detail="Admin access required")
 
 
 @asynccontextmanager
@@ -157,13 +133,45 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"),
+    same_site="lax",
+    https_only=False,  # set True behind HTTPS in production
+)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_current_user(request: Request) -> dict:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {
+        "user_id": user_id,
+        "username": request.session.get("username"),
+        "is_admin": request.session.get("is_admin", False),
+    }
+
+
+def require_admin(
+    current_user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    user = db.get(User, current_user["user_id"])
+    if not user or not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
 
 
 @app.post("/ingest/league/{league_id}")
-def ingest_league_endpoint(league_id: int, body: AdminBody):
-    db = SessionLocal()
-    require_admin(body.user_id, db)
-    db.close()
+def ingest_league_endpoint(league_id: int, _: dict = Depends(require_admin)):
     ingest_league(league_id)
     run_enrichment()
     seed_cards(league_id)
@@ -171,20 +179,23 @@ def ingest_league_endpoint(league_id: int, body: AdminBody):
 
 
 @app.post("/login")
-def login(body: LoginBody):
+def login(request: Request, body: LoginBody):
     db = SessionLocal()
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
         db.close()
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
+    request.session["user_id"]  = user.id
+    request.session["username"] = user.username
+    request.session["is_admin"] = user.is_admin
+    data = {"username": user.username, "is_admin": user.is_admin,
             "tokens": user.tokens if user.tokens is not None else 0}
     db.close()
     return data
 
 
 @app.post("/register")
-def register(body: RegisterBody):
+def register(request: Request, body: RegisterBody):
     db = SessionLocal()
     if db.query(User).filter(User.username == body.username).first():
         db.close()
@@ -202,10 +213,27 @@ def register(body: RegisterBody):
     )
     db.add(user)
     db.commit()
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
-            "tokens": user.tokens}
+    request.session["user_id"]  = user.id
+    request.session["username"] = user.username
+    request.session["is_admin"] = user.is_admin
+    data = {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
     db.close()
     return data
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"status": "ok"}
+
+
+@app.get("/me")
+def get_me(current_user: dict = Depends(get_current_user)):
+    db = SessionLocal()
+    user = db.get(User, current_user["user_id"])
+    tokens = user.tokens if user and user.tokens is not None else 0
+    db.close()
+    return {**current_user, "tokens": tokens}
 
 
 @app.get("/deck")
@@ -222,9 +250,10 @@ def get_deck():
 
 
 @app.post("/draw")
-def draw_card(body: DrawBody):
+def draw_card(current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user_id = current_user["user_id"]
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -251,7 +280,7 @@ def draw_card(body: DrawBody):
 
     # Prefer players the user does not yet own a card for
     owned_player_ids = {r[0] for r in db.execute(
-        text("SELECT c.player_id FROM cards c WHERE c.owner_id = :uid"), {"uid": body.user_id}
+        text("SELECT c.player_id FROM cards c WHERE c.owner_id = :uid"), {"uid": user_id}
     ).fetchall()}
     available = [c for c in unclaimed if c.player_id not in owned_player_ids]
     if not available:
@@ -259,11 +288,11 @@ def draw_card(body: DrawBody):
 
     chosen = random.choice(available)
     card = db.get(Card, chosen.id)
-    card.owner_id = body.user_id
+    card.owner_id = user_id
     user.tokens = (user.tokens or 0) - 1
 
     active_count = db.query(Card).filter(
-        Card.owner_id == body.user_id, Card.is_active == True
+        Card.owner_id == user_id, Card.is_active == True
     ).count()
     is_active = active_count < ROSTER_LIMIT
     card.is_active = is_active
@@ -394,10 +423,11 @@ def get_roster(user_id: int, week_id: int = None):
 
 
 @app.post("/roster/{card_id}/activate")
-def activate_card(card_id: int, body: RosterActionBody):
+def activate_card(card_id: int, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = current_user["user_id"]
     card = db.get(Card, card_id)
-    if not card or card.owner_id != body.user_id:
+    if not card or card.owner_id != user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     if card.is_active:
@@ -405,7 +435,7 @@ def activate_card(card_id: int, body: RosterActionBody):
         raise HTTPException(status_code=409, detail="Card already active")
 
     active_count = db.query(Card).filter(
-        Card.owner_id == body.user_id, Card.is_active == True
+        Card.owner_id == user_id, Card.is_active == True
     ).count()
     if active_count >= ROSTER_LIMIT:
         db.close()
@@ -413,7 +443,7 @@ def activate_card(card_id: int, body: RosterActionBody):
 
     # Single-player rule: only one card per player may be active
     duplicate = db.query(Card).filter(
-        Card.owner_id == body.user_id,
+        Card.owner_id == user_id,
         Card.player_id == card.player_id,
         Card.is_active == True,
         Card.id != card_id,
@@ -429,10 +459,11 @@ def activate_card(card_id: int, body: RosterActionBody):
 
 
 @app.post("/roster/{card_id}/deactivate")
-def deactivate_card(card_id: int, body: RosterActionBody):
+def deactivate_card(card_id: int, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = current_user["user_id"]
     card = db.get(Card, card_id)
-    if not card or card.owner_id != body.user_id:
+    if not card or card.owner_id != user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     card.is_active = False
@@ -629,7 +660,7 @@ def get_weights():
 
 
 @app.put("/weights/{key}")
-def update_weight(key: str, body: WeightUpdateBody):
+def update_weight(key: str, body: WeightUpdateBody, _: dict = Depends(require_admin)):
     db = SessionLocal()
     weight = db.get(Weight, key)
     if not weight:
@@ -642,9 +673,8 @@ def update_weight(key: str, body: WeightUpdateBody):
 
 
 @app.get("/users")
-def list_users(user_id: int):
+def list_users(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     users = db.query(User).order_by(User.username).all()
     result = []
     for u in users:
@@ -658,9 +688,8 @@ def list_users(user_id: int):
 
 
 @app.post("/grant-tokens")
-def grant_tokens(body: GrantTokensBody):
+def grant_tokens(body: GrantTokensBody, _: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     target = db.get(User, body.target_user_id)
     if not target:
         db.close()
@@ -676,9 +705,8 @@ def grant_tokens(body: GrantTokensBody):
 
 
 @app.post("/recalculate")
-def recalculate(body: AdminBody):
+def recalculate(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     weights = {w.key: w.value for w in db.query(Weight).all()}
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
@@ -707,9 +735,8 @@ def schedule_endpoint():
 
 
 @app.post("/schedule/refresh")
-def schedule_refresh(body: AdminBody):
+def schedule_refresh(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     bust_cache()
     data = get_schedule(db)
     db.close()
@@ -717,10 +744,7 @@ def schedule_refresh(body: AdminBody):
 
 
 @app.get("/schedule/debug")
-def schedule_debug(user_id: int):
-    db = SessionLocal()
-    require_admin(user_id, db)
-    db.close()
+def schedule_debug(_: dict = Depends(require_admin)):
 
     from schedule import SCHEDULE_SHEET_URL as _DEFAULT_SCHEDULE_URL
     url = os.getenv("SCHEDULE_SHEET_URL", _DEFAULT_SCHEDULE_URL)
@@ -762,9 +786,10 @@ def get_profile(user_id: int):
 
 
 @app.put("/profile/username")
-def update_username(body: UpdateUsernameBody):
+def update_username(body: UpdateUsernameBody, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user_id = current_user["user_id"]
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -772,7 +797,7 @@ def update_username(body: UpdateUsernameBody):
     if not username:
         db.close()
         raise HTTPException(status_code=422, detail="Username cannot be empty")
-    existing = db.query(User).filter(User.username == username, User.id != body.user_id).first()
+    existing = db.query(User).filter(User.username == username, User.id != user_id).first()
     if existing:
         db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
@@ -783,9 +808,9 @@ def update_username(body: UpdateUsernameBody):
 
 
 @app.put("/profile/player-id")
-def update_player_id(body: UpdatePlayerIdBody):
+def update_player_id(body: UpdatePlayerIdBody, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, current_user["user_id"])
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -845,9 +870,9 @@ def weekly_leaderboard(week_id: int):
 
 
 @app.put("/profile/password")
-def change_password(body: ChangePasswordBody):
+def change_password(body: ChangePasswordBody, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, current_user["user_id"])
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -864,9 +889,8 @@ def change_password(body: ChangePasswordBody):
 
 
 @app.post("/codes")
-def create_code(body: CreateCodeBody):
+def create_code(body: CreateCodeBody, admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     code = body.code.strip().upper()
     if not code:
         db.close()
@@ -877,7 +901,7 @@ def create_code(body: CreateCodeBody):
     if db.query(PromoCode).filter(PromoCode.code == code).first():
         db.close()
         raise HTTPException(status_code=409, detail="Code already exists")
-    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=body.user_id)
+    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=admin["user_id"])
     db.add(promo)
     db.commit()
     result = {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount}
@@ -886,9 +910,8 @@ def create_code(body: CreateCodeBody):
 
 
 @app.get("/codes")
-def list_codes(user_id: int):
+def list_codes(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     codes = db.query(PromoCode).all()
     result = []
     for c in codes:
@@ -900,9 +923,8 @@ def list_codes(user_id: int):
 
 
 @app.delete("/codes/{code_id}")
-def delete_code(code_id: int, user_id: int):
+def delete_code(code_id: int, _: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     promo = db.get(PromoCode, code_id)
     if not promo:
         db.close()
@@ -914,9 +936,10 @@ def delete_code(code_id: int, user_id: int):
 
 
 @app.post("/redeem")
-def redeem_code(body: RedeemCodeBody):
+def redeem_code(body: RedeemCodeBody, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user_id = current_user["user_id"]
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -927,13 +950,13 @@ def redeem_code(body: RedeemCodeBody):
         raise HTTPException(status_code=404, detail="Invalid code")
     already = db.query(CodeRedemption).filter(
         CodeRedemption.code_id == promo.id,
-        CodeRedemption.user_id == body.user_id,
+        CodeRedemption.user_id == user_id,
     ).first()
     if already:
         db.close()
         raise HTTPException(status_code=409, detail="Code already redeemed")
     user.tokens = (user.tokens or 0) + promo.token_amount
-    db.add(CodeRedemption(code_id=promo.id, user_id=body.user_id, redeemed_at=int(time.time())))
+    db.add(CodeRedemption(code_id=promo.id, user_id=user_id, redeemed_at=int(time.time())))
     db.commit()
     result = {"tokens": user.tokens, "granted": promo.token_amount}
     db.close()

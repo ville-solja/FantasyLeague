@@ -9,4 +9,5 @@ services:
       - ./data:/app/data
     environment:
       - SCHEDULE_SHEET_URL=${SCHEDULE_SHEET_URL}
+      - SECRET_KEY=${SECRET_KEY}
 

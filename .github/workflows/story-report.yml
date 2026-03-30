@@ -8,8 +8,6 @@ on:
 jobs:
   generate-report:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -26,11 +24,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
-      - name: Commit report
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add markdown/story-report.md
-          git diff --cached --quiet || git commit -m "chore: update story coverage report [skip ci]"
-          git pull --rebase origin main
-          git push
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: story-report
+          path: markdown/story-report.md
+          retention-days: 90
