@@ -195,48 +195,25 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup):
     """Return {team1_wins, team2_wins, game_count, start_time} or None if unresolvable."""
     team1_id = _find_team_id(team1_name, team_lookup)
     team2_id = _find_team_id(team2_name, team_lookup)
-
-    # Each entry: (team1_is_radiant: bool, radiant_win: bool|None, start_time: int|None)
-    resolved_rows = []
-
+    if not team1_id or not team2_id:
+        return None
     try:
-        if team1_id and team2_id:
-            db_rows = db.execute(text("""
-                SELECT radiant_team_id, radiant_win, start_time FROM matches
-                WHERE (radiant_team_id = :a AND dire_team_id = :b)
-                   OR (radiant_team_id = :b AND dire_team_id = :a)
-            """), {"a": team1_id, "b": team2_id}).fetchall()
-            for r in db_rows:
-                resolved_rows.append((r[0] == team1_id, r[1], r[2]))
-
-        # Fallback: match by stored team names (covers teams without an OpenDota team_id)
-        if not resolved_rows:
-            t1n = _norm(team1_name)
-            t2n = _norm(team2_name)
-            if t1n and t2n:
-                name_rows = db.execute(text(
-                    "SELECT radiant_win, start_time, radiant_name, dire_name FROM matches"
-                )).fetchall()
-                for r in name_rows:
-                    rn = _norm(r[2] or "")
-                    dn = _norm(r[3] or "")
-                    if (t1n in rn or rn in t1n) and (t2n in dn or dn in t2n):
-                        resolved_rows.append((True, r[0], r[1]))   # team1 is radiant
-                    elif (t2n in rn or rn in t2n) and (t1n in dn or dn in t1n):
-                        resolved_rows.append((False, r[0], r[1]))  # team1 is dire
+        rows = db.execute(text("""
+            SELECT radiant_team_id, radiant_win, start_time FROM matches
+            WHERE (radiant_team_id = :a AND dire_team_id = :b)
+               OR (radiant_team_id = :b AND dire_team_id = :a)
+        """), {"a": team1_id, "b": team2_id}).fetchall()
     except Exception:
         return None
-
-    if not resolved_rows:
+    if not rows:
         return None
-
     team1_wins = 0
     team2_wins = 0
-    start_times = [r[2] for r in resolved_rows if r[2] is not None]
-    for team1_is_radiant, radiant_win, _ in resolved_rows:
+    start_times = [r[2] for r in rows if r[2] is not None]
+    for radiant_id, radiant_win, _ in rows:
         if radiant_win is None:
             continue
-        if team1_is_radiant:
+        if radiant_id == team1_id:
             team1_wins += 1 if radiant_win else 0
             team2_wins += 0 if radiant_win else 1
         else:
@@ -245,7 +222,7 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup):
     return {
         "team1_wins": team1_wins,
         "team2_wins": team2_wins,
-        "game_count": len(resolved_rows),
+        "game_count": len(rows),
         "start_time": min(start_times) if start_times else None,
     }
 

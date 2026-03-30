@@ -1,6 +1,6 @@
 const API = "";
 
-let activeUserId   = null;
+let activeUserId   = localStorage.getItem("user_id");
 let activeUsername = localStorage.getItem("username");
 let activeIsAdmin  = localStorage.getItem("is_admin") === "true";
 let _tokenName     = "Tokens";
@@ -79,10 +79,17 @@ async function login() {
     const data = await res.json();
     if (!res.ok) return setStatus("loginStatus", data.detail, false);
 
-    await loadMe();
+    activeUserId   = String(data.id);
+    activeUsername = data.username;
+    activeIsAdmin  = data.is_admin;
+
+    localStorage.setItem("user_id",  activeUserId);
+    localStorage.setItem("username", activeUsername);
+    localStorage.setItem("is_admin", activeIsAdmin);
 
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
+    updateTokenDisplay(data.tokens ?? null);
     applyAuthState();
     switchTab("team");
     loadDeck();
@@ -103,11 +110,17 @@ async function register() {
     if (!res.ok) return setStatus("registerStatus", data.detail, false);
 
     // Auto-login on registration
-    await loadMe();
+    activeUserId   = String(data.id);
+    activeUsername = data.username;
+    activeIsAdmin  = data.is_admin;
+    localStorage.setItem("user_id",  activeUserId);
+    localStorage.setItem("username", activeUsername);
+    localStorage.setItem("is_admin", String(activeIsAdmin));
     document.getElementById("registerModal").classList.add("hidden");
     document.getElementById("regUsername").value = "";
     document.getElementById("regEmail").value    = "";
     document.getElementById("regPassword").value = "";
+    updateTokenDisplay(data.tokens ?? null);
     applyAuthState();
     switchTab("team");
     loadDeck();
@@ -116,24 +129,10 @@ async function register() {
   }
 }
 
-async function loadMe() {
-  try {
-    const res = await fetch(`${API}/me`);
-    if (!res.ok) return;
-    const data = await res.json();
-    activeUserId   = data.user_id;
-    activeUsername = data.username;
-    activeIsAdmin  = data.is_admin;
-    localStorage.setItem("username", activeUsername);
-    localStorage.setItem("is_admin", String(activeIsAdmin));
-    updateTokenDisplay(data.tokens ?? null);
-  } catch (_) {}
-}
-
-async function logout() {
-  await fetch(`${API}/logout`, { method: "POST" });
+function logout() {
   activeUserId = activeUsername = null;
   activeIsAdmin = false;
+  localStorage.removeItem("user_id");
   localStorage.removeItem("username");
   localStorage.removeItem("is_admin");
   updateTokenDisplay(null);
@@ -178,7 +177,7 @@ async function saveUsername() {
   try {
     const res = await fetch(`${API}/profile/username`, {
       method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({username})
+      body: JSON.stringify({user_id: parseInt(activeUserId), username})
     });
     const data = await res.json();
     if (!res.ok) return setStatus("usernameStatus", data.detail, false);
@@ -198,7 +197,7 @@ async function changePassword() {
   try {
     const res = await fetch(`${API}/profile/password`, {
       method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({current_password: current, new_password: newPw})
+      body: JSON.stringify({user_id: parseInt(activeUserId), current_password: current, new_password: newPw})
     });
     const data = await res.json();
     if (!res.ok) return setStatus("passwordStatus", data.detail, false);
@@ -216,7 +215,7 @@ async function savePlayerId() {
   try {
     const res = await fetch(`${API}/profile/player-id`, {
       method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({player_id})
+      body: JSON.stringify({user_id: parseInt(activeUserId), player_id})
     });
     const data = await res.json();
     if (!res.ok) return setStatus("playerIdStatus", data.detail, false);
@@ -291,7 +290,7 @@ async function loadDeck() {
 
 async function drawCard() {
   try {
-    const res = await fetch(`${API}/draw`, { method: "POST" });
+    const res = await fetch(`${API}/draw`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     if (!res.ok) return setStatus("deckStatus", data.detail, false);
     updateTokenDisplay(data.tokens ?? null);
@@ -312,7 +311,7 @@ async function redeemCode() {
   const code = document.getElementById("redeemCodeInput").value.trim().toUpperCase();
   if (!code) return setStatus("redeemStatus", "Enter a code", false);
   try {
-    const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code}) });
+    const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), code}) });
     const data = await res.json();
     if (!res.ok) return setStatus("redeemStatus", data.detail, false);
     document.getElementById("redeemCodeInput").value = "";
@@ -479,7 +478,7 @@ async function loadRoster(weekId = null) {
 
 async function activateCard(cardId) {
   try {
-    const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST" });
+    const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     if (res.ok) loadRoster(_rosterWeekId);
     else setStatus("rosterStatus", data.detail, false);
@@ -490,7 +489,7 @@ async function activateCard(cardId) {
 
 async function deactivateCard(cardId) {
   try {
-    const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST" });
+    const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     if (res.ok) loadRoster(_rosterWeekId);
     else setStatus("rosterStatus", data.detail, false);
@@ -651,7 +650,7 @@ async function saveWeight(key) {
 
 async function loadUsers() {
   try {
-    const res = await fetch(`${API}/users`);
+    const res = await fetch(`${API}/users?user_id=${activeUserId}`);
     const rows = await res.json();
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
     document.getElementById("usersBody").innerHTML = rows.map(u => `
@@ -673,7 +672,7 @@ async function grantTokens(targetId) {
   const amount = parseInt(document.getElementById(`grant_${targetId}`).value);
   if (!amount || amount < 1) return setStatus("usersStatus", "Enter a valid amount", false);
   try {
-    const res = await fetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target_user_id: targetId, amount}) });
+    const res = await fetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), target_user_id: targetId, amount}) });
     const data = await res.json();
     setStatus("usersStatus", res.ok ? `${data.username} now has ${data.tokens} ${_tokenName}` : data.detail, res.ok);
     if (res.ok) loadUsers();
@@ -689,7 +688,7 @@ async function grantTokens(targetId) {
 async function loadCodes() {
   if (!activeIsAdmin) return;
   try {
-    const res = await fetch(`${API}/codes`);
+    const res = await fetch(`${API}/codes?user_id=${activeUserId}`);
     const rows = await res.json();
     if (!res.ok) return setStatus("codesStatus", rows.detail, false);
     if (!rows.length) {
@@ -715,7 +714,7 @@ async function createCode() {
   if (!code)        return setStatus("codesStatus", "Enter a code name", false);
   if (!amount || amount < 1) return setStatus("codesStatus", "Enter a token amount ≥ 1", false);
   try {
-    const res = await fetch(`${API}/codes`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, token_amount: amount}) });
+    const res = await fetch(`${API}/codes`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), code, token_amount: amount}) });
     const data = await res.json();
     if (!res.ok) return setStatus("codesStatus", data.detail, false);
     document.getElementById("newCodeInput").value  = "";
@@ -729,7 +728,7 @@ async function createCode() {
 
 async function deleteCode(codeId) {
   try {
-    const res = await fetch(`${API}/codes/${codeId}`, { method: "DELETE" });
+    const res = await fetch(`${API}/codes/${codeId}?user_id=${activeUserId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("codesStatus", d.detail, false); }
     setStatus("codesStatus", "Code deleted");
     loadCodes();
@@ -745,7 +744,7 @@ async function deleteCode(codeId) {
 async function refreshSchedule() {
   setStatus("scheduleRefreshStatus", "Refreshing...");
   try {
-    const res = await fetch(`${API}/schedule/refresh`, { method: "POST" });
+    const res = await fetch(`${API}/schedule/refresh`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     if (!res.ok) return setStatus("scheduleRefreshStatus", data.detail, false);
     const count = data.weeks?.length ?? 0;
@@ -760,7 +759,7 @@ async function ingestLeague() {
   if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
   setStatus("ingestStatus", "Ingesting... this may take a while");
   try {
-    const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST" });
+    const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     setStatus("ingestStatus", res.ok ? `Done. League ${data.league_id} ingested.` : data.detail, res.ok);
   } catch (e) {
@@ -771,7 +770,7 @@ async function ingestLeague() {
 async function recalculate() {
   setStatus("recalcStatus", "Recalculating...");
   try {
-    const res = await fetch(`${API}/recalculate`, { method: "POST" });
+    const res = await fetch(`${API}/recalculate`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
   } catch (e) {
@@ -1068,7 +1067,6 @@ async function loadSchedule() {
 
 async function init() {
   await loadConfig();
-  await loadMe();
   applyAuthState();
   if (!activeUserId) {
     showLogin();
