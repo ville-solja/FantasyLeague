@@ -3,6 +3,34 @@ const API = "";
 let activeUserId   = localStorage.getItem("user_id");
 let activeUsername = localStorage.getItem("username");
 let activeIsAdmin  = localStorage.getItem("is_admin") === "true";
+let _tokenName     = "Tokens";
+let _tokenBalance  = null;
+
+// -------------------------------------------------------
+// CONFIG
+// -------------------------------------------------------
+
+async function loadConfig() {
+  try {
+    const res = await fetch(`${API}/config`);
+    if (res.ok) {
+      const cfg = await res.json();
+      _tokenName = cfg.token_name || "Tokens";
+    }
+  } catch (_) { /* non-fatal */ }
+}
+
+function updateTokenDisplay(balance) {
+  _tokenBalance = balance;
+  const el = document.getElementById("tokenBalance");
+  if (!el) return;
+  if (balance !== null && activeUserId) {
+    el.textContent = `${balance} ${_tokenName}`;
+    el.style.display = "";
+  } else {
+    el.style.display = "none";
+  }
+}
 
 // -------------------------------------------------------
 // AUTH
@@ -18,6 +46,9 @@ function applyAuthState() {
   document.getElementById("tab-btn-team").style.display    = loggedIn ? "" : "none";
   document.getElementById("tab-btn-profile").style.display = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
+
+  const tokenEl = document.getElementById("tokenBalance");
+  if (tokenEl) tokenEl.style.display = loggedIn ? "" : "none";
 
   if (!loggedIn) switchTab("leaderboard");
 }
@@ -58,6 +89,7 @@ async function login() {
 
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
+    updateTokenDisplay(data.tokens ?? null);
     applyAuthState();
     switchTab("team");
     loadDeck();
@@ -77,11 +109,21 @@ async function register() {
     const data = await res.json();
     if (!res.ok) return setStatus("registerStatus", data.detail, false);
 
-    setStatus("registerStatus", "Account created — you can now log in");
+    // Auto-login on registration
+    activeUserId   = String(data.id);
+    activeUsername = data.username;
+    activeIsAdmin  = data.is_admin;
+    localStorage.setItem("user_id",  activeUserId);
+    localStorage.setItem("username", activeUsername);
+    localStorage.setItem("is_admin", String(activeIsAdmin));
+    document.getElementById("registerModal").classList.add("hidden");
     document.getElementById("regUsername").value = "";
     document.getElementById("regEmail").value    = "";
     document.getElementById("regPassword").value = "";
-    setTimeout(showLogin, 1200);
+    updateTokenDisplay(data.tokens ?? null);
+    applyAuthState();
+    switchTab("team");
+    loadDeck();
   } catch (e) {
     setStatus("registerStatus", e.message, false);
   }
@@ -93,6 +135,7 @@ function logout() {
   localStorage.removeItem("user_id");
   localStorage.removeItem("username");
   localStorage.removeItem("is_admin");
+  updateTokenDisplay(null);
   applyAuthState();
 }
 
@@ -147,6 +190,25 @@ async function saveUsername() {
   }
 }
 
+async function changePassword() {
+  const current = document.getElementById("pwCurrent").value;
+  const newPw   = document.getElementById("pwNew").value;
+  if (!current || !newPw) return setStatus("passwordStatus", "Fill in both fields", false);
+  try {
+    const res = await fetch(`${API}/profile/password`, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({user_id: parseInt(activeUserId), current_password: current, new_password: newPw})
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("passwordStatus", data.detail, false);
+    document.getElementById("pwCurrent").value = "";
+    document.getElementById("pwNew").value = "";
+    setStatus("passwordStatus", "Password updated");
+  } catch (e) {
+    setStatus("passwordStatus", e.message, false);
+  }
+}
+
 async function savePlayerId() {
   const raw = document.getElementById("profilePlayerId").value.trim();
   const player_id = raw ? parseInt(raw) : null;
@@ -185,11 +247,14 @@ function switchTab(name) {
 
   if (name === "profile")       loadProfile();
   if (name === "team")        { loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
-  if (name === "leaderboard") { loadRosterLeaderboard(); loadLeaderboard(); loadTop(); }
+  if (name === "leaderboard") {
+    loadWeeks().then(() => { _populateLbWeekSelect(); switchLeaderboard(_lbMode); });
+    loadLeaderboard(); loadTop();
+  }
   if (name === "players")       loadPlayers();
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
-  if (name === "admin")       { loadWeights(); loadUsers(); }
+  if (name === "admin")       { loadWeights(); loadUsers(); loadCodes(); }
 }
 
 // -------------------------------------------------------
@@ -228,11 +293,32 @@ async function drawCard() {
     const res = await fetch(`${API}/draw`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId)}) });
     const data = await res.json();
     if (!res.ok) return setStatus("deckStatus", data.detail, false);
+    updateTokenDisplay(data.tokens ?? null);
     showReveal(data);
     loadDeck();
     loadRoster(_rosterWeekId);
   } catch (e) {
     setStatus("deckStatus", e.message, false);
+  }
+}
+
+function toggleScoringInfo() {
+  const el = document.getElementById("scoringInfo");
+  if (el) el.style.display = el.style.display === "none" ? "" : "none";
+}
+
+async function redeemCode() {
+  const code = document.getElementById("redeemCodeInput").value.trim().toUpperCase();
+  if (!code) return setStatus("redeemStatus", "Enter a code", false);
+  try {
+    const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), code}) });
+    const data = await res.json();
+    if (!res.ok) return setStatus("redeemStatus", data.detail, false);
+    document.getElementById("redeemCodeInput").value = "";
+    updateTokenDisplay(data.tokens ?? null);
+    setStatus("redeemStatus", `+${data.granted} ${_tokenName}!`);
+  } catch (e) {
+    setStatus("redeemStatus", e.message, false);
   }
 }
 
@@ -310,13 +396,18 @@ async function loadRoster(weekId = null) {
       : `${API}/roster/${activeUserId}`;
     const res = await fetch(url);
     const data = await res.json();
-    const { active, bench, combined_value, draws_used, draw_limit, week } = data;
+    const { active, bench, combined_value, tokens, season_points, week } = data;
     const isLocked = week?.is_locked ?? false;
 
     _rosterCards = [...active, ...bench];
 
+    if (tokens !== undefined) updateTokenDisplay(tokens);
+
+    const seasonEl = document.getElementById("rosterSeasonPoints");
+    if (seasonEl) seasonEl.textContent = season_points !== undefined ? Number(season_points).toFixed(1) : "—";
+
     const counter = document.getElementById("drawCounter");
-    if (counter) counter.textContent = draws_used !== undefined ? `${draws_used} / ${draw_limit} draws used` : "";
+    if (counter) counter.textContent = tokens !== undefined ? `${tokens} ${_tokenName} remaining` : "";
 
     // Week status label
     const weekStatusEl = document.getElementById("rosterWeekStatus");
@@ -411,26 +502,79 @@ async function deactivateCard(cardId) {
 // LEADERBOARDS
 // -------------------------------------------------------
 
-async function loadRosterLeaderboard() {
+let _lbMode = "season";
+
+function switchLeaderboard(mode) {
+  _lbMode = mode;
+  const seasonBtn = document.getElementById("lbSeasonBtn");
+  const weeklyBtn = document.getElementById("lbWeeklyBtn");
+  const weekSel   = document.getElementById("lbWeekSelect");
+  const header    = document.getElementById("lbPtsHeader");
+  if (seasonBtn) seasonBtn.className = mode === "season" ? "secondary" : "ghost";
+  if (weeklyBtn) weeklyBtn.className = mode === "weekly"  ? "secondary" : "ghost";
+  if (weekSel)   weekSel.style.display = mode === "weekly" ? "" : "none";
+  if (header)    header.textContent = mode === "season" ? "Season pts" : "Week pts";
+  if (mode === "season") {
+    loadSeasonLeaderboard();
+  } else {
+    const sel = document.getElementById("lbWeekSelect");
+    const weekId = sel ? parseInt(sel.value) : null;
+    if (weekId) loadWeeklyLeaderboard(weekId);
+  }
+}
+
+async function onLbWeekChange() {
+  const sel = document.getElementById("lbWeekSelect");
+  if (sel) loadWeeklyLeaderboard(parseInt(sel.value));
+}
+
+async function loadSeasonLeaderboard() {
   try {
-    const res = await fetch(`${API}/leaderboard/roster`);
+    const res = await fetch(`${API}/leaderboard/season`);
     const rows = await res.json();
-    const tbody = document.getElementById("rosterLeaderboardBody");
+    const tbody = document.getElementById("standingsBody");
     if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${r.username}</td>
-        <td>${r.total_cards}</td>
-        <td>${Number(r.roster_value).toFixed(1)}</td>
-      </tr>`).join("");
-    setStatus("rosterLeaderboardStatus", "");
+    tbody.innerHTML = rows.map((r, i) => {
+      const isMe = activeUserId && String(r.id) === String(activeUserId);
+      const style = isMe ? " style='color:#f0b429;font-weight:bold;'" : "";
+      return `<tr${style}><td>${i + 1}</td><td>${r.username}</td><td>${Number(r.season_points).toFixed(1)}</td></tr>`;
+    }).join("");
+    setStatus("standingsStatus", "");
   } catch (e) {
-    setStatus("rosterLeaderboardStatus", e.message, false);
+    setStatus("standingsStatus", e.message, false);
   }
+}
+
+async function loadWeeklyLeaderboard(weekId) {
+  try {
+    const res = await fetch(`${API}/leaderboard/weekly?week_id=${weekId}`);
+    const rows = await res.json();
+    const tbody = document.getElementById("standingsBody");
+    if (!rows.length) {
+      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
+      return;
+    }
+    tbody.innerHTML = rows.map((r, i) => {
+      const isMe = activeUserId && String(r.id) === String(activeUserId);
+      const style = isMe ? " style='color:#f0b429;font-weight:bold;'" : "";
+      return `<tr${style}><td>${i + 1}</td><td>${r.username}</td><td>${Number(r.week_points).toFixed(1)}</td></tr>`;
+    }).join("");
+    setStatus("standingsStatus", "");
+  } catch (e) {
+    setStatus("standingsStatus", e.message, false);
+  }
+}
+
+function _populateLbWeekSelect() {
+  const sel = document.getElementById("lbWeekSelect");
+  if (!sel || !_weeks.length) return;
+  sel.innerHTML = _weeks.filter(w => w.is_locked).map(w =>
+    `<option value="${w.id}">${w.label}</option>`
+  ).join("");
+  if (!sel.innerHTML) sel.innerHTML = "<option disabled>No locked weeks yet</option>";
 }
 
 async function loadLeaderboard() {
@@ -501,7 +645,7 @@ async function saveWeight(key) {
 }
 
 // -------------------------------------------------------
-// ADMIN — USERS / DRAW LIMITS
+// ADMIN — USERS / TOKEN BALANCES
 // -------------------------------------------------------
 
 async function loadUsers() {
@@ -512,11 +656,10 @@ async function loadUsers() {
     document.getElementById("usersBody").innerHTML = rows.map(u => `
       <tr>
         <td>${u.username}</td>
-        <td>${u.draws_used}</td>
-        <td>${u.draw_limit}</td>
+        <td>${u.tokens}</td>
         <td style="display:flex;gap:6px;align-items:center;">
           <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
-          <button class="secondary" onclick="grantDraws(${u.id})">Grant</button>
+          <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
         </td>
       </tr>`).join("");
     setStatus("usersStatus", "");
@@ -525,16 +668,72 @@ async function loadUsers() {
   }
 }
 
-async function grantDraws(targetId) {
+async function grantTokens(targetId) {
   const amount = parseInt(document.getElementById(`grant_${targetId}`).value);
   if (!amount || amount < 1) return setStatus("usersStatus", "Enter a valid amount", false);
   try {
-    const res = await fetch(`${API}/grant-draws`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), target_user_id: targetId, amount}) });
+    const res = await fetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), target_user_id: targetId, amount}) });
     const data = await res.json();
-    setStatus("usersStatus", res.ok ? `${data.username} now has limit ${data.draw_limit}` : data.detail, res.ok);
+    setStatus("usersStatus", res.ok ? `${data.username} now has ${data.tokens} ${_tokenName}` : data.detail, res.ok);
     if (res.ok) loadUsers();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
+  }
+}
+
+// -------------------------------------------------------
+// ADMIN — PROMO CODES
+// -------------------------------------------------------
+
+async function loadCodes() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/codes?user_id=${activeUserId}`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("codesStatus", rows.detail, false);
+    if (!rows.length) {
+      document.getElementById("codesBody").innerHTML = "<tr><td colspan='4' style='color:#444'>No codes yet</td></tr>";
+      return;
+    }
+    document.getElementById("codesBody").innerHTML = rows.map(c => `
+      <tr>
+        <td><code>${c.code}</code></td>
+        <td>${c.token_amount}</td>
+        <td>${c.redemptions}</td>
+        <td><button class="ghost" style="font-size:0.8rem;" onclick="deleteCode(${c.id})">Delete</button></td>
+      </tr>`).join("");
+    setStatus("codesStatus", "");
+  } catch (e) {
+    setStatus("codesStatus", e.message, false);
+  }
+}
+
+async function createCode() {
+  const code   = document.getElementById("newCodeInput").value.trim().toUpperCase();
+  const amount = parseInt(document.getElementById("newCodeAmount").value);
+  if (!code)        return setStatus("codesStatus", "Enter a code name", false);
+  if (!amount || amount < 1) return setStatus("codesStatus", "Enter a token amount ≥ 1", false);
+  try {
+    const res = await fetch(`${API}/codes`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({user_id: parseInt(activeUserId), code, token_amount: amount}) });
+    const data = await res.json();
+    if (!res.ok) return setStatus("codesStatus", data.detail, false);
+    document.getElementById("newCodeInput").value  = "";
+    document.getElementById("newCodeAmount").value = "";
+    setStatus("codesStatus", `Code ${data.code} created`);
+    loadCodes();
+  } catch (e) {
+    setStatus("codesStatus", e.message, false);
+  }
+}
+
+async function deleteCode(codeId) {
+  try {
+    const res = await fetch(`${API}/codes/${codeId}?user_id=${activeUserId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("codesStatus", d.detail, false); }
+    setStatus("codesStatus", "Code deleted");
+    loadCodes();
+  } catch (e) {
+    setStatus("codesStatus", e.message, false);
   }
 }
 
@@ -866,7 +1065,8 @@ async function loadSchedule() {
 // INIT
 // -------------------------------------------------------
 
-function init() {
+async function init() {
+  await loadConfig();
   applyAuthState();
   if (!activeUserId) {
     showLogin();
@@ -874,6 +1074,7 @@ function init() {
     loadDeck();
     loadWeeks().then(() => loadRoster(_rosterWeekId));
   }
+  loadWeeks().then(() => { _populateLbWeekSelect(); loadSeasonLeaderboard(); });
   loadLeaderboard();
   loadTop();
 }

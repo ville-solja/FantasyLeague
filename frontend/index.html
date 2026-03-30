@@ -98,6 +98,7 @@
 <div class="header">
   <h1>Kanaliiga Fantasy</h1>
   <div class="header-right">
+    <span id="tokenBalance" style="font-size:0.85rem;color:#aaa;margin-right:8px;display:none;"></span>
     <span id="headerUserLabel"></span>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
@@ -129,9 +130,11 @@
         <div class="status" id="usernameStatus"></div>
       </div>
       <div>
-        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Twitch</div>
-        <button class="ghost" disabled style="opacity:0.45;cursor:not-allowed;">Link Twitch account</button>
-        <div style="font-size:0.75rem;color:#444;margin-top:6px;">Coming soon</div>
+        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Password</div>
+        <input id="pwCurrent" type="password" placeholder="Current password" style="width:100%;margin-bottom:8px;" />
+        <input id="pwNew" type="password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:8px;" />
+        <button onclick="changePassword()">Change password</button>
+        <div class="status" id="passwordStatus"></div>
       </div>
     </div>
 
@@ -176,9 +179,24 @@
           <div class="label">Legendary</div>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <button onclick="drawCard()">Draw a card</button>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button id="drawBtn" onclick="drawCard()">Draw a card</button>
         <span id="drawCounter" style="font-size:0.8rem;color:#555;"></span>
+      </div>
+      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+        <input id="redeemCodeInput" type="text" placeholder="Promo code" style="max-width:160px;text-transform:uppercase;" />
+        <button class="secondary" onclick="redeemCode()">Redeem</button>
+        <div class="status" id="redeemStatus" style="margin:0;"></div>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="ghost" style="font-size:0.8rem;" onclick="toggleScoringInfo()">How is scoring calculated?</button>
+        <div id="scoringInfo" style="display:none;margin-top:10px;font-size:0.82rem;color:#888;line-height:1.6;">
+          Fantasy points are calculated from each player's match stats using configurable weights:<br>
+          <strong style="color:#aaa;">Kills × kill_weight + Assists × assist_weight − Deaths × death_weight
+          + GPM × gpm_weight + Observer wards × obs_weight + Sentry wards × sen_weight
+          + Tower damage × tower_dmg_weight</strong><br>
+          Weights are managed by the admin under Scoring Weights.
+        </div>
       </div>
       <div class="status" id="deckStatus"></div>
     </div>
@@ -201,6 +219,11 @@
             <td id="rosterCombined" style="padding-top:8px;">—</td>
             <td></td>
           </tr>
+          <tr>
+            <td colspan="2" style="color:#555;">Season total</td>
+            <td id="rosterSeasonPoints" style="">—</td>
+            <td></td>
+          </tr>
         </tfoot>
       </table>
       <div id="benchSection" style="margin-top:20px;display:none;">
@@ -221,13 +244,17 @@
   <div class="grid">
 
     <div class="panel" style="grid-column: span 2;">
-      <h2>Roster standings</h2>
-      <button class="secondary" onclick="loadRosterLeaderboard()" style="margin-bottom:12px;">Refresh</button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <h2 style="margin:0;">Standings</h2>
+        <button class="secondary" id="lbSeasonBtn" onclick="switchLeaderboard('season')" style="font-size:0.82rem;">Season</button>
+        <button class="ghost" id="lbWeeklyBtn" onclick="switchLeaderboard('weekly')" style="font-size:0.82rem;">Weekly</button>
+        <select id="lbWeekSelect" onchange="onLbWeekChange()" style="display:none;font-size:0.82rem;"></select>
+      </div>
       <table>
-        <thead><tr><th>Rank</th><th>User</th><th>Cards owned</th><th>Roster value</th></tr></thead>
-        <tbody id="rosterLeaderboardBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        <thead><tr><th>Rank</th><th>User</th><th id="lbPtsHeader">Season pts</th></tr></thead>
+        <tbody id="standingsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
       </table>
-      <div class="status" id="rosterLeaderboardStatus"></div>
+      <div class="status" id="standingsStatus"></div>
     </div>
 
     <div class="panel" style="grid-column: span 2;">
@@ -327,11 +354,26 @@
     </div>
 
     <div class="panel" style="grid-column: span 2;">
-      <h2>Draw Limits</h2>
+      <h2>Promo Codes</h2>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <input id="newCodeInput" type="text" placeholder="Code name" style="max-width:160px;text-transform:uppercase;" />
+        <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" />
+        <button onclick="createCode()">Create</button>
+        <button class="secondary" onclick="loadCodes()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Code</th><th>Tokens</th><th>Redemptions</th><th></th></tr></thead>
+        <tbody id="codesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="codesStatus"></div>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Token Balances</h2>
       <button class="secondary" onclick="loadUsers()" style="margin-bottom:12px;">Refresh</button>
       <table>
-        <thead><tr><th>User</th><th>Draws used</th><th>Limit</th><th>Grant extra draws</th></tr></thead>
-        <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        <thead><tr><th>User</th><th>Tokens</th><th>Grant tokens</th></tr></thead>
+        <tbody id="usersBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="usersStatus"></div>
     </div>
