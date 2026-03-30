@@ -28,7 +28,7 @@ SOURCE_FILES = [
     "frontend/index.html",
 ]
 
-STORIES_FILE = "markdown/User_stories.md"
+STORIES_FILE = "markdown/user_stories.md"
 REPORT_FILE  = "markdown/story-report.md"
 
 
