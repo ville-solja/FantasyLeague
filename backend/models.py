@@ -16,6 +16,8 @@ class Match(Base):
     match_id = Column(Integer, primary_key=True)
     radiant_team_id = Column(Integer)
     dire_team_id = Column(Integer)
+    radiant_name = Column(String)
+    dire_name = Column(String)
     league_id = Column(Integer, ForeignKey("leagues.id"))
     start_time = Column(Integer)   # Unix timestamp from OpenDota
     radiant_win = Column(Boolean)  # from OpenDota

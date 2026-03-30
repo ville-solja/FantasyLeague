@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 data/
 data/fantasy.db
+markdown/story-report.md
 
 # Terraform
 infra/.terraform/
@@ -11,4 +12,3 @@ infra/.terraform.lock.hcl
 infra/terraform.tfstate
 infra/terraform.tfstate.backup
 infra/*.tfvars
-data/fantasy.db
