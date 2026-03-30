@@ -233,7 +233,7 @@ def draw_card(body: DrawBody):
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
     unclaimed = db.execute(text("""
-        SELECT c.id, c.card_type, p.name as player_name, p.avatar_url, t.name as team_name
+        SELECT c.id, c.card_type, c.player_id, p.name as player_name, p.avatar_url, t.name as team_name
         FROM cards c
         JOIN players p ON p.id = c.player_id
         LEFT JOIN (
