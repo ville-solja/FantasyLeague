@@ -536,6 +536,16 @@ As a user, I want to re-roll a card's modifiers and quality.
 ### 9.5 View System Status
 ### 9.6 Start New Season
 
+### 9.7 Admin set series date
+**User Story**
+As admin there can be matches that take place outside of their intended week schedule. I need to have the ability to identify the series from a list and set the week when it should have happened instead. This value should not be automatically overwritten by schedule refreshes or other event that touch on the match data
+
+**Acceptance Criteria**
+- Admin view allow for selecting the series that took place on the wrong week
+- Admin can select the appropriate week
+- New datetime is displayed on the schedule and not from the actual match date
+- - This is done in order to keep the scoring and the match history aligned to avoid confusion
+
 ---
 
 ## 10. UX and Transparency
