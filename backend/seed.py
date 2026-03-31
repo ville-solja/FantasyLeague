@@ -71,13 +71,17 @@ def seed_cards(league_id: int):
 
 
 DEFAULT_WEIGHTS = [
-    {"key": "kills",        "label": "Kills",                  "value": 3.0},
-    {"key": "assists",      "label": "Assists",                "value": 2.0},
-    {"key": "deaths",       "label": "Deaths",                 "value": -1.0},
-    {"key": "gold_per_min", "label": "Gold per minute",        "value": 0.02},
-    {"key": "obs_placed",   "label": "Observer wards placed",  "value": 1.0},
-    {"key": "sen_placed",   "label": "Sentry wards placed",    "value": 1.5},
-    {"key": "tower_damage", "label": "Tower damage",           "value": 0.002},
+    {"key": "kills",             "label": "Kills",                        "value": 3.0},
+    {"key": "assists",           "label": "Assists",                      "value": 2.0},
+    {"key": "deaths",            "label": "Deaths",                       "value": -1.0},
+    {"key": "gold_per_min",      "label": "Gold per minute",              "value": 0.02},
+    {"key": "obs_placed",        "label": "Observer wards placed",        "value": 1.0},
+    {"key": "sen_placed",        "label": "Sentry wards placed",          "value": 1.5},
+    {"key": "tower_damage",      "label": "Tower damage",                 "value": 0.002},
+    {"key": "rarity_common",     "label": "Rarity bonus — Common (%)",    "value": 0.0},
+    {"key": "rarity_rare",       "label": "Rarity bonus — Rare (%)",      "value": 1.0},
+    {"key": "rarity_epic",       "label": "Rarity bonus — Epic (%)",      "value": 2.0},
+    {"key": "rarity_legendary",  "label": "Rarity bonus — Legendary (%)", "value": 3.0},
 ]
 
 
