@@ -9,13 +9,13 @@
    - 1.4 User Password Reset
    - 1.5 User Logout
    - 1.6 Admin-only Access
+   - 1.7 User Profile Tab
 2. [Initial Onboarding and Starter Tokens](#2-initial-onboarding-and-starter-tokens)
    - 2.1 Grant Starter Tokens on Registration
    - 2.2 Token Visibility
    - 2.3 View Cards
    - 2.4 View Weekly Rosters
    - 2.5 View Current and Season Points
-   - 2.6 View Collection *(post-MVP)*
 3. [Card Collection and Deck Rules](#3-card-collection-and-deck-rules)
    - 3.1 Generate Cards
    - 3.2 Card Drawing
@@ -24,59 +24,54 @@
    - 3.5 Assign Randomized Modifiers
    - 3.6 Modifier Management
    - 3.7 View Seasonal Reserve Cards
-   - 3.8 View Permanent Collection *(post-MVP, duplicate of 2.6)*
+   - 3.8 View Permanent Collection *(post-MVP)*
 4. [Active Lineup and Reserve Management](#4-active-lineup-and-reserve-management)
    - 4.1 Place Cards into Active Slots
    - 4.2 Lock Active Cards
    - 4.3 Admin Move Series Time Manually
    - 4.4 Preserve Points
+   - 4.5 View Past Week Snapshots
 5. [Token System](#5-token-system)
    - 5.1 Free Weekly Token
    - 5.2 Token Log *(admin)*
    - 5.3 Spend Token to Draw Card
    - 5.4 Redeem Code
-   - 5.5 Generate Codes *(admin, duplicate of 9.1)*
-   - 5.6 View Token Balance *(duplicate of 2.2)*
-   - 5.7 Re-roll Modifiers
+   - 5.5 Re-roll Modifiers
 6. [Scoring and Points](#6-scoring-and-points)
    - 6.1 Score Active Cards
-   - 6.2 Configure Event Weights *(admin, duplicate of 9.3)*
-   - 6.3 Card Modifier Scoring
-   - 6.4 Track Season Points
-   - 6.5 Track Points per Card
-   - 6.6 Prevent Duplicate Scoring
+   - 6.2 Card Modifier Scoring
+   - 6.3 Track Season Points
+   - 6.4 Track Points per Card
+   - 6.5 Prevent Duplicate Scoring
 7. [Dota Data Integration](#7-dota-data-integration)
    - 7.1 Fetch Player Data
    - 7.2 Import Match Data
    - 7.3 Handle API Failures
-8. [Leaderboard](#8-leaderboard)
+   - 7.4 Auto-ingest on Startup
+8. [Leaderboard and Browse](#8-leaderboard-and-browse)
    - 8.1 Season Leaderboard
    - 8.2 Scrollable Leaderboard
    - 8.3 Show User Rank
    - 8.4 Weekly Leaderboard
+   - 8.5 Player Performance Browser
+   - 8.6 Team Browser
 9. [Admin Management](#9-admin-management)
-   - 9.1 Generate Codes *(duplicate of 5.5)*
+   - 9.1 Generate Promo Codes
    - 9.2 Grant Tokens
-   - 9.3 Configure Scoring *(duplicate of 6.2)*
+   - 9.3 Configure Scoring Weights
    - 9.4 Manage Season Lifecycle
    - 9.5 View System Status
    - 9.6 Start New Season
+   - 9.7 Admin Set Series Date
+   - 9.8 Recalculate Fantasy Points
+   - 9.9 Manual League Ingestion
+   - 9.10 Schedule Refresh
 10. [UX and Transparency](#10-ux-and-transparency)
     - 10.1 Explain Scoring
+    - 10.2 Schedule Tab
 11. [Security and Integrity](#11-security-and-integrity)
     - 11.1 Server-side Validation
     - 11.2 Audit Logs
-12. [Implemented — Not Yet in Stories](#12-implemented--not-yet-in-stories)
-    - 12.1 Player Browser
-    - 12.2 Team Browser
-    - 12.3 Schedule Tab
-    - 12.4 User Profile Tab
-    - 12.5 Week History Selector
-    - 12.6 Auto-ingest on Startup
-    - 12.7 Admin: Recalculate Points
-    - 12.8 Admin: Manual League Ingestion
-    - 12.9 Admin: Schedule Refresh
-    - 12.10 Admin: Grant Draws to User
 
 ---
 
@@ -123,6 +118,7 @@ As a user, once logged in, I want to be able to reset my password.
 
 **Acceptance criteria**
 - Profile page has a flow for setting a new password
+- Current password is required before a new one is accepted
 
 ---
 
@@ -144,7 +140,19 @@ As an admin, I want a protected admin area so that only authorized users can man
 **Acceptance criteria**
 - Only admin users can access the admin tab
 - Non-admin cannot see the admin tab
-- Admin authentication is tied to specific login credentials
+- Admin status is verified server-side on every admin request — client-side state alone is not sufficient
+
+---
+
+### 1.7 User Profile Tab
+**User story**
+As a logged-in user, I want a profile page where I can update my account details.
+
+**Acceptance criteria**
+- User can change their display username; must remain unique
+- User can change their password via a current password + new password form
+- User can optionally link their account to an OpenDota player ID
+- When a valid player ID is saved and the player exists in league data, the player's name and avatar are shown as a preview
 
 ---
 
@@ -155,7 +163,7 @@ As an admin, I want a protected admin area so that only authorized users can man
 As a newly registered user, I want to receive N tokens when I sign up so that I can start building my active lineup immediately.
 
 **Acceptance criteria**
-- N tokens are granted at registration
+- N tokens are granted at registration (configurable via `INITIAL_TOKENS`)
 
 ---
 
@@ -164,9 +172,9 @@ As a newly registered user, I want to receive N tokens when I sign up so that I 
 As a user, I want to know how many tokens I currently have.
 
 **Acceptance criteria**
-- Token amount is visible across all tabs in shared UI elements
-
-> ⚠️ *Duplicate of 5.6 — consolidate into one story.*
+- Token balance is visible in the header across all tabs
+- Balance updates immediately after any token-changing event (draw, redeem, weekly grant)
+- Token counter on the My Team tab stays in sync with the header balance
 
 ---
 
@@ -175,9 +183,9 @@ As a user, I want to know how many tokens I currently have.
 As a new user, I want to see the cards I have drawn in my bench and my roster.
 
 **Acceptance criteria**
-- Each drawn card displays player identity, quality, and modifiers
+- Each drawn card displays player identity, rarity, and current week's points
 - Cards are clearly shown as benched until placed into the weekly roster
-- Cards drawn should be visible in the "My Team" tab
+- Cards drawn should be visible in the My Team tab
 
 ---
 
@@ -186,36 +194,21 @@ As a new user, I want to see the cards I have drawn in my bench and my roster.
 As a new user, I want to see the upcoming week's roster.
 
 **Acceptance criteria**
-- Upcoming week's active roster should be the default view
-- All active slots should be initially carried over from the previous week unless the user makes changes
-  - This limits the effect of missing roster updates for a particular week
-- It should be clearly visible in the UI when the roster is getting locked (every Sunday at end of day)
+- Upcoming week's active roster is the default view
+- It is clearly visible when the roster will be locked (every Sunday at end of day)
+- Empty active slots are shown explicitly so the user knows how many cards they can still add
 
 ---
 
 ### 2.5 View Current and Season Points
 **User story**
-As a new user, I want to see my earned points for this week and the whole season.
+As a user, I want to see my earned points for this week and the whole season.
 
 **Acceptance criteria**
 - Should be 0 for a new user with no participation
-- Clearly visible in the UI
+- Clearly visible in the My Team tab
 - Two separate point pools: weekly and season
-- Points and past rosters visible per week via weekly roster selection
-
----
-
-### 2.6 View Collection
-**User story**
-As a long-time user, I want to have a collection of player cards from multiple seasons.
-
-**Phase:** Not included in the MVP scope.
-
-**Acceptance criteria**
-- Cards should show up in my Collection
-- Collection should be a separate tab
-
-> ⚠️ *Duplicate of 3.8 — consolidate into one story.*
+- Points and past rosters visible per week via the week history selector
 
 ---
 
@@ -226,16 +219,10 @@ As a long-time user, I want to have a collection of player cards from multiple s
 As a system administrator, I want the seasonal card deck to reflect real Dota 2 league players participating in the season.
 
 **Acceptance criteria**
-- Admin can import league players into the card deck based on a given player ID list
-  - This is particularly useful pre-season when there is no league data to ingest
-- Admin can provide a league ID for ingestion, which generates cards based on the obtained player list
-- Permanent pool avoids duplicates
+- Admin can provide a league ID for ingestion, which generates cards based on the player list obtained from match data
+- Deck avoids duplicate seeding (idempotent)
 - Shared deck among all users
-- Deck contains per player:
-  - 1 golden
-  - 2 purple
-  - 4 blue
-  - 8 white cards
+- Deck contains per player: 1 legendary, 2 epic, 4 rare, 8 common
 
 ---
 
@@ -244,9 +231,10 @@ As a system administrator, I want the seasonal card deck to reflect real Dota 2 
 As a user, I want to be able to draw cards from the deck.
 
 **Acceptance criteria**
-- User can draw a card, given they have the necessary token
-- Card is shown to the user
+- User can draw a card if they have at least 1 token
+- Card is shown to the user in a reveal modal
 - Card is added to the user's active roster if empty slots exist, otherwise to their bench
+- System prefers players the user does not yet own; only allows duplicates when the user owns all available players
 
 ---
 
@@ -257,7 +245,7 @@ As a system administrator, I want to remove players from card pools.
 **Phase:** Not in MVP. A clear justification is needed, e.g. a player known to be unable to participate for the whole season.
 
 **Acceptance criteria**
-- Admin selects and deletes a player from the restricted admin tab
+- Admin selects and deletes a player from the admin tab
 - Users receive 1 token per removed card
 - All card types for that player are removed from the season
 
@@ -268,7 +256,8 @@ As a system administrator, I want to remove players from card pools.
 As a user, I want each drawn card to have a rarity.
 
 **Acceptance criteria**
-- Cards that are generated have a rarity
+- Cards are generated with a fixed rarity (common / rare / epic / legendary) set at deck creation time, not at draw time
+- Rarity is shown on the card in the reveal modal and roster views
 
 ---
 
@@ -289,7 +278,7 @@ As an admin, I want to be able to adjust the weights of modifiers in order to tu
 **Acceptance criteria**
 - Modifiers manageable from the admin tab
 - Individual cards are not modified — entire modifier weights are adjusted at once
-- Modifier changes are not applied retroactively to already-generated fantasy points
+- Modifier changes are not applied retroactively without an explicit recalculate action
 
 ---
 
@@ -300,8 +289,8 @@ As a user, I want to browse my roster and bench.
 **Acceptance criteria**
 - All benched cards are shown in the My Team tab
 - Cards are either in the currently active roster for the upcoming week, or in the bench
-- Show player, quality, and points accumulated over the season
-- Supports filtering/sorting
+- Shows player, rarity, and points accumulated during the current week
+- Bench is hidden for locked past weeks (read-only snapshot view)
 
 ---
 
@@ -312,14 +301,11 @@ As a user, I want to track cards across seasons.
 **Phase:** Not in MVP.
 
 **Acceptance criteria**
-- Shows all owned cards
-- Higher quality replaces lower
-- No duplicates
+- Shows all owned cards across seasons
+- Higher quality replaces lower; no duplicates
 - No gameplay effect
 - Supports filtering
 - Past season cards are stored separately so they are not included in current season logic
-
-> ⚠️ *Duplicate of 2.6 — consolidate into one story.*
 
 ---
 
@@ -331,11 +317,10 @@ As a user, I want to assign cards to the upcoming week's roster.
 
 **Acceptance criteria**
 - Upcoming week's roster has 5 slots
-- One card per slot
-- Cards lock Sunday EoD
-- User can set a card from bench to the upcoming week's roster
-- User can bench a card from the upcoming week's roster
+- User can move a card from bench to active roster (Activate)
+- User can move a card from active roster to bench (Bench)
 - Only one card may be active from a single player
+- Roster changes are only allowed on the editable (upcoming) week, not on locked past weeks
 
 ---
 
@@ -344,9 +329,10 @@ As a user, I want to assign cards to the upcoming week's roster.
 As a user, I want cards to lock before the week begins.
 
 **Acceptance criteria**
-- Auto-lock Sunday EoD
-- UI indicates that the week is locked
-- User is informed of the upcoming lock on the My Team tab
+- Auto-lock every Sunday at end of day (UTC)
+- UI indicates that the week is locked and shows a locked banner
+- User is informed of the upcoming lock date on the My Team tab
+- Locked roster is immutable and shown as a read-only snapshot
 
 ---
 
@@ -358,7 +344,6 @@ As an admin, I want to correct series timing when teams play out of the regular 
 - Ability to see series in the Admin tab
 - Ability to select a series and input a corrected match date
 - Corrected start date is persisted so that future ingestions do not override it
-  - Particularly the schedule sheet sync
 
 ---
 
@@ -369,6 +354,18 @@ As a user, I want my points to persist across weeks.
 **Acceptance criteria**
 - Once a week has passed and is scored, the points for that week are stored in the DB
 - Total points are derivable from past week records
+
+---
+
+### 4.5 View Past Week Snapshots
+**User story**
+As a user, I want to review my roster and points from any past week.
+
+**Acceptance criteria**
+- Week selector dropdown on the My Team tab lists all season weeks
+- Selecting a past locked week shows the immutable roster snapshot for that week
+- Weekly points shown reflect only matches played during that specific week
+- Current editable roster is always accessible via the selector
 
 ---
 
@@ -383,14 +380,14 @@ As a user, I want a free weekly token.
 
 ---
 
-### 5.2 Token Log
+### 5.2 Token Log *(admin)*
 **User story**
 As an admin, I want visibility into events that have granted tokens.
 
 **Acceptance criteria**
 - Weekly free token grants are shown with the total number of users affected
 - Admin token grants are listed with time, granting admin, target user, and amount
-- Other methods of obtaining tokens are logged as well
+- Other methods of obtaining tokens (draws, code redemptions) are logged as well
 
 ---
 
@@ -402,8 +399,7 @@ As a user, I want to draw a card using a token.
 - 1 token deducted
 - Card marked as owned by the user
 - User cannot receive a card for a player they already have, unless they have cards from all players
-  - Exception: higher-rarity duplicates are allowed
-- Card shown to user immediately
+- Card shown to user immediately in a reveal modal
 
 ---
 
@@ -415,29 +411,11 @@ As a user, I want to redeem a code.
 - Valid code grants tokens
 - Invalid code shows an error
 - One use per user
-- Logged
+- Logged in the audit log
 
 ---
 
-### 5.5 Generate Codes *(Admin)*
-**Acceptance criteria**
-- Admin creates reusable codes
-- Token amount configurable
-- Server-side validation
-
-> ⚠️ *Duplicate of 9.1 — consolidate into one story.*
-
----
-
-### 5.6 View Token Balance
-**Acceptance criteria**
-- Token balance visible in UI
-
-> ⚠️ *Duplicate of 2.2 — consolidate into one story.*
-
----
-
-### 5.7 Re-roll Modifiers
+### 5.5 Re-roll Modifiers
 **User story**
 As a user, I want to re-roll a card's modifiers and quality.
 
@@ -459,151 +437,258 @@ As a user, I want to re-roll a card's modifiers and quality.
 
 ---
 
-### 6.2 Configure Event Weights *(Admin)*
+### 6.2 Card Modifier Scoring
 **Acceptance criteria**
-- Adjustable weights
-- Only affects future scoring
-- Logged
-
-> ⚠️ *Duplicate of 9.3 — consolidate into one story.*
+- Rarity bonus applied on top of raw fantasy points (common +0%, rare +1%, epic +2%, legendary +3% by default)
+- Rarity modifiers are configurable from the admin panel
 
 ---
 
-### 6.3 Card Modifier Scoring
+### 6.3 Track Season Points
 **Acceptance criteria**
-- Modifiers map to match events
-- Bonus points applied accordingly
+- Persistent total score per user across all locked weeks
+- Visible to user on the My Team tab and leaderboard
 
 ---
 
-### 6.4 Track Season Points
+### 6.4 Track Points per Card
 **Acceptance criteria**
-- Persistent total score per user
-- Visible to user
+- Per-week card point contribution visible in the week snapshot view
+- Historical tracking via the week selector
 
 ---
 
-### 6.5 Track Points per Card
-**Acceptance criteria**
-- Per-week card contribution visible
-- Historical tracking
-
----
-
-### 6.6 Prevent Duplicate Scoring
+### 6.5 Prevent Duplicate Scoring
 **Acceptance criteria**
 - Match events uniquely tracked
-- Safe to retry ingestion
+- Safe to retry ingestion — already-stored records are not duplicated
 
 ---
 
 ## 7. Dota Data Integration
 
 ### 7.1 Fetch Player Data
-### 7.2 Import Match Data
-### 7.3 Handle API Failures
-
-*(All include validation, logging, retry handling, and admin visibility.)*
+**Acceptance criteria**
+- Player names and avatar images fetched from OpenDota after ingestion
+- Missing or unknown players are handled gracefully
 
 ---
 
-## 8. Leaderboard
+### 7.2 Import Match Data
+**Acceptance criteria**
+- Match data (kills, assists, deaths, GPM, wards, tower damage) fetched per player per match
+- Fantasy points calculated and stored per player-match record
+
+---
+
+### 7.3 Handle API Failures
+**Acceptance criteria**
+- API failures are logged
+- Partial ingestion does not corrupt existing data
+- Admin can re-trigger ingestion to recover
+
+---
+
+### 7.4 Auto-ingest on Startup
+**User story**
+As an operator, I want the server to automatically fetch fresh match data when it starts so that the app stays up to date without manual intervention.
+
+**Acceptance criteria**
+- League IDs to ingest are configured via `AUTO_INGEST_LEAGUES` environment variable
+- Ingestion runs in a background thread on startup; already-stored matches are skipped
+- Setting `AUTO_INGEST_LEAGUES=` (empty) disables auto-ingest
+
+---
+
+## 8. Leaderboard and Browse
 
 ### 8.1 Season Leaderboard
-- Ranked by total season points
+**Acceptance criteria**
+- Users ranked by cumulative fantasy points across all locked weeks
+- Points only counted for cards in the user's active roster snapshot for each week
+- Rarity modifiers applied
+
+---
 
 ### 8.2 Scrollable Leaderboard
-- Visible in a separate tab
+**Acceptance criteria**
+- Leaderboard visible in its own tab without requiring a login
+
+---
 
 ### 8.3 Show User Rank
-- Always visible to logged-in user
+**Acceptance criteria**
+- Logged-in user's rank visible on the leaderboard
+
+---
 
 ### 8.4 Weekly Leaderboard
-- Weekly ranking support
+**Acceptance criteria**
+- Weekly leaderboard mode available alongside season view
+- Week selector to view any past locked week
+
+---
+
+### 8.5 Player Performance Browser
+**User story**
+As a user, I want to browse all league players and their performance stats.
+
+**Acceptance criteria**
+- Players tab lists all players with match count, average points, and total points
+- Filterable by player name or team name
+- Clicking a player opens a detail modal with full match history and per-match stats (K/A/D, GPM, wards, tower damage, fantasy points)
+
+---
+
+### 8.6 Team Browser
+**User story**
+As a user, I want to browse all teams in the league.
+
+**Acceptance criteria**
+- Teams tab lists all teams with match count and player count
+- Clicking a team opens a detail modal showing its player roster with stats
 
 ---
 
 ## 9. Admin Management
 
-### 9.1 Generate Codes
-> ⚠️ *Duplicate of 5.5 — consolidate into one story.*
+### 9.1 Generate Promo Codes
+**User story**
+As an admin, I want to create promo codes that grant tokens to users who redeem them.
+
+**Acceptance criteria**
+- Admin creates codes with a configurable token amount
+- Codes are reusable (multiple users can redeem the same code)
+- Each user can only redeem a given code once
+- Admin can delete codes
+
+---
 
 ### 9.2 Grant Tokens
-### 9.3 Configure Scoring
-> ⚠️ *Duplicate of 6.2 — consolidate into one story.*
+**User story**
+As an admin, I want to manually grant additional tokens to a specific user.
+
+**Acceptance criteria**
+- Admin can select any user and grant a specified number of tokens
+- Token balance updates immediately
+- Logged in the audit log with admin actor, target user, and amount
+
+---
+
+### 9.3 Configure Scoring Weights
+**User story**
+As an admin, I want to configure the scoring weights for match stats.
+
+**Acceptance criteria**
+- Each stat weight (kills, assists, deaths, GPM, wards, tower damage) is editable from the admin tab
+- Rarity modifier percentages (common, rare, epic, legendary) are also configurable here
+- Weight changes take effect for future calculations; use Recalculate to apply retroactively
+
+---
 
 ### 9.4 Manage Season Lifecycle
-### 9.5 View System Status
-### 9.6 Start New Season
+**Acceptance criteria**
+- Admin can initiate and close a season
+- Season configuration (lock dates, league IDs) managed via environment variables
 
-### 9.7 Admin set series date
+---
+
+### 9.5 View System Status
+**Acceptance criteria**
+- Admin can see current system state (ingest status, schedule cache status)
+
+---
+
+### 9.6 Start New Season
+**Acceptance criteria**
+- Admin can reset the database and begin a new season with a fresh configuration
+
+---
+
+### 9.7 Admin Set Series Date
 **User Story**
-As admin there can be matches that take place outside of their intended week schedule. I need to have the ability to identify the series from a list and set the week when it should have happened instead. This value should not be automatically overwritten by schedule refreshes or other event that touch on the match data
+As admin there can be matches that take place outside of their intended week schedule. I need to have the ability to identify the series from a list and set the week when it should have happened instead. This value should not be automatically overwritten by schedule refreshes or other events that touch on the match data.
 
 **Acceptance Criteria**
-- Admin view allow for selecting the series that took place on the wrong week
+- Admin view allows selecting a series that took place on the wrong week
 - Admin can select the appropriate week
-- New datetime is displayed on the schedule and not from the actual match date
-- - This is done in order to keep the scoring and the match history aligned to avoid confusion
+- New datetime is displayed on the schedule instead of the actual match date
+- This is done to keep scoring and match history aligned and avoid confusion
+
+---
+
+### 9.8 Recalculate Fantasy Points
+**User story**
+As an admin, I want to recalculate all historical fantasy points using the current scoring weights.
+
+**Acceptance criteria**
+- Recalculate button applies the current weights to all stored player-match stats
+- Does not require re-fetching data from OpenDota
+- Result shows the number of records updated
+- Logged in the audit log
+
+---
+
+### 9.9 Manual League Ingestion
+**User story**
+As an admin, I want to trigger data ingestion for a specific league at any time.
+
+**Acceptance criteria**
+- Admin can enter a league ID and trigger ingestion from the admin tab
+- Ingestion fetches new matches, calculates fantasy points, seeds player cards, and enriches player profiles
+- Already-stored matches are skipped (idempotent)
+- Logged in the audit log
+
+---
+
+### 9.10 Schedule Refresh
+**User story**
+As an admin, I want to force a refresh of the season schedule from the Google Sheet source.
+
+**Acceptance criteria**
+- Refresh button busts the in-memory schedule cache
+- Fresh data is fetched immediately from the configured Google Sheets CSV URL
+- Logged in the audit log
 
 ---
 
 ## 10. UX and Transparency
 
 ### 10.1 Explain Scoring
-- Show stats and their point mapping
-- UI explanation available
+**Acceptance criteria**
+- Stats and their point mapping are shown to the user in the My Team tab
+- Collapsible "How is scoring calculated?" section lists all weighted stats
+
+---
+
+### 10.2 Schedule Tab
+**User story**
+As a user, I want to see the full season fixture list including past results and upcoming matches.
+
+**Acceptance criteria**
+- All series shown in a single chronological list spanning all divisions
+- Upcoming series show planned date, team names, and stream link where available
+- Past series show actual match start time, series result (e.g. 2–0), and VOD link where available
+- Team names link to the team detail modal
+- Stale cache notice shown if schedule data is outdated
 
 ---
 
 ## 11. Security and Integrity
 
 ### 11.1 Server-side Validation
-- All actions validated server-side
-
-### 11.2 Audit Logs
-**User Story**
-As admin I want to have visibility into actions that have taken place on the app
-
-**Acceptance Criteria**
-- Tracks:
-  - User registrations
-  - Token usage
-  - Admin actions
-- Includes at least timestamp and actor
+**Acceptance criteria**
+- All state-changing actions (draw, activate, admin ops) are validated server-side
+- Client-side `is_admin` flag alone is not sufficient — every admin endpoint re-verifies from the session
 
 ---
 
-## 12. Implemented — Not Yet in Stories
+### 11.2 Audit Logs
+**User Story**
+As admin I want to have visibility into actions that have taken place on the app.
 
-These features exist in the current implementation but have no corresponding user story. Each should be evaluated: write a story to formalise it, or remove it if no longer needed.
-
-### 12.1 Player Browser
-Players tab with searchable list of all league players, showing match count, average and total fantasy points. Clicking a player opens a detail modal with full match history and per-match stats.
-
-### 12.2 Team Browser
-Teams tab listing all teams with match count and player count. Clicking a team opens a detail modal showing its current roster.
-
-### 12.3 Schedule Tab
-Shows the full season schedule, including upcoming series and past results. Team names are clickable and link to 12.2.
-
-### 12.4 User Profile Tab
-Allows the logged-in user to edit their display name and link their OpenDota player ID to their account.
-
-### 12.5 Week History Selector
-Dropdown on the My Team tab lets users view any past locked week's snapshot roster and the points it earned during that week.
-
-### 12.6 Auto-ingest on Startup
-The server automatically ingests configured league IDs when it starts, controlled by the `AUTO_INGEST_LEAGUES` environment variable. Skips data already present in the database.
-
-### 12.7 Admin: Recalculate Points
-Admin action that recalculates all stored fantasy points using the current modifier weights. Useful after a weight adjustment.
-
-### 12.8 Admin: Manual League Ingestion
-Admin can trigger ingestion of a specific league by ID from the admin tab, outside of the auto-ingest flow.
-
-### 12.9 Admin: Schedule Refresh
-Admin can force a re-fetch of the season schedule from the configured Google Sheets source.
-
-### 12.10 Admin: Grant Draws to User
-Admin can grant additional card draws to a specific user, overriding their default draw limit.
+**Acceptance Criteria**
+- Tracks: user registrations, user logins, token draws, code redemptions, admin token grants, league ingestion, weight changes, recalculations, schedule refreshes, code creation and deletion
+- Each entry includes timestamp, actor username, action type, and a detail string
+- Visible in the Admin tab with most recent entries first
+- Admin-only access
