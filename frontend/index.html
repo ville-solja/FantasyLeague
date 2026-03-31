@@ -387,6 +387,18 @@
       <div class="status" id="weightsStatus"></div>
     </div>
 
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Audit Log</h2>
+      <button class="secondary" onclick="loadAuditLog()" style="margin-bottom:12px;">Refresh</button>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
+          <tbody id="auditBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        </table>
+      </div>
+      <div class="status" id="auditStatus"></div>
+    </div>
+
   </div>
 </div>
 

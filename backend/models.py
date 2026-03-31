@@ -121,3 +121,14 @@ class CodeRedemption(Base):
     code_id     = Column(Integer, ForeignKey("promo_codes.id"))
     user_id     = Column(Integer, ForeignKey("users.id"))
     redeemed_at = Column(Integer)  # Unix timestamp
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp      = Column(Integer)           # Unix timestamp
+    actor_id       = Column(Integer, nullable=True)   # user_id; None = system
+    actor_username = Column(String, nullable=True)
+    action         = Column(String)            # e.g. "user_register", "token_draw", "admin_ingest"
+    detail         = Column(String, nullable=True)

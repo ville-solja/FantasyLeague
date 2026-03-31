@@ -101,10 +101,9 @@ As a registered user, I want to log in securely so that I can access my cards, t
 
 **Acceptance criteria**
 - User can log in with valid credentials (username AND password)
-- Invalid credentials show an error: "Login failed – Invalid credentials."
-- Logged-in users are redirected to their main dashboard
+- Invalid credentials show an error
 - Session persists according to configured authentication rules
-- Logged-out users cannot access authenticated pages
+- Logged-out users cannot access pages that require authentication
 
 ---
 
@@ -553,14 +552,15 @@ As a user, I want to re-roll a card's modifiers and quality.
 - All actions validated server-side
 
 ### 11.2 Audit Logs
+**User Story**
+As admin I want to have visibility into actions that have taken place on the app
+
+**Acceptance Criteria**
 - Tracks:
-  - Registration rewards
+  - User registrations
   - Token usage
-  - Draws
-  - Re-rolls
   - Admin actions
-  - Season resets
-- Includes timestamp and actor
+- Includes at least timestamp and actor
 
 ---
 

@@ -4,11 +4,12 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption
+from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
@@ -48,60 +49,84 @@ class RegisterBody(BaseModel):
     password: str
 
 
-class DrawBody(BaseModel):
-    user_id: int
-
-
-class RosterActionBody(BaseModel):
-    user_id: int
-
-
 class WeightUpdateBody(BaseModel):
     value: float
 
 
-class AdminBody(BaseModel):
-    user_id: int
-
-
 class GrantTokensBody(BaseModel):
-    user_id: int        # admin
     target_user_id: int
     amount: int
 
 
 class ChangePasswordBody(BaseModel):
-    user_id: int
     current_password: str
     new_password: str
 
 
 class CreateCodeBody(BaseModel):
-    user_id: int        # admin
     code: str
     token_amount: int
 
 
 class RedeemCodeBody(BaseModel):
-    user_id: int
     code: str
 
 
 class UpdateUsernameBody(BaseModel):
-    user_id: int
     username: str
 
 
 class UpdatePlayerIdBody(BaseModel):
-    user_id: int
     player_id: int | None = None
 
 
-def require_admin(user_id: int, db):
-    user = db.get(User, user_id)
-    if not user or not user.is_admin:
-        db.close()
+def get_current_user(request: Request) -> dict:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"user_id": user_id, "username": request.session.get("username"),
+            "is_admin": request.session.get("is_admin", False)}
+
+
+def require_admin(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+def _audit(db, action: str, actor_id=None, actor_username=None, detail=None):
+    db.add(AuditLog(
+        timestamp=int(time.time()),
+        actor_id=actor_id,
+        actor_username=actor_username,
+        action=action,
+        detail=detail,
+    ))
+    # Caller is responsible for committing
+
+
+def _rarity_params(db) -> dict:
+    """Return rarity modifier params for SQL CASE expressions.
+
+    Values are stored as percentages (e.g. 3.0 = 3%).
+    Returns them divided by 100 so they can be used as: fantasy_points * (1 + param).
+    """
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    return {
+        "mod_common":    weights.get("rarity_common",    0.0) / 100,
+        "mod_rare":      weights.get("rarity_rare",      1.0) / 100,
+        "mod_epic":      weights.get("rarity_epic",      2.0) / 100,
+        "mod_legendary": weights.get("rarity_legendary", 3.0) / 100,
+    }
+
+
+_RARITY_MULTIPLIER_CASE = """
+    CASE c.card_type
+        WHEN 'common'    THEN (1 + :mod_common)
+        WHEN 'rare'      THEN (1 + :mod_rare)
+        WHEN 'epic'      THEN (1 + :mod_epic)
+        WHEN 'legendary' THEN (1 + :mod_legendary)
+        ELSE 1 END"""
 
 
 @asynccontextmanager
@@ -157,34 +182,47 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"),
+    same_site="lax",
+    https_only=False,
+)
 
 
 @app.post("/ingest/league/{league_id}")
-def ingest_league_endpoint(league_id: int, body: AdminBody):
-    db = SessionLocal()
-    require_admin(body.user_id, db)
-    db.close()
+def ingest_league_endpoint(league_id: int, admin: dict = Depends(require_admin)):
     ingest_league(league_id)
     run_enrichment()
     seed_cards(league_id)
+    db = SessionLocal()
+    _audit(db, "admin_ingest", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"league_id={league_id}")
+    db.commit()
+    db.close()
     return {"status": "ok", "league_id": league_id}
 
 
 @app.post("/login")
-def login(body: LoginBody):
+def login(request: Request, body: LoginBody):
     db = SessionLocal()
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
         db.close()
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
+    request.session["user_id"]  = user.id
+    request.session["username"] = user.username
+    request.session["is_admin"] = user.is_admin
+    _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
+    db.commit()
+    data = {"username": user.username, "is_admin": user.is_admin,
             "tokens": user.tokens if user.tokens is not None else 0}
     db.close()
     return data
 
 
 @app.post("/register")
-def register(body: RegisterBody):
+def register(request: Request, body: RegisterBody):
     db = SessionLocal()
     if db.query(User).filter(User.username == body.username).first():
         db.close()
@@ -201,11 +239,35 @@ def register(body: RegisterBody):
         created_at=int(time.time()),
     )
     db.add(user)
+    db.flush()  # populate user.id before audit
+    _audit(db, "user_register", actor_id=user.id, actor_username=user.username)
     db.commit()
-    data = {"id": user.id, "username": user.username, "is_admin": user.is_admin,
-            "tokens": user.tokens}
+    request.session["user_id"]  = user.id
+    request.session["username"] = user.username
+    request.session["is_admin"] = user.is_admin
+    data = {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
     db.close()
     return data
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"status": "ok"}
+
+
+@app.get("/me")
+def me(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    db = SessionLocal()
+    user = db.get(User, user_id)
+    db.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
+            "tokens": user.tokens if user.tokens is not None else 0}
 
 
 @app.get("/deck")
@@ -222,9 +284,10 @@ def get_deck():
 
 
 @app.post("/draw")
-def draw_card(body: DrawBody):
+def draw_card(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -233,7 +296,7 @@ def draw_card(body: DrawBody):
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
     unclaimed = db.execute(text("""
-        SELECT c.id, c.card_type, p.name as player_name, p.avatar_url, t.name as team_name
+        SELECT c.id, c.card_type, c.player_id, p.name as player_name, p.avatar_url, t.name as team_name
         FROM cards c
         JOIN players p ON p.id = c.player_id
         LEFT JOIN (
@@ -251,7 +314,7 @@ def draw_card(body: DrawBody):
 
     # Prefer players the user does not yet own a card for
     owned_player_ids = {r[0] for r in db.execute(
-        text("SELECT c.player_id FROM cards c WHERE c.owner_id = :uid"), {"uid": body.user_id}
+        text("SELECT c.player_id FROM cards c WHERE c.owner_id = :uid"), {"uid": user_id}
     ).fetchall()}
     available = [c for c in unclaimed if c.player_id not in owned_player_ids]
     if not available:
@@ -259,15 +322,17 @@ def draw_card(body: DrawBody):
 
     chosen = random.choice(available)
     card = db.get(Card, chosen.id)
-    card.owner_id = body.user_id
+    card.owner_id = user_id
     user.tokens = (user.tokens or 0) - 1
 
     active_count = db.query(Card).filter(
-        Card.owner_id == body.user_id, Card.is_active == True
+        Card.owner_id == user_id, Card.is_active == True
     ).count()
     is_active = active_count < ROSTER_LIMIT
     card.is_active = is_active
 
+    _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
+           detail=f"card_id={chosen.id} player={chosen.player_name} rarity={chosen.card_type}")
     db.commit()
     tokens_remaining = user.tokens
     db.close()
@@ -365,13 +430,19 @@ def get_roster(user_id: int, week_id: int = None):
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
 
+    rarity = _rarity_params(db)
+    for c in cards:
+        mod = 1 + rarity.get(f"mod_{c['card_type']}", 0)
+        c["total_points"] = c["total_points"] * mod
+
     combined = sum(c["total_points"] for c in active)
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    # Season points: sum across all locked weekly roster entries
-    season_pts_row = db.execute(text("""
-        SELECT COALESCE(SUM(s.fantasy_points), 0) as season_points
+    # Season points: sum per card_type so rarity modifier can be applied
+    season_pts_rows = db.execute(text("""
+        SELECT c.card_type,
+               COALESCE(SUM(s.fantasy_points), 0) as raw_points
         FROM weekly_roster_entries wre
         JOIN weeks wk ON wk.id = wre.week_id
         JOIN cards c ON c.id = wre.card_id
@@ -380,8 +451,12 @@ def get_roster(user_id: int, week_id: int = None):
         WHERE wre.user_id = :user_id
           AND wk.is_locked = 1
           AND m.start_time BETWEEN wk.start_time AND wk.end_time
-    """), {"user_id": user_id}).first()
-    season_points = season_pts_row.season_points if season_pts_row else 0
+        GROUP BY c.card_type
+    """), {"user_id": user_id}).fetchall()
+    season_points = sum(
+        row.raw_points * (1 + rarity.get(f"mod_{row.card_type}", 0))
+        for row in season_pts_rows
+    )
 
     db.close()
     return {
@@ -394,10 +469,11 @@ def get_roster(user_id: int, week_id: int = None):
 
 
 @app.post("/roster/{card_id}/activate")
-def activate_card(card_id: int, body: RosterActionBody):
+def activate_card(card_id: int, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
     card = db.get(Card, card_id)
-    if not card or card.owner_id != body.user_id:
+    if not card or card.owner_id != user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     if card.is_active:
@@ -405,15 +481,14 @@ def activate_card(card_id: int, body: RosterActionBody):
         raise HTTPException(status_code=409, detail="Card already active")
 
     active_count = db.query(Card).filter(
-        Card.owner_id == body.user_id, Card.is_active == True
+        Card.owner_id == user_id, Card.is_active == True
     ).count()
     if active_count >= ROSTER_LIMIT:
         db.close()
         raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
 
-    # Single-player rule: only one card per player may be active
     duplicate = db.query(Card).filter(
-        Card.owner_id == body.user_id,
+        Card.owner_id == user_id,
         Card.player_id == card.player_id,
         Card.is_active == True,
         Card.id != card_id,
@@ -429,10 +504,11 @@ def activate_card(card_id: int, body: RosterActionBody):
 
 
 @app.post("/roster/{card_id}/deactivate")
-def deactivate_card(card_id: int, body: RosterActionBody):
+def deactivate_card(card_id: int, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
     card = db.get(Card, card_id)
-    if not card or card.owner_id != body.user_id:
+    if not card or card.owner_id != user_id:
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     card.is_active = False
@@ -629,22 +705,24 @@ def get_weights():
 
 
 @app.put("/weights/{key}")
-def update_weight(key: str, body: WeightUpdateBody):
+def update_weight(key: str, body: WeightUpdateBody, admin: dict = Depends(require_admin)):
     db = SessionLocal()
     weight = db.get(Weight, key)
     if not weight:
         db.close()
         raise HTTPException(status_code=404, detail="Weight not found")
+    old_value = weight.value
     weight.value = body.value
+    _audit(db, "admin_weight_update", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"key={key} {old_value}->{body.value}")
     db.commit()
     db.close()
     return {"key": key, "value": body.value}
 
 
 @app.get("/users")
-def list_users(user_id: int):
+def list_users(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     users = db.query(User).order_by(User.username).all()
     result = []
     for u in users:
@@ -658,9 +736,8 @@ def list_users(user_id: int):
 
 
 @app.post("/grant-tokens")
-def grant_tokens(body: GrantTokensBody):
+def grant_tokens(body: GrantTokensBody, admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     target = db.get(User, body.target_user_id)
     if not target:
         db.close()
@@ -669,6 +746,8 @@ def grant_tokens(body: GrantTokensBody):
         db.close()
         raise HTTPException(status_code=422, detail="Amount must be at least 1")
     target.tokens = (target.tokens or 0) + body.amount
+    _audit(db, "admin_grant_tokens", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"target={target.username} amount={body.amount}")
     db.commit()
     new_tokens = target.tokens
     db.close()
@@ -676,9 +755,8 @@ def grant_tokens(body: GrantTokensBody):
 
 
 @app.post("/recalculate")
-def recalculate(body: AdminBody):
+def recalculate(admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     weights = {w.key: w.value for w in db.query(Weight).all()}
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
@@ -692,6 +770,8 @@ def recalculate(body: AdminBody):
             "tower_damage": stat.tower_damage,
         }
         stat.fantasy_points = fantasy_score(p, weights)
+    _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"records={len(stats)}")
     db.commit()
     count = len(stats)
     db.close()
@@ -707,19 +787,20 @@ def schedule_endpoint():
 
 
 @app.post("/schedule/refresh")
-def schedule_refresh(body: AdminBody):
+def schedule_refresh(admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     bust_cache()
+    _audit(db, "admin_schedule_refresh", actor_id=admin["user_id"], actor_username=admin["username"])
+    db.commit()
     data = get_schedule(db)
     db.close()
     return data
 
 
 @app.get("/schedule/debug")
-def schedule_debug(user_id: int):
+def schedule_debug(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
+    db.close()
     db.close()
 
     from schedule import SCHEDULE_SHEET_URL as _DEFAULT_SCHEDULE_URL
@@ -762,9 +843,10 @@ def get_profile(user_id: int):
 
 
 @app.put("/profile/username")
-def update_username(body: UpdateUsernameBody):
+def update_username(body: UpdateUsernameBody, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -772,7 +854,7 @@ def update_username(body: UpdateUsernameBody):
     if not username:
         db.close()
         raise HTTPException(status_code=422, detail="Username cannot be empty")
-    existing = db.query(User).filter(User.username == username, User.id != body.user_id).first()
+    existing = db.query(User).filter(User.username == username, User.id != user_id).first()
     if existing:
         db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
@@ -783,9 +865,10 @@ def update_username(body: UpdateUsernameBody):
 
 
 @app.put("/profile/player-id")
-def update_player_id(body: UpdatePlayerIdBody):
+def update_player_id(body: UpdatePlayerIdBody, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -804,9 +887,10 @@ def update_player_id(body: UpdatePlayerIdBody):
 @app.get("/leaderboard/season")
 def season_leaderboard():
     db = SessionLocal()
-    results = db.execute(text("""
+    rarity = _rarity_params(db)
+    results = db.execute(text(f"""
         SELECT u.id, u.username,
-               COALESCE(SUM(s.fantasy_points), 0) as season_points
+               COALESCE(SUM(s.fantasy_points * {_RARITY_MULTIPLIER_CASE}), 0) as season_points
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
         LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
@@ -816,7 +900,7 @@ def season_leaderboard():
             AND m.start_time BETWEEN wk.start_time AND wk.end_time
         GROUP BY u.id, u.username
         ORDER BY season_points DESC
-    """)).fetchall()
+    """), rarity).fetchall()
     db.close()
     return [dict(r._mapping) for r in results]
 
@@ -828,9 +912,10 @@ def weekly_leaderboard(week_id: int):
     if not week:
         db.close()
         raise HTTPException(status_code=404, detail="Week not found")
-    results = db.execute(text("""
+    rarity = _rarity_params(db)
+    results = db.execute(text(f"""
         SELECT u.id, u.username,
-               COALESCE(SUM(s.fantasy_points), 0) as week_points
+               COALESCE(SUM(s.fantasy_points * {_RARITY_MULTIPLIER_CASE}), 0) as week_points
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
@@ -839,15 +924,15 @@ def weekly_leaderboard(week_id: int):
             AND m.start_time BETWEEN :ws AND :we
         GROUP BY u.id, u.username
         ORDER BY week_points DESC
-    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
+    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time, **rarity}).fetchall()
     db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.put("/profile/password")
-def change_password(body: ChangePasswordBody):
+def change_password(body: ChangePasswordBody, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, current_user["user_id"])
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -864,9 +949,8 @@ def change_password(body: ChangePasswordBody):
 
 
 @app.post("/codes")
-def create_code(body: CreateCodeBody):
+def create_code(body: CreateCodeBody, admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(body.user_id, db)
     code = body.code.strip().upper()
     if not code:
         db.close()
@@ -877,8 +961,10 @@ def create_code(body: CreateCodeBody):
     if db.query(PromoCode).filter(PromoCode.code == code).first():
         db.close()
         raise HTTPException(status_code=409, detail="Code already exists")
-    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=body.user_id)
+    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=admin["user_id"])
     db.add(promo)
+    _audit(db, "admin_code_create", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"code={code} tokens={body.token_amount}")
     db.commit()
     result = {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount}
     db.close()
@@ -886,9 +972,8 @@ def create_code(body: CreateCodeBody):
 
 
 @app.get("/codes")
-def list_codes(user_id: int):
+def list_codes(_: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     codes = db.query(PromoCode).all()
     result = []
     for c in codes:
@@ -900,13 +985,14 @@ def list_codes(user_id: int):
 
 
 @app.delete("/codes/{code_id}")
-def delete_code(code_id: int, user_id: int):
+def delete_code(code_id: int, admin: dict = Depends(require_admin)):
     db = SessionLocal()
-    require_admin(user_id, db)
     promo = db.get(PromoCode, code_id)
     if not promo:
         db.close()
         raise HTTPException(status_code=404, detail="Code not found")
+    _audit(db, "admin_code_delete", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"code={promo.code}")
     db.delete(promo)
     db.commit()
     db.close()
@@ -914,9 +1000,10 @@ def delete_code(code_id: int, user_id: int):
 
 
 @app.post("/redeem")
-def redeem_code(body: RedeemCodeBody):
+def redeem_code(body: RedeemCodeBody, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
     db = SessionLocal()
-    user = db.get(User, body.user_id)
+    user = db.get(User, user_id)
     if not user:
         db.close()
         raise HTTPException(status_code=404, detail="User not found")
@@ -927,17 +1014,32 @@ def redeem_code(body: RedeemCodeBody):
         raise HTTPException(status_code=404, detail="Invalid code")
     already = db.query(CodeRedemption).filter(
         CodeRedemption.code_id == promo.id,
-        CodeRedemption.user_id == body.user_id,
+        CodeRedemption.user_id == user_id,
     ).first()
     if already:
         db.close()
         raise HTTPException(status_code=409, detail="Code already redeemed")
     user.tokens = (user.tokens or 0) + promo.token_amount
-    db.add(CodeRedemption(code_id=promo.id, user_id=body.user_id, redeemed_at=int(time.time())))
+    db.add(CodeRedemption(code_id=promo.id, user_id=user_id, redeemed_at=int(time.time())))
+    _audit(db, "token_redeem", actor_id=user_id, actor_username=user.username,
+           detail=f"code={promo.code} granted={promo.token_amount}")
     db.commit()
     result = {"tokens": user.tokens, "granted": promo.token_amount}
     db.close()
     return result
+
+
+@app.get("/audit-logs")
+def get_audit_logs(limit: int = 200, _: dict = Depends(require_admin)):
+    db = SessionLocal()
+    rows = db.execute(text("""
+        SELECT id, timestamp, actor_username, action, detail
+        FROM audit_logs
+        ORDER BY id DESC
+        LIMIT :limit
+    """), {"limit": limit}).fetchall()
+    db.close()
+    return [dict(r._mapping) for r in rows]
 
 
 @app.get("/config")

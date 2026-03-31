@@ -47,17 +47,19 @@ The app is available at `http://localhost:8000`. The SQLite database is stored i
 | `SCHEDULE_SHEET_URL` | Google Sheets CSV export URL for the season fixture list (sheet must be publicly viewable) |
 | `AUTO_INGEST_LEAGUES` | Comma-separated OpenDota league IDs to ingest on startup. Defaults to `19368,19369`. Set empty to disable. |
 | `SEASON_LOCK_START` | ISO date of the first Sunday lock (e.g. `2026-03-08`). All weekly boundaries are derived from this. |
+| `SECRET_KEY` | Secret used to sign session cookies. **Must be set to a long random string in production.** Generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `TOKEN_NAME` | Display name for the in-game token currency shown in the UI (e.g. `Kana Tokens`). |
+| `INITIAL_TOKENS` | Number of tokens granted automatically on new user registration (default `5`). |
 
 ### Ingest league data
 League data is ingested automatically on startup in a background thread. The leagues to ingest are controlled by `AUTO_INGEST_LEAGUES` in `.env` (comma-separated OpenDota league IDs, defaults to `19368,19369`). Matches already in the database are skipped, so restarts are fast.
 
 To disable auto-ingest, set `AUTO_INGEST_LEAGUES=` (empty).
 
-To trigger a manual re-ingest (e.g. after a new match week), log in as admin and use the **Admin → Ingest League** panel, or via curl:
+To trigger a manual re-ingest (e.g. after a new match week), log in as admin and use the **Admin → Ingest League** panel, or via curl (pass the session cookie obtained from a prior `/login` call):
 ```
 curl -X POST http://localhost:8000/ingest/league/19368 \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 1}'
+  -H "Cookie: session=<your-session-cookie>"
 ```
 Ingestion fetches all matches from OpenDota, calculates fantasy points, seeds player cards into the deck, and enriches player profiles with names and avatars. It can take several minutes depending on match count and OpenDota rate limits.
 
@@ -82,7 +84,7 @@ sqlite3 data/fantasy.db
 - Leaderboards for roster standings and individual player performance (visible without an account)
 
 ### Registered users
-- Draw a random player card from the deck (common / rare / epic / legendary) — 7 draws granted on registration
+- Draw a random player card from the deck (common / rare / epic / legendary) — tokens granted on registration (configurable via `INITIAL_TOKENS`)
 - Manage your roster — up to 5 active cards, remaining cards on bench
 - View your draw counter and combined roster value
 
@@ -127,6 +129,39 @@ The My Team tab includes a week selector. Selecting a past week shows that week'
 ### Season configuration
 
 The first lock date and all subsequent Sunday boundaries are controlled by `SEASON_LOCK_START` in `.env` (default `2026-03-08`). For a new season, update this value and reset the database.
+
+## Authentication
+
+Authentication uses **signed session cookies** (Starlette `SessionMiddleware` backed by `itsdangerous`). On successful login the server writes a tamper-proof cookie containing the user's ID, username, and admin flag. The cookie is:
+
+- **HttpOnly** — not accessible from JavaScript, protecting against XSS
+- **SameSite=Lax** — blocks cross-site request forgery in the common case
+- Signed with `SECRET_KEY` — any tampering invalidates the cookie
+
+No tokens are stored in `localStorage`. All authenticated API endpoints read identity from the server-side session, not from request bodies or query parameters.
+
+### Session lifecycle
+
+| Event | Effect |
+|---|---|
+| `POST /login` | Validates credentials, writes session cookie |
+| `POST /register` | Creates account, writes session cookie (auto-login) |
+| `GET /me` | Returns `{user_id, username, is_admin, tokens}` for the current session; `401` if not logged in |
+| `POST /logout` | Clears the session cookie |
+
+### Seed users (development)
+
+Development users are seeded from `backend/seed/users.json` on startup. They are only inserted if the user ID does not already exist in the database. To reset to seed credentials, delete `data/fantasy.db` and restart.
+
+## User accounts and password management
+
+Users can manage their account from the **Profile** tab:
+
+- **Username** — changeable at any time; must remain unique
+- **Password** — changed via current password + new password form (`PUT /profile/password`); the current password is always verified before accepting a change. Passwords are stored as bcrypt hashes.
+- **Player link** — optionally link your account to a Kanaliiga player ID so your real match history is associated with your fantasy profile
+
+Admins cannot reset or view other users' passwords. There is currently no self-service password reset via email (post-MVP).
 
 ## Card draw limits
 Each user starts with a draw limit of 7. Admins can grant additional draws per user from the **Admin → Draw Limits** panel. The limit is stored on the user record and enforced server-side.
