@@ -3,6 +3,7 @@ const API = "";
 let activeUserId   = null;
 let activeUsername = localStorage.getItem("username");
 let activeIsAdmin  = localStorage.getItem("is_admin") === "true";
+let activeMustChangePassword = false;
 let _tokenName     = "Tokens";
 let _tokenBalance  = null;
 
@@ -59,8 +60,36 @@ function applyAuthState() {
 
 function showLogin() {
   document.getElementById("registerModal").classList.add("hidden");
+  document.getElementById("forgotModal").classList.add("hidden");
   document.getElementById("loginModal").classList.remove("hidden");
   document.getElementById("loginStatus").textContent = "";
+}
+
+function showForgotPassword() {
+  document.getElementById("loginModal").classList.add("hidden");
+  document.getElementById("forgotModal").classList.remove("hidden");
+  document.getElementById("forgotStatus").textContent = "";
+  document.getElementById("forgotUsername").value = "";
+}
+
+async function submitForgotPassword() {
+  const username = document.getElementById("forgotUsername").value.trim();
+  if (!username) return setStatus("forgotStatus", "Enter your username", false);
+  try {
+    const res = await fetch(`${API}/forgot-password`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username})
+    });
+    if (res.ok) {
+      setStatus("forgotStatus", "If an account with that username exists, a temporary password has been sent to its registered email.");
+      document.getElementById("forgotUsername").value = "";
+    } else {
+      const data = await res.json();
+      setStatus("forgotStatus", data.detail, false);
+    }
+  } catch (e) {
+    setStatus("forgotStatus", e.message, false);
+  }
 }
 
 function closeLoginModal() {
@@ -87,8 +116,12 @@ async function login() {
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
     applyAuthState();
-    switchTab("team");
-    loadDeck();
+    if (activeMustChangePassword) {
+      switchTab("profile");
+    } else {
+      switchTab("team");
+      loadDeck();
+    }
   } catch (e) {
     setStatus("loginStatus", e.message, false);
   }
@@ -122,6 +155,7 @@ async function logout() {
   await fetch(`${API}/logout`, { method: "POST" });
   activeUserId = activeUsername = null;
   activeIsAdmin = false;
+  activeMustChangePassword = false;
   localStorage.removeItem("username");
   localStorage.removeItem("is_admin");
   updateTokenDisplay(null);
@@ -133,13 +167,20 @@ async function loadMe() {
     const res = await fetch(`${API}/me`);
     if (!res.ok) return;
     const data = await res.json();
-    activeUserId   = data.user_id;
-    activeUsername = data.username;
-    activeIsAdmin  = data.is_admin;
+    activeUserId             = data.user_id;
+    activeUsername           = data.username;
+    activeIsAdmin            = data.is_admin;
+    activeMustChangePassword = data.must_change_password ?? false;
     localStorage.setItem("username", activeUsername);
     localStorage.setItem("is_admin", String(activeIsAdmin));
     updateTokenDisplay(data.tokens ?? null);
+    _applyTempPasswordBanner();
   } catch (_) {}
+}
+
+function _applyTempPasswordBanner() {
+  const banner = document.getElementById("tempPasswordBanner");
+  if (banner) banner.style.display = activeMustChangePassword ? "" : "none";
 }
 
 // -------------------------------------------------------
@@ -207,6 +248,8 @@ async function changePassword() {
     document.getElementById("pwCurrent").value = "";
     document.getElementById("pwNew").value = "";
     setStatus("passwordStatus", "Password updated");
+    activeMustChangePassword = false;
+    _applyTempPasswordBanner();
   } catch (e) {
     setStatus("passwordStatus", e.message, false);
   }

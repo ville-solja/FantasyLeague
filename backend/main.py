@@ -1,6 +1,8 @@
 import asyncio
 import os
 import random
+import secrets
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
@@ -16,6 +18,7 @@ from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score
 from auth import hash_password, verify_password
+from email_utils import send_email
 from schedule import get_schedule, bust_cache
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
 
@@ -24,6 +27,20 @@ TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 
 _ingest_executor = ThreadPoolExecutor(max_workers=1)
+_WEEK_CHECK_INTERVAL = int(os.getenv("WEEK_CHECK_INTERVAL", "300"))  # seconds, default 5 min
+
+
+def _week_maintenance_loop():
+    """Background thread: periodically generate new weeks and lock past ones."""
+    while True:
+        time.sleep(_WEEK_CHECK_INTERVAL)
+        try:
+            db = SessionLocal()
+            generate_weeks(db)
+            auto_lock_weeks(db)
+            db.close()
+        except Exception as e:
+            print(f"[WEEKS] Maintenance error: {e}")
 
 
 def _auto_ingest(league_ids: list[int]):
@@ -78,6 +95,10 @@ class UpdateUsernameBody(BaseModel):
 
 class UpdatePlayerIdBody(BaseModel):
     player_id: int | None = None
+
+
+class ForgotPasswordBody(BaseModel):
+    username: str
 
 
 def get_current_user(request: Request) -> dict:
@@ -159,6 +180,9 @@ async def lifespan(app: FastAPI):
         if "player_id" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN player_id INTEGER"))
             conn.commit()
+        if "must_change_password" not in user_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
+            conn.commit()
     seed_users()
     seed_weights()
     # Migrate: if the old epoch-0 Week 1 exists, the week structure is wrong.
@@ -178,6 +202,9 @@ async def lifespan(app: FastAPI):
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
         asyncio.get_event_loop().run_in_executor(_ingest_executor, _auto_ingest, _league_ids)
+    t = threading.Thread(target=_week_maintenance_loop, daemon=True)
+    t.start()
+    print(f"[WEEKS] Maintenance thread started (interval={_WEEK_CHECK_INTERVAL}s)")
     yield
 
 
@@ -223,7 +250,11 @@ def login(request: Request, body: LoginBody):
 
 @app.post("/register")
 def register(request: Request, body: RegisterBody):
+    import re as _re
     db = SessionLocal()
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', body.email.strip()):
+        db.close()
+        raise HTTPException(status_code=422, detail="Invalid email address")
     if db.query(User).filter(User.username == body.username).first():
         db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
@@ -256,6 +287,44 @@ def logout(request: Request):
     return {"status": "ok"}
 
 
+@app.post("/forgot-password")
+def forgot_password(body: ForgotPasswordBody):
+    db = SessionLocal()
+    user = db.query(User).filter(User.username == body.username).first()
+    if not user or not user.email:
+        db.close()
+        # Return 200 regardless to avoid username enumeration
+        return {"status": "ok"}
+
+    # Capture values before closing the session to avoid DetachedInstanceError
+    user_email    = user.email
+    user_username = user.username
+    user_id       = user.id
+
+    temp_password = secrets.token_urlsafe(9)  # ~12 printable chars
+    user.password_hash = hash_password(temp_password)
+    user.must_change_password = True
+    _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
+    db.commit()
+    db.close()
+
+    app_name = os.getenv("APP_NAME", "Kanaliiga Fantasy")
+    send_email(
+        to_address=user_email,
+        subject=f"[{app_name}] Your temporary password",
+        body=(
+            f"Hi {user_username},\n\n"
+            f"A temporary password has been issued for your account:\n\n"
+            f"    {temp_password}\n\n"
+            f"Log in and go to your Profile to set a new password.\n"
+            f"This temporary password will stop working once you change it.\n\n"
+            f"If you did not request this, your account is still safe — "
+            f"the password was not changed until you log in and update it.\n"
+        ),
+    )
+    return {"status": "ok"}
+
+
 @app.get("/me")
 def me(request: Request):
     user_id = request.session.get("user_id")
@@ -267,7 +336,8 @@ def me(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
-            "tokens": user.tokens if user.tokens is not None else 0}
+            "tokens": user.tokens if user.tokens is not None else 0,
+            "must_change_password": bool(user.must_change_password)}
 
 
 @app.get("/deck")
@@ -943,6 +1013,7 @@ def change_password(body: ChangePasswordBody, current_user: dict = Depends(get_c
         db.close()
         raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
     user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
     db.commit()
     db.close()
     return {"status": "ok"}

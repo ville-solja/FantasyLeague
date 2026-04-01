@@ -129,7 +129,6 @@ As a logged-in user, I want to log out so that my account stays secure on shared
 **Acceptance criteria**
 - User can log out from any page
 - Session is invalidated on logout
-- User is redirected to the leaderboard screen (the only tab visible without login)
 
 ---
 
@@ -195,7 +194,7 @@ As a new user, I want to see the upcoming week's roster.
 
 **Acceptance criteria**
 - Upcoming week's active roster is the default view
-- It is clearly visible when the roster will be locked (every Sunday at end of day)
+- It is clearly visible when the roster will be locked
 - Empty active slots are shown explicitly so the user knows how many cards they can still add
 
 ---
@@ -251,7 +250,7 @@ As a system administrator, I want to remove players from card pools.
 
 ---
 
-### 3.4 Assign Randomized Card Rarity
+### 3.4 Card Rarity
 **User story**
 As a user, I want each drawn card to have a rarity.
 
@@ -668,7 +667,7 @@ As a user, I want to see the full season fixture list including past results and
 **Acceptance criteria**
 - All series shown in a single chronological list spanning all divisions
 - Upcoming series show planned date, team names, and stream link where available
-- Past series show actual match start time, series result (e.g. 2–0), and VOD link where available
+- Past series show actual match start time, series result (e.g. 2–0)
 - Team names link to the team detail modal
 - Stale cache notice shown if schedule data is outdated
 
@@ -692,3 +691,4 @@ As admin I want to have visibility into actions that have taken place on the app
 - Each entry includes timestamp, actor username, action type, and a detail string
 - Visible in the Admin tab with most recent entries first
 - Admin-only access
+- Roster changes and other minor "regular" events are not needed to be tracked

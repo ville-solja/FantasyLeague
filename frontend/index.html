@@ -17,8 +17,28 @@
     <input id="loginUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') login()" />
     <input id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') login()" />
     <button style="width:100%;margin-bottom:10px;" onclick="login()">Login</button>
-    <button class="secondary" style="width:100%;" onclick="showRegister()">Create new account</button>
+    <button class="secondary" style="width:100%;" onclick="showForgotPassword()">Forgot password</button>
     <div class="status" id="loginStatus"></div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="ghost" style="font-size:0.8rem;" onclick="showRegister()">Create new account</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div class="modal-overlay hidden" id="forgotModal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin-bottom:0;">Reset password</h2>
+      <button class="ghost" onclick="showLogin()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:16px;">Enter your username. A temporary password will be sent to the email address on your account.</p>
+    <input id="forgotUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') submitForgotPassword()" />
+    <button style="width:100%;" onclick="submitForgotPassword()">Send temporary password</button>
+    <div class="status" id="forgotStatus"></div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="ghost" style="font-size:0.8rem;" onclick="showLogin()">Back to login</button>
+    </div>
   </div>
 </div>
 
@@ -117,6 +137,9 @@
 
 <!-- TAB: PROFILE -->
 <div id="tab-profile" class="tab-content">
+  <div id="tempPasswordBanner" style="display:none;background:#2a1a00;border:1px solid #f0b429;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#f0b429;">
+    You are using a temporary password. Please set a new password below before continuing.
+  </div>
   <div class="grid">
 
     <div class="panel">
