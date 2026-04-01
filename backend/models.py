@@ -68,7 +68,8 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     tokens = Column(Integer, default=0)
     created_at = Column(Integer, nullable=True)  # Unix timestamp of registration
-    player_id = Column(Integer, nullable=True)  # linked OpenDota account_id
+    player_id = Column(Integer, nullable=True)   # linked OpenDota account_id
+    must_change_password = Column(Boolean, default=False)  # True after a temp password is issued
 
 
 class League(Base):

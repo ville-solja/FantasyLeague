@@ -2,7 +2,7 @@ import datetime
 import os
 import time
 
-from models import Card, User, Week, WeeklyRosterEntry
+from models import AuditLog, Card, User, Week, WeeklyRosterEntry
 
 _SECS_PER_WEEK = 7 * 24 * 3600
 
@@ -90,6 +90,14 @@ def auto_lock_weeks(db):
         users = db.query(User).all()
         for u in users:
             u.tokens = (u.tokens or 0) + 1
+        week_labels = ", ".join(w.label for w in unlocked)
+        db.add(AuditLog(
+            timestamp=int(now),
+            actor_id=None,
+            actor_username="system",
+            action="weekly_token_grant",
+            detail=f"weeks={week_labels} users={len(users)}",
+        ))
         print(f"[WEEKS] Granted 1 token to {len(users)} users")
         db.commit()
 
