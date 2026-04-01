@@ -368,6 +368,27 @@ async function redeemCode() {
   }
 }
 
+const _STAT_LABELS = {
+  kills: "Kills", assists: "Assists", deaths: "Deaths",
+  gold_per_min: "GPM", obs_placed: "Obs wards", sen_placed: "Sen wards",
+  tower_damage: "Tower dmg",
+};
+
+function _formatModifiers(modifiers) {
+  if (!modifiers || !modifiers.length) return "";
+  return modifiers.map(m =>
+    `${_STAT_LABELS[m.stat] || m.stat} +${m.bonus_pct}%`
+  ).join("  ·  ");
+}
+
+function _renderModifierPills(modifiers) {
+  if (!modifiers || !modifiers.length) return "";
+  const pills = modifiers.map(m =>
+    `<span style="display:inline-block;background:#1a2a1a;border:1px solid #2a4a2a;border-radius:3px;padding:1px 5px;font-size:0.7rem;color:#5a9;margin-right:3px;margin-top:2px;">${_STAT_LABELS[m.stat] || m.stat} +${m.bonus_pct}%</span>`
+  ).join("");
+  return `<div style="margin-top:2px;">${pills}</div>`;
+}
+
 function showCard(card, footer) {
   document.getElementById("revealCard").className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
@@ -376,6 +397,7 @@ function showCard(card, footer) {
   else { revealAvatar.style.display = "none"; }
   document.getElementById("revealPlayer").textContent = card.player_name;
   document.getElementById("revealTeam").textContent = card.team_name || "";
+  document.getElementById("revealModifiers").textContent = _formatModifiers(card.modifiers);
   document.getElementById("revealDestination").textContent = footer || "";
   document.getElementById("revealModal").classList.remove("hidden");
 }
@@ -396,11 +418,20 @@ let _rosterCards = [];
 let _weeks = [];
 let _rosterWeekId = null; // null = current week (default)
 
-function showRosterCard(cardId) {
-  const c = _rosterCards.find(x => x.id === cardId);
+async function showRosterCard(cardId) {
+  // Use cached data if available, otherwise fetch
+  let c = _rosterCards.find(x => x.id === cardId);
   if (!c) return;
-  const status = c.is_active ? "active" : "bench";
-  showCard(c, `${Number(c.total_points).toFixed(1)} wk pts · ${status}`);
+  // Modifiers may not be cached on locked-week rows — fetch from API if missing
+  if (!c.modifiers) {
+    try {
+      const res = await fetch(`${API}/cards/${cardId}`);
+      if (res.ok) { const d = await res.json(); c = {...c, ...d}; }
+    } catch (_) {}
+  }
+  const status = c.is_active !== undefined ? (c.is_active ? "active" : "bench") : "";
+  const pts = c.total_points != null ? `${Number(c.total_points).toFixed(1)} wk pts · ` : "";
+  showCard(c, `${pts}${status}`);
 }
 
 async function loadWeeks() {
@@ -492,7 +523,15 @@ async function loadRoster(weekId = null) {
     } else {
       activeBody.innerHTML = active.map(c => `
         <tr>
-          <td><img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;" onerror="this.style.display='none'" />
+              <div>
+                <span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span>
+                ${_renderModifierPills(c.modifiers)}
+              </div>
+            </div>
+          </td>
           <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
           <td>${Number(c.total_points).toFixed(1)}</td>
           <td>${isLocked ? "" : `<button class="secondary" onclick="deactivateCard(${c.id})">Bench</button>`}</td>
@@ -508,7 +547,15 @@ async function loadRoster(weekId = null) {
       if (bench.length) {
         benchBody.innerHTML = bench.map(c => `
           <tr>
-            <td><img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span></td>
+            <td>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;" onerror="this.style.display='none'" />
+                <div>
+                  <span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span>
+                  ${_renderModifierPills(c.modifiers)}
+                </div>
+              </div>
+            </td>
             <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
             <td>${Number(c.total_points).toFixed(1)}</td>
             <td>${rosterFull

@@ -11,12 +11,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Card, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
+from models import Player, PlayerMatchStats, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
-from scoring import fantasy_score
+from scoring import fantasy_score, card_fantasy_score, SCORING_STATS
 from auth import hash_password, verify_password
 from email_utils import send_email
 from schedule import get_schedule, bust_cache
@@ -141,13 +141,37 @@ def _rarity_params(db) -> dict:
     }
 
 
-_RARITY_MULTIPLIER_CASE = """
-    CASE c.card_type
-        WHEN 'common'    THEN (1 + :mod_common)
-        WHEN 'rare'      THEN (1 + :mod_rare)
-        WHEN 'epic'      THEN (1 + :mod_epic)
-        WHEN 'legendary' THEN (1 + :mod_legendary)
-        ELSE 1 END"""
+def _assign_modifiers(db, card: Card, weights: dict):
+    """Randomly assign stat modifiers to a card based on its rarity and configured weights.
+
+    modifier_count_<rarity>  — how many stats get a modifier
+    modifier_bonus_pct       — the % bonus each modifier grants
+    """
+    count_key = f"modifier_count_{card.card_type}"
+    count = int(weights.get(count_key, 0))
+    if count <= 0:
+        return
+    bonus_pct = weights.get("modifier_bonus_pct", 10.0)
+    # Pick `count` distinct stats to boost (capped at number of available stats)
+    chosen = random.sample(SCORING_STATS, min(count, len(SCORING_STATS)))
+    for stat in chosen:
+        db.add(CardModifier(card_id=card.id, stat_key=stat, bonus_pct=bonus_pct))
+
+
+def _card_modifiers_map(db, card_ids: list[int]) -> dict[int, dict]:
+    """Return {card_id: {stat_key: bonus_pct}} for a list of card IDs."""
+    if not card_ids:
+        return {}
+    rows = db.query(CardModifier).filter(CardModifier.card_id.in_(card_ids)).all()
+    result: dict[int, dict] = {}
+    for row in rows:
+        result.setdefault(row.card_id, {})[row.stat_key] = row.bonus_pct
+    return result
+
+
+def _format_modifiers(mods: dict) -> list[dict]:
+    """Convert {stat_key: bonus_pct} to sorted list for API response."""
+    return [{"stat": k, "bonus_pct": v} for k, v in sorted(mods.items())]
 
 
 @asynccontextmanager
@@ -401,10 +425,17 @@ def draw_card(current_user: dict = Depends(get_current_user)):
     is_active = active_count < ROSTER_LIMIT
     card.is_active = is_active
 
+    # Assign stat modifiers based on rarity config
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    _assign_modifiers(db, card, weights)
+
     _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={chosen.id} player={chosen.player_name} rarity={chosen.card_type}")
     db.commit()
     tokens_remaining = user.tokens
+
+    # Load modifiers after commit so IDs are populated
+    mods = _card_modifiers_map(db, [card.id]).get(card.id, {})
     db.close()
     return {
         "id": chosen.id,
@@ -414,6 +445,7 @@ def draw_card(current_user: dict = Depends(get_current_user)):
         "team_name": chosen.team_name,
         "is_active": is_active,
         "tokens": tokens_remaining,
+        "modifiers": _format_modifiers(mods),
     }
 
 
@@ -500,18 +532,28 @@ def get_roster(user_id: int, week_id: int = None):
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
 
+    # Load modifiers for all cards in this roster
+    card_ids = [c["id"] for c in cards]
+    modifiers_map = _card_modifiers_map(db, card_ids)
+
     rarity = _rarity_params(db)
     for c in cards:
-        mod = 1 + rarity.get(f"mod_{c['card_type']}", 0)
-        c["total_points"] = c["total_points"] * mod
+        mods = modifiers_map.get(c["id"], {})
+        c["modifiers"] = _format_modifiers(mods)
+        # Card modifier bonus: average % across all modifiers on this card
+        # applied on top of the base score (which uses raw fantasy_points from DB)
+        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
+        rarity_mod = 1 + rarity.get(f"mod_{c['card_type']}", 0)
+        card_mod = 1 + avg_mod_bonus / 100
+        c["total_points"] = c["total_points"] * rarity_mod * card_mod
 
     combined = sum(c["total_points"] for c in active)
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    # Season points: sum per card_type so rarity modifier can be applied
+    # Season points: per card so both rarity and card modifiers can be applied
     season_pts_rows = db.execute(text("""
-        SELECT c.card_type,
+        SELECT c.id as card_id, c.card_type,
                COALESCE(SUM(s.fantasy_points), 0) as raw_points
         FROM weekly_roster_entries wre
         JOIN weeks wk ON wk.id = wre.week_id
@@ -521,12 +563,18 @@ def get_roster(user_id: int, week_id: int = None):
         WHERE wre.user_id = :user_id
           AND wk.is_locked = 1
           AND m.start_time BETWEEN wk.start_time AND wk.end_time
-        GROUP BY c.card_type
+        GROUP BY c.id, c.card_type
     """), {"user_id": user_id}).fetchall()
-    season_points = sum(
-        row.raw_points * (1 + rarity.get(f"mod_{row.card_type}", 0))
-        for row in season_pts_rows
-    )
+
+    season_card_ids = [r.card_id for r in season_pts_rows]
+    season_mods = _card_modifiers_map(db, season_card_ids)
+    season_points = 0.0
+    for row in season_pts_rows:
+        mods = season_mods.get(row.card_id, {})
+        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
+        rarity_mod = 1 + rarity.get(f"mod_{row.card_type}", 0)
+        card_mod = 1 + avg_mod_bonus / 100
+        season_points += row.raw_points * rarity_mod * card_mod
 
     db.close()
     return {
@@ -535,6 +583,26 @@ def get_roster(user_id: int, week_id: int = None):
         "season_points": season_points,
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
                  "start_time": week.start_time, "end_time": week.end_time} if week else None,
+    }
+
+
+@app.get("/cards/{card_id}")
+def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
+    db = SessionLocal()
+    card = db.get(Card, card_id)
+    if not card or card.owner_id != user_id:
+        db.close()
+        raise HTTPException(status_code=404, detail="Card not found")
+    player = db.get(Player, card.player_id)
+    mods = _card_modifiers_map(db, [card_id]).get(card_id, {})
+    db.close()
+    return {
+        "id": card.id,
+        "card_type": card.card_type,
+        "player_name": player.name if player else None,
+        "avatar_url": player.avatar_url if player else None,
+        "modifiers": _format_modifiers(mods),
     }
 
 
@@ -954,13 +1022,43 @@ def update_player_id(body: UpdatePlayerIdBody, current_user: dict = Depends(get_
     return result
 
 
+def _leaderboard_rows(db, rows) -> list[dict]:
+    """Apply rarity + card modifier multipliers to raw leaderboard rows.
+
+    rows must have: user_id, username, card_id, card_type, raw_points
+    """
+    rarity = _rarity_params(db)
+    card_ids = list({r.card_id for r in rows if r.card_id})
+    mods_map = _card_modifiers_map(db, card_ids)
+
+    totals: dict[int, float] = {}
+    usernames: dict[int, str] = {}
+    for r in rows:
+        uid = r.user_id
+        usernames[uid] = r.username
+        if not r.card_id or not r.raw_points:
+            totals.setdefault(uid, 0.0)
+            continue
+        mods = mods_map.get(r.card_id, {})
+        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
+        rarity_mod = 1 + rarity.get(f"mod_{r.card_type}", 0)
+        card_mod = 1 + avg_mod_bonus / 100
+        totals[uid] = totals.get(uid, 0.0) + r.raw_points * rarity_mod * card_mod
+
+    return sorted(
+        [{"id": uid, "username": usernames[uid], "points": round(totals[uid], 2)}
+         for uid in totals],
+        key=lambda x: x["points"], reverse=True,
+    )
+
+
 @app.get("/leaderboard/season")
 def season_leaderboard():
     db = SessionLocal()
-    rarity = _rarity_params(db)
-    results = db.execute(text(f"""
-        SELECT u.id, u.username,
-               COALESCE(SUM(s.fantasy_points * {_RARITY_MULTIPLIER_CASE}), 0) as season_points
+    rows = db.execute(text("""
+        SELECT u.id as user_id, u.username,
+               c.id as card_id, c.card_type,
+               COALESCE(SUM(s.fantasy_points), 0) as raw_points
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
         LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
@@ -968,11 +1066,11 @@ def season_leaderboard():
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
             AND m.start_time BETWEEN wk.start_time AND wk.end_time
-        GROUP BY u.id, u.username
-        ORDER BY season_points DESC
-    """), rarity).fetchall()
+        GROUP BY u.id, u.username, c.id, c.card_type
+    """)).fetchall()
+    result = _leaderboard_rows(db, rows)
     db.close()
-    return [dict(r._mapping) for r in results]
+    return [{"id": r["id"], "username": r["username"], "season_points": r["points"]} for r in result]
 
 
 @app.get("/leaderboard/weekly")
@@ -982,21 +1080,21 @@ def weekly_leaderboard(week_id: int):
     if not week:
         db.close()
         raise HTTPException(status_code=404, detail="Week not found")
-    rarity = _rarity_params(db)
-    results = db.execute(text(f"""
-        SELECT u.id, u.username,
-               COALESCE(SUM(s.fantasy_points * {_RARITY_MULTIPLIER_CASE}), 0) as week_points
+    rows = db.execute(text("""
+        SELECT u.id as user_id, u.username,
+               c.id as card_id, c.card_type,
+               COALESCE(SUM(s.fantasy_points), 0) as raw_points
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
             AND m.start_time BETWEEN :ws AND :we
-        GROUP BY u.id, u.username
-        ORDER BY week_points DESC
-    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time, **rarity}).fetchall()
+        GROUP BY u.id, u.username, c.id, c.card_type
+    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
+    result = _leaderboard_rows(db, rows)
     db.close()
-    return [dict(r._mapping) for r in results]
+    return [{"id": r["id"], "username": r["username"], "week_points": r["points"]} for r in result]
 
 
 @app.put("/profile/password")

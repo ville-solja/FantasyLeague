@@ -58,6 +58,15 @@ class Card(Base):
     is_active = Column(Boolean, default=False)
 
 
+class CardModifier(Base):
+    __tablename__ = "card_modifiers"
+
+    id        = Column(Integer, primary_key=True, autoincrement=True)
+    card_id   = Column(Integer, ForeignKey("cards.id"))
+    stat_key  = Column(String)   # one of SCORING_STATS
+    bonus_pct = Column(Float)    # e.g. 10.0 = +10% boost to this stat's contribution
+
+
 class User(Base):
     __tablename__ = "users"
 
