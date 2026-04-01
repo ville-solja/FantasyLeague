@@ -71,17 +71,26 @@ def seed_cards(league_id: int):
 
 
 DEFAULT_WEIGHTS = [
-    {"key": "kills",             "label": "Kills",                        "value": 3.0},
-    {"key": "assists",           "label": "Assists",                      "value": 2.0},
-    {"key": "deaths",            "label": "Deaths",                       "value": -1.0},
-    {"key": "gold_per_min",      "label": "Gold per minute",              "value": 0.02},
-    {"key": "obs_placed",        "label": "Observer wards placed",        "value": 1.0},
-    {"key": "sen_placed",        "label": "Sentry wards placed",          "value": 1.5},
-    {"key": "tower_damage",      "label": "Tower damage",                 "value": 0.002},
-    {"key": "rarity_common",     "label": "Rarity bonus — Common (%)",    "value": 0.0},
-    {"key": "rarity_rare",       "label": "Rarity bonus — Rare (%)",      "value": 1.0},
-    {"key": "rarity_epic",       "label": "Rarity bonus — Epic (%)",      "value": 2.0},
-    {"key": "rarity_legendary",  "label": "Rarity bonus — Legendary (%)", "value": 3.0},
+    # --- Scoring stat weights ---
+    {"key": "kills",             "label": "Kills",                              "value": 3.0},
+    {"key": "assists",           "label": "Assists",                            "value": 2.0},
+    {"key": "deaths",            "label": "Deaths",                             "value": -1.0},
+    {"key": "gold_per_min",      "label": "Gold per minute",                    "value": 0.02},
+    {"key": "obs_placed",        "label": "Observer wards placed",              "value": 1.0},
+    {"key": "sen_placed",        "label": "Sentry wards placed",                "value": 1.5},
+    {"key": "tower_damage",      "label": "Tower damage",                       "value": 0.002},
+    # --- Rarity bonuses — flat % multiplier on a card's total score ---
+    {"key": "rarity_common",     "label": "Rarity bonus — Common (%)",          "value": 0.0},
+    {"key": "rarity_rare",       "label": "Rarity bonus — Rare (%)",            "value": 1.0},
+    {"key": "rarity_epic",       "label": "Rarity bonus — Epic (%)",            "value": 2.0},
+    {"key": "rarity_legendary",  "label": "Rarity bonus — Legendary (%)",       "value": 3.0},
+    # --- Card modifiers — number of stat modifiers granted per rarity at draw time ---
+    {"key": "modifier_count_common",    "label": "Modifiers — Common (count)",     "value": 0.0},
+    {"key": "modifier_count_rare",      "label": "Modifiers — Rare (count)",       "value": 1.0},
+    {"key": "modifier_count_epic",      "label": "Modifiers — Epic (count)",       "value": 2.0},
+    {"key": "modifier_count_legendary", "label": "Modifiers — Legendary (count)",  "value": 3.0},
+    # --- Bonus % applied by each modifier ---
+    {"key": "modifier_bonus_pct",       "label": "Modifier bonus (%)",             "value": 10.0},
 ]
 
 
