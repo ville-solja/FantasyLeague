@@ -19,6 +19,7 @@ class Match(Base):
     league_id = Column(Integer, ForeignKey("leagues.id"))
     start_time = Column(Integer)   # Unix timestamp from OpenDota
     radiant_win = Column(Boolean)  # from OpenDota
+    week_override_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)  # admin override: which week this match counts for
 
 
 class PlayerMatchStats(Base):

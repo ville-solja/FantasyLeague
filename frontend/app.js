@@ -389,7 +389,10 @@ function _renderModifierPills(modifiers) {
   return `<div style="margin-top:2px;">${pills}</div>`;
 }
 
+let _openCardId = null;
+
 function showCard(card, footer) {
+  _openCardId = card.id || null;
   document.getElementById("revealCard").className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
   const revealAvatar = document.getElementById("revealAvatar");
@@ -399,6 +402,14 @@ function showCard(card, footer) {
   document.getElementById("revealTeam").textContent = card.team_name || "";
   document.getElementById("revealModifiers").textContent = _formatModifiers(card.modifiers);
   document.getElementById("revealDestination").textContent = footer || "";
+  closeRerollConfirm();
+  const rerollBtn = document.getElementById("rerollBtn");
+  if (rerollBtn) {
+    const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
+    rerollBtn.disabled = !hasTokens;
+    rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
+    rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
+  }
   document.getElementById("revealModal").classList.remove("hidden");
 }
 
@@ -408,6 +419,50 @@ function showReveal(card) {
 
 function closeReveal() {
   document.getElementById("revealModal").classList.add("hidden");
+  closeRerollConfirm();
+}
+
+function openRerollConfirm() {
+  document.getElementById("rerollConfirm").style.display = "";
+  document.getElementById("rerollStatus").textContent = "";
+}
+
+function closeRerollConfirm() {
+  const el = document.getElementById("rerollConfirm");
+  if (el) el.style.display = "none";
+}
+
+async function confirmReroll() {
+  if (!_openCardId) return;
+  const statusEl = document.getElementById("rerollStatus");
+  statusEl.textContent = "";
+  try {
+    const res = await fetch(`${API}/roster/${_openCardId}/reroll`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = data.detail || "Reroll failed.";
+      return;
+    }
+    // Update display
+    document.getElementById("revealModifiers").textContent = _formatModifiers(data.modifiers);
+    updateTokenDisplay(data.tokens);
+    closeRerollConfirm();
+    // Update cached roster card if present
+    const cached = _rosterCards.find(x => x.id === _openCardId);
+    if (cached) cached.modifiers = data.modifiers;
+    // Gray out button if out of tokens
+    const rerollBtn = document.getElementById("rerollBtn");
+    if (rerollBtn && data.tokens < 1) {
+      rerollBtn.disabled = true;
+      rerollBtn.style.opacity = "0.4";
+      rerollBtn.style.cursor = "not-allowed";
+    }
+  } catch (e) {
+    statusEl.textContent = "Network error.";
+  }
 }
 
 // -------------------------------------------------------
