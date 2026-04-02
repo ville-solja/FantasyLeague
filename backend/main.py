@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
+from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
@@ -101,6 +101,10 @@ class ForgotPasswordBody(BaseModel):
     username: str
 
 
+class MatchWeekBody(BaseModel):
+    week_id: int | None = None
+
+
 def get_current_user(request: Request) -> dict:
     user_id = request.session.get("user_id")
     if not user_id:
@@ -188,6 +192,9 @@ async def lifespan(app: FastAPI):
             conn.commit()
         if "radiant_win" not in match_cols:
             conn.execute(text("ALTER TABLE matches ADD COLUMN radiant_win BOOLEAN"))
+            conn.commit()
+        if "week_override_id" not in match_cols:
+            conn.execute(text("ALTER TABLE matches ADD COLUMN week_override_id INTEGER REFERENCES weeks(id)"))
             conn.commit()
         user_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
         if "tokens" not in user_cols:
@@ -493,7 +500,7 @@ def get_roster(user_id: int, week_id: int = None):
             SELECT c.id, c.card_type, 1 as is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name,
-                   COALESCE(SUM(CASE WHEN m.start_time BETWEEN :ws AND :we
+                   COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
                                 THEN s.fantasy_points ELSE 0 END), 0) as total_points
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
@@ -517,7 +524,7 @@ def get_roster(user_id: int, week_id: int = None):
             SELECT c.id, c.card_type, c.is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name,
-                   COALESCE(SUM(CASE WHEN m.start_time BETWEEN :ws AND :we
+                   COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
                                 THEN s.fantasy_points ELSE 0 END), 0) as total_points
             FROM cards c
             JOIN players p ON p.id = c.player_id
@@ -527,7 +534,7 @@ def get_roster(user_id: int, week_id: int = None):
             WHERE c.owner_id = :user_id
             GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name
             ORDER BY c.is_active DESC, total_points DESC
-        """), {"ws": ws, "we": we, "user_id": user_id}).fetchall()
+        """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
@@ -562,7 +569,7 @@ def get_roster(user_id: int, week_id: int = None):
         JOIN matches m ON m.match_id = s.match_id
         WHERE wre.user_id = :user_id
           AND wk.is_locked = 1
-          AND m.start_time BETWEEN wk.start_time AND wk.end_time
+          AND (m.week_override_id = wk.id OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
         GROUP BY c.id, c.card_type
     """), {"user_id": user_id}).fetchall()
 
@@ -603,6 +610,43 @@ def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
         "player_name": player.name if player else None,
         "avatar_url": player.avatar_url if player else None,
         "modifiers": _format_modifiers(mods),
+    }
+
+
+@app.post("/roster/{card_id}/reroll")
+def reroll_modifiers(card_id: int, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["user_id"]
+    db = SessionLocal()
+    user = db.get(User, user_id)
+    if not user:
+        db.close()
+        raise HTTPException(status_code=404, detail="User not found")
+    if (user.tokens or 0) <= 0:
+        db.close()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    card = db.get(Card, card_id)
+    if not card or card.owner_id != user_id:
+        db.close()
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    # Remove old modifiers
+    db.query(CardModifier).filter(CardModifier.card_id == card_id).delete()
+
+    # Assign new modifiers using same logic as draw
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    _assign_modifiers(db, card, weights)
+
+    user.tokens = (user.tokens or 0) - 1
+    _audit(db, "reroll_modifiers", actor_id=user_id, actor_username=user.username,
+           detail=f"card_id={card_id} rarity={card.card_type}")
+    db.commit()
+    tokens_remaining = user.tokens
+
+    mods = _card_modifiers_map(db, [card_id]).get(card_id, {})
+    db.close()
+    return {
+        "modifiers": _format_modifiers(mods),
+        "tokens": tokens_remaining,
     }
 
 
@@ -960,6 +1004,115 @@ def schedule_debug(_: dict = Depends(require_admin)):
         result["error"] = str(e)
 
     return result
+
+
+@app.put("/matches/{match_id}/week")
+def set_match_week(match_id: int, body: MatchWeekBody, admin: dict = Depends(require_admin)):
+    """Manually override which fantasy week a match counts for.
+    Set week_id to null to clear the override and revert to time-based assignment."""
+    db = SessionLocal()
+    match = db.get(Match, match_id)
+    if not match:
+        db.close()
+        raise HTTPException(status_code=404, detail="Match not found")
+    if body.week_id is not None:
+        week = db.get(Week, body.week_id)
+        if not week:
+            db.close()
+            raise HTTPException(status_code=404, detail="Week not found")
+    old_override = match.week_override_id
+    match.week_override_id = body.week_id
+    _audit(db, "admin_set_match_week", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"match_id={match_id} old_override={old_override} new_override={body.week_id}")
+    db.commit()
+    db.close()
+    return {"match_id": match_id, "week_override_id": body.week_id}
+
+
+@app.post("/admin/sync-match-weeks")
+def sync_match_weeks(admin: dict = Depends(require_admin)):
+    """Auto-assign week_override_id on matches whose actual play date differs from their
+    scheduled week in the Google Sheet. Matches already in the correct week get their
+    override cleared (set to NULL). Uses ±3-day proximity to the series scheduled date
+    to disambiguate when two teams play each other more than once in a season."""
+    from schedule import get_schedule
+
+    db = SessionLocal()
+
+    # Build week lookup: normalised label -> Week
+    db_weeks = db.query(Week).all()
+    week_by_label = {w.label.lower().strip(): w for w in db_weeks}
+
+    schedule_data = get_schedule(db)
+
+    changes = []
+    errors = []
+
+    for sheet_week in schedule_data.get("weeks", []):
+        week_label = (sheet_week.get("label") or "").lower().strip()
+        target_week = week_by_label.get(week_label)
+        if not target_week:
+            errors.append(f"No DB week found for sheet label '{sheet_week.get('label')}'")
+            continue
+
+        for series in sheet_week["div1"] + sheet_week["div2"]:
+            team1_id = series.get("team1_id")
+            team2_id = series.get("team2_id")
+            if not team1_id or not team2_id:
+                continue
+
+            # Convert scheduled series date to Unix timestamp for proximity matching
+            series_ts = None
+            dt_iso = series.get("datetime_iso")
+            if dt_iso:
+                try:
+                    from datetime import datetime
+                    series_ts = int(datetime.fromisoformat(dt_iso).timestamp())
+                except (ValueError, OSError):
+                    pass
+
+            rows = db.execute(text("""
+                SELECT match_id, start_time, week_override_id FROM matches
+                WHERE (radiant_team_id = :a AND dire_team_id = :b)
+                   OR (radiant_team_id = :b AND dire_team_id = :a)
+            """), {"a": team1_id, "b": team2_id}).fetchall()
+
+            for row in rows:
+                # If we have a scheduled date, skip matches more than 3 days away —
+                # they belong to a different series between the same two teams.
+                if series_ts and row.start_time:
+                    if abs(row.start_time - series_ts) > 3 * 86400:
+                        continue
+
+                in_target_by_time = (
+                    row.start_time is not None
+                    and target_week.start_time <= row.start_time <= target_week.end_time
+                )
+                # Correct state: no override needed when time already lands in target week
+                new_override = None if in_target_by_time else target_week.id
+
+                # Skip if already in desired state
+                if new_override == row.week_override_id:
+                    continue
+
+                match_obj = db.get(Match, row.match_id)
+                old = match_obj.week_override_id
+                match_obj.week_override_id = new_override
+                changes.append({
+                    "match_id": row.match_id,
+                    "old_override": old,
+                    "new_override": new_override,
+                    "target_week": target_week.label,
+                    "teams": f"{series.get('team1')} vs {series.get('team2')}",
+                })
+
+    if changes:
+        _audit(db, "admin_sync_match_weeks", actor_id=admin["user_id"], actor_username=admin["username"],
+               detail=f"changes={len(changes)}")
+        db.commit()
+
+    db.close()
+    return {"changes": changes, "errors": errors}
 
 
 @app.get("/profile/{user_id}")
