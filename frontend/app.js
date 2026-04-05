@@ -778,22 +778,9 @@ async function loadWeights() {
     document.getElementById("weightsBody").innerHTML = weights.map(w => `
       <tr>
         <td>${w.label}</td>
-        <td><input type="number" step="any" id="w_${w.key}" value="${w.value}" style="width:100px;flex:none;" /></td>
-        <td><button onclick="saveWeight('${w.key}')">Save</button></td>
+        <td>${w.value}</td>
       </tr>`).join("");
     setStatus("weightsStatus", "");
-  } catch (e) {
-    setStatus("weightsStatus", e.message, false);
-  }
-}
-
-async function saveWeight(key) {
-  const value = parseFloat(document.getElementById(`w_${key}`).value);
-  if (isNaN(value)) return setStatus("weightsStatus", "Invalid value", false);
-  try {
-    const res = await fetch(`${API}/weights/${key}`, { method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({value}) });
-    const data = await res.json();
-    setStatus("weightsStatus", res.ok ? `Saved ${key} = ${data.value}` : data.detail, res.ok);
   } catch (e) {
     setStatus("weightsStatus", e.message, false);
   }

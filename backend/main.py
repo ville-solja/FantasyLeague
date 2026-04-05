@@ -66,9 +66,6 @@ class RegisterBody(BaseModel):
     password: str
 
 
-class WeightUpdateBody(BaseModel):
-    value: float
-
 
 class GrantTokensBody(BaseModel):
     target_user_id: int
@@ -103,6 +100,16 @@ class ForgotPasswordBody(BaseModel):
 
 class MatchWeekBody(BaseModel):
     week_id: int | None = None
+
+
+class SimulateBody(BaseModel):
+    kills: float | None = None
+    assists: float | None = None
+    deaths: float | None = None
+    gold_per_min: float | None = None
+    obs_placed: float | None = None
+    sen_placed: float | None = None
+    tower_damage: float | None = None
 
 
 def get_current_user(request: Request) -> dict:
@@ -886,20 +893,130 @@ def get_weights():
     return data
 
 
-@app.put("/weights/{key}")
-def update_weight(key: str, body: WeightUpdateBody, admin: dict = Depends(require_admin)):
+
+_SIMULATE_DOCS = {
+    "endpoint": "POST /simulate/{match_id}",
+    "description": (
+        "Simulate fantasy point scores for all players in a given match using custom "
+        "per-stat weights. Any stat weight not provided falls back to the current "
+        "season default stored in the database. No authentication required."
+    ),
+    "path_parameters": {
+        "match_id": "integer — OpenDota match ID that has been ingested into the system",
+    },
+    "request_body": {
+        "content_type": "application/json",
+        "fields": {
+            "kills":        "float | omit  — points per kill (default from DB)",
+            "assists":      "float | omit  — points per assist (default from DB)",
+            "deaths":       "float | omit  — points per death, typically negative (default from DB)",
+            "gold_per_min": "float | omit  — points per GPM (default from DB)",
+            "obs_placed":   "float | omit  — points per observer ward placed (default from DB)",
+            "sen_placed":   "float | omit  — points per sentry ward placed (default from DB)",
+            "tower_damage": "float | omit  — points per tower damage dealt (default from DB)",
+        },
+        "example": {
+            "kills": 2.0,
+            "deaths": -1.5,
+            "gold_per_min": 0.05,
+        },
+    },
+    "response": {
+        "match_id": "integer — the queried match ID",
+        "weights_used": "object — the full weight map applied (merged DB defaults + overrides)",
+        "players": [
+            {
+                "player_id": "integer",
+                "player_name": "string",
+                "team_name": "string | null",
+                "fantasy_points": "float — score under the provided weights",
+                "stats": {
+                    "kills": "integer",
+                    "assists": "integer",
+                    "deaths": "integer",
+                    "gold_per_min": "float",
+                    "obs_placed": "integer",
+                    "sen_placed": "integer",
+                    "tower_damage": "integer",
+                },
+            }
+        ],
+    },
+    "errors": {
+        "404": "Match not found — match_id has not been ingested",
+        "422": "Validation error — non-numeric weight value supplied",
+    },
+}
+
+
+@app.get("/simulate")
+def simulate_docs():
+    """12.2 — Human- and machine-readable documentation for the weight simulation endpoint."""
+    return _SIMULATE_DOCS
+
+
+@app.post("/simulate/{match_id}")
+def simulate_match(match_id: int, body: SimulateBody = None):
+    """12.1 — Return fantasy scores for every player in a match under custom weights.
+
+    Any weight not supplied in the request body falls back to the current DB default.
+    No authentication required so statisticians can call this without an account.
+    """
+    if body is None:
+        body = SimulateBody()
+
     db = SessionLocal()
-    weight = db.get(Weight, key)
-    if not weight:
+
+    # Verify match exists
+    match = db.get(Match, match_id)
+    if not match:
         db.close()
-        raise HTTPException(status_code=404, detail="Weight not found")
-    old_value = weight.value
-    weight.value = body.value
-    _audit(db, "admin_weight_update", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"key={key} {old_value}->{body.value}")
-    db.commit()
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    # Load DB weights and apply overrides for scoring stats only
+    db_weights = {w.key: w.value for w in db.query(Weight).all()}
+    overrides = {k: v for k, v in body.model_dump().items() if v is not None}
+    weights_used = {stat: overrides.get(stat, db_weights.get(stat, 0.0)) for stat in SCORING_STATS}
+
+    # Fetch all player stats for this match with player and team names
+    rows = db.execute(text("""
+        SELECT s.player_id, p.name as player_name,
+               t.name as team_name,
+               s.kills, s.assists, s.deaths,
+               s.gold_per_min, s.obs_placed, s.sen_placed, s.tower_damage
+        FROM player_match_stats s
+        JOIN players p ON p.id = s.player_id
+        LEFT JOIN teams t ON t.id = s.team_id
+        WHERE s.match_id = :match_id
+    """), {"match_id": match_id}).fetchall()
     db.close()
-    return {"key": key, "value": body.value}
+
+    players = []
+    for r in rows:
+        stats = {
+            "kills": r.kills or 0,
+            "assists": r.assists or 0,
+            "deaths": r.deaths or 0,
+            "gold_per_min": r.gold_per_min or 0,
+            "obs_placed": r.obs_placed or 0,
+            "sen_placed": r.sen_placed or 0,
+            "tower_damage": r.tower_damage or 0,
+        }
+        players.append({
+            "player_id": r.player_id,
+            "player_name": r.player_name,
+            "team_name": r.team_name,
+            "fantasy_points": round(fantasy_score(stats, weights_used), 2),
+            "stats": stats,
+        })
+
+    players.sort(key=lambda p: p["fantasy_points"], reverse=True)
+
+    return {
+        "match_id": match_id,
+        "weights_used": weights_used,
+        "players": players,
+    }
 
 
 @app.get("/users")
