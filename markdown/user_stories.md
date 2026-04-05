@@ -275,7 +275,7 @@ As a user, I want each card to have a defined number of modifiers.
 As an admin, I want to be able to adjust the weights of modifiers in order to tune balance.
 
 **Acceptance criteria**
-- Modifiers manageable from the admin tab
+- Modifiers manageable from environment variables
 - Individual cards are not modified — entire modifier weights are adjusted at once
 - Modifier changes are not applied retroactively without an explicit recalculate action
 
@@ -439,7 +439,7 @@ As a user, I want to re-roll a card's modifiers and quality.
 ### 6.2 Card Modifier Scoring
 **Acceptance criteria**
 - Rarity bonus applied on top of raw fantasy points (common +0%, rare +1%, epic +2%, legendary +3% by default)
-- Rarity modifiers are configurable from the admin panel
+- Rarity modifiers are configurable environment variables
 
 ---
 
@@ -579,8 +579,8 @@ As an admin, I want to manually grant additional tokens to a specific user.
 As an admin, I want to configure the scoring weights for match stats.
 
 **Acceptance criteria**
-- Each stat weight (kills, assists, deaths, GPM, wards, tower damage) is editable from the admin tab
-- Rarity modifier percentages (common, rare, epic, legendary) are also configurable here
+- Each stat weight (kills, assists, deaths, GPM, wards, tower damage) is editable from environment variables
+- Rarity modifier percentages (common, rare, epic, legendary) are also configurable in the environment variables
 - Weight changes take effect for future calculations; use Recalculate to apply retroactively
 
 ---
@@ -692,3 +692,22 @@ As admin I want to have visibility into actions that have taken place on the app
 - Visible in the Admin tab with most recent entries first
 - Admin-only access
 - Roster changes and other minor "regular" events are not needed to be tracked
+
+---
+
+### 12.1 Weight calculation
+**User Story** 
+As admin I want to provide a weight for statistics experts to simulate the values and set the values for the season
+
+**Acceptance criteria**
+- Separate endpoint is created outside of the league navigation
+- Endpoint is given the matchID
+- Endpoint can receive the each scoring stat and value that differs from the default
+- Returning value is a simple table containing the players and their fantasypoint values from the given match, with the provided scoring modifiers
+
+### 12.2 Weight statistics
+**User Story**
+As statistician, I want to have documentation about the weight simulation endpoint, so I can build my own tooling to systematically gather data
+
+**Acceptance criteria**
+- Documentation about the endpoint functionality is available to users

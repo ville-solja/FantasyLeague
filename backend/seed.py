@@ -95,11 +95,33 @@ DEFAULT_WEIGHTS = [
 
 
 def seed_weights():
+    """Seed weights from DEFAULT_WEIGHTS, then apply any WEIGHTS_JSON overrides.
+
+    WEIGHTS_JSON is a JSON object mapping weight keys to float values, e.g.:
+        WEIGHTS_JSON={"kills": 3.0, "deaths": -1.5}
+    Only keys present in the env var are overridden; the rest keep their defaults.
+    Values are upserted so env var changes take effect on restart.
+    """
+    env_overrides: dict = {}
+    raw = os.getenv("WEIGHTS_JSON", "").strip()
+    if raw:
+        try:
+            parsed = json.loads(raw)
+            env_overrides = {k: float(v) for k, v in parsed.items()}
+            print(f"[SEED] WEIGHTS_JSON overrides: {list(env_overrides.keys())}")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"[SEED] WARNING: could not parse WEIGHTS_JSON — {e}")
+
     db = SessionLocal()
     for w in DEFAULT_WEIGHTS:
-        if not db.get(Weight, w["key"]):
-            db.add(Weight(key=w["key"], label=w["label"], value=w["value"]))
-            print(f"[SEED] Weight {w['key']} = {w['value']}")
+        existing = db.get(Weight, w["key"])
+        target_value = env_overrides.get(w["key"], w["value"])
+        if existing is None:
+            db.add(Weight(key=w["key"], label=w["label"], value=target_value))
+            print(f"[SEED] Weight {w['key']} = {target_value}")
+        elif w["key"] in env_overrides and existing.value != target_value:
+            print(f"[SEED] Weight {w['key']} overridden by env: {existing.value} → {target_value}")
+            existing.value = target_value
     db.commit()
     db.close()
 

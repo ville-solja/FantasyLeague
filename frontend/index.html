@@ -228,7 +228,7 @@
           <strong style="color:#aaa;">Kills × kill_weight + Assists × assist_weight − Deaths × death_weight
           + GPM × gpm_weight + Observer wards × obs_weight + Sentry wards × sen_weight
           + Tower damage × tower_dmg_weight</strong><br>
-          Weights are managed by the admin under Scoring Weights.
+          Weights are set via the <code>WEIGHTS_JSON</code> environment variable and applied on restart.
         </div>
       </div>
       <div class="status" id="deckStatus"></div>
@@ -414,7 +414,7 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Scoring Weights</h2>
       <table>
-        <thead><tr><th>Stat</th><th>Weight</th><th></th></tr></thead>
+        <thead><tr><th>Stat</th><th>Weight</th></tr></thead>
         <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="weightsStatus"></div>
