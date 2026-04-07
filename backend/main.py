@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog
+from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog, ToornamentSyncLog
 from database import SessionLocal, engine, Base
 from ingest import ingest_league
 from enrich import run_enrichment
@@ -27,7 +27,8 @@ TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 
 _ingest_executor = ThreadPoolExecutor(max_workers=1)
-_WEEK_CHECK_INTERVAL = int(os.getenv("WEEK_CHECK_INTERVAL", "300"))  # seconds, default 5 min
+_WEEK_CHECK_INTERVAL  = int(os.getenv("WEEK_CHECK_INTERVAL",  "300"))   # seconds, default 5 min
+_INGEST_POLL_INTERVAL = int(os.getenv("INGEST_POLL_INTERVAL", "900"))   # seconds, default 15 min
 
 
 def _week_maintenance_loop():
@@ -53,6 +54,25 @@ def _auto_ingest(league_ids: list[int]):
             print(f"[AUTO-INGEST] League {league_id} done")
         except Exception as e:
             print(f"[AUTO-INGEST] League {league_id} failed: {e}")
+
+
+def _run_toornament_sync():
+    try:
+        from toornament import sync_toornament_results
+        db = SessionLocal()
+        result = sync_toornament_results(db)
+        db.close()
+        print(f"[TOORNAMENT] Sync: {result}")
+    except Exception as e:
+        print(f"[TOORNAMENT] Sync error: {e}")
+
+
+def _ingest_poll_loop(league_ids: list[int]):
+    """Background thread: periodically ingest new matches then sync to toornament."""
+    while True:
+        _auto_ingest(league_ids)
+        _run_toornament_sync()
+        time.sleep(_INGEST_POLL_INTERVAL)
 
 
 class LoginBody(BaseModel):
@@ -239,7 +259,8 @@ async def lifespan(app: FastAPI):
     _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
-        asyncio.get_event_loop().run_in_executor(_ingest_executor, _auto_ingest, _league_ids)
+        threading.Thread(target=_ingest_poll_loop, args=(_league_ids,), daemon=True).start()
+        print(f"[INGEST] Poll thread started (interval={_INGEST_POLL_INTERVAL}s)")
     t = threading.Thread(target=_week_maintenance_loop, daemon=True)
     t.start()
     print(f"[WEEKS] Maintenance thread started (interval={_WEEK_CHECK_INTERVAL}s)")
@@ -1230,6 +1251,19 @@ def sync_match_weeks(admin: dict = Depends(require_admin)):
 
     db.close()
     return {"changes": changes, "errors": errors}
+
+
+@app.post("/admin/sync-toornament")
+def admin_sync_toornament(admin: dict = Depends(require_admin)):
+    """Push current series results to toornament.com. Idempotent — safe to call repeatedly."""
+    from toornament import sync_toornament_results
+    db = SessionLocal()
+    result = sync_toornament_results(db)
+    _audit(db, "admin_sync_toornament", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"pushed={result['pushed']} skipped={result['skipped']} errors={len(result['errors'])}")
+    db.commit()
+    db.close()
+    return result
 
 
 @app.get("/profile/{user_id}")
