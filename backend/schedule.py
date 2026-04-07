@@ -163,7 +163,7 @@ def bust_cache():
     _cache["fetched_at"] = None
 
 
-def _norm(name):
+def norm_team_name(name):
     """Normalise a team name for fuzzy matching."""
     name = (name or "").lower().strip()
     name = re.sub(r'\(.*?\)', '', name)   # strip parentheticals: Meta(no)core → metacore
@@ -171,9 +171,9 @@ def _norm(name):
     return name
 
 
-def _find_team_id(name, team_lookup):
+def find_team_id(name, team_lookup):
     """Exact match first, then substring containment fallback."""
-    n = _norm(name)
+    n = norm_team_name(name)
     if n in team_lookup:
         return team_lookup[n]
     for key, tid in team_lookup.items():
@@ -186,15 +186,15 @@ def build_team_lookup(db):
     """Return {normalised_name: team_id} for all teams in DB."""
     try:
         rows = db.execute(text("SELECT id, name FROM teams")).fetchall()
-        return {_norm(row[1]): row[0] for row in rows if row[1]}
+        return {norm_team_name(row[1]): row[0] for row in rows if row[1]}
     except Exception:
         return {}
 
 
 def resolve_series_result(db, team1_name, team2_name, team_lookup):
     """Return {team1_wins, team2_wins, game_count, start_time} or None if unresolvable."""
-    team1_id = _find_team_id(team1_name, team_lookup)
-    team2_id = _find_team_id(team2_name, team_lookup)
+    team1_id = find_team_id(team1_name, team_lookup)
+    team2_id = find_team_id(team2_name, team_lookup)
     if not team1_id or not team2_id:
         return None
     try:
@@ -252,14 +252,14 @@ def get_schedule(db):
     db_team_names = set(team_lookup.keys())
 
     for week in weeks:
-        div1_teams = {_norm(t) for m in week["div1"] for t in (m["team1"] or "", m["team2"] or "") if t.strip()}
-        div2_teams = {_norm(t) for m in week["div2"] for t in (m["team1"] or "", m["team2"] or "") if t.strip()}
+        div1_teams = {norm_team_name(t) for m in week["div1"] for t in (m["team1"] or "", m["team2"] or "") if t.strip()}
+        div2_teams = {norm_team_name(t) for m in week["div2"] for t in (m["team1"] or "", m["team2"] or "") if t.strip()}
         week["has_results_div1"] = bool(div1_teams & db_team_names)
         week["has_results_div2"] = bool(div2_teams & db_team_names)
 
         for series in week["div1"] + week["div2"]:
-            series["team1_id"] = _find_team_id(series.get("team1"), team_lookup)
-            series["team2_id"] = _find_team_id(series.get("team2"), team_lookup)
+            series["team1_id"] = find_team_id(series.get("team1"), team_lookup)
+            series["team2_id"] = find_team_id(series.get("team2"), team_lookup)
             series["series_result"] = resolve_series_result(
                 db, series.get("team1"), series.get("team2"), team_lookup
             )

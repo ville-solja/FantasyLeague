@@ -711,3 +711,23 @@ As statistician, I want to have documentation about the weight simulation endpoi
 
 **Acceptance criteria**
 - Documentation about the endpoint functionality is available to users
+
+---
+
+### 13.1 Twitch integration - MVP selection
+**User Stories*' 
+As a streamer I want to select the MVP of a match from the player list
+
+**Acceptance criteria**
+- Streamer has access to current matches player list
+- Streamer can select the MVP
+- MVP information is sent to this application and stored in the DB
+
+### 13.2 Twitch Integration - token drops
+**User story** 
+As a streamer I want to grant token drops to users
+
+**Acceptance criteria**
+- Streamer that is streaming a tournament game can give drops, which give n (customizable amount) players 1 token.
+- Streamer is recognized by the fantasyleague app
+- Of the watchers those who have started to play FantasyLeague are in the drop pool

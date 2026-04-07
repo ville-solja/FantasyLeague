@@ -143,3 +143,15 @@ class AuditLog(Base):
     actor_username = Column(String, nullable=True)
     action         = Column(String)            # e.g. "user_register", "token_draw", "admin_ingest"
     detail         = Column(String, nullable=True)
+
+
+class ToornamentSyncLog(Base):
+    __tablename__ = "toornament_sync_log"
+
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    toornament_match_id = Column(String, unique=True, index=True)
+    team1_name          = Column(String)   # as seen in toornament
+    team2_name          = Column(String)
+    team1_score         = Column(Integer)
+    team2_score         = Column(Integer)
+    pushed_at           = Column(Integer)  # Unix timestamp
