@@ -5,3 +5,5 @@ sqlalchemy
 requests
 bcrypt
 itsdangerous
+pillow
+cloudscraper>=1.2.71

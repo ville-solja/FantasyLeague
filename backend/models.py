@@ -46,6 +46,7 @@ class Team(Base):
 
     id = Column(Integer, primary_key=True)  # OpenDota team_id
     name = Column(String)
+    logo_url = Column(String, nullable=True)  # OpenDota team logo URL
 
 
 class Card(Base):

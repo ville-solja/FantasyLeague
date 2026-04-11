@@ -1,33 +1,63 @@
-import requests
 import time
+
+import requests
 from database import SessionLocal
 from models import Match, Player, PlayerMatchStats, League, Team, Weight
+from opendota_client import OPEN_DOTA_URL, get as opendota_get
 from scoring import fantasy_score
+from dotabuff_league_logos import ensure_dotabuff_league_logos
 
-OPEN_DOTA_URL = "https://api.opendota.com/api"
+
+def _match_logo_url(val) -> str | None:
+    if not isinstance(val, str):
+        return None
+    s = val.strip()
+    if not s:
+        return None
+    if s.startswith("//"):
+        s = "https:" + s
+    if s.startswith("http://") or s.startswith("https://"):
+        return s
+    return None
 
 
 # -----------------------
 # API HELPERS
 # -----------------------
 
+
+def _get_json_with_retry(url: str, *, label: str, retries: int = 5, backoff: int = 15):
+    """OpenDota league/list endpoints 429 often without api_key; retry with backoff."""
+    for attempt in range(retries):
+        res = opendota_get(url, timeout=30)
+        if res.status_code == 429:
+            wait = backoff * (attempt + 1)
+            print(f"[RATE LIMIT] {label}, waiting {wait}s (set OPENDOTA_API_KEY to raise limits)")
+            time.sleep(wait)
+            continue
+        if res.status_code >= 500:
+            wait = backoff * (attempt + 1)
+            print(f"[ERROR] {label} HTTP {res.status_code}, retry in {wait}s")
+            time.sleep(wait)
+            continue
+        res.raise_for_status()
+        return res.json()
+    raise requests.HTTPError(f"429/5xx after {retries} retries: {label}")
+
+
 def get_league_matches(league_id: int):
     url = f"{OPEN_DOTA_URL}/leagues/{league_id}/matchIds"
-    res = requests.get(url)
-    res.raise_for_status()
-    return res.json()
+    return _get_json_with_retry(url, label=f"league {league_id} matchIds")
 
 
 def get_league_info(league_id: int):
     url = f"{OPEN_DOTA_URL}/leagues/{league_id}"
-    res = requests.get(url)
-    res.raise_for_status()
-    return res.json()
+    return _get_json_with_retry(url, label=f"league {league_id} info")
 
 
 def fetch_match_with_retry(match_id: int, retries=3, backoff=5):
     for attempt in range(retries):
-        res = requests.get(f"{OPEN_DOTA_URL}/matches/{match_id}")
+        res = opendota_get(f"{OPEN_DOTA_URL}/matches/{match_id}", timeout=30)
         if res.status_code == 429:
             wait = backoff * (attempt + 1)
             print(f"[RATE LIMIT] Match {match_id}, waiting {wait}s")
@@ -89,9 +119,11 @@ def ingest_league(league_id: int):
         except Exception as e:
             print(f"[SKIP] Match {match_id} failed: {e}")
 
-        time.sleep(0.5)
-
     db.close()
+    try:
+        ensure_dotabuff_league_logos()
+    except Exception as e:
+        print(f"[DOTABUFF] League logo step failed: {e}")
 
 
 # -----------------------
@@ -112,14 +144,26 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     dire_team_id = data.get("dire_team_id")
     radiant_name = data.get("radiant_name")
     dire_name = data.get("dire_name")
+    radiant_logo = _match_logo_url(data.get("radiant_logo"))
+    dire_logo = _match_logo_url(data.get("dire_logo"))
 
     print(f"[MATCH] {match_id} | {radiant_name} vs {dire_name}")
 
-    for team_id, team_name in ((radiant_team_id, radiant_name), (dire_team_id, dire_name)):
-        if team_id and team_id not in seen_teams:
-            if not db.get(Team, team_id):
-                db.add(Team(id=team_id, name=team_name))
-            seen_teams.add(team_id)
+    for team_id, team_name, row_logo in (
+        (radiant_team_id, radiant_name, radiant_logo),
+        (dire_team_id, dire_name, dire_logo),
+    ):
+        if not team_id:
+            continue
+        team = db.get(Team, team_id)
+        if not team:
+            db.add(Team(id=team_id, name=team_name or str(team_id), logo_url=row_logo))
+        else:
+            if team_name and (not team.name or team.name == str(team_id)):
+                team.name = team_name
+            if row_logo and not team.logo_url:
+                team.logo_url = row_logo
+        seen_teams.add(team_id)
 
     match = Match(
         match_id=match_id,
