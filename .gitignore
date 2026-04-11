@@ -12,3 +12,8 @@ infra/terraform.tfstate
 infra/terraform.tfstate.backup
 infra/*.tfvars
 data/fantasy.db
+
+# Local card preview scratch files (repo root)
+/tmp.png
+/tmp_card_with_logo.png
+/tmp_card_without_logo.png

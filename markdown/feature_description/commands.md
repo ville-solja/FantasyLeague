@@ -27,6 +27,21 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 curl -X POST http://localhost:8000/ingest/league/19369
 ```
 
+Each ingest also refreshes **Dotabuff league team logos** (default Kanaliiga overview URLs): new PNGs are downloaded only when missing under `assets/.../dotabuff_league_logos/` (or `Assets/...` in Docker). Configure or disable with `DOTABUFF_LEAGUE_LOGO_PAGES` in `.env`.
+
+### Clear cached Dotabuff league logos
+Force re-download on next ingest (e.g. after a team rename on Dotabuff):
+
+**Repo root (paths match your card template folder — often `assets/` locally, `Assets/` in the Linux container):**
+```
+rm -f assets/dotabuff_league_logos/*.png
+```
+
+**Docker (production image uses `/app/Assets`):**
+```
+docker compose exec backend sh -c 'rm -f /app/Assets/dotabuff_league_logos/*.png'
+```
+
 ## Access DB (SQLite)
 ```
 docker compose exec backend sqlite3 /app/data/fantasy.db

@@ -1,9 +1,8 @@
-import requests
 import time
-from database import SessionLocal
-from models import Player, Team
 
-OPEN_DOTA_URL = "https://api.opendota.com/api"
+from database import SessionLocal
+from models import Player
+from opendota_client import OPEN_DOTA_URL, get as opendota_get, parse_json_object
 
 
 # -----------------------
@@ -32,7 +31,7 @@ def enrich_players(batch_size=50):
         account_id = player.id
 
         try:
-            res = requests.get(f"{OPEN_DOTA_URL}/players/{account_id}")
+            res = opendota_get(f"{OPEN_DOTA_URL}/players/{account_id}", timeout=15)
 
             if res.status_code == 429:
                 print(f"[RATE LIMIT] Player {account_id}, skipping for retry")
@@ -44,7 +43,10 @@ def enrich_players(batch_size=50):
                 player.name = str(account_id)
                 continue
 
-            data = res.json()
+            data = parse_json_object(res, context=f"players/{account_id}")
+            if not data:
+                player.name = str(account_id)
+                continue
             profile = data.get("profile", {})
 
             name = (
@@ -62,40 +64,9 @@ def enrich_players(batch_size=50):
             print(f"[ERROR] Player {account_id}: {e}")
             player.name = str(account_id)
 
-        time.sleep(0.2)
-
     db.commit()
     db.close()
     return len(players)
-
-
-# -----------------------
-# TEAM ENRICHMENT
-# -----------------------
-
-def enrich_teams(batch_size=50):
-    db = SessionLocal()
-
-    teams = (
-        db.query(Team)
-        .filter(Team.name.is_(None))
-        .limit(batch_size)
-        .all()
-    )
-
-    if not teams:
-        db.close()
-        return 0
-
-    print(f"[ENRICH] Teams with missing name -> {len(teams)}")
-
-    for team in teams:
-        team.name = str(team.id)
-        print(f"[WARN] Team {team.id} has no name, using ID as fallback")
-
-    db.commit()
-    db.close()
-    return len(teams)
 
 
 # -----------------------
@@ -106,9 +77,8 @@ def run_enrichment(max_rounds=20):
     for round in range(max_rounds):
         print(f"[ENRICH] Round {round + 1}")
         p = enrich_players()
-        t = enrich_teams()
 
-        if p == 0 and t == 0:
+        if p == 0:
             print("[ENRICH] Done")
             return
 

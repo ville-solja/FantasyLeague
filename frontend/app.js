@@ -6,6 +6,15 @@ let activeIsAdmin  = localStorage.getItem("is_admin") === "true";
 let activeMustChangePassword = false;
 let _tokenName     = "Tokens";
 let _tokenBalance  = null;
+/** Increments on modifier reroll so every PNG URL is unique (Date.now() can collide in the same ms). */
+let _cardImageBustSeq = 0;
+function bumpCardImageCacheBust() {
+  _cardImageBustSeq += 1;
+  return _cardImageBustSeq;
+}
+function cardImageUrl(cardId) {
+  return `${API}/cards/${cardId}/image?b=${_cardImageBustSeq}`;
+}
 
 // -------------------------------------------------------
 // CONFIG
@@ -340,6 +349,10 @@ async function drawCard() {
     const data = await res.json();
     if (!res.ok) return setStatus("deckStatus", data.detail, false);
     updateTokenDisplay(data.tokens ?? null);
+    if (data.id) {
+      const warm = new window.Image();
+      warm.src = cardImageUrl(data.id);
+    }
     showReveal(data);
     loadDeck();
     loadRoster(_rosterWeekId);
@@ -368,41 +381,153 @@ async function redeemCode() {
   }
 }
 
-const _STAT_LABELS = {
-  kills: "Kills", assists: "Assists", deaths: "Deaths",
-  gold_per_min: "GPM", obs_placed: "Obs wards", sen_placed: "Sen wards",
-  tower_damage: "Tower dmg",
-};
-
-function _formatModifiers(modifiers) {
-  if (!modifiers || !modifiers.length) return "";
-  return modifiers.map(m =>
-    `${_STAT_LABELS[m.stat] || m.stat} +${m.bonus_pct}%`
-  ).join("  ·  ");
-}
-
-function _renderModifierPills(modifiers) {
-  if (!modifiers || !modifiers.length) return "";
-  const pills = modifiers.map(m =>
-    `<span style="display:inline-block;background:#1a2a1a;border:1px solid #2a4a2a;border-radius:3px;padding:1px 5px;font-size:0.7rem;color:#5a9;margin-right:3px;margin-top:2px;">${_STAT_LABELS[m.stat] || m.stat} +${m.bonus_pct}%</span>`
-  ).join("");
-  return `<div style="margin-top:2px;">${pills}</div>`;
-}
-
 let _openCardId = null;
 
-function showCard(card, footer) {
+/** Min ms before revealing art after PNG is ready (flash overlay is ~0.5s CSS) */
+const DRAW_REVEAL_MIN_MS = 220;
+/** Strip burst classes shortly after drawRevealFlash ends */
+const DRAW_REVEAL_FLASH_MS = 1520;
+let _drawBurstHideTimer = null;
+const REROLL_IMAGE_MIN_MS = 280;
+
+const DRAW_RARITY_KEYS = ["common", "rare", "epic", "legendary"];
+
+function _normalizeDrawRarity(cardType) {
+  const t = String(cardType || "common").toLowerCase();
+  return DRAW_RARITY_KEYS.includes(t) ? t : "common";
+}
+
+function _stripDrawBurstClasses(burst) {
+  if (_drawBurstHideTimer) {
+    clearTimeout(_drawBurstHideTimer);
+    _drawBurstHideTimer = null;
+  }
+  if (!burst) return;
+  burst.classList.remove("reveal-draw-burst--active");
+  for (const r of DRAW_RARITY_KEYS) {
+    burst.classList.remove(`reveal-draw-burst--rarity-${r}`);
+  }
+}
+
+function _stripRevealImgWrapRarity(imgWrap) {
+  if (!imgWrap) return;
+  for (const r of DRAW_RARITY_KEYS) {
+    imgWrap.classList.remove(`reveal-img-wrap--rarity-${r}`);
+  }
+}
+
+function _prefersReducedMotion() {
+  return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
+  modal.classList.remove("reveal-overlay--draw");
+  _stripDrawBurstClasses(document.getElementById("revealDrawBurst"));
+  _stripRevealImgWrapRarity(imgWrap);
+  if (imgWrap) {
+    imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft");
+  }
+  if (placeholder) {
+    placeholder.classList.remove(
+      "reveal-img-placeholder--drawing",
+      "reveal-img-placeholder--static",
+    );
+  }
+  if (img) {
+    img.classList.remove("reveal-card-img--reroll-flash");
+    img.style.visibility = "";
+  }
+}
+
+/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean }} [opts] */
+function showCard(card, footer, opts = {}) {
+  const drawFx = Boolean(opts.drawAnimation);
+  const reduceMotion = _prefersReducedMotion();
+
+  const modal = document.getElementById("revealModal");
+  const cardEl = document.getElementById("revealCard");
+  const imgWrap = document.getElementById("revealImgWrap") || modal.querySelector(".reveal-img-wrap");
+  const img = document.getElementById("revealCardImg");
+  const placeholder = document.getElementById("revealImgPlaceholder");
+
+  _stripRevealDrawFx(modal, imgWrap, placeholder, img);
+
   _openCardId = card.id || null;
-  document.getElementById("revealCard").className = `reveal-card ${card.card_type}`;
+  cardEl.className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
-  const revealAvatar = document.getElementById("revealAvatar");
-  if (card.avatar_url) { revealAvatar.src = card.avatar_url; revealAvatar.style.display = ""; }
-  else { revealAvatar.style.display = "none"; }
-  document.getElementById("revealPlayer").textContent = card.player_name;
-  document.getElementById("revealTeam").textContent = card.team_name || "";
-  document.getElementById("revealModifiers").textContent = _formatModifiers(card.modifiers);
+  // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
+  document.getElementById("revealPlayer").textContent = drawFx ? "" : (card.player_name || "");
+  document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
+
+  img.style.display = "none";
+  img.style.visibility = "";
+  placeholder.style.display = "flex";
+  placeholder.textContent = "";
+  if (drawFx) {
+    placeholder.classList.add("reveal-img-placeholder--drawing");
+    if (reduceMotion) placeholder.classList.add("reveal-img-placeholder--static");
+    placeholder.setAttribute("aria-label", "Drawing card, image loading");
+  } else {
+    placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+    placeholder.textContent = "generating card…";
+    placeholder.removeAttribute("aria-label");
+  }
+
+  const t0 = performance.now();
+  const minWait = drawFx ? (reduceMotion ? 320 : DRAW_REVEAL_MIN_MS) : 0;
+
+  if (card.id) {
+    placeholder.setAttribute("aria-busy", "true");
+    const src = cardImageUrl(card.id);
+    const tmp = new window.Image();
+    tmp.onload = () => {
+      const reveal = () => {
+        img.src = src;
+        img.alt = drawFx
+          ? [card.player_name, card.team_name].filter(Boolean).join(" — ") || "Fantasy card"
+          : "";
+        img.style.display = "";
+        img.style.opacity = "1";
+        img.style.visibility = "hidden";
+        const afterBitmapReady = () => {
+          img.style.visibility = "visible";
+          placeholder.style.display = "none";
+          placeholder.classList.remove(
+            "reveal-img-placeholder--drawing",
+            "reveal-img-placeholder--static",
+          );
+          placeholder.removeAttribute("aria-label");
+          placeholder.setAttribute("aria-busy", "false");
+        };
+        if (typeof img.decode === "function") {
+          img.decode().then(afterBitmapReady).catch(afterBitmapReady);
+        } else {
+          requestAnimationFrame(afterBitmapReady);
+        }
+      };
+      const elapsed = performance.now() - t0;
+      const delay = Math.max(0, minWait - elapsed);
+      if (delay > 0) setTimeout(reveal, delay);
+      else reveal();
+    };
+    tmp.onerror = () => {
+      placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+      placeholder.removeAttribute("aria-label");
+      placeholder.setAttribute("aria-busy", "false");
+      placeholder.textContent = (card.card_type || "").toUpperCase() || "Card";
+      _stripDrawBurstClasses(document.getElementById("revealDrawBurst"));
+      if (imgWrap) {
+        imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft");
+        _stripRevealImgWrapRarity(imgWrap);
+      }
+    };
+    tmp.src = src;
+  } else {
+    placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+  }
+
   const rerollBtn = document.getElementById("rerollBtn");
   if (rerollBtn) {
     const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
@@ -410,15 +535,41 @@ function showCard(card, footer) {
     rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
     rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
   }
-  document.getElementById("revealModal").classList.remove("hidden");
+
+  modal.classList.remove("hidden");
+
+  if (drawFx && imgWrap) {
+    const rarityKey = _normalizeDrawRarity(card.card_type);
+    const burst = document.getElementById("revealDrawBurst");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!reduceMotion && burst) {
+          _stripDrawBurstClasses(burst);
+          burst.classList.add("reveal-draw-burst--active", `reveal-draw-burst--rarity-${rarityKey}`);
+          _drawBurstHideTimer = setTimeout(() => {
+            _drawBurstHideTimer = null;
+            _stripDrawBurstClasses(burst);
+          }, DRAW_REVEAL_FLASH_MS);
+        }
+        if (reduceMotion) imgWrap.classList.add("reveal-img-wrap--draw-soft");
+      });
+    });
+  }
 }
 
 function showReveal(card) {
-  showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)");
+  showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)", {
+    drawAnimation: true,
+  });
 }
 
 function closeReveal() {
-  document.getElementById("revealModal").classList.add("hidden");
+  const modal = document.getElementById("revealModal");
+  const imgWrap = document.getElementById("revealImgWrap") || modal.querySelector(".reveal-img-wrap");
+  const placeholder = document.getElementById("revealImgPlaceholder");
+  const img = document.getElementById("revealCardImg");
+  _stripRevealDrawFx(modal, imgWrap, placeholder, img);
+  modal.classList.add("hidden");
   closeRerollConfirm();
 }
 
@@ -446,13 +597,67 @@ async function confirmReroll() {
       statusEl.textContent = data.detail || "Reroll failed.";
       return;
     }
-    // Update display
-    document.getElementById("revealModifiers").textContent = _formatModifiers(data.modifiers);
     updateTokenDisplay(data.tokens);
     closeRerollConfirm();
+    bumpCardImageCacheBust();
     // Update cached roster card if present
     const cached = _rosterCards.find(x => x.id === _openCardId);
     if (cached) cached.modifiers = data.modifiers;
+    // Refresh card art (modifiers are painted on PNG) + roster thumbnails
+    const img = document.getElementById("revealCardImg");
+    const placeholder = document.getElementById("revealImgPlaceholder");
+    if (img && placeholder && _openCardId) {
+      const modal = document.getElementById("revealModal");
+      const imgWrap = document.getElementById("revealImgWrap") || (modal && modal.querySelector(".reveal-img-wrap"));
+      const reduceMotion = _prefersReducedMotion();
+      const t0 = performance.now();
+      const minWait = reduceMotion ? 0 : REROLL_IMAGE_MIN_MS;
+      const src = cardImageUrl(_openCardId);
+      img.style.display = "none";
+      placeholder.style.display = "flex";
+      placeholder.textContent = "";
+      placeholder.setAttribute("aria-busy", "true");
+      placeholder.setAttribute("aria-label", "Updating card image");
+      placeholder.classList.add("reveal-img-placeholder--drawing");
+      placeholder.classList.toggle("reveal-img-placeholder--static", reduceMotion);
+      const tmp = new window.Image();
+      tmp.onload = () => {
+        const reveal = () => {
+          img.src = src;
+          img.style.display = "";
+          img.style.opacity = "1";
+          img.style.visibility = "hidden";
+          const afterBitmapReady = () => {
+            img.style.visibility = "visible";
+            placeholder.style.display = "none";
+            placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+            placeholder.removeAttribute("aria-label");
+            placeholder.setAttribute("aria-busy", "false");
+            if (!reduceMotion) {
+              img.classList.add("reveal-card-img--reroll-flash");
+              setTimeout(() => img.classList.remove("reveal-card-img--reroll-flash"), 400);
+            }
+          };
+          if (typeof img.decode === "function") {
+            img.decode().then(afterBitmapReady).catch(afterBitmapReady);
+          } else {
+            requestAnimationFrame(afterBitmapReady);
+          }
+        };
+        const elapsed = performance.now() - t0;
+        const delay = Math.max(0, minWait - elapsed);
+        if (delay > 0) setTimeout(reveal, delay);
+        else reveal();
+      };
+      tmp.onerror = () => {
+        placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+        placeholder.removeAttribute("aria-label");
+        placeholder.setAttribute("aria-busy", "false");
+        placeholder.textContent = "Could not load card";
+      };
+      tmp.src = src;
+    }
+    loadRoster(_rosterWeekId);
     // Gray out button if out of tokens
     const rerollBtn = document.getElementById("rerollBtn");
     if (rerollBtn && data.tokens < 1) {
@@ -568,67 +773,60 @@ async function loadRoster(weekId = null) {
       }
     }
 
-    const activeBody = document.getElementById("rosterActive");
-    const emptySlots = Math.max(0, 5 - active.length);
-    const emptyRows = Array(emptySlots).fill(0).map(() =>
-      `<tr style="color:#444"><td colspan="3" style="font-style:italic">— empty slot —</td><td></td></tr>`
-    ).join("");
-    if (!active.length && !emptySlots) {
-      activeBody.innerHTML = "<tr><td colspan='4' style='color:#444'>No active cards</td></tr>";
-    } else {
-      activeBody.innerHTML = active.map(c => `
-        <tr>
-          <td>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;" onerror="this.style.display='none'" />
-              <div>
-                <span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span>
-                ${_renderModifierPills(c.modifiers)}
-              </div>
-            </div>
-          </td>
-          <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
-          <td>${Number(c.total_points).toFixed(1)}</td>
-          <td>${isLocked ? "" : `<button class="secondary" onclick="deactivateCard(${c.id})">Bench</button>`}</td>
-        </tr>`).join("") + emptyRows;
-    }
+    // ── Active roster card grid ──────────────────────────────────────────
+    const activeGrid = document.getElementById("rosterActiveGrid");
+    const emptyCount = Math.max(0, 5 - active.length);
+    let activeHTML = active.map(c => _cardSlotHTML(c, isLocked ? null : "bench")).join("");
+    activeHTML += Array(emptyCount).fill(`<div class="card-slot-empty">empty slot</div>`).join("");
+    activeGrid.innerHTML = activeHTML || `<span style="color:#444;font-size:0.85rem;">No active cards</span>`;
+
     document.getElementById("rosterCombined").textContent = Number(combined_value).toFixed(1);
 
+    // ── Bench card grid ──────────────────────────────────────────────────
     const benchSection = document.getElementById("benchSection");
-    const benchBody = document.getElementById("rosterBench");
+    const benchGrid = document.getElementById("benchGrid");
     if (!isLocked) {
       benchSection.style.display = "";
       const rosterFull = active.length >= 5;
       if (bench.length) {
-        benchBody.innerHTML = bench.map(c => `
-          <tr>
-            <td>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <img src="${c.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;flex-shrink:0;" onerror="this.style.display='none'" />
-                <div>
-                  <span class="entity-link" onclick="showRosterCard(${c.id})">${c.player_name}</span>
-                  ${_renderModifierPills(c.modifiers)}
-                </div>
-              </div>
-            </td>
-            <td><span class="badge ${c.card_type}">${c.card_type}</span></td>
-            <td>${Number(c.total_points).toFixed(1)}</td>
-            <td>${rosterFull
-              ? `<span style="color:#444;font-size:0.8rem;">Roster full</span>`
-              : `<button class="secondary" onclick="activateCard(${c.id})">Activate</button>`
-            }</td>
-          </tr>`).join("");
+        benchGrid.innerHTML = bench.map(c => _cardSlotHTML(c, rosterFull ? null : "activate")).join("");
       } else {
-        benchBody.innerHTML = "<tr><td colspan='4' style='color:#444'>No cards on bench</td></tr>";
+        benchGrid.innerHTML = `<span style="color:#444;font-size:0.85rem;">No cards on bench — draw some!</span>`;
       }
     } else {
       benchSection.style.display = "none";
     }
 
-    setStatus("rosterStatus", isLocked ? "" : `${active.length}/5 active`);
+    const statusEl = document.getElementById("rosterStatus");
+    if (statusEl) statusEl.textContent = isLocked ? "" : `${active.length}/5 active`;
+
   } catch (e) {
-    setStatus("rosterStatus", e.message, false);
+    const statusEl = document.getElementById("rosterStatus");
+    if (statusEl) { statusEl.textContent = e.message; statusEl.className = "status err"; }
   }
+}
+
+/**
+ * Build the HTML for a single card slot (image + action button).
+ * action: "bench" | "activate" | null (locked/no action)
+ */
+function _cardSlotHTML(c, action) {
+  const imgSrc = cardImageUrl(c.id);
+  const pts = Number(c.total_points || 0).toFixed(1);
+  let actionBtn = "";
+  if (action === "bench") {
+    actionBtn = `<button class="secondary" style="font-size:0.7rem;padding:4px 8px;" onclick="deactivateCard(${c.id})">Bench</button>`;
+  } else if (action === "activate") {
+    actionBtn = `<button class="secondary" style="font-size:0.7rem;padding:4px 8px;" onclick="activateCard(${c.id})">Activate</button>`;
+  }
+  return `
+    <div class="card-slot" data-rarity="${c.card_type}">
+      <img class="card-img" src="${imgSrc}" alt="${c.player_name}"
+           onclick="showRosterCard(${c.id})"
+           onerror="this.outerHTML='<div class=\\'card-img-loading\\'>${c.card_type.toUpperCase()}<br><span style=\\'font-size:0.65rem;margin-top:4px;\\'>${c.player_name}</span></div>'" />
+      <div class="card-slot-pts">${pts} pts</div>
+      <div class="card-slot-actions">${actionBtn}</div>
+    </div>`;
 }
 
 async function activateCard(cardId) {
@@ -636,9 +834,9 @@ async function activateCard(cardId) {
     const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST" });
     const data = await res.json();
     if (res.ok) loadRoster(_rosterWeekId);
-    else setStatus("rosterStatus", data.detail, false);
+    else { const s = document.getElementById("rosterStatus"); if(s){s.textContent=data.detail;s.className="status err";} }
   } catch (e) {
-    setStatus("rosterStatus", e.message, false);
+    const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
   }
 }
 
@@ -647,9 +845,9 @@ async function deactivateCard(cardId) {
     const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST" });
     const data = await res.json();
     if (res.ok) loadRoster(_rosterWeekId);
-    else setStatus("rosterStatus", data.detail, false);
+    else { const s = document.getElementById("rosterStatus"); if(s){s.textContent=data.detail;s.className="status err";} }
   } catch (e) {
-    setStatus("rosterStatus", e.message, false);
+    const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
   }
 }
 

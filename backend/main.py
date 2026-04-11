@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import random
 import secrets
@@ -7,13 +8,15 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog, ToornamentSyncLog
-from database import SessionLocal, engine, Base
+from database import SessionLocal, engine, Base, DATABASE_URL
 from ingest import ingest_league
+from dotabuff_league_logos import resolve_local_team_logo_path
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score, card_fantasy_score, SCORING_STATS
@@ -21,10 +24,271 @@ from auth import hash_password, verify_password
 from email_utils import send_email
 from schedule import get_schedule, bust_cache
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 ROSTER_LIMIT = 5
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
+
+# ---------------------------------------------------------------------------
+# CARD IMAGE GENERATION
+# ---------------------------------------------------------------------------
+
+def _resolve_assets_dir() -> str:
+    here = os.path.dirname(__file__)
+    repo_root = os.path.normpath(os.path.join(here, ".."))
+
+    template_files = [
+        "Card_Template_Common.png",
+        "Card_Template_Rare.png",
+        "Card_Template_Epic.png",
+        "Card_Template_Legendary.png",
+    ]
+
+    candidates = [
+        os.path.join(here, "Assets"),
+        os.path.join(here, "assets"),
+        os.path.join(repo_root, "Assets"),
+        os.path.join(repo_root, "assets"),
+        "Assets",
+        "assets",
+        "/app/Assets",
+        "/app/assets",
+    ]
+    for c in candidates:
+        if not os.path.isdir(c):
+            continue
+        if all(os.path.exists(os.path.join(c, f)) for f in template_files):
+            return c
+    return "assets"
+
+
+_ASSETS_DIR = _resolve_assets_dir()
+
+_CARD_TEMPLATES = {
+    "common":    "Card_Template_Common.png",
+    "rare":      "Card_Template_Rare.png",
+    "epic":      "Card_Template_Epic.png",
+    "legendary": "Card_Template_Legendary.png",
+}
+
+# Layout positions discovered by pixel analysis of the 597×845 templates
+_BIG_CIRCLE    = (298, 375, 175)   # (cx, cy, radius) — player avatar
+_SMALL_CIRCLE  = (444, 258,  52)   # (cx, cy, radius) — team logo
+# Name plates: PNG pixel coords for /cards/{id}/image only (reveal modal no longer duplicates name/team under the art on draw).
+_PLAYER_NAME_Y = 90
+_TEAM_NAME_Y   = 155
+_CARD_SIZE     = (597, 845)
+# Stat modifiers — bottom band of the template (below portrait)
+_MODIFIERS_START_Y = 620
+_MODIFIER_LINE_GAP = 50
+_MODIFIER_MAX_WIDTH = 500
+# Epic/Legendary templates’ cutouts/plates sit slightly higher than common/rare — nudge content down.
+_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
+
+# Human-readable stat names (must match frontend roster copy / SCORING_STATS)
+_STAT_LABELS_CARD = {
+    "kills": "Kills",
+    "assists": "Assists",
+    "deaths": "Deaths",
+    "gold_per_min": "GPM",
+    "obs_placed": "Observer wards",
+    "sen_placed": "Sentry wards",
+    "tower_damage": "Tower damage",
+}
+
+_FONT_PATHS = [
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+]
+
+
+def _get_font(size: int):
+    if not PIL_AVAILABLE:
+        return None
+    for path in _FONT_PATHS:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
+
+
+def _fetch_team_logo_image(team_logo_url: str | None, diameter: int):
+    """Team badge from DB `logo_url` (HTTP)."""
+    u = _normalize_image_url(team_logo_url)
+    return _fetch_pil_image(u, diameter) if u else None
+
+
+def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None, diameter: int):
+    """Prefer PNG under {assets}/dotabuff_league_logos/ (ingest), else HTTP logo_url."""
+    logo_dir = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
+    path = resolve_local_team_logo_path(logo_dir, team_name)
+    if path and PIL_AVAILABLE:
+        try:
+            img = Image.open(path).convert("RGBA")
+            img = img.resize((diameter, diameter), Image.LANCZOS)
+            return img
+        except Exception:
+            pass
+    return _fetch_team_logo_image(team_logo_url, diameter)
+
+
+def _normalize_image_url(url: str | None) -> str | None:
+    if not url or not str(url).strip():
+        return None
+    u = str(url).strip()
+    if u.startswith("//"):
+        u = "https:" + u
+    return u
+
+
+def _fetch_pil_image(url: str, diameter: int):
+    """Download an image, resize to diameter×diameter, return RGBA PIL Image or None."""
+    url = _normalize_image_url(url)
+    if not url or not PIL_AVAILABLE:
+        return None
+    try:
+        import requests as _req
+        headers = {
+            "User-Agent": "FantasyLeagueCardBot/1.0 (+https://github.com/)",
+            "Accept": "image/*,*/*;q=0.8",
+        }
+        r = _req.get(url, timeout=10, headers=headers)
+        if r.status_code != 200:
+            return None
+        img = Image.open(io.BytesIO(r.content)).convert("RGBA")
+        img = img.resize((diameter, diameter), Image.LANCZOS)
+        return img
+    except Exception:
+        return None
+
+
+def _circle_crop(img):
+    """Apply a circular alpha mask to a square PIL RGBA image."""
+    sz = img.size[0]
+    mask = Image.new("L", (sz, sz), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, sz, sz), fill=255)
+    result = img.copy()
+    result.putalpha(mask)
+    return result
+
+
+def _draw_centered_text(draw, text: str, cx: int, cy: int, font, fill,
+                        shadow=(0, 0, 0, 160)):
+    """Draw text centred at (cx, cy) with a configurable drop shadow."""
+    try:
+        draw.text((cx + 2, cy + 2), text, font=font, fill=shadow, anchor="mm")
+        draw.text((cx, cy), text, font=font, fill=fill, anchor="mm")
+        return
+    except (TypeError, ValueError):
+        pass
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x, y = cx - w // 2, cy - h // 2
+    draw.text((x + 2, y + 2), text, font=font, fill=shadow)
+    draw.text((x, y), text, font=font, fill=fill)
+
+
+def _truncate_centered_line(draw, text: str, font, max_w: int) -> str:
+    t = text
+    if hasattr(draw, "textlength"):
+        while len(t) > 3 and draw.textlength(t, font=font) > max_w:
+            t = t[:-1]
+    return t
+
+
+def _modifier_lines_from_map(mods: dict) -> list[str]:
+    if not mods:
+        return []
+    lines: list[str] = []
+    for stat_key, bonus in sorted(mods.items()):
+        label = _STAT_LABELS_CARD.get(stat_key, stat_key.replace("_", " ")).upper()
+        pct = int(bonus) if float(bonus).is_integer() else bonus
+        lines.append(f"{label} +{pct}%")
+    return lines
+
+
+def _draw_card_modifiers(draw, mods: dict, y_offset: int = 0):
+    """Stack modifier lines in the empty lower area of the card template."""
+    lines = _modifier_lines_from_map(mods)
+    if not lines:
+        return
+    font = _get_font(30)
+    fill = (200, 230, 210, 255)
+    shadow = (15, 18, 20, 220)
+    cy = _MODIFIERS_START_Y + y_offset
+    for line in lines:
+        t = _truncate_centered_line(draw, line, font, _MODIFIER_MAX_WIDTH)
+        _draw_centered_text(draw, t, _CARD_SIZE[0] // 2, cy, font, fill, shadow=shadow)
+        cy += _MODIFIER_LINE_GAP
+
+
+def generate_card_image(
+    card_type: str,
+    player_name: str | None,
+    avatar_url: str | None,
+    team_name: str | None,
+    team_logo_url: str | None,
+    card_modifiers: dict | None = None,
+):
+    """Composite a player card PNG and return a PIL Image."""
+    ct = (card_type or "common").lower()
+    template_file = _CARD_TEMPLATES.get(ct, _CARD_TEMPLATES["common"])
+    template = Image.open(os.path.join(_ASSETS_DIR, template_file)).convert("RGBA")
+
+    y_off = _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY if ct in ("epic", "legendary") else 0
+
+    # Dark base matching the card's background colour
+    base = Image.new("RGBA", _CARD_SIZE, (35, 37, 40, 255))
+
+    # ── Player avatar (big circle) ──────────────────────────────────────────
+    cx, cy, r = _BIG_CIRCLE
+    cy += y_off
+    avatar = _fetch_pil_image(avatar_url, r * 2)
+    if avatar:
+        base.paste(_circle_crop(avatar), (cx - r, cy - r), _circle_crop(avatar))
+
+    # ── Team logo (small circle) ────────────────────────────────────────────
+    scx, scy, sr = _SMALL_CIRCLE
+    scy += y_off
+    logo = _load_team_logo_for_card(team_name, team_logo_url, sr * 2)
+    if logo:
+        base.paste(_circle_crop(logo), (scx - sr, scy - sr), _circle_crop(logo))
+
+    # ── Composite frame on top ──────────────────────────────────────────────
+    base.alpha_composite(template)
+
+    # ── Text ────────────────────────────────────────────────────────────────
+    draw = ImageDraw.Draw(base)
+
+    # Player name — big plate (bright silver bg → dark text, light shadow)
+    name_font = _get_font(32)
+    name = (player_name or "Unknown").upper()
+    if hasattr(draw, "textlength"):
+        while len(name) > 1 and draw.textlength(name, font=name_font) > 480:
+            name = name[:-1]
+    _draw_centered_text(draw, name, _CARD_SIZE[0] // 2, _PLAYER_NAME_Y + y_off,
+                        name_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
+
+    # Team name — use same shadow as player; _draw_centered_text default is dark (0,0,0,160).
+    team_font = _get_font(22)
+    team = (team_name or "").upper()
+    if team:
+        _draw_centered_text(draw, team, _CARD_SIZE[0] // 2, _TEAM_NAME_Y + y_off,
+                            team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
+
+    _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
+
+    return base
+
+
 
 _ingest_executor = ThreadPoolExecutor(max_workers=1)
 _WEEK_CHECK_INTERVAL  = int(os.getenv("WEEK_CHECK_INTERVAL",  "300"))   # seconds, default 5 min
@@ -200,6 +464,15 @@ def _card_modifiers_map(db, card_ids: list[int]) -> dict[int, dict]:
     return result
 
 
+def _card_modifiers_dict_for_image(db, card_id: int) -> dict:
+    """Fresh read from DB for PNG generation (avoids any ORM identity-map edge cases)."""
+    rows = db.execute(
+        text("SELECT stat_key, bonus_pct FROM card_modifiers WHERE card_id = :cid"),
+        {"cid": card_id},
+    ).fetchall()
+    return {r[0]: float(r[1]) for r in rows}
+
+
 def _format_modifiers(mods: dict) -> list[dict]:
     """Convert {stat_key: bonus_pct} to sorted list for API response."""
     return [{"stat": k, "bonus_pct": v} for k, v in sorted(mods.items())]
@@ -207,6 +480,7 @@ def _format_modifiers(mods: dict) -> list[dict]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print(f"[DB] {DATABASE_URL}")
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
@@ -240,6 +514,10 @@ async def lifespan(app: FastAPI):
             conn.commit()
         if "must_change_password" not in user_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
+            conn.commit()
+        team_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(teams)")).fetchall()]
+        if "logo_url" not in team_cols:
+            conn.execute(text("ALTER TABLE teams ADD COLUMN logo_url TEXT"))
             conn.commit()
     seed_users()
     seed_weights()
@@ -425,15 +703,11 @@ def draw_card(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
     unclaimed = db.execute(text("""
-        SELECT c.id, c.card_type, c.player_id, p.name as player_name, p.avatar_url, t.name as team_name
+        SELECT c.id, c.card_type, c.player_id, p.name as player_name, p.avatar_url,
+               t.name as team_name, t.id as team_id, t.logo_url as team_logo_url
         FROM cards c
         JOIN players p ON p.id = c.player_id
-        LEFT JOIN (
-            SELECT player_id, team_id, MAX(match_id) as latest_match
-            FROM player_match_stats
-            GROUP BY player_id
-        ) latest ON latest.player_id = p.id
-        LEFT JOIN teams t ON t.id = latest.team_id
+""" + _LATEST_TEAM_SUBQUERY + """
         WHERE c.owner_id IS NULL
     """)).fetchall()
 
@@ -478,6 +752,7 @@ def draw_card(current_user: dict = Depends(get_current_user)):
         "player_name": chosen.player_name,
         "avatar_url": chosen.avatar_url,
         "team_name": chosen.team_name,
+        "team_logo_url": chosen.team_logo_url,
         "is_active": is_active,
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
@@ -527,7 +802,7 @@ def get_roster(user_id: int, week_id: int = None):
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, 1 as is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
-                   t.name as team_name,
+                   t.name as team_name, t.logo_url as team_logo_url,
                    COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
                                 THEN s.fantasy_points ELSE 0 END), 0) as total_points
             FROM weekly_roster_entries wre
@@ -537,7 +812,7 @@ def get_roster(user_id: int, week_id: int = None):
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY c.id, c.card_type, p.id, p.name, p.avatar_url, t.name
+            GROUP BY c.id, c.card_type, p.id, p.name, p.avatar_url, t.name, t.logo_url
             ORDER BY total_points DESC
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
@@ -551,7 +826,7 @@ def get_roster(user_id: int, week_id: int = None):
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, c.is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
-                   t.name as team_name,
+                   t.name as team_name, t.logo_url as team_logo_url,
                    COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
                                 THEN s.fantasy_points ELSE 0 END), 0) as total_points
             FROM cards c
@@ -560,7 +835,7 @@ def get_roster(user_id: int, week_id: int = None):
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id
-            GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name
+            GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name, t.logo_url
             ORDER BY c.is_active DESC, total_points DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -630,6 +905,14 @@ def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     player = db.get(Player, card.player_id)
+    # Resolve latest team for this player
+    team_row = db.execute(text("""
+        SELECT t.name, t.logo_url
+        FROM player_match_stats s
+        JOIN teams t ON t.id = s.team_id
+        WHERE s.player_id = :pid
+        ORDER BY s.match_id DESC LIMIT 1
+    """), {"pid": card.player_id}).first()
     mods = _card_modifiers_map(db, [card_id]).get(card_id, {})
     db.close()
     return {
@@ -637,8 +920,50 @@ def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
         "card_type": card.card_type,
         "player_name": player.name if player else None,
         "avatar_url": player.avatar_url if player else None,
+        "team_name": team_row.name if team_row else None,
+        "team_logo_url": team_row.logo_url if team_row else None,
         "modifiers": _format_modifiers(mods),
     }
+
+
+@app.get("/cards/{card_id}/image")
+def get_card_image(card_id: int):
+    """Generate and return a PNG image for this card."""
+    if not PIL_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
+    db = SessionLocal()
+    result = db.execute(text("""
+        SELECT c.card_type, p.name as player_name, p.avatar_url,
+               t.name as team_name, t.logo_url as team_logo_url
+        FROM cards c
+        JOIN players p ON p.id = c.player_id
+""" + _LATEST_TEAM_SUBQUERY + """
+        WHERE c.id = :card_id
+    """), {"card_id": card_id}).first()
+    mods: dict = _card_modifiers_dict_for_image(db, card_id) if result else {}
+    db.close()
+    if not result:
+        raise HTTPException(status_code=404, detail="Card not found")
+    img = generate_card_image(
+        card_type=result.card_type,
+        player_name=result.player_name,
+        avatar_url=result.avatar_url,
+        team_name=result.team_name,
+        team_logo_url=result.team_logo_url,
+        card_modifiers=mods,
+    )
+    buf = io.BytesIO()
+    # Faster encode for interactive /draw reveal (size vs latency tradeoff)
+    img.save(buf, format="PNG", optimize=False, compress_level=5)
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="image/png",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.post("/roster/{card_id}/reroll")
@@ -657,8 +982,9 @@ def reroll_modifiers(card_id: int, current_user: dict = Depends(get_current_user
         db.close()
         raise HTTPException(status_code=404, detail="Card not found")
 
-    # Remove old modifiers
-    db.query(CardModifier).filter(CardModifier.card_id == card_id).delete()
+    # Raw DELETE avoids ORM bulk-delete session sync quirks (SA 2.x)
+    db.execute(text("DELETE FROM card_modifiers WHERE card_id = :cid"), {"cid": card_id})
+    db.flush()
 
     # Assign new modifiers using same logic as draw
     weights = {w.key: w.value for w in db.query(Weight).all()}
@@ -1520,4 +1846,8 @@ def get_config():
     return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS}
 
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+_FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+if not os.path.isdir(_FRONTEND_DIR):
+    _FRONTEND_DIR = "frontend"  # docker image copies to /app/frontend
+
+app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
