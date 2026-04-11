@@ -1,8 +1,6 @@
 name: Story Coverage Report
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
