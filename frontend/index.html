@@ -60,12 +60,15 @@
 
 <!-- CARD REVEAL MODAL -->
 <div class="reveal-overlay hidden" id="revealModal">
+  <div class="reveal-draw-burst" id="revealDrawBurst" aria-hidden="true"></div>
   <div class="reveal-card" id="revealCard">
     <div class="rarity-label" id="revealRarity"></div>
-    <img id="revealAvatar" style="width:80px;height:80px;border-radius:50%;margin-bottom:12px;display:none;" onerror="this.style.display='none'" />
-    <div class="player-name" id="revealPlayer"></div>
-    <div id="revealTeam" style="font-size:0.85rem;color:#888;margin-bottom:6px;"></div>
-    <div id="revealModifiers" style="font-size:0.78rem;color:#aaa;margin-bottom:12px;min-height:1em;"></div>
+    <div class="reveal-img-wrap" id="revealImgWrap">
+      <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
+      <img id="revealCardImg" class="reveal-card-img" alt="" width="200" height="283" style="display:none;" />
+    </div>
+    <div class="player-name" id="revealPlayer" style="font-size:1.1rem;margin-bottom:4px;"></div>
+    <div id="revealTeam" style="font-size:0.82rem;color:#888;margin-bottom:12px;"></div>
     <div id="revealDestination" style="font-size:0.75rem;color:#666;margin-bottom:20px;"></div>
     <button id="rerollBtn" onclick="openRerollConfirm()" style="margin-bottom:8px;width:100%;background:#1a2a1a;border:1px solid #2a4a2a;color:#5a9;">Reroll Modifiers (1 token)</button>
     <div id="rerollConfirm" style="display:none;background:#111;border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:8px;font-size:0.85rem;color:#aaa;">
@@ -243,30 +246,20 @@
         <span id="rosterWeekStatus" style="font-size:0.8rem;color:#555;"></span>
       </div>
       <div id="rosterLockedBanner" style="display:none;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem;color:#888;"></div>
-      <table>
-        <thead><tr><th>Player</th><th>Rarity</th><th>Wk pts</th><th></th></tr></thead>
-        <tbody id="rosterActive"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="2" style="color:#555;padding-top:8px;">This week</td>
-            <td id="rosterCombined" style="padding-top:8px;">—</td>
-            <td></td>
-          </tr>
-          <tr>
-            <td colspan="2" style="color:#555;">Season total</td>
-            <td id="rosterSeasonPoints" style="">—</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
-      <div id="benchSection" style="margin-top:20px;display:none;">
-        <h2 style="margin-bottom:10px;">Bench</h2>
-        <table>
-          <thead><tr><th>Player</th><th>Rarity</th><th>Wk pts</th><th></th></tr></thead>
-          <tbody id="rosterBench"></tbody>
-        </table>
+
+      <!-- Active roster: card image grid -->
+      <div id="rosterActiveGrid" class="card-grid"></div>
+      <div style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
+        <span>This week: <strong id="rosterCombined" style="color:#aaa;">—</strong> pts</span>
+        <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
+        <span id="rosterStatus" style="color:#555;"></span>
       </div>
-      <div class="status" id="rosterStatus"></div>
+
+      <!-- Bench: scrollable card strip -->
+      <div id="benchSection" style="margin-top:24px;display:none;">
+        <h2 style="margin-bottom:8px;">Bench</h2>
+        <div id="benchGrid" class="card-grid"></div>
+      </div>
     </div>
 
   </div>
