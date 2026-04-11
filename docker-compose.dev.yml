@@ -6,9 +6,13 @@ services:
     volumes:
       - ./backend:/app
       - ./frontend:/app/frontend
+      - ./assets:/app/assets:ro
       - ./data:/app/data
+    env_file:
+      - .env
     environment:
-      - SCHEDULE_SHEET_URL=${SCHEDULE_SHEET_URL}
+      - PYTHONUNBUFFERED=1
+      - OPENDOTA_API_KEY=${OPENDOTA_API_KEY:-}
       - INGEST_POLL_INTERVAL=${INGEST_POLL_INTERVAL:-900}
       - TOORNAMENT_CLIENT_ID=${TOORNAMENT_CLIENT_ID:-}
       - TOORNAMENT_CLIENT_SECRET=${TOORNAMENT_CLIENT_SECRET:-}
