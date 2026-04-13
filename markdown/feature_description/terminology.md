@@ -37,3 +37,15 @@
 **Promo Code** — An admin-created alphanumeric code that grants a configurable number of tokens to each user who redeems it. Each code can be used once per user.
 
 **Admin** — A user with elevated privileges. Can ingest leagues, manage scoring weights, grant tokens, create/delete promo codes, and refresh the schedule cache. Identified by the `is_admin` flag on the user record.
+
+**Week** — A 7-day scoring window anchored to Sundays. Rosters are locked at the start of each week and the snapshot is used to calculate that week's points. See `weeks.md`.
+
+**Week Lock** — The moment a week's match window opens (Monday 00:00 UTC). At lock time: the active roster is snapshotted, the week is marked locked, and every user receives +1 token.
+
+**Week Override** — An admin-assigned mapping that moves a specific match into a different fantasy week than the one its timestamp falls in. Used when matches are played outside their scheduled window.
+
+**Toornament** — The tournament bracket platform (toornament.com) where the Kanaliiga tournament is managed. The app automatically pushes series results there after each ingest cycle. See `toornament.md`.
+
+**Audit Log** — A time-ordered record of significant system events (ingests, token grants, week locks, admin actions). Visible to admins at `GET /audit-logs`.
+
+**Promo Code** — An admin-created alphanumeric code that grants a configurable number of tokens when redeemed. Each code can be redeemed once per user.
