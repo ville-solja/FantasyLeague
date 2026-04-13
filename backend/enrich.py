@@ -1,8 +1,6 @@
-import time
-
 from database import SessionLocal
 from models import Player
-from opendota_client import OPEN_DOTA_URL, get as opendota_get, parse_json_object
+from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 
 
 # -----------------------
@@ -31,19 +29,10 @@ def enrich_players(batch_size=50):
         account_id = player.id
 
         try:
-            res = opendota_get(f"{OPEN_DOTA_URL}/players/{account_id}", timeout=15)
-
-            if res.status_code == 429:
-                print(f"[RATE LIMIT] Player {account_id}, skipping for retry")
-                time.sleep(10)
-                continue
-
-            if res.status_code != 200:
-                print(f"[WARN] Player {account_id} failed: {res.status_code}")
-                player.name = str(account_id)
-                continue
-
-            data = parse_json_object(res, context=f"players/{account_id}")
+            data = opendota_get_json(
+                f"{OPEN_DOTA_URL}/players/{account_id}",
+                label=f"player {account_id}",
+            )
             if not data:
                 player.name = str(account_id)
                 continue

@@ -24,3 +24,12 @@ DATABASE_URL = os.getenv("DATABASE_URL") or _default_database_url()
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
+
+
+def get_db():
+    """FastAPI dependency: yield a DB session and guarantee close even on exception."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
