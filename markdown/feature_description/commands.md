@@ -23,11 +23,19 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
 ## Ingestion
+
+Match data is ingested automatically in a background polling loop every 15 minutes (configurable via `INGEST_POLL_INTERVAL`). Manual ingest is available for admins when an immediate refresh is needed:
+
 ```
 curl -X POST http://localhost:8000/ingest/league/19369
 ```
 
-Each ingest also refreshes **Dotabuff league team logos** (default Kanaliiga overview URLs): new PNGs are downloaded only when missing under `assets/.../dotabuff_league_logos/` (or `Assets/...` in Docker). Configure or disable with `DOTABUFF_LEAGUE_LOGO_PAGES` in `.env`.
+Each ingest also:
+- Runs player profile enrichment (names, avatars from OpenDota)
+- Seeds new player cards into the unowned pool
+- Refreshes **Dotabuff league team logos** (new PNGs downloaded only when missing under `assets/.../dotabuff_league_logos/`)
+
+Configure which leagues are auto-ingested via `AUTO_INGEST_LEAGUES` (comma-separated OpenDota league IDs, default: `19368,19369`).
 
 ### Clear cached Dotabuff league logos
 Force re-download on next ingest (e.g. after a team rename on Dotabuff):
@@ -41,6 +49,16 @@ rm -f assets/dotabuff_league_logos/*.png
 ```
 docker compose exec backend sh -c 'rm -f /app/Assets/dotabuff_league_logos/*.png'
 ```
+
+## Toornament sync
+
+Push current series results to toornament.com manually (also runs automatically after each poll cycle):
+```
+curl -X POST http://localhost:8000/admin/sync-toornament \
+  -H "Cookie: session=<admin-session>"
+```
+
+Returns `{"pushed": N, "skipped": M, "errors": [...]}`.
 
 ## Access DB (SQLite)
 ```
@@ -69,4 +87,35 @@ SELECT pms.*
 FROM player_match_stats pms
 LEFT JOIN players p ON pms.player_id = p.id
 WHERE p.id IS NULL;
+
+-- Check toornament sync log
+SELECT * FROM toornament_sync_log ORDER BY pushed_at DESC;
+
+-- Check week lock status
+SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
+       datetime(end_time, 'unixepoch') as end FROM weeks;
 ```
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AUTO_INGEST_LEAGUES` | `19368,19369` | Comma-separated OpenDota league IDs to poll |
+| `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles |
+| `WEEK_CHECK_INTERVAL` | `300` | Seconds between week lock maintenance checks |
+| `SEASON_LOCK_START` | `2026-03-08` | First Sunday lock date (ISO format) |
+| `SCHEDULE_SHEET_URL` | *(Kanaliiga sheet)* | Google Sheets CSV export URL for the match schedule |
+| `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
+| `TOORNAMENT_CLIENT_ID` | *(empty)* | OAuth2 client ID for toornament.com |
+| `TOORNAMENT_CLIENT_SECRET` | *(empty)* | OAuth2 client secret for toornament.com |
+| `TOORNAMENT_API_KEY` | *(empty)* | `X-Api-Key` header for toornament.com |
+| `TOORNAMENT_TOURNAMENT_ID` | *(empty)* | Toornament tournament UUID |
+| `DOTABUFF_LEAGUE_LOGO_PAGES` | *(Kanaliiga URLs)* | Dotabuff league overview URLs to scrape team logos from |
+| `WEIGHTS_JSON` | *(empty)* | JSON overrides for scoring weights applied at startup |
+| `TOKEN_NAME` | `Tokens` | Display name for the token currency |
+| `INITIAL_TOKENS` | `5` | Tokens granted to newly registered users |
+| `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
+| `SMTP_HOST` | *(empty)* | SMTP host for email (forgot-password). Disabled if unset. |
+| `SMTP_PORT` | `587` | SMTP port |
+| `SMTP_USER` | *(empty)* | SMTP username |
+| `SMTP_PASSWORD` | *(empty)* | SMTP password |
