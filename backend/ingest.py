@@ -1,9 +1,6 @@
-import time
-
-import requests
 from database import SessionLocal
 from models import Match, Player, PlayerMatchStats, League, Team, Weight
-from opendota_client import OPEN_DOTA_URL, get as opendota_get
+from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 from scoring import fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
 
@@ -26,51 +23,14 @@ def _match_logo_url(val) -> str | None:
 # -----------------------
 
 
-def _get_json_with_retry(url: str, *, label: str, retries: int = 5, backoff: int = 15):
-    """OpenDota league/list endpoints 429 often without api_key; retry with backoff."""
-    for attempt in range(retries):
-        res = opendota_get(url, timeout=30)
-        if res.status_code == 429:
-            wait = backoff * (attempt + 1)
-            print(f"[RATE LIMIT] {label}, waiting {wait}s (set OPENDOTA_API_KEY to raise limits)")
-            time.sleep(wait)
-            continue
-        if res.status_code >= 500:
-            wait = backoff * (attempt + 1)
-            print(f"[ERROR] {label} HTTP {res.status_code}, retry in {wait}s")
-            time.sleep(wait)
-            continue
-        res.raise_for_status()
-        return res.json()
-    raise requests.HTTPError(f"429/5xx after {retries} retries: {label}")
-
-
 def get_league_matches(league_id: int):
     url = f"{OPEN_DOTA_URL}/leagues/{league_id}/matchIds"
-    return _get_json_with_retry(url, label=f"league {league_id} matchIds")
+    return opendota_get_json(url, label=f"league {league_id} matchIds")
 
 
 def get_league_info(league_id: int):
     url = f"{OPEN_DOTA_URL}/leagues/{league_id}"
-    return _get_json_with_retry(url, label=f"league {league_id} info")
-
-
-def fetch_match_with_retry(match_id: int, retries=3, backoff=5):
-    for attempt in range(retries):
-        res = opendota_get(f"{OPEN_DOTA_URL}/matches/{match_id}", timeout=30)
-        if res.status_code == 429:
-            wait = backoff * (attempt + 1)
-            print(f"[RATE LIMIT] Match {match_id}, waiting {wait}s")
-            time.sleep(wait)
-            continue
-        if res.status_code >= 500:
-            wait = backoff * (attempt + 1)
-            print(f"[ERROR] Match {match_id} got {res.status_code}, retrying in {wait}s")
-            time.sleep(wait)
-            continue
-        res.raise_for_status()
-        return res.json()
-    return None
+    return opendota_get_json(url, label=f"league {league_id} info")
 
 
 # -----------------------
@@ -131,7 +91,7 @@ def ingest_league(league_id: int):
 # -----------------------
 
 def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict):
-    data = fetch_match_with_retry(match_id)
+    data = opendota_get_json(f"{OPEN_DOTA_URL}/matches/{match_id}", label=f"match {match_id}")
     if data is None:
         print(f"[SKIP] Match {match_id} unavailable after retries")
         return
