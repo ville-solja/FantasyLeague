@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import threading
 import time
 
@@ -67,6 +68,40 @@ def get(
     headers = {**DEFAULT_HEADERS, **(extra_headers or {})}
     params = {**_api_key_params(), **(extra_params or {})}
     return requests.get(url, params=params, headers=headers, timeout=timeout)
+
+
+def get_json(
+    url: str,
+    *,
+    retries: int = 5,
+    base_backoff: float = 10.0,
+    label: str = "",
+) -> dict | list | None:
+    """GET + parse JSON with exponential back-off + jitter on 429/5xx.
+
+    Returns the decoded JSON value (dict or list) or None after all retries
+    are exhausted or on a non-retryable client error.
+    """
+    tag_label = label or url
+    for attempt in range(retries):
+        res = get(url, timeout=30)
+        if res.status_code == 200:
+            try:
+                return res.json()
+            except Exception as e:
+                print(f"[WARN] get_json non-JSON {tag_label}: {e}")
+                return None
+        if res.status_code == 429 or res.status_code >= 500:
+            wait = base_backoff * (2 ** attempt) + random.uniform(0, 3)
+            tag = "[RATE LIMIT]" if res.status_code == 429 else "[ERROR]"
+            print(f"{tag} {tag_label} HTTP {res.status_code}, retry in {wait:.1f}s")
+            time.sleep(wait)
+            continue
+        # 4xx (except 429) — no point retrying
+        print(f"[WARN] get_json {tag_label} HTTP {res.status_code} — not retrying")
+        return None
+    print(f"[ERROR] get_json {tag_label} gave up after {retries} retries")
+    return None
 
 
 def parse_json_object(res: requests.Response, *, context: str = "") -> dict | None:

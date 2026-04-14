@@ -1,11 +1,11 @@
-import asyncio
 import io
 import os
 import random
+import re as _re
 import secrets
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+import warnings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import Response
@@ -13,284 +13,23 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, WeeklyRosterEntry, PromoCode, CodeRedemption, AuditLog, ToornamentSyncLog
-from database import SessionLocal, engine, Base, DATABASE_URL
+from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, PromoCode, CodeRedemption, AuditLog
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db
 from ingest import ingest_league
-from dotabuff_league_logos import resolve_local_team_logo_path
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
-from scoring import fantasy_score, card_fantasy_score, SCORING_STATS
+from scoring import fantasy_score, SCORING_STATS
 from auth import hash_password, verify_password
 from email_utils import send_email
-from schedule import get_schedule, bust_cache
+from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
-try:
-    from PIL import Image, ImageDraw, ImageFont
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+from image import generate_card_image, PIL_AVAILABLE
+from toornament import sync_toornament_results
 
 ROSTER_LIMIT = 5
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 
-# ---------------------------------------------------------------------------
-# CARD IMAGE GENERATION
-# ---------------------------------------------------------------------------
-
-def _resolve_assets_dir() -> str:
-    here = os.path.dirname(__file__)
-    repo_root = os.path.normpath(os.path.join(here, ".."))
-
-    template_files = [
-        "Card_Template_Common.png",
-        "Card_Template_Rare.png",
-        "Card_Template_Epic.png",
-        "Card_Template_Legendary.png",
-    ]
-
-    candidates = [
-        os.path.join(here, "Assets"),
-        os.path.join(here, "assets"),
-        os.path.join(repo_root, "Assets"),
-        os.path.join(repo_root, "assets"),
-        "Assets",
-        "assets",
-        "/app/Assets",
-        "/app/assets",
-    ]
-    for c in candidates:
-        if not os.path.isdir(c):
-            continue
-        if all(os.path.exists(os.path.join(c, f)) for f in template_files):
-            return c
-    return "assets"
-
-
-_ASSETS_DIR = _resolve_assets_dir()
-
-_CARD_TEMPLATES = {
-    "common":    "Card_Template_Common.png",
-    "rare":      "Card_Template_Rare.png",
-    "epic":      "Card_Template_Epic.png",
-    "legendary": "Card_Template_Legendary.png",
-}
-
-# Layout positions discovered by pixel analysis of the 597×845 templates
-_BIG_CIRCLE    = (298, 375, 175)   # (cx, cy, radius) — player avatar
-_SMALL_CIRCLE  = (444, 258,  52)   # (cx, cy, radius) — team logo
-# Name plates: PNG pixel coords for /cards/{id}/image only (reveal modal no longer duplicates name/team under the art on draw).
-_PLAYER_NAME_Y = 90
-_TEAM_NAME_Y   = 155
-_CARD_SIZE     = (597, 845)
-# Stat modifiers — bottom band of the template (below portrait)
-_MODIFIERS_START_Y = 620
-_MODIFIER_LINE_GAP = 50
-_MODIFIER_MAX_WIDTH = 500
-# Epic/Legendary templates’ cutouts/plates sit slightly higher than common/rare — nudge content down.
-_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
-
-# Human-readable stat names (must match frontend roster copy / SCORING_STATS)
-_STAT_LABELS_CARD = {
-    "kills": "Kills",
-    "assists": "Assists",
-    "deaths": "Deaths",
-    "gold_per_min": "GPM",
-    "obs_placed": "Observer wards",
-    "sen_placed": "Sentry wards",
-    "tower_damage": "Tower damage",
-}
-
-_FONT_PATHS = [
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-    "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-]
-
-
-def _get_font(size: int):
-    if not PIL_AVAILABLE:
-        return None
-    for path in _FONT_PATHS:
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                pass
-    return ImageFont.load_default()
-
-
-def _fetch_team_logo_image(team_logo_url: str | None, diameter: int):
-    """Team badge from DB `logo_url` (HTTP)."""
-    u = _normalize_image_url(team_logo_url)
-    return _fetch_pil_image(u, diameter) if u else None
-
-
-def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None, diameter: int):
-    """Prefer PNG under {assets}/dotabuff_league_logos/ (ingest), else HTTP logo_url."""
-    logo_dir = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
-    path = resolve_local_team_logo_path(logo_dir, team_name)
-    if path and PIL_AVAILABLE:
-        try:
-            img = Image.open(path).convert("RGBA")
-            img = img.resize((diameter, diameter), Image.LANCZOS)
-            return img
-        except Exception:
-            pass
-    return _fetch_team_logo_image(team_logo_url, diameter)
-
-
-def _normalize_image_url(url: str | None) -> str | None:
-    if not url or not str(url).strip():
-        return None
-    u = str(url).strip()
-    if u.startswith("//"):
-        u = "https:" + u
-    return u
-
-
-def _fetch_pil_image(url: str, diameter: int):
-    """Download an image, resize to diameter×diameter, return RGBA PIL Image or None."""
-    url = _normalize_image_url(url)
-    if not url or not PIL_AVAILABLE:
-        return None
-    try:
-        import requests as _req
-        headers = {
-            "User-Agent": "FantasyLeagueCardBot/1.0 (+https://github.com/)",
-            "Accept": "image/*,*/*;q=0.8",
-        }
-        r = _req.get(url, timeout=10, headers=headers)
-        if r.status_code != 200:
-            return None
-        img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-        img = img.resize((diameter, diameter), Image.LANCZOS)
-        return img
-    except Exception:
-        return None
-
-
-def _circle_crop(img):
-    """Apply a circular alpha mask to a square PIL RGBA image."""
-    sz = img.size[0]
-    mask = Image.new("L", (sz, sz), 0)
-    ImageDraw.Draw(mask).ellipse((0, 0, sz, sz), fill=255)
-    result = img.copy()
-    result.putalpha(mask)
-    return result
-
-
-def _draw_centered_text(draw, text: str, cx: int, cy: int, font, fill,
-                        shadow=(0, 0, 0, 160)):
-    """Draw text centred at (cx, cy) with a configurable drop shadow."""
-    try:
-        draw.text((cx + 2, cy + 2), text, font=font, fill=shadow, anchor="mm")
-        draw.text((cx, cy), text, font=font, fill=fill, anchor="mm")
-        return
-    except (TypeError, ValueError):
-        pass
-    bbox = draw.textbbox((0, 0), text, font=font)
-    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    x, y = cx - w // 2, cy - h // 2
-    draw.text((x + 2, y + 2), text, font=font, fill=shadow)
-    draw.text((x, y), text, font=font, fill=fill)
-
-
-def _truncate_centered_line(draw, text: str, font, max_w: int) -> str:
-    t = text
-    if hasattr(draw, "textlength"):
-        while len(t) > 3 and draw.textlength(t, font=font) > max_w:
-            t = t[:-1]
-    return t
-
-
-def _modifier_lines_from_map(mods: dict) -> list[str]:
-    if not mods:
-        return []
-    lines: list[str] = []
-    for stat_key, bonus in sorted(mods.items()):
-        label = _STAT_LABELS_CARD.get(stat_key, stat_key.replace("_", " ")).upper()
-        pct = int(bonus) if float(bonus).is_integer() else bonus
-        lines.append(f"{label} +{pct}%")
-    return lines
-
-
-def _draw_card_modifiers(draw, mods: dict, y_offset: int = 0):
-    """Stack modifier lines in the empty lower area of the card template."""
-    lines = _modifier_lines_from_map(mods)
-    if not lines:
-        return
-    font = _get_font(30)
-    fill = (200, 230, 210, 255)
-    shadow = (15, 18, 20, 220)
-    cy = _MODIFIERS_START_Y + y_offset
-    for line in lines:
-        t = _truncate_centered_line(draw, line, font, _MODIFIER_MAX_WIDTH)
-        _draw_centered_text(draw, t, _CARD_SIZE[0] // 2, cy, font, fill, shadow=shadow)
-        cy += _MODIFIER_LINE_GAP
-
-
-def generate_card_image(
-    card_type: str,
-    player_name: str | None,
-    avatar_url: str | None,
-    team_name: str | None,
-    team_logo_url: str | None,
-    card_modifiers: dict | None = None,
-):
-    """Composite a player card PNG and return a PIL Image."""
-    ct = (card_type or "common").lower()
-    template_file = _CARD_TEMPLATES.get(ct, _CARD_TEMPLATES["common"])
-    template = Image.open(os.path.join(_ASSETS_DIR, template_file)).convert("RGBA")
-
-    y_off = _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY if ct in ("epic", "legendary") else 0
-
-    # Dark base matching the card's background colour
-    base = Image.new("RGBA", _CARD_SIZE, (35, 37, 40, 255))
-
-    # ── Player avatar (big circle) ──────────────────────────────────────────
-    cx, cy, r = _BIG_CIRCLE
-    cy += y_off
-    avatar = _fetch_pil_image(avatar_url, r * 2)
-    if avatar:
-        base.paste(_circle_crop(avatar), (cx - r, cy - r), _circle_crop(avatar))
-
-    # ── Team logo (small circle) ────────────────────────────────────────────
-    scx, scy, sr = _SMALL_CIRCLE
-    scy += y_off
-    logo = _load_team_logo_for_card(team_name, team_logo_url, sr * 2)
-    if logo:
-        base.paste(_circle_crop(logo), (scx - sr, scy - sr), _circle_crop(logo))
-
-    # ── Composite frame on top ──────────────────────────────────────────────
-    base.alpha_composite(template)
-
-    # ── Text ────────────────────────────────────────────────────────────────
-    draw = ImageDraw.Draw(base)
-
-    # Player name — big plate (bright silver bg → dark text, light shadow)
-    name_font = _get_font(32)
-    name = (player_name or "Unknown").upper()
-    if hasattr(draw, "textlength"):
-        while len(name) > 1 and draw.textlength(name, font=name_font) > 480:
-            name = name[:-1]
-    _draw_centered_text(draw, name, _CARD_SIZE[0] // 2, _PLAYER_NAME_Y + y_off,
-                        name_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
-
-    # Team name — use same shadow as player; _draw_centered_text default is dark (0,0,0,160).
-    team_font = _get_font(22)
-    team = (team_name or "").upper()
-    if team:
-        _draw_centered_text(draw, team, _CARD_SIZE[0] // 2, _TEAM_NAME_Y + y_off,
-                            team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
-
-    _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
-
-    return base
-
-
-
-_ingest_executor = ThreadPoolExecutor(max_workers=1)
 _WEEK_CHECK_INTERVAL  = int(os.getenv("WEEK_CHECK_INTERVAL",  "300"))   # seconds, default 5 min
 _INGEST_POLL_INTERVAL = int(os.getenv("INGEST_POLL_INTERVAL", "900"))   # seconds, default 15 min
 
@@ -298,14 +37,16 @@ _INGEST_POLL_INTERVAL = int(os.getenv("INGEST_POLL_INTERVAL", "900"))   # second
 def _week_maintenance_loop():
     """Background thread: periodically generate new weeks and lock past ones."""
     while True:
-        time.sleep(_WEEK_CHECK_INTERVAL)
         try:
             db = SessionLocal()
-            generate_weeks(db)
-            auto_lock_weeks(db)
-            db.close()
+            try:
+                generate_weeks(db)
+                auto_lock_weeks(db)
+            finally:
+                db.close()
         except Exception as e:
             print(f"[WEEKS] Maintenance error: {e}")
+        time.sleep(_WEEK_CHECK_INTERVAL)
 
 
 def _auto_ingest(league_ids: list[int]):
@@ -322,10 +63,11 @@ def _auto_ingest(league_ids: list[int]):
 
 def _run_toornament_sync():
     try:
-        from toornament import sync_toornament_results
         db = SessionLocal()
-        result = sync_toornament_results(db)
-        db.close()
+        try:
+            result = sync_toornament_results(db)
+        finally:
+            db.close()
         print(f"[TOORNAMENT] Sync: {result}")
     except Exception as e:
         print(f"[TOORNAMENT] Sync error: {e}")
@@ -348,7 +90,6 @@ class RegisterBody(BaseModel):
     username: str
     email: str
     password: str
-
 
 
 class GrantTokensBody(BaseModel):
@@ -530,10 +271,8 @@ async def lifespan(app: FastAPI):
             _mc.execute(text("DELETE FROM weeks"))
             _mc.commit()
             print("[MIGRATION] Reset weeks to corrected structure (lock-before-matches)")
-    _db = SessionLocal()
-    generate_weeks(_db)
-    auto_lock_weeks(_db)
-    _db.close()
+    # Week generation runs immediately in the maintenance loop (sleep is at the END).
+    # No separate init call needed here.
     _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
@@ -546,57 +285,53 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+_secret_key = os.environ.get("SECRET_KEY", "")
+if not _secret_key:
+    warnings.warn(
+        "[SECURITY] SECRET_KEY not set — using insecure default. Set SECRET_KEY in production.",
+        stacklevel=1,
+    )
+    _secret_key = "dev-secret-change-me"
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"),
+    secret_key=_secret_key,
     same_site="lax",
     https_only=False,
 )
 
 
 @app.post("/ingest/league/{league_id}")
-def ingest_league_endpoint(league_id: int, admin: dict = Depends(require_admin)):
+def ingest_league_endpoint(league_id: int, db=Depends(get_db), admin: dict = Depends(require_admin)):
     ingest_league(league_id)
     run_enrichment()
     seed_cards(league_id)
-    db = SessionLocal()
     _audit(db, "admin_ingest", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"league_id={league_id}")
     db.commit()
-    db.close()
     return {"status": "ok", "league_id": league_id}
 
 
 @app.post("/login")
-def login(request: Request, body: LoginBody):
-    db = SessionLocal()
+def login(request: Request, body: LoginBody, db=Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
-        db.close()
         raise HTTPException(status_code=401, detail="Invalid username or password")
     request.session["user_id"]  = user.id
     request.session["username"] = user.username
     request.session["is_admin"] = user.is_admin
     _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
     db.commit()
-    data = {"username": user.username, "is_admin": user.is_admin,
+    return {"username": user.username, "is_admin": user.is_admin,
             "tokens": user.tokens if user.tokens is not None else 0}
-    db.close()
-    return data
 
 
 @app.post("/register")
-def register(request: Request, body: RegisterBody):
-    import re as _re
-    db = SessionLocal()
+def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', body.email.strip()):
-        db.close()
         raise HTTPException(status_code=422, detail="Invalid email address")
     if db.query(User).filter(User.username == body.username).first():
-        db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
     if db.query(User).filter(User.email == body.email).first():
-        db.close()
         raise HTTPException(status_code=409, detail="Email already registered")
     user = User(
         username=body.username,
@@ -613,9 +348,7 @@ def register(request: Request, body: RegisterBody):
     request.session["user_id"]  = user.id
     request.session["username"] = user.username
     request.session["is_admin"] = user.is_admin
-    data = {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
-    db.close()
-    return data
+    return {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
 
 
 @app.post("/logout")
@@ -625,15 +358,13 @@ def logout(request: Request):
 
 
 @app.post("/forgot-password")
-def forgot_password(body: ForgotPasswordBody):
-    db = SessionLocal()
+def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not user.email:
-        db.close()
         # Return 200 regardless to avoid username enumeration
         return {"status": "ok"}
 
-    # Capture values before closing the session to avoid DetachedInstanceError
+    # Capture values before any session state changes to avoid DetachedInstanceError
     user_email    = user.email
     user_username = user.username
     user_id       = user.id
@@ -643,7 +374,6 @@ def forgot_password(body: ForgotPasswordBody):
     user.must_change_password = True
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
     db.commit()
-    db.close()
 
     app_name = os.getenv("APP_NAME", "Kanaliiga Fantasy")
     send_email(
@@ -663,13 +393,11 @@ def forgot_password(body: ForgotPasswordBody):
 
 
 @app.get("/me")
-def me(request: Request):
+def me(request: Request, db=Depends(get_db)):
     user_id = request.session.get("user_id")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    db = SessionLocal()
     user = db.get(User, user_id)
-    db.close()
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
@@ -678,28 +406,23 @@ def me(request: Request):
 
 
 @app.get("/deck")
-def get_deck():
-    db = SessionLocal()
+def get_deck(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT c.card_type, COUNT(*) as count
         FROM cards c
         WHERE c.owner_id IS NULL
         GROUP BY c.card_type
     """)).fetchall()
-    db.close()
     return {r.card_type: r.count for r in results}
 
 
 @app.post("/draw")
-def draw_card(current_user: dict = Depends(get_current_user)):
+def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     if (user.tokens or 0) <= 0:
-        db.close()
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
     unclaimed = db.execute(text("""
@@ -712,7 +435,6 @@ def draw_card(current_user: dict = Depends(get_current_user)):
     """)).fetchall()
 
     if not unclaimed:
-        db.close()
         raise HTTPException(status_code=404, detail="No cards left in deck")
 
     # Prefer players the user does not yet own a card for
@@ -745,7 +467,6 @@ def draw_card(current_user: dict = Depends(get_current_user)):
 
     # Load modifiers after commit so IDs are populated
     mods = _card_modifiers_map(db, [card.id]).get(card.id, {})
-    db.close()
     return {
         "id": chosen.id,
         "card_type": chosen.card_type,
@@ -760,13 +481,10 @@ def draw_card(current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/weeks")
-def get_weeks():
-    db = SessionLocal()
+def get_weeks(db=Depends(get_db)):
     weeks = db.query(Week).order_by(Week.start_time).all()
-    data = [{"id": w.id, "label": w.label, "start_time": w.start_time,
+    return [{"id": w.id, "label": w.label, "start_time": w.start_time,
              "end_time": w.end_time, "is_locked": w.is_locked} for w in weeks]
-    db.close()
-    return data
 
 
 _LATEST_TEAM_SUBQUERY = """
@@ -784,9 +502,7 @@ _LATEST_TEAM_SUBQUERY = """
 
 
 @app.get("/roster/{user_id}")
-def get_roster(user_id: int, week_id: int = None):
-    db = SessionLocal()
-
+def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
     # Determine which week to scope points to
     if week_id is not None:
         week = db.get(Week, week_id)
@@ -886,7 +602,6 @@ def get_roster(user_id: int, week_id: int = None):
         card_mod = 1 + avg_mod_bonus / 100
         season_points += row.raw_points * rarity_mod * card_mod
 
-    db.close()
     return {
         "active": active, "bench": bench, "combined_value": combined,
         "tokens": tokens,
@@ -897,12 +612,10 @@ def get_roster(user_id: int, week_id: int = None):
 
 
 @app.get("/cards/{card_id}")
-def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
+def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     card = db.get(Card, card_id)
     if not card or card.owner_id != user_id:
-        db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     player = db.get(Player, card.player_id)
     # Resolve latest team for this player
@@ -914,7 +627,6 @@ def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
         ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": card.player_id}).first()
     mods = _card_modifiers_map(db, [card_id]).get(card_id, {})
-    db.close()
     return {
         "id": card.id,
         "card_type": card.card_type,
@@ -927,11 +639,10 @@ def get_card(card_id: int, current_user: dict = Depends(get_current_user)):
 
 
 @app.get("/cards/{card_id}/image")
-def get_card_image(card_id: int):
+def get_card_image(card_id: int, db=Depends(get_db)):
     """Generate and return a PNG image for this card."""
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
-    db = SessionLocal()
     result = db.execute(text("""
         SELECT c.card_type, p.name as player_name, p.avatar_url,
                t.name as team_name, t.logo_url as team_logo_url
@@ -940,10 +651,9 @@ def get_card_image(card_id: int):
 """ + _LATEST_TEAM_SUBQUERY + """
         WHERE c.id = :card_id
     """), {"card_id": card_id}).first()
-    mods: dict = _card_modifiers_dict_for_image(db, card_id) if result else {}
-    db.close()
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
+    mods: dict = _card_modifiers_dict_for_image(db, card_id)
     img = generate_card_image(
         card_type=result.card_type,
         player_name=result.player_name,
@@ -967,19 +677,15 @@ def get_card_image(card_id: int):
 
 
 @app.post("/roster/{card_id}/reroll")
-def reroll_modifiers(card_id: int, current_user: dict = Depends(get_current_user)):
+def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     if (user.tokens or 0) <= 0:
-        db.close()
         raise HTTPException(status_code=409, detail="Not enough tokens")
     card = db.get(Card, card_id)
     if not card or card.owner_id != user_id:
-        db.close()
         raise HTTPException(status_code=404, detail="Card not found")
 
     # Raw DELETE avoids ORM bulk-delete session sync quirks (SA 2.x)
@@ -997,7 +703,6 @@ def reroll_modifiers(card_id: int, current_user: dict = Depends(get_current_user
     tokens_remaining = user.tokens
 
     mods = _card_modifiers_map(db, [card_id]).get(card_id, {})
-    db.close()
     return {
         "modifiers": _format_modifiers(mods),
         "tokens": tokens_remaining,
@@ -1005,22 +710,18 @@ def reroll_modifiers(card_id: int, current_user: dict = Depends(get_current_user
 
 
 @app.post("/roster/{card_id}/activate")
-def activate_card(card_id: int, current_user: dict = Depends(get_current_user)):
+def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     card = db.get(Card, card_id)
     if not card or card.owner_id != user_id:
-        db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     if card.is_active:
-        db.close()
         raise HTTPException(status_code=409, detail="Card already active")
 
     active_count = db.query(Card).filter(
         Card.owner_id == user_id, Card.is_active == True
     ).count()
     if active_count >= ROSTER_LIMIT:
-        db.close()
         raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
 
     duplicate = db.query(Card).filter(
@@ -1030,32 +731,26 @@ def activate_card(card_id: int, current_user: dict = Depends(get_current_user)):
         Card.id != card_id,
     ).first()
     if duplicate:
-        db.close()
         raise HTTPException(status_code=409, detail="A card for this player is already active")
 
     card.is_active = True
     db.commit()
-    db.close()
     return {"status": "ok", "card_id": card_id}
 
 
 @app.post("/roster/{card_id}/deactivate")
-def deactivate_card(card_id: int, current_user: dict = Depends(get_current_user)):
+def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     card = db.get(Card, card_id)
     if not card or card.owner_id != user_id:
-        db.close()
         raise HTTPException(status_code=404, detail="Card not found")
     card.is_active = False
     db.commit()
-    db.close()
     return {"status": "ok", "card_id": card_id}
 
 
 @app.get("/players")
-def list_players():
-    db = SessionLocal()
+def list_players(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT p.id, p.name, p.avatar_url,
                t.name as team_name, t.id as team_id,
@@ -1077,16 +772,13 @@ def list_players():
         GROUP BY p.id, p.name, p.avatar_url, t.name, t.id
         ORDER BY total_points DESC
     """)).fetchall()
-    db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.get("/players/{player_id}")
-def get_player(player_id: int):
-    db = SessionLocal()
+def get_player(player_id: int, db=Depends(get_db)):
     player = db.get(Player, player_id)
     if not player:
-        db.close()
         raise HTTPException(status_code=404, detail="Player not found")
 
     stats = db.execute(text("""
@@ -1110,7 +802,6 @@ def get_player(player_id: int):
     team_name = history[0]["team_name"] if history else None
     team_id = history[0]["team_id"] if history else None
 
-    db.close()
     return {
         "id": player.id,
         "name": player.name,
@@ -1130,8 +821,7 @@ def get_player(player_id: int):
 
 
 @app.get("/teams")
-def list_teams():
-    db = SessionLocal()
+def list_teams(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT t.id, t.name,
                COUNT(DISTINCT s.match_id) as matches,
@@ -1141,16 +831,13 @@ def list_teams():
         GROUP BY t.id, t.name
         ORDER BY matches DESC, t.name
     """)).fetchall()
-    db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.get("/teams/{team_id}")
-def get_team(team_id: int):
-    db = SessionLocal()
+def get_team(team_id: int, db=Depends(get_db)):
     team = db.get(Team, team_id)
     if not team:
-        db.close()
         raise HTTPException(status_code=404, detail="Team not found")
 
     players = db.execute(text("""
@@ -1168,7 +855,6 @@ def get_team(team_id: int):
         SELECT COUNT(DISTINCT match_id) as cnt FROM player_match_stats WHERE team_id = :team_id
     """), {"team_id": team_id}).scalar()
 
-    db.close()
     return {
         "id": team.id,
         "name": team.name,
@@ -1178,8 +864,7 @@ def get_team(team_id: int):
 
 
 @app.get("/top")
-def top_performances():
-    db = SessionLocal()
+def top_performances(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT p.id, p.name, p.avatar_url, s.fantasy_points
         FROM player_match_stats s
@@ -1187,13 +872,11 @@ def top_performances():
         ORDER BY s.fantasy_points DESC
         LIMIT 10
     """)).fetchall()
-    db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.get("/leaderboard")
-def leaderboard():
-    db = SessionLocal()
+def leaderboard(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT p.id, p.name, p.avatar_url, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
         FROM player_match_stats s
@@ -1201,13 +884,11 @@ def leaderboard():
         GROUP BY p.id, p.name, p.avatar_url
         ORDER BY avg_points DESC
     """)).fetchall()
-    db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.get("/leaderboard/roster")
-def roster_leaderboard():
-    db = SessionLocal()
+def roster_leaderboard(db=Depends(get_db)):
     results = db.execute(text("""
         SELECT u.username,
                COALESCE(owned.total, 0) as total_cards,
@@ -1227,18 +908,13 @@ def roster_leaderboard():
         GROUP BY u.id, u.username, owned.total
         ORDER BY roster_value DESC
     """)).fetchall()
-    db.close()
     return [dict(r._mapping) for r in results]
 
 
 @app.get("/weights")
-def get_weights():
-    db = SessionLocal()
+def get_weights(db=Depends(get_db)):
     weights = db.query(Weight).order_by(Weight.key).all()
-    data = [{"key": w.key, "label": w.label, "value": w.value} for w in weights]
-    db.close()
-    return data
-
+    return [{"key": w.key, "label": w.label, "value": w.value} for w in weights]
 
 
 _SIMULATE_DOCS = {
@@ -1298,13 +974,13 @@ _SIMULATE_DOCS = {
 
 @app.get("/simulate")
 def simulate_docs():
-    """12.2 — Human- and machine-readable documentation for the weight simulation endpoint."""
+    """Human- and machine-readable documentation for the weight simulation endpoint."""
     return _SIMULATE_DOCS
 
 
 @app.post("/simulate/{match_id}")
-def simulate_match(match_id: int, body: SimulateBody = None):
-    """12.1 — Return fantasy scores for every player in a match under custom weights.
+def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None):
+    """Return fantasy scores for every player in a match under custom weights.
 
     Any weight not supplied in the request body falls back to the current DB default.
     No authentication required so statisticians can call this without an account.
@@ -1312,12 +988,9 @@ def simulate_match(match_id: int, body: SimulateBody = None):
     if body is None:
         body = SimulateBody()
 
-    db = SessionLocal()
-
     # Verify match exists
     match = db.get(Match, match_id)
     if not match:
-        db.close()
         raise HTTPException(status_code=404, detail="Match not found")
 
     # Load DB weights and apply overrides for scoring stats only
@@ -1336,7 +1009,6 @@ def simulate_match(match_id: int, body: SimulateBody = None):
         LEFT JOIN teams t ON t.id = s.team_id
         WHERE s.match_id = :match_id
     """), {"match_id": match_id}).fetchall()
-    db.close()
 
     players = []
     for r in rows:
@@ -1367,42 +1039,28 @@ def simulate_match(match_id: int, body: SimulateBody = None):
 
 
 @app.get("/users")
-def list_users(_: dict = Depends(require_admin)):
-    db = SessionLocal()
+def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
     users = db.query(User).order_by(User.username).all()
-    result = []
-    for u in users:
-        result.append({
-            "id": u.id,
-            "username": u.username,
-            "tokens": u.tokens if u.tokens is not None else 0,
-        })
-    db.close()
-    return result
+    return [{"id": u.id, "username": u.username, "tokens": u.tokens if u.tokens is not None else 0}
+            for u in users]
 
 
 @app.post("/grant-tokens")
-def grant_tokens(body: GrantTokensBody, admin: dict = Depends(require_admin)):
-    db = SessionLocal()
+def grant_tokens(body: GrantTokensBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
     target = db.get(User, body.target_user_id)
     if not target:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     if body.amount < 1:
-        db.close()
         raise HTTPException(status_code=422, detail="Amount must be at least 1")
     target.tokens = (target.tokens or 0) + body.amount
     _audit(db, "admin_grant_tokens", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"target={target.username} amount={body.amount}")
     db.commit()
-    new_tokens = target.tokens
-    db.close()
-    return {"username": target.username, "tokens": new_tokens}
+    return {"username": target.username, "tokens": target.tokens}
 
 
 @app.post("/recalculate")
-def recalculate(admin: dict = Depends(require_admin)):
-    db = SessionLocal()
+def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
     weights = {w.key: w.value for w in db.query(Weight).all()}
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
@@ -1419,38 +1077,25 @@ def recalculate(admin: dict = Depends(require_admin)):
     _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"records={len(stats)}")
     db.commit()
-    count = len(stats)
-    db.close()
-    return {"status": "ok", "recalculated": count}
+    return {"status": "ok", "recalculated": len(stats)}
 
 
 @app.get("/schedule")
-def schedule_endpoint():
-    db = SessionLocal()
-    data = get_schedule(db)
-    db.close()
-    return data
+def schedule_endpoint(db=Depends(get_db)):
+    return get_schedule(db)
 
 
 @app.post("/schedule/refresh")
-def schedule_refresh(admin: dict = Depends(require_admin)):
-    db = SessionLocal()
+def schedule_refresh(db=Depends(get_db), admin: dict = Depends(require_admin)):
     bust_cache()
     _audit(db, "admin_schedule_refresh", actor_id=admin["user_id"], actor_username=admin["username"])
     db.commit()
-    data = get_schedule(db)
-    db.close()
-    return data
+    return get_schedule(db)
 
 
 @app.get("/schedule/debug")
 def schedule_debug(_: dict = Depends(require_admin)):
-    db = SessionLocal()
-    db.close()
-    db.close()
-
-    from schedule import SCHEDULE_SHEET_URL as _DEFAULT_SCHEDULE_URL
-    url = os.getenv("SCHEDULE_SHEET_URL", _DEFAULT_SCHEDULE_URL)
+    url = os.getenv("SCHEDULE_SHEET_URL", SCHEDULE_SHEET_URL)
     result = {"url_set": bool(url), "url_prefix": url[:60] + "..." if len(url) > 60 else url}
 
     if not url:
@@ -1471,38 +1116,30 @@ def schedule_debug(_: dict = Depends(require_admin)):
 
 
 @app.put("/matches/{match_id}/week")
-def set_match_week(match_id: int, body: MatchWeekBody, admin: dict = Depends(require_admin)):
+def set_match_week(match_id: int, body: MatchWeekBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
     """Manually override which fantasy week a match counts for.
     Set week_id to null to clear the override and revert to time-based assignment."""
-    db = SessionLocal()
     match = db.get(Match, match_id)
     if not match:
-        db.close()
         raise HTTPException(status_code=404, detail="Match not found")
     if body.week_id is not None:
         week = db.get(Week, body.week_id)
         if not week:
-            db.close()
             raise HTTPException(status_code=404, detail="Week not found")
     old_override = match.week_override_id
     match.week_override_id = body.week_id
     _audit(db, "admin_set_match_week", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"match_id={match_id} old_override={old_override} new_override={body.week_id}")
     db.commit()
-    db.close()
     return {"match_id": match_id, "week_override_id": body.week_id}
 
 
 @app.post("/admin/sync-match-weeks")
-def sync_match_weeks(admin: dict = Depends(require_admin)):
+def sync_match_weeks(db=Depends(get_db), admin: dict = Depends(require_admin)):
     """Auto-assign week_override_id on matches whose actual play date differs from their
     scheduled week in the Google Sheet. Matches already in the correct week get their
     override cleared (set to NULL). Uses ±3-day proximity to the series scheduled date
     to disambiguate when two teams play each other more than once in a season."""
-    from schedule import get_schedule
-
-    db = SessionLocal()
-
     # Build week lookup: normalised label -> Week
     db_weeks = db.query(Week).all()
     week_by_label = {w.label.lower().strip(): w for w in db_weeks}
@@ -1575,29 +1212,23 @@ def sync_match_weeks(admin: dict = Depends(require_admin)):
                detail=f"changes={len(changes)}")
         db.commit()
 
-    db.close()
     return {"changes": changes, "errors": errors}
 
 
 @app.post("/admin/sync-toornament")
-def admin_sync_toornament(admin: dict = Depends(require_admin)):
+def admin_sync_toornament(db=Depends(get_db), admin: dict = Depends(require_admin)):
     """Push current series results to toornament.com. Idempotent — safe to call repeatedly."""
-    from toornament import sync_toornament_results
-    db = SessionLocal()
     result = sync_toornament_results(db)
     _audit(db, "admin_sync_toornament", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"pushed={result['pushed']} skipped={result['skipped']} errors={len(result['errors'])}")
     db.commit()
-    db.close()
     return result
 
 
 @app.get("/profile/{user_id}")
-def get_profile(user_id: int):
-    db = SessionLocal()
+def get_profile(user_id: int, db=Depends(get_db)):
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     result = {"id": user.id, "username": user.username, "player_id": user.player_id,
               "player_name": None, "player_avatar_url": None}
@@ -1606,39 +1237,31 @@ def get_profile(user_id: int):
         if player:
             result["player_name"] = player.name
             result["player_avatar_url"] = player.avatar_url
-    db.close()
     return result
 
 
 @app.put("/profile/username")
-def update_username(body: UpdateUsernameBody, current_user: dict = Depends(get_current_user)):
+def update_username(body: UpdateUsernameBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     username = body.username.strip()
     if not username:
-        db.close()
         raise HTTPException(status_code=422, detail="Username cannot be empty")
     existing = db.query(User).filter(User.username == username, User.id != user_id).first()
     if existing:
-        db.close()
         raise HTTPException(status_code=409, detail="Username already taken")
     user.username = username
     db.commit()
-    db.close()
     return {"username": username}
 
 
 @app.put("/profile/player-id")
-def update_player_id(body: UpdatePlayerIdBody, current_user: dict = Depends(get_current_user)):
+def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     user.player_id = body.player_id
     db.commit()
@@ -1648,7 +1271,6 @@ def update_player_id(body: UpdatePlayerIdBody, current_user: dict = Depends(get_
         if player:
             result["player_name"] = player.name
             result["player_avatar_url"] = player.avatar_url
-    db.close()
     return result
 
 
@@ -1683,8 +1305,7 @@ def _leaderboard_rows(db, rows) -> list[dict]:
 
 
 @app.get("/leaderboard/season")
-def season_leaderboard():
-    db = SessionLocal()
+def season_leaderboard(db=Depends(get_db)):
     rows = db.execute(text("""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
@@ -1699,16 +1320,13 @@ def season_leaderboard():
         GROUP BY u.id, u.username, c.id, c.card_type
     """)).fetchall()
     result = _leaderboard_rows(db, rows)
-    db.close()
     return [{"id": r["id"], "username": r["username"], "season_points": r["points"]} for r in result]
 
 
 @app.get("/leaderboard/weekly")
-def weekly_leaderboard(week_id: int):
-    db = SessionLocal()
+def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     week = db.get(Week, week_id)
     if not week:
-        db.close()
         raise HTTPException(status_code=404, detail="Week not found")
     rows = db.execute(text("""
         SELECT u.id as user_id, u.username,
@@ -1723,121 +1341,96 @@ def weekly_leaderboard(week_id: int):
         GROUP BY u.id, u.username, c.id, c.card_type
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)
-    db.close()
     return [{"id": r["id"], "username": r["username"], "week_points": r["points"]} for r in result]
 
 
 @app.put("/profile/password")
-def change_password(body: ChangePasswordBody, current_user: dict = Depends(get_current_user)):
-    db = SessionLocal()
+def change_password(body: ChangePasswordBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     if not verify_password(body.current_password, user.password_hash):
-        db.close()
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     if len(body.new_password) < 6:
-        db.close()
         raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
     db.commit()
-    db.close()
     return {"status": "ok"}
 
 
 @app.post("/codes")
-def create_code(body: CreateCodeBody, admin: dict = Depends(require_admin)):
-    db = SessionLocal()
+def create_code(body: CreateCodeBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
     code = body.code.strip().upper()
     if not code:
-        db.close()
         raise HTTPException(status_code=422, detail="Code cannot be empty")
     if body.token_amount < 1:
-        db.close()
         raise HTTPException(status_code=422, detail="Token amount must be at least 1")
     if db.query(PromoCode).filter(PromoCode.code == code).first():
-        db.close()
         raise HTTPException(status_code=409, detail="Code already exists")
     promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=admin["user_id"])
     db.add(promo)
     _audit(db, "admin_code_create", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"code={code} tokens={body.token_amount}")
     db.commit()
-    result = {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount}
-    db.close()
-    return result
+    return {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount}
 
 
 @app.get("/codes")
-def list_codes(_: dict = Depends(require_admin)):
-    db = SessionLocal()
+def list_codes(db=Depends(get_db), _: dict = Depends(require_admin)):
     codes = db.query(PromoCode).all()
     result = []
     for c in codes:
         redemptions = db.query(CodeRedemption).filter(CodeRedemption.code_id == c.id).count()
         result.append({"id": c.id, "code": c.code, "token_amount": c.token_amount,
                        "redemptions": redemptions})
-    db.close()
     return result
 
 
 @app.delete("/codes/{code_id}")
-def delete_code(code_id: int, admin: dict = Depends(require_admin)):
-    db = SessionLocal()
+def delete_code(code_id: int, db=Depends(get_db), admin: dict = Depends(require_admin)):
     promo = db.get(PromoCode, code_id)
     if not promo:
-        db.close()
         raise HTTPException(status_code=404, detail="Code not found")
     _audit(db, "admin_code_delete", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"code={promo.code}")
     db.delete(promo)
     db.commit()
-    db.close()
     return {"status": "ok"}
 
 
 @app.post("/redeem")
-def redeem_code(body: RedeemCodeBody, current_user: dict = Depends(get_current_user)):
+def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
-    db = SessionLocal()
     user = db.get(User, user_id)
     if not user:
-        db.close()
         raise HTTPException(status_code=404, detail="User not found")
     code = body.code.strip().upper()
     promo = db.query(PromoCode).filter(PromoCode.code == code).first()
     if not promo:
-        db.close()
         raise HTTPException(status_code=404, detail="Invalid code")
     already = db.query(CodeRedemption).filter(
         CodeRedemption.code_id == promo.id,
         CodeRedemption.user_id == user_id,
     ).first()
     if already:
-        db.close()
         raise HTTPException(status_code=409, detail="Code already redeemed")
     user.tokens = (user.tokens or 0) + promo.token_amount
     db.add(CodeRedemption(code_id=promo.id, user_id=user_id, redeemed_at=int(time.time())))
     _audit(db, "token_redeem", actor_id=user_id, actor_username=user.username,
            detail=f"code={promo.code} granted={promo.token_amount}")
     db.commit()
-    result = {"tokens": user.tokens, "granted": promo.token_amount}
-    db.close()
-    return result
+    return {"tokens": user.tokens, "granted": promo.token_amount}
 
 
 @app.get("/audit-logs")
-def get_audit_logs(limit: int = 200, _: dict = Depends(require_admin)):
-    db = SessionLocal()
+def get_audit_logs(db=Depends(get_db), limit: int = 200, _: dict = Depends(require_admin)):
     rows = db.execute(text("""
         SELECT id, timestamp, actor_username, action, detail
         FROM audit_logs
         ORDER BY id DESC
         LIMIT :limit
     """), {"limit": limit}).fetchall()
-    db.close()
     return [dict(r._mapping) for r in rows]
 
 
