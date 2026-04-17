@@ -716,27 +716,29 @@ As statistician, I want to have documentation about the weight simulation endpoi
 
 ---
 
-### 13.1 Twitch integration - MVP selection
-**User Stories*' 
-As a streamer I want to select the MVP of a match
+### 13.1 Twitch integration - MVP selection and token drop
+**User story**
+As a streamer I want to select the MVP of a match, which also rewards viewers watching the stream.
 
 **Acceptance criteria**
-- After the match has ended the streamer can press the quick action button on twitch to open the MVP selection
-- MVP selection shows the the weeks series with the information of team1 vs team2
-- Once the correct series is picked from the list streamer is asked to select the correct match (match1, match2, etc.)
-- Once the correct match is identified the streamer selects from the 10 players that participated in the match and confirms the MVP selection, which is then saved in the app
+- After a match has ended the streamer presses the quick action button on Twitch to open MVP selection
+- The most recent matches (ongoing and ended) in the system are listed with start time and teams. Streamer makes the selection out of these matches.
+- Streamer is shown the list of 10 players who participated in the match
+- Streamer selects one of the players who participated in the match and confirms
+- Confirming the MVP saves the selection and automatically drops tokens to viewers in the presence pool (once per match — re-confirming a different MVP does not re-drop)
+- The number of viewers rewarded is capped server-side by `TWITCH_DROP_MAX`
+- The broadcaster sees a confirmation showing the MVP name and which viewers received tokens
 
 ---
 
-### 13.2 Twitch integration - Token drops
-**User story** 
-As a streamer I want to grant token drops to users
+### 13.2 Twitch integration - Viewer token eligibility
+**User story**
+As a viewer I want to be eligible for token drops while watching the Kanaliiga stream.
 
 **Acceptance criteria**
-- Streamer that is streaming a tournament game can use quick actions -button, which give n players 1 token.
-- Streamer is authenticated in the fantasy app as a streamer
-- Of the watchers those who have started to play FantasyLeague are in the drop pool
-- Streamer can do this only once per series
+- Viewers who have linked their Fantasy account and have the Twitch extension panel open are in the drop pool
+- Presence in the pool is maintained automatically while the panel is open (heartbeat every ~55 seconds)
+- Viewers not in the pool at the time of the MVP confirmation do not receive a token for that match
 
 ---
 
