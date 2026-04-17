@@ -166,31 +166,47 @@ function showTab(name) {
     document.getElementById("tab-" + name).classList.add("active");
 }
 
-// ── Load iframes with stub injected ────────────────────────────────────────
+// ── Load iframes via srcdoc so the stub runs before any extension script ───
 
-function loadFrame(frameId, htmlFile) {
+async function loadFrame(frameId, htmlFile) {
     var ebsUrl = document.getElementById("ebs-url").value.trim();
     var role   = document.getElementById("role").value;
     var userId = document.getElementById("user-id").value.trim();
 
     var iframe = document.getElementById(frameId);
-    iframe.onload = function() {
-        try {
-            var stub = iframe.contentDocument.createElement("script");
-            stub.textContent = buildStubScript(ebsUrl, role, userId);
-            iframe.contentDocument.head.insertBefore(stub, iframe.contentDocument.head.firstChild);
-        } catch (e) {
-            console.warn("Could not inject stub:", e);
-        }
-    };
-    iframe.src = htmlFile + "?t=" + Date.now();
+    try {
+        var resp = await fetch(htmlFile + "?t=" + Date.now());
+        if (!resp.ok) throw new Error(resp.status + " " + htmlFile);
+        var html = await resp.text();
+
+        // Remove the Twitch CDN script — our stub replaces it entirely.
+        // If left in, the CDN may load and overwrite window.Twitch before the stub.
+        html = html.replace(/<script[^>]*twitch-ext\.min\.js[^>]*><\/script>/gi, "");
+
+        // Replace the %%EBS_URL%% placeholder that package.sh normally fills.
+        html = html.replace(/"%%EBS_URL%%"/g, JSON.stringify(ebsUrl));
+
+        // Prepend a <base> tag (so relative CSS/JS paths resolve from /twitch-ext/)
+        // and the stub script so window.Twitch and window.EBS_URL exist before
+        // extension.js parses.
+        var baseHref = window.location.origin + "/twitch-ext/";
+        var inject   = '<base href="' + baseHref + '">' +
+                       '<script>' + buildStubScript(ebsUrl, role, userId) + '<\/script>';
+        html = html.replace('<head>', '<head>' + inject);
+
+        iframe.srcdoc = html;
+        log("[harness] loaded " + htmlFile + " role=" + role);
+    } catch (e) {
+        log("[harness] ERROR loading " + htmlFile + ": " + e.message);
+    }
 }
 
 function reloadAll() {
+    var ebsUrl = document.getElementById("ebs-url").value;
     loadFrame("frame-panel",  "panel.html");
     loadFrame("frame-live",   "live_config.html");
     loadFrame("frame-config", "config.html");
-    log("Frames reloaded with EBS=" + document.getElementById("ebs-url").value);
+    log("Reloading frames  EBS=" + ebsUrl);
 }
 
 // ── PubSub simulator ────────────────────────────────────────────────────────
@@ -225,8 +241,6 @@ function log(msg) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
-// Iframes must load from same origin (served via FastAPI /twitch-ext/).
-// Inject the stub via onload because cross-origin iframes would block this.
 reloadAll();
 </script>
 </body>

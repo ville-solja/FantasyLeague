@@ -46,16 +46,21 @@ Once linked, the panel shows the viewer's token balance and they become eligible
 
 ## Broadcaster Quick Actions (live_config.html)
 
-The Live Config view (shown in Twitch Stream Manager as the extension's Quick Actions) provides:
+The Live Config view (shown in Twitch Stream Manager as the extension's Quick Actions) has a single flow: **MVP selection + token drop**.
 
-### Giveaway
-Picks one random linked viewer from the active presence pool and grants them +1 token. Result is broadcast to all open panels via Twitch PubSub.
+### Flow
 
-### Token Drop
-Grants +1 token to up to N random linked viewers. **Rate-limited to once per series** — the broadcaster supplies a `series_id` string (e.g. `"week3-s2"`); a second drop with the same `series_id` on the same channel returns `409 Conflict`. Result broadcast via PubSub.
+1. Broadcaster clicks **"Select match MVP"**
+2. Current week's series are listed (only matches that have already started)
+3. Broadcaster picks the series (team1 vs team2), then the specific match (Match 1, Match 2…)
+4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**
+5. The MVP is saved and tokens are automatically distributed to viewers in the presence pool
 
-### MVP Selection
-Displays the current week's matches with player lists. Broadcaster selects the MVP for a match; the selection is stored in `twitch_mvp` and broadcast via PubSub to all panels.
+### Token drop rules
+- Fires automatically on MVP confirmation — no separate trigger needed
+- **Once per match**: re-selecting a different MVP for the same match does not re-drop tokens
+- Up to `TWITCH_DROP_MAX` (default 20) random linked viewers from the pool receive +1 token
+- Result is broadcast via Twitch PubSub so all open panels see the MVP announcement
 
 ---
 
@@ -121,13 +126,8 @@ Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 Twitch JWT. Returns matches from the current/most-recent week with per-match player lists. Used for MVP selection.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts the MVP selection and broadcasts via PubSub.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts the MVP selection, triggers a one-time token drop to the presence pool (skipped on re-confirm for the same match), and broadcasts via PubSub. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
-### `POST /twitch/giveaway` *(broadcaster only)*
-Twitch JWT (broadcaster role). Picks one random linked viewer from the active presence pool, grants +1 token, and broadcasts the winner via PubSub.
-
-### `POST /twitch/token-drop` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{count, series_id}`. Grants +1 token to up to `count` random linked viewers. Returns `409` if `series_id` was already used on this channel. Broadcasts winners via PubSub. Server caps at `TWITCH_DROP_MAX`.
 
 ---
 

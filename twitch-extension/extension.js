@@ -12,15 +12,24 @@ var ext = {
 
 // ── Initialise ──────────────────────────────────────────────────────────────
 
+var _initAttempts = 0;
+
 function init() {
     if (typeof window.Twitch === "undefined" || !window.Twitch.ext) {
-        console.error("[ext] window.Twitch.ext not available — are you running outside Twitch?");
+        // Retry until available — the dev harness injects window.Twitch after page load.
+        // In production Twitch iframes this resolves on the first call.
+        if (_initAttempts++ < 60) {
+            setTimeout(init, 100);
+        } else {
+            console.error("[ext] window.Twitch.ext not available after 6s — check TWITCH_LOCAL_DEV=true");
+        }
         return;
     }
+    _initAttempts = 0;
 
     window.Twitch.ext.onAuthorized(function (auth) {
-        ext.token = auth.token;
-        ext.userId = auth.userId;
+        ext.token    = auth.token;
+        ext.userId   = auth.userId;
         ext.channelId = auth.channelId;
 
         if (typeof onReady === "function") onReady();

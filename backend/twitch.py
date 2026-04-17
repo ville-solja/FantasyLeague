@@ -230,7 +230,7 @@ def current_matches(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return matches from the current/most-recent week with player lists for MVP selection."""
+    """Return started/completed matches from current week grouped into series by team pair."""
     now = int(time.time())
     week = (
         db.query(Week)
@@ -238,7 +238,6 @@ def current_matches(
         .first()
     )
     if not week:
-        # Fall back to the most recently locked week
         week = (
             db.query(Week)
             .filter(Week.is_locked == True)  # noqa: E712
@@ -246,88 +245,78 @@ def current_matches(
             .first()
         )
     if not week:
-        return {"week": None, "matches": []}
+        return {"week": None, "series": []}
 
+    # Only matches that have already started (streamer can't pick MVP for a future game)
+    week_end = min(week.end_time, now)
     matches = (
         db.query(Match)
         .filter(
             Match.start_time >= week.start_time,
-            Match.start_time <= week.end_time,
+            Match.start_time <= week_end,
         )
+        .order_by(Match.start_time)
         .all()
     )
 
-    result = []
+    # Group by normalised team pair so Bo2/Bo3 games appear as one series
+    series_map: dict = {}
     for m in matches:
-        stats = (
-            db.query(PlayerMatchStats, Player, Team)
-            .join(Player, PlayerMatchStats.player_id == Player.id)
-            .join(Team, PlayerMatchStats.team_id == Team.id)
-            .filter(PlayerMatchStats.match_id == m.match_id)
-            .all()
-        )
-        players = [
-            {
-                "player_id": pms.player_id,
-                "player_name": p.name,
-                "team_name": t.name,
-                "fantasy_points": pms.fantasy_points,
-            }
-            for pms, p, t in stats
-        ]
-        existing_mvp = db.query(TwitchMVP).filter_by(match_id=m.match_id).first()
-        result.append({
-            "match_id": m.match_id,
-            "start_time": m.start_time,
-            "players": players,
-            "mvp_player_id": existing_mvp.player_id if existing_mvp else None,
+        t1 = m.radiant_team_id or 0
+        t2 = m.dire_team_id or 0
+        key = (min(t1, t2), max(t1, t2))
+        series_map.setdefault(key, []).append(m)
+
+    result_series = []
+    for (tid_lo, tid_hi), series_matches in series_map.items():
+        team1 = db.get(Team, tid_lo) if tid_lo else None
+        team2 = db.get(Team, tid_hi) if tid_hi else None
+
+        match_list = []
+        for i, m in enumerate(series_matches):  # already sorted by start_time
+            stats = (
+                db.query(PlayerMatchStats, Player, Team)
+                .join(Player, PlayerMatchStats.player_id == Player.id)
+                .join(Team, PlayerMatchStats.team_id == Team.id)
+                .filter(PlayerMatchStats.match_id == m.match_id)
+                .all()
+            )
+            players = [
+                {
+                    "player_id": pms.player_id,
+                    "player_name": p.name,
+                    "team_name": t.name,
+                    "fantasy_points": round(pms.fantasy_points or 0, 1),
+                }
+                for pms, p, t in stats
+            ]
+            existing_mvp = db.query(TwitchMVP).filter_by(match_id=m.match_id).first()
+            match_list.append({
+                "match_id": m.match_id,
+                "match_number": i + 1,
+                "start_time": m.start_time,
+                "players": players,
+                "mvp_player_id": existing_mvp.player_id if existing_mvp else None,
+                "mvp_player_name": None,
+            })
+            if existing_mvp:
+                mvp_player = db.get(Player, existing_mvp.player_id)
+                match_list[-1]["mvp_player_name"] = mvp_player.name if mvp_player else None
+
+        result_series.append({
+            "team1_name": team1.name if team1 else f"Team {tid_lo}",
+            "team2_name": team2.name if team2 else f"Team {tid_hi}",
+            "matches": match_list,
         })
 
-    return {"week": {"id": week.id, "label": week.label}, "matches": result}
+    # Most-recently-played series first
+    result_series.sort(key=lambda s: s["matches"][-1]["start_time"] if s["matches"] else 0, reverse=True)
+
+    return {"week": {"id": week.id, "label": week.label}, "series": result_series}
 
 
 # ---------------------------------------------------------------------------
-# MVP selection
-# ---------------------------------------------------------------------------
-
-class MVPBody(BaseModel):
-    match_id: int
-    player_id: int
-
-
-@router.post("/mvp")
-def set_mvp(
-    body: MVPBody,
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Broadcaster sets the MVP for a match. Upserts one record per match."""
-    _require_broadcaster(payload)
-    channel_id = payload.get("channel_id", "")
-
-    player = db.query(Player).filter_by(id=body.player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
-
-    existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
-    if existing:
-        existing.player_id = body.player_id
-        existing.channel_id = channel_id
-        existing.selected_at = int(time.time())
-    else:
-        db.add(TwitchMVP(
-            match_id=body.match_id,
-            player_id=body.player_id,
-            channel_id=channel_id,
-            selected_at=int(time.time()),
-        ))
-    db.commit()
-    _pubsub_broadcast(channel_id, {"type": "mvp", "player_name": player.name, "match_id": body.match_id})
-    return {"match_id": body.match_id, "player_id": body.player_id, "player_name": player.name}
-
-
-# ---------------------------------------------------------------------------
-# Giveaway (single random winner)
+# Presence pool helper
 # ---------------------------------------------------------------------------
 
 def _active_pool(db: Session, channel_id: str) -> list[str]:
@@ -348,85 +337,96 @@ def _active_pool(db: Session, channel_id: str) -> list[str]:
     return [p.twitch_user_id for p in presences if p.twitch_user_id in linked_ids]
 
 
-@router.post("/giveaway")
-def trigger_giveaway(
+# ---------------------------------------------------------------------------
+# MVP selection — also triggers a one-time token drop for the match
+# ---------------------------------------------------------------------------
+
+class MVPBody(BaseModel):
+    match_id: int
+    player_id: int
+
+
+@router.post("/mvp")
+def set_mvp(
+    body: MVPBody,
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Pick a random linked viewer from the presence pool and grant +1 token."""
-    _require_broadcaster(payload)
-    channel_id = payload.get("channel_id", "")
-    pool = _active_pool(db, channel_id)
-    if not pool:
-        raise HTTPException(status_code=400, detail="No eligible viewers in pool")
+    """Set match MVP and trigger a one-time token drop to the presence pool.
 
-    winner_twitch_id = random.choice(pool)
-    winner = db.query(User).filter_by(twitch_user_id=winner_twitch_id).first()
-    if not winner:
-        raise HTTPException(status_code=500, detail="Winner lookup failed")
-
-    winner.tokens = (winner.tokens or 0) + 1
-    db.add(AuditLog(
-        timestamp=int(time.time()),
-        actor_id=None,
-        actor_username="twitch",
-        action="twitch_giveaway",
-        detail=f"channel={channel_id} winner={winner.username}",
-    ))
-    db.commit()
-    _pubsub_broadcast(channel_id, {"type": "winner", "winner_username": winner.username})
-    return {"winner_username": winner.username, "pool_size": len(pool)}
-
-
-# ---------------------------------------------------------------------------
-# Token drop (n random winners)
-# ---------------------------------------------------------------------------
-
-class TokenDropBody(BaseModel):
-    count: int
-    series_id: str = Field(min_length=1, max_length=64)
-
-
-@router.post("/token-drop")
-def token_drop(
-    body: TokenDropBody,
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Grant +1 token to up to `count` random linked viewers. Once per series_id per channel."""
+    The token drop fires once per match (keyed by match_id). Re-setting the MVP
+    on the same match updates the player record but does not re-drop tokens.
+    """
     _require_broadcaster(payload)
     channel_id = payload.get("channel_id", "")
 
-    existing_drop = (
-        db.query(TwitchTokenDrop)
-        .filter_by(channel_id=channel_id, series_id=body.series_id)
-        .first()
+    player = db.query(Player).filter_by(id=body.player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    # Upsert MVP record
+    existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
+    if existing:
+        existing.player_id = body.player_id
+        existing.channel_id = channel_id
+        existing.selected_at = int(time.time())
+    else:
+        db.add(TwitchMVP(
+            match_id=body.match_id,
+            player_id=body.player_id,
+            channel_id=channel_id,
+            selected_at=int(time.time()),
+        ))
+
+    # Token drop — once per match
+    drop_key = str(body.match_id)
+    already_dropped = bool(
+        db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).first()
     )
-    if existing_drop:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Token drop already performed for series '{body.series_id}' on this channel",
-        )
+    winner_names: list[str] = []
+    pool_size = 0
 
-    count = max(1, min(body.count, _TWITCH_DROP_MAX))
-    pool = _active_pool(db, channel_id)
-    if not pool:
-        raise HTTPException(status_code=400, detail="No eligible viewers in pool")
+    if not already_dropped:
+        pool = _active_pool(db, channel_id)
+        pool_size = len(pool)
+        if pool:
+            count = min(_TWITCH_DROP_MAX, len(pool))
+            for twitch_id in random.sample(pool, count):
+                user = db.query(User).filter_by(twitch_user_id=twitch_id).first()
+                if user:
+                    user.tokens = (user.tokens or 0) + 1
+                    winner_names.append(user.username)
+            db.add(TwitchTokenDrop(
+                channel_id=channel_id,
+                series_id=drop_key,
+                dropped_at=int(time.time()),
+                count=len(winner_names),
+            ))
+            db.add(AuditLog(
+                timestamp=int(time.time()),
+                actor_id=None,
+                actor_username="twitch",
+                action="twitch_token_drop",
+                detail=f"channel={channel_id} match={body.match_id} count={len(winner_names)} winners={','.join(winner_names)}",
+            ))
 
-    winners_ids = random.sample(pool, min(count, len(pool)))
-    winner_names = []
-    for twitch_id in winners_ids:
-        user = db.query(User).filter_by(twitch_user_id=twitch_id).first()
-        if user:
-            user.tokens = (user.tokens or 0) + 1
-            winner_names.append(user.username)
-
-    db.add(TwitchTokenDrop(
-        channel_id=channel_id,
-        series_id=body.series_id,
-        dropped_at=int(time.time()),
-        count=len(winner_names),
-    ))
+    db.commit()
+    _pubsub_broadcast(channel_id, {
+        "type": "mvp",
+        "player_name": player.name,
+        "match_id": body.match_id,
+        "token_drop_winners": winner_names,
+    })
+    return {
+        "match_id": body.match_id,
+        "player_id": body.player_id,
+        "player_name": player.name,
+        "token_drop": {
+            "winners": winner_names,
+            "pool_size": pool_size,
+            "already_dropped": already_dropped,
+        },
+    }
     db.add(AuditLog(
         timestamp=int(time.time()),
         actor_id=None,
