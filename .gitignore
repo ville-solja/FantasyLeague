@@ -2,15 +2,6 @@
 .venv/
 __pycache__/
 *.pyc
-data/
-data/fantasy.db
-
-# Terraform
-infra/.terraform/
-infra/.terraform.lock.hcl
-infra/terraform.tfstate
-infra/terraform.tfstate.backup
-infra/*.tfvars
 data/fantasy.db
 
 # Local card preview scratch files (repo root)

@@ -51,6 +51,9 @@ Shows individual Dota players ranked by average fantasy points per match, across
 ### Roster Value Leaderboard (`GET /leaderboard/roster`)
 Shows users ranked by the total all-time fantasy points of their currently active cards. Unlike the season leaderboard, this uses the current active roster rather than locked snapshots and is not scoped to any week.
 
+### Top Single-Match Performances (`GET /top`)
+Returns the 10 highest individual fantasy point scores from a single match across all ingested data, regardless of week or user roster. Each entry shows the player, their avatar, and the raw `fantasy_points` value for that match. No authentication required. Used by the frontend to surface standout performances on the leaderboard tab.
+
 ## Week Override
 
 An admin can manually assign a match to a different week than the one its `start_time` falls in:
