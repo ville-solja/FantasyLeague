@@ -40,6 +40,16 @@ td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
 .status.ok  { color: #4caf50; }
 .status.err { color: #e05050; }
 
+/* LEADERBOARD CARD BREAKDOWN */
+.lb-chevron { display: inline-block; margin-left: 5px; font-size: 0.9rem; color: #555;
+              transition: transform 0.15s; vertical-align: middle; }
+tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron { transform: rotate(90deg); color: #888; }
+.lb-card-detail td { padding: 0 8px 10px; }
+.lb-card-breakdown { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.lb-card-chip { display: inline-flex; align-items: center; gap: 5px;
+                padding: 3px 8px; border-radius: 4px; font-size: 0.78rem; }
+.lb-chip-pts { font-weight: bold; opacity: 0.9; }
+
 /* DECK SUMMARY */
 .rarity-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
 .rarity-box { background: #111; border: 1px solid #2a2a2a; border-radius: 4px;

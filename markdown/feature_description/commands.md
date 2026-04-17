@@ -106,6 +106,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SEASON_LOCK_START` | `2026-03-08` | First Sunday lock date (ISO format) |
 | `SCHEDULE_SHEET_URL` | *(Kanaliiga sheet)* | Google Sheets CSV export URL for the match schedule |
 | `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
+| `OPENDOTA_MAX_RPM` | `55` | Max OpenDota requests per rolling 60 s (free tier ~60/min; default leaves headroom) |
 | `TOORNAMENT_CLIENT_ID` | *(empty)* | OAuth2 client ID for toornament.com |
 | `TOORNAMENT_CLIENT_SECRET` | *(empty)* | OAuth2 client secret for toornament.com |
 | `TOORNAMENT_API_KEY` | *(empty)* | `X-Api-Key` header for toornament.com |
@@ -119,3 +120,10 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP username |
 | `SMTP_PASSWORD` | *(empty)* | SMTP password |
+| `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
+| `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
+| `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |
+| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
+| `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
+| `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
+| `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally — **never set in production** |

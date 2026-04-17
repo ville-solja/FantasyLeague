@@ -75,6 +75,34 @@ Maps each entry in `markdown/user_stories.md` to the implementation and marks it
 
 ---
 
+### `/run-tests`
+Runs the pytest suite in `backend/tests/` and reports results grouped by module.
+- Covers `scoring.py` (unit tests for `fantasy_score` and `card_fantasy_score`)
+- Covers `weeks.py` (fixture tests with in-memory SQLite for `generate_weeks` and `auto_lock_weeks`)
+- Covers `auth.py` (bcrypt hash/verify round-trips)
+
+**When to run:** After any change to `backend/scoring.py`, `backend/weeks.py`, or `backend/auth.py`. Also useful as a quick sanity check before pushing.
+
+---
+
+### `/architect`
+Reviews the full application architecture and produces a prioritised findings table covering:
+- Separation of concerns (business logic mixed into request handlers, repeated query patterns)
+- Data layer risks (N+1 queries, missing indexes, SQLite write-serialisation limits)
+- Background job resilience (exception handling in `_week_maintenance_loop` and `_ingest_poll_loop`)
+- Error handling and observability (print vs logging, unhandled 500 paths)
+- Security posture (SQL injection in raw `text()` queries, insecure `SECRET_KEY` defaults, session config)
+- Dependency and configuration hygiene (hardcoded values, unpinned packages, missing health check)
+- Frontend structure (split points in `app.js`, async state management)
+
+Each finding is classified **High / Medium / Low** and includes a concrete recommendation. The report ends with the top 3 highest-impact changes in priority order.
+
+**When to run:** Before a refactor, after a significant feature addition, or when onboarding a new contributor.
+
+**Usage:** `/architect` — no arguments needed.
+
+---
+
 ### Scheduled: Dependency Scout
 A weekly scheduled job (runs Monday 09:23) checks every pinned package in `backend/requirements.txt` against PyPI and flags outdated or security-relevant versions. It is session-scoped — re-register it at the start of a session with:
 

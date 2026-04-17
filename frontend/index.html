@@ -188,6 +188,24 @@
       <div class="status" id="playerIdStatus"></div>
     </div>
 
+    <div class="panel">
+      <h2>Twitch Account</h2>
+      <div id="twitchLinked" style="display:none">
+        <p style="color:#9147ff;font-weight:600;margin-bottom:6px">✓ Twitch account linked</p>
+        <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live Kanaliiga streams.</p>
+      </div>
+      <div id="twitchUnlinked" style="display:none">
+        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to become eligible for token drops during live Kanaliiga streams.</p>
+        <button onclick="generateTwitchCode()">Generate Link Code</button>
+        <div id="twitchCodeSection" style="display:none;margin-top:16px">
+          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the FantasyLeague extension panel on a Kanaliiga Twitch stream and enter this code:</p>
+          <div style="font-size:2rem;letter-spacing:0.3em;font-weight:700;color:#9147ff;padding:8px 0" id="twitchCode">------</div>
+          <div class="status" id="twitchCodeExpiry"></div>
+        </div>
+      </div>
+      <div class="status" id="twitchStatus"></div>
+    </div>
+
   </div>
 </div>
 

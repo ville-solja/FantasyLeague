@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FantasyLeague — Config</title>
+<link rel="stylesheet" href="extension.css">
+<script>window.EBS_URL = "%%EBS_URL%%";</script>
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script src="extension.js"></script>
+</head>
+<body>
+
+<h2>FantasyLeague — Setup</h2>
+
+<div id="banner" class="banner"></div>
+
+<p>This extension connects your stream to the <strong>Kanaliiga FantasyLeague</strong>.</p>
+
+<h3>What it does</h3>
+<ul style="padding-left:16px;line-height:1.8">
+  <li>Let viewers link their FantasyLeague accounts.</li>
+  <li>Broadcaster can trigger token drops during streams.</li>
+  <li>Broadcaster can select the match MVP.</li>
+</ul>
+
+<h3>EBS URL</h3>
+<p class="muted">The backend URL is set at build time. Contact the extension developer to change it.</p>
+<p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display"></p>
+
+<script>
+el("ebs-display").textContent = window.EBS_URL || "(not set)";
+// Config view has no Twitch auth actions — purely informational.
+</script>
+</body>
+</html>

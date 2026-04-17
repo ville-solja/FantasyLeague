@@ -210,8 +210,48 @@ async function loadProfile() {
     } else {
       document.getElementById("profilePlayerId").value = "";
     }
+    _renderTwitchLinkStatus(data.twitch_linked);
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
+  }
+}
+
+function _renderTwitchLinkStatus(linked) {
+  document.getElementById("twitchLinked").style.display = linked ? "block" : "none";
+  document.getElementById("twitchUnlinked").style.display = linked ? "none" : "block";
+  document.getElementById("twitchCodeSection").style.display = "none";
+  document.getElementById("twitchStatus").textContent = "";
+}
+
+var _twitchCodeTimer = null;
+
+async function generateTwitchCode() {
+  document.getElementById("twitchStatus").textContent = "";
+  try {
+    const res = await fetch(`${API}/twitch/link-code`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchStatus", data.detail, false);
+    document.getElementById("twitchCode").textContent = data.code;
+    document.getElementById("twitchCodeSection").style.display = "block";
+    if (_twitchCodeTimer) clearInterval(_twitchCodeTimer);
+    let remaining = data.expires_in;
+    const expiry = document.getElementById("twitchCodeExpiry");
+    expiry.style.color = "";
+    expiry.textContent = `Expires in ${remaining}s`;
+    _twitchCodeTimer = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) {
+        clearInterval(_twitchCodeTimer);
+        _twitchCodeTimer = null;
+        expiry.textContent = "Code expired. Generate a new one.";
+        expiry.style.color = "#c0392b";
+        document.getElementById("twitchCode").textContent = "------";
+      } else {
+        expiry.textContent = `Expires in ${remaining}s`;
+      }
+    }, 1000);
+  } catch (e) {
+    setStatus("twitchStatus", e.message, false);
   }
 }
 
@@ -881,6 +921,34 @@ async function onLbWeekChange() {
   if (sel) loadWeeklyLeaderboard(parseInt(sel.value));
 }
 
+function toggleLbDetail(userId) {
+  const el = document.getElementById(`lb-detail-${userId}`);
+  if (el) el.classList.toggle("hidden");
+}
+
+function _lbStandingsRow(r, i, ptsKey) {
+  const isMe = activeUserId && String(r.id) === String(activeUserId);
+  const baseStyle = isMe ? "color:#f0b429;font-weight:bold;" : "";
+  const cards = r.cards || [];
+  const hasCards = cards.length > 0;
+  const cursorStyle = hasCards ? "cursor:pointer;" : "";
+  const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
+  const pts = Number(r[ptsKey] || 0).toFixed(1);
+  const mainRow = `<tr style="${baseStyle}${cursorStyle}" ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
+    <td>${i + 1}</td>
+    <td>${r.username}${chevron}</td>
+    <td>${pts}</td>
+  </tr>`;
+  if (!hasCards) return mainRow;
+  const breakdown = cards.map(c =>
+    `<span class="lb-card-chip ${c.card_type}">${c.player_name} <span class="lb-chip-pts">${Number(c.points).toFixed(1)}</span></span>`
+  ).join("");
+  const detailRow = `<tr class="lb-card-detail hidden" id="lb-detail-${r.id}">
+    <td colspan="3"><div class="lb-card-breakdown">${breakdown}</div></td>
+  </tr>`;
+  return mainRow + detailRow;
+}
+
 async function loadSeasonLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard/season`);
@@ -890,11 +958,7 @@ async function loadSeasonLeaderboard() {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => {
-      const isMe = activeUserId && String(r.id) === String(activeUserId);
-      const style = isMe ? " style='color:#f0b429;font-weight:bold;'" : "";
-      return `<tr${style}><td>${i + 1}</td><td>${r.username}</td><td>${Number(r.season_points).toFixed(1)}</td></tr>`;
-    }).join("");
+    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points")).join("");
     setStatus("standingsStatus", "");
   } catch (e) {
     setStatus("standingsStatus", e.message, false);
@@ -910,11 +974,7 @@ async function loadWeeklyLeaderboard(weekId) {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => {
-      const isMe = activeUserId && String(r.id) === String(activeUserId);
-      const style = isMe ? " style='color:#f0b429;font-weight:bold;'" : "";
-      return `<tr${style}><td>${i + 1}</td><td>${r.username}</td><td>${Number(r.week_points).toFixed(1)}</td></tr>`;
-    }).join("");
+    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join("");
     setStatus("standingsStatus", "");
   } catch (e) {
     setStatus("standingsStatus", e.message, false);

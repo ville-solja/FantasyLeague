@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FantasyLeague</title>
+<link rel="stylesheet" href="extension.css">
+<script>window.EBS_URL = "%%EBS_URL%%";</script>
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script src="extension.js"></script>
+</head>
+<body>
+
+<div id="banner" class="banner"></div>
+
+<!-- Unlinked state -->
+<div id="view-unlinked" style="display:none">
+  <h2>Link your account</h2>
+  <p>Connect your FantasyLeague account to receive token drops from the broadcaster.</p>
+  <ol style="padding-left:16px;line-height:2">
+    <li>Log into the <strong>FantasyLeague site</strong>.</li>
+    <li>Go to Profile → click <strong>Generate Twitch Code</strong>.</li>
+    <li>Enter the 6-character code here:</li>
+  </ol>
+  <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+    <input id="link-code-input" type="text" maxlength="6" placeholder="ABC123"
+      style="width:90px;font-size:1.2rem;letter-spacing:0.2em;text-transform:uppercase;padding:6px 8px" />
+    <button id="btn-link">Link</button>
+  </div>
+  <p class="muted" id="link-status" style="margin-top:6px"></p>
+</div>
+
+<!-- Linked state -->
+<div id="view-linked" style="display:none">
+  <h2>FantasyLeague</h2>
+  <div class="stat-block">
+    <div class="stat-label">Your tokens</div>
+    <div class="stat-value" id="token-count">—</div>
+  </div>
+  <div class="stat-block">
+    <div class="stat-label">Linked as</div>
+    <div id="linked-username" style="font-weight:600">—</div>
+  </div>
+  <p class="muted">Stay in this panel to remain eligible for token drops!</p>
+</div>
+
+<!-- Winner announcement overlay (hidden by default) -->
+<div id="winner-banner" style="display:none;text-align:center;padding:16px;background:#2c2c3a;border-radius:8px;margin-top:10px">
+  <div style="font-size:20px">🎉</div>
+  <div style="font-weight:700;color:#9147ff;margin:4px 0" id="winner-name"></div>
+  <div class="muted" id="winner-msg"></div>
+</div>
+
+<script>
+function onReady() {
+    startHeartbeat(55000);
+    loadStatus();
+    el("btn-link").addEventListener("click", doLink);
+    el("link-code-input").addEventListener("keydown", function(e) {
+        if (e.key === "Enter") doLink();
+    });
+}
+
+function loadStatus() {
+    ebsGet("/twitch/status").then(function(data) {
+        if (data.linked) {
+            el("token-count").textContent = data.tokens;
+            el("linked-username").textContent = data.username;
+            el("view-linked").style.display = "block";
+            el("view-unlinked").style.display = "none";
+        } else {
+            el("view-unlinked").style.display = "block";
+            el("view-linked").style.display = "none";
+        }
+    }).catch(function() {
+        showBanner(el("banner"), "Could not reach FantasyLeague server.", true);
+    });
+}
+
+function doLink() {
+    var code = el("link-code-input").value.trim().toUpperCase();
+    if (code.length !== 6) {
+        el("link-status").textContent = "Enter the 6-character code from the FantasyLeague site.";
+        return;
+    }
+    el("btn-link").disabled = true;
+    el("link-status").textContent = "";
+    ebsPost("/twitch/link", { code: code }).then(function(data) {
+        if (data.linked) {
+            loadStatus();
+        } else {
+            el("link-status").textContent = data.detail || "Linking failed. Check your code and try again.";
+        }
+    }).catch(function() {
+        el("link-status").textContent = "Request failed. Try again.";
+    }).finally(function() {
+        el("btn-link").disabled = false;
+    });
+}
+
+function onPubSub(msg) {
+    if (msg.type === "winner" || msg.type === "token_drop") {
+        el("winner-name").textContent = msg.winner_username || (msg.winners || []).join(", ");
+        el("winner-msg").textContent = msg.type === "winner"
+            ? "won a free card draw!"
+            : "received a token drop!";
+        el("winner-banner").style.display = "block";
+        setTimeout(function() { el("winner-banner").style.display = "none"; }, 8000);
+        // Refresh token count if we're linked
+        loadStatus();
+    }
+    if (msg.type === "mvp") {
+        showBanner(el("banner"), "MVP: " + msg.player_name, false);
+    }
+}
+
+init();
+</script>
+</body>
+</html>
