@@ -107,6 +107,33 @@ All three settings are configurable in the admin panel under Scoring Weights.
 
 Modifier counts apply to **newly drawn cards only** — existing cards in users' rosters are not retroactively updated when the count weights change.
 
+### Modifier Reroll
+
+A user can spend **1 token** to discard a card's current modifiers and generate a new random set in their place. The card's rarity, player, and league are unchanged — only the `card_modifiers` rows are replaced.
+
+#### `POST /roster/{card_id}/reroll`
+
+Requires authentication. The card must be owned by the calling user.
+
+**Cost:** 1 token, deducted on success.
+
+**Behaviour:**
+1. All existing `CardModifier` rows for the card are deleted.
+2. New modifiers are assigned using the same random logic as draw time: count determined by `modifier_count_<rarity>`, stats randomly sampled without replacement, bonus set by `modifier_bonus_pct`.
+3. The action is recorded in the audit log (`reroll_modifiers`).
+
+**Response:**
+```json
+{
+  "modifiers": [{"stat": "kills", "bonus_pct": 10.0}],
+  "tokens": 4
+}
+```
+
+Returns the new modifier list and the user's remaining token balance. Returns 409 if the user has no tokens.
+
+The reroll applies the **current** `modifier_count_<rarity>` and `modifier_bonus_pct` weight values, so a reroll may produce a different number of modifiers than the card originally had if an admin has changed the weights since the card was drawn.
+
 ### Extending the modifier system
 
 The current system uses a single uniform `bonus_pct` for all modifiers. Future extensions could include:
@@ -117,3 +144,47 @@ The current system uses a single uniform `bonus_pct` for all modifiers. Future e
 - Card-specific modifiers that affect only one player's known strengths
 
 To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` present in `SCORING_STATS` (defined in `backend/scoring.py`) will be applied automatically.
+
+---
+
+## Card Endpoints
+
+### `GET /deck`
+
+Returns a count of unowned cards remaining in the shared pool, grouped by rarity.
+
+```json
+{ "common": 34, "rare": 12, "epic": 4, "legendary": 1 }
+```
+
+No authentication required. Used by the frontend to show pool depth before drawing.
+
+---
+
+### `GET /cards/{card_id}`
+
+Returns full detail for a single card owned by the authenticated user. Returns 404 if the card does not exist or is not owned by the caller.
+
+```json
+{
+  "id": 42,
+  "card_type": "rare",
+  "player_name": "SomePlayer",
+  "avatar_url": "https://...",
+  "team_name": "SomeTeam",
+  "team_logo_url": "https://...",
+  "modifiers": [{ "stat": "kills", "bonus_pct": 10.0 }]
+}
+```
+
+`team_name` and `team_logo_url` are resolved from the player's most recent ingested match.
+
+---
+
+### `GET /cards/{card_id}/image`
+
+Generates and returns a PNG card image for any card (owner not required). Returns `Content-Type: image/png` with `no-cache` headers.
+
+Returns 404 if the card does not exist. Returns 503 if the Pillow image library is not available in the runtime environment.
+
+The image includes the player avatar, team logo, card rarity border, player name, and any stat modifier labels. Used by the frontend draw reveal modal.

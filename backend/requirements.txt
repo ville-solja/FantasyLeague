@@ -7,3 +7,5 @@ bcrypt
 itsdangerous
 pillow
 cloudscraper>=1.2.71
+PyJWT
+pytest

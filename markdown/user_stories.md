@@ -416,13 +416,15 @@ As a user, I want to redeem a code.
 
 ### 5.5 Re-roll Modifiers
 **User story**
-As a user, I want to re-roll a card's modifiers and quality.
+As a user, I want to spend a token to re-roll a card's stat modifiers so that I can try for a more useful modifier combination.
 
 **Acceptance criteria**
-- Costs 1 token
-- Confirmation popup
-- Modifiers and quality replaced
-- Logged
+- Costs 1 token per reroll; returns 409 if the user has no tokens
+- All existing modifiers on the card are replaced with a freshly randomised set (same count and bonus rules as draw time)
+- Card rarity, player, and league are unchanged — only modifiers are replaced
+- Action is recorded in the audit log
+- Frontend shows a confirmation prompt before spending the token
+- Updated modifier list and remaining token balance are returned in the response
 
 ---
 
@@ -716,18 +718,45 @@ As statistician, I want to have documentation about the weight simulation endpoi
 
 ### 13.1 Twitch integration - MVP selection
 **User Stories*' 
-As a streamer I want to select the MVP of a match from the player list
+As a streamer I want to select the MVP of a match
 
 **Acceptance criteria**
-- Streamer has access to current matches player list
-- Streamer can select the MVP
-- MVP information is sent to this application and stored in the DB
+- After the match has ended the streamer can press the quick action button on twitch to open the MVP selection
+- MVP selection shows the the weeks series with the information of team1 vs team2
+- Once the correct series is picked from the list streamer is asked to select the correct match (match1, match2, etc.)
+- Once the correct match is identified the streamer selects from the 10 players that participated in the match and confirms the MVP selection, which is then saved in the app
 
-### 13.2 Twitch Integration - token drops
+---
+
+### 13.2 Twitch integration - Token drops
 **User story** 
 As a streamer I want to grant token drops to users
 
 **Acceptance criteria**
-- Streamer that is streaming a tournament game can give drops, which give n (customizable amount) players 1 token.
-- Streamer is recognized by the fantasyleague app
+- Streamer that is streaming a tournament game can use quick actions -button, which give n players 1 token.
+- Streamer is authenticated in the fantasy app as a streamer
 - Of the watchers those who have started to play FantasyLeague are in the drop pool
+- Streamer can do this only once per series
+
+---
+
+### 13.3 Twitch integraton - Account linking
+**User story**
+As a user of fantasy league I want to link my twitch profile in fantasy league so I am eligible for drops while watching stream
+
+**Acceptance criteria**
+- User can navigate to their profile and start process for linking their Twitch account
+- Account linking is done in Twitch recommended fashion that is safe and does not create attack surface against twitch accounts from the fantasy league
+- - Safety of linking accounts is documented
+
+---
+
+### 13.4 Twitch integration - Extension
+**User story**
+As a streamer I want to take FantasyLeague twitch extension into use so I can use extension features that interact with app. I additionally want the buttons and flow to be on quick actions, so they are not conflicting with any other elements.
+
+**Acceptance criteria**
+- Streamer is able to take the extension into use with instructions documented in fantasy league app
+- Extension buttons are visible in the quick actions
+
+---

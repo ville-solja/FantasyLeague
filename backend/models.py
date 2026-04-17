@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint
 from database import Base
 
 
@@ -60,12 +60,18 @@ class Card(Base):
     is_active = Column(Boolean, default=False)
 
 
+_VALID_STAT_KEYS = "('kills','assists','deaths','gold_per_min','obs_placed','sen_placed','tower_damage')"
+
+
 class CardModifier(Base):
     __tablename__ = "card_modifiers"
+    __table_args__ = (
+        CheckConstraint(f"stat_key IN {_VALID_STAT_KEYS}", name="ck_card_modifiers_stat_key"),
+    )
 
     id        = Column(Integer, primary_key=True, autoincrement=True)
     card_id   = Column(Integer, ForeignKey("cards.id"))
-    stat_key  = Column(String)   # one of SCORING_STATS
+    stat_key  = Column(String)
     bonus_pct = Column(Float)    # e.g. 10.0 = +10% boost to this stat's contribution
 
 
@@ -81,6 +87,7 @@ class User(Base):
     created_at = Column(Integer, nullable=True)  # Unix timestamp of registration
     player_id = Column(Integer, nullable=True)   # linked OpenDota account_id
     must_change_password = Column(Boolean, default=False)  # True after a temp password is issued
+    twitch_user_id = Column(String, nullable=True, unique=True)  # opaque Twitch user ID from extension JWT
 
 
 class League(Base):
@@ -144,6 +151,42 @@ class AuditLog(Base):
     actor_username = Column(String, nullable=True)
     action         = Column(String)            # e.g. "user_register", "token_draw", "admin_ingest"
     detail         = Column(String, nullable=True)
+
+
+class TwitchLinkCode(Base):
+    __tablename__ = "twitch_link_codes"
+
+    code       = Column(String, primary_key=True)        # 6-char alphanumeric
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    expires_at = Column(Integer)                         # Unix timestamp
+
+
+class TwitchPresence(Base):
+    __tablename__ = "twitch_presence"
+
+    twitch_user_id = Column(String, primary_key=True)
+    channel_id     = Column(String)
+    seen_at        = Column(Integer)  # Unix timestamp — updated on each heartbeat
+
+
+class TwitchMVP(Base):
+    __tablename__ = "twitch_mvp"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    match_id    = Column(Integer, ForeignKey("matches.match_id"))
+    player_id   = Column(Integer, ForeignKey("players.id"))
+    channel_id  = Column(String)
+    selected_at = Column(Integer)  # Unix timestamp
+
+
+class TwitchTokenDrop(Base):
+    __tablename__ = "twitch_token_drops"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id = Column(String)
+    series_id  = Column(String)   # broadcaster-supplied series identifier
+    dropped_at = Column(Integer)  # Unix timestamp
+    count      = Column(Integer)  # number of tokens actually distributed
 
 
 class ToornamentSyncLog(Base):

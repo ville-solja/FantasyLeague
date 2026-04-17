@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!--
+  Twitch Extension — Local Development Harness
+  =============================================
+  Open this at http://localhost:8000/twitch-ext/dev-harness.html
+
+  Requires TWITCH_LOCAL_DEV=true in .env (restarts app after changing).
+  The harness stubs window.Twitch.ext so the extension JS runs without
+  the real Twitch iframe environment.
+
+  NOT uploaded to Twitch CDN — local dev only.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extension Dev Harness</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Inter, sans-serif; font-size: 13px; background: #0e0e10; color: #efeff1; }
+
+  .harness-bar {
+    background: #18181b;
+    border-bottom: 2px solid #9147ff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .harness-bar h1 { font-size: 14px; color: #9147ff; font-weight: 700; }
+  .harness-bar label { font-size: 11px; color: #adadb8; }
+  .harness-bar input, .harness-bar select {
+    background: #2c2c3a; border: 1px solid #3d3d50; color: #efeff1;
+    padding: 4px 8px; border-radius: 3px; font-size: 12px;
+  }
+  .harness-bar button {
+    background: #9147ff; color: #fff; border: none; padding: 5px 12px;
+    border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .harness-bar button:hover { background: #772ce8; }
+
+  .tabs { display: flex; background: #18181b; border-bottom: 1px solid #2c2c3a; }
+  .tab {
+    padding: 10px 20px; cursor: pointer; font-size: 12px; font-weight: 600;
+    color: #adadb8; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: #9147ff; border-bottom-color: #9147ff; }
+
+  .frames { display: flex; gap: 0; height: calc(100vh - 100px); }
+  .frame-wrap { display: none; flex: 1; }
+  .frame-wrap.active { display: flex; flex-direction: column; }
+  .frame-label {
+    background: #18181b; font-size: 10px; color: #adadb8;
+    padding: 4px 10px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  iframe {
+    border: none; flex: 1;
+    border-right: 1px solid #2c2c3a;
+  }
+
+  .pubsub-panel {
+    width: 260px; background: #18181b; border-left: 1px solid #2c2c3a;
+    display: flex; flex-direction: column;
+  }
+  .pubsub-panel h3 {
+    font-size: 11px; color: #adadb8; text-transform: uppercase;
+    letter-spacing: 0.05em; padding: 10px; border-bottom: 1px solid #2c2c3a;
+  }
+  .pubsub-log {
+    flex: 1; overflow-y: auto; padding: 8px; font-family: monospace;
+    font-size: 11px; color: #56d364;
+  }
+  .pubsub-controls { padding: 8px; border-top: 1px solid #2c2c3a; }
+  .pubsub-controls select, .pubsub-controls input {
+    width: 100%; background: #2c2c3a; border: 1px solid #3d3d50; color: #efeff1;
+    padding: 4px 6px; border-radius: 3px; font-size: 11px; margin-bottom: 4px;
+  }
+  .pubsub-controls button {
+    width: 100%; background: #3d3d50; color: #efeff1; border: none;
+    padding: 5px; border-radius: 3px; cursor: pointer; font-size: 11px;
+  }
+  .pubsub-controls button:hover { background: #9147ff; }
+</style>
+</head>
+<body>
+
+<div class="harness-bar">
+  <h1>Extension Dev Harness</h1>
+  <label>EBS URL
+    <input type="text" id="ebs-url" value="http://localhost:8000" style="width:200px">
+  </label>
+  <label>Role
+    <select id="role">
+      <option value="broadcaster">broadcaster</option>
+      <option value="viewer">viewer</option>
+    </select>
+  </label>
+  <label>Twitch User ID
+    <input type="text" id="user-id" value="Udev123" style="width:100px">
+  </label>
+  <button onclick="reloadAll()">Reload frames</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('viewer')">Viewer Panel</div>
+  <div class="tab" onclick="showTab('broadcaster')">Broadcaster (Live Config)</div>
+  <div class="tab" onclick="showTab('config')">Config</div>
+</div>
+
+<div class="frames">
+  <!-- Viewer tab -->
+  <div class="frame-wrap active" id="tab-viewer">
+    <div class="frame-label">panel.html — Viewer</div>
+    <iframe id="frame-panel" src="about:blank"></iframe>
+  </div>
+
+  <!-- Broadcaster tab -->
+  <div class="frame-wrap" id="tab-broadcaster">
+    <div class="frame-label">live_config.html — Broadcaster</div>
+    <iframe id="frame-live" src="about:blank"></iframe>
+  </div>
+
+  <!-- Config tab -->
+  <div class="frame-wrap" id="tab-config">
+    <div class="frame-label">config.html — Setup</div>
+    <iframe id="frame-config" src="about:blank"></iframe>
+  </div>
+
+  <!-- PubSub simulator -->
+  <div class="pubsub-panel">
+    <h3>PubSub Simulator</h3>
+    <div class="pubsub-log" id="pubsub-log">&gt; Ready</div>
+    <div class="pubsub-controls">
+      <select id="msg-type">
+        <option value="winner">winner</option>
+        <option value="token_drop">token_drop</option>
+        <option value="mvp">mvp</option>
+      </select>
+      <input type="text" id="msg-payload" placeholder='{"winner_username":"Alice"}'>
+      <button onclick="sendPubSub()">Broadcast</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Twitch ext stub injected into each iframe ──────────────────────────────
+
+function buildStubScript(ebsUrl, role, userId) {
+    return [
+      "window.EBS_URL = " + JSON.stringify(ebsUrl) + ";",
+      "window.Twitch = { ext: {",
+      "  onAuthorized: function(cb) { cb({ token: 'dev-token', userId: " + JSON.stringify(userId) + ", channelId: 'dev_channel' }); },",
+      "  listen: function(t, cb) { window.__pubSubListener = cb; },",
+      "  send: function() {}",
+      "} };",
+    ].join("\n");
+}
+
+// ── Tab switching ───────────────────────────────────────────────────────────
+
+function showTab(name) {
+    document.querySelectorAll(".tab").forEach(function(t) { t.classList.remove("active"); });
+    document.querySelectorAll(".frame-wrap").forEach(function(f) { f.classList.remove("active"); });
+    event.target.classList.add("active");
+    document.getElementById("tab-" + name).classList.add("active");
+}
+
+// ── Load iframes with stub injected ────────────────────────────────────────
+
+function loadFrame(frameId, htmlFile) {
+    var ebsUrl = document.getElementById("ebs-url").value.trim();
+    var role   = document.getElementById("role").value;
+    var userId = document.getElementById("user-id").value.trim();
+
+    var iframe = document.getElementById(frameId);
+    iframe.onload = function() {
+        try {
+            var stub = iframe.contentDocument.createElement("script");
+            stub.textContent = buildStubScript(ebsUrl, role, userId);
+            iframe.contentDocument.head.insertBefore(stub, iframe.contentDocument.head.firstChild);
+        } catch (e) {
+            console.warn("Could not inject stub:", e);
+        }
+    };
+    iframe.src = htmlFile + "?t=" + Date.now();
+}
+
+function reloadAll() {
+    loadFrame("frame-panel",  "panel.html");
+    loadFrame("frame-live",   "live_config.html");
+    loadFrame("frame-config", "config.html");
+    log("Frames reloaded with EBS=" + document.getElementById("ebs-url").value);
+}
+
+// ── PubSub simulator ────────────────────────────────────────────────────────
+
+function sendPubSub() {
+    var type    = document.getElementById("msg-type").value;
+    var payload = document.getElementById("msg-payload").value.trim();
+    var msg;
+    try {
+        msg = payload ? JSON.parse(payload) : {};
+    } catch (e) {
+        log("Invalid JSON: " + e.message);
+        return;
+    }
+    msg.type = type;
+    var raw = JSON.stringify(msg);
+
+    ["frame-panel", "frame-live", "frame-config"].forEach(function(id) {
+        try {
+            var cb = document.getElementById(id).contentWindow.__pubSubListener;
+            if (cb) cb("broadcast", "application/json", raw);
+        } catch (e) {}
+    });
+    log("→ " + raw);
+}
+
+function log(msg) {
+    var el = document.getElementById("pubsub-log");
+    el.textContent += "\n" + msg;
+    el.scrollTop = el.scrollHeight;
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+
+// Iframes must load from same origin (served via FastAPI /twitch-ext/).
+// Inject the stub via onload because cross-origin iframes would block this.
+reloadAll();
+</script>
+</body>
+</html>

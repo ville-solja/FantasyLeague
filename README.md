@@ -53,6 +53,7 @@ rm data/fantasy.db && docker compose restart
 | [Point Simulator](markdown/feature_description/point_simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Profile & Account Management](markdown/feature_description/profile.md) | Username, password, Dota 2 player linking, and forgot-password flow |
 | [Configuration & Commands](markdown/feature_description/commands.md) | Environment variables and useful admin commands |
+| [Twitch Extension](markdown/feature_description/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |
 
 ### User stories
 

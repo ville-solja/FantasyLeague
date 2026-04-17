@@ -22,22 +22,22 @@ Negative amounts are not validated server-side — use carefully. All grants are
 
 ---
 
-## Token Distribution: Promo Codes
+## Token Distribution: Redeemable Codes
 
-Promo codes allow token grants to be distributed without admin action per user. Each code can be redeemed once per user.
+Redeemable codes allow token grants to be distributed without per-user admin action. Each code can be redeemed once per user. Codes are not restricted to promotional use — they can serve any purpose (event rewards, onboarding, giveaways, etc.).
 
 ### `POST /codes`
-Creates a new promo code.
+Creates a new redeemable code.
 ```json
 { "code": "LAUNCH2026", "token_amount": 5 }
 ```
 Codes are stored uppercased. Duplicate codes return 409.
 
 ### `GET /codes`
-Lists all created promo codes with their redemption counts.
+Lists all created codes with their redemption counts.
 
 ### `DELETE /codes/{code_id}`
-Deletes a promo code. Users who already redeemed it keep their tokens.
+Deletes a code. Users who already redeemed it keep their tokens.
 
 ### `POST /redeem` *(user-facing)*
 Regular users redeem a code via this endpoint. Returns the number of tokens granted.
@@ -52,8 +52,8 @@ Regular users redeem a code via this endpoint. Returns the number of tokens gran
 ### `GET /weights`
 Returns all scoring weight keys, labels, and current values. Available to all users (used to display weights in the UI).
 
-### Admin panel
-Weights are adjusted through the admin panel UI. Changes apply immediately to future recalculations. To change weights persistently across restarts, use the `WEIGHTS_JSON` environment variable.
+### Changing weights
+Weights are configured via the `WEIGHTS_JSON` environment variable (a JSON object mapping weight keys to float values). Changes take effect on the next container restart. See `commands.md` for the full variable reference and `seed.py` for the list of all weight keys and their defaults.
 
 ### `POST /recalculate`
 Recalculates fantasy points for every `PlayerMatchStats` row using the current weights. Run this after changing weights to update historical scores. Takes several seconds on large datasets.
@@ -117,14 +117,21 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | Action | Trigger |
 |---|---|
 | `user_register` | New user registration |
+| `user_login` | Successful user login |
 | `token_draw` | Card drawn |
+| `reroll_modifiers` | User spent a token to reroll card modifiers |
+| `token_redeem` | User redeemed a code |
 | `admin_grant_tokens` | Admin granted tokens to a user |
 | `admin_ingest` | Manual league ingest triggered |
 | `admin_recalculate` | Fantasy points recalculated |
+| `admin_schedule_refresh` | Schedule cache busted via `POST /schedule/refresh` |
+| `admin_set_match_week` | Admin manually assigned a match to a week |
 | `admin_sync_match_weeks` | Bulk week override sync |
 | `admin_sync_toornament` | Toornament result push |
+| `admin_code_create` | Admin created a redeemable code |
+| `admin_code_delete` | Admin deleted a redeemable code |
 | `weekly_token_grant` | Automatic token grant at week lock |
-| `promo_code_redeemed` | User redeemed a promo code |
+| `password_reset_requested` | Forgot-password flow issued a temporary password |
 
 ---
 

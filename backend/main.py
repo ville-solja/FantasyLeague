@@ -10,15 +10,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
 from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, PromoCode, CodeRedemption, AuditLog
+from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
 from ingest import ingest_league
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
-from scoring import fantasy_score, SCORING_STATS
+from scoring import fantasy_score, card_fantasy_score, SCORING_STATS
 from auth import hash_password, verify_password
 from email_utils import send_email
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
@@ -82,14 +83,14 @@ def _ingest_poll_loop(league_ids: list[int]):
 
 
 class LoginBody(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class RegisterBody(BaseModel):
-    username: str
-    email: str
-    password: str
+    username: str = Field(min_length=1, max_length=64)
+    email:    str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=6, max_length=128)
 
 
 class GrantTokensBody(BaseModel):
@@ -98,21 +99,21 @@ class GrantTokensBody(BaseModel):
 
 
 class ChangePasswordBody(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password:     str = Field(min_length=6, max_length=128)
 
 
 class CreateCodeBody(BaseModel):
-    code: str
+    code:         str = Field(min_length=1, max_length=64)
     token_amount: int
 
 
 class RedeemCodeBody(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=64)
 
 
 class UpdateUsernameBody(BaseModel):
-    username: str
+    username: str = Field(min_length=1, max_length=64)
 
 
 class UpdatePlayerIdBody(BaseModel):
@@ -120,7 +121,7 @@ class UpdatePlayerIdBody(BaseModel):
 
 
 class ForgotPasswordBody(BaseModel):
-    username: str
+    username: str = Field(min_length=1, max_length=64)
 
 
 class MatchWeekBody(BaseModel):
@@ -162,19 +163,39 @@ def _audit(db, action: str, actor_id=None, actor_username=None, detail=None):
     # Caller is responsible for committing
 
 
-def _rarity_params(db) -> dict:
-    """Return rarity modifier params for SQL CASE expressions.
+def _load_weights(db) -> tuple[dict, dict]:
+    """Return (weights_dict, rarity_dict) loaded from DB in a single query.
 
-    Values are stored as percentages (e.g. 3.0 = 3%).
-    Returns them divided by 100 so they can be used as: fantasy_points * (1 + param).
+    weights_dict — full {key: value} map, used directly by card_fantasy_score()
+    rarity_dict  — {"mod_common": 0.0, "mod_rare": 0.01, ...} multipliers
     """
-    weights = {w.key: w.value for w in db.query(Weight).all()}
-    return {
-        "mod_common":    weights.get("rarity_common",    0.0) / 100,
-        "mod_rare":      weights.get("rarity_rare",      1.0) / 100,
-        "mod_epic":      weights.get("rarity_epic",      2.0) / 100,
-        "mod_legendary": weights.get("rarity_legendary", 3.0) / 100,
+    all_weights = {w.key: w.value for w in db.query(Weight).all()}
+    rarity = {
+        "mod_common":    all_weights.get("rarity_common",    0.0) / 100,
+        "mod_rare":      all_weights.get("rarity_rare",      1.0) / 100,
+        "mod_epic":      all_weights.get("rarity_epic",      2.0) / 100,
+        "mod_legendary": all_weights.get("rarity_legendary", 3.0) / 100,
     }
+    return all_weights, rarity
+
+
+def _rarity_params(db) -> dict:
+    _, rarity = _load_weights(db)
+    return rarity
+
+
+def _stat_sums_from_row(row) -> dict:
+    """Extract SCORING_STATS values from a SQLAlchemy Row or dict."""
+    if hasattr(row, "_mapping"):
+        return {stat: row._mapping.get(stat, 0) or 0 for stat in SCORING_STATS}
+    return {stat: getattr(row, stat, 0) or 0 for stat in SCORING_STATS}
+
+
+def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity: dict, mods: dict) -> float:
+    """Apply card_fantasy_score + rarity multiplier for one card."""
+    base = card_fantasy_score(stat_sums, weights, mods)
+    rarity_mod = 1 + rarity.get(f"mod_{card_type}", 0)
+    return base * rarity_mod
 
 
 def _assign_modifiers(db, card: Card, weights: dict):
@@ -260,6 +281,28 @@ async def lifespan(app: FastAPI):
         if "logo_url" not in team_cols:
             conn.execute(text("ALTER TABLE teams ADD COLUMN logo_url TEXT"))
             conn.commit()
+        _cm_ddl = (conn.execute(text(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
+        )).scalar() or "")
+        if "ck_card_modifiers_stat_key" not in _cm_ddl:
+            conn.execute(text("""
+                CREATE TABLE card_modifiers_new (
+                    id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    card_id  INTEGER REFERENCES cards(id),
+                    stat_key VARCHAR,
+                    bonus_pct FLOAT,
+                    CONSTRAINT ck_card_modifiers_stat_key
+                        CHECK (stat_key IN ('kills','assists','deaths','gold_per_min',
+                                            'obs_placed','sen_placed','tower_damage'))
+                )
+            """))
+            conn.execute(text(
+                "INSERT INTO card_modifiers_new SELECT id, card_id, stat_key, bonus_pct FROM card_modifiers"
+            ))
+            conn.execute(text("DROP TABLE card_modifiers"))
+            conn.execute(text("ALTER TABLE card_modifiers_new RENAME TO card_modifiers"))
+            conn.commit()
+            print("[MIGRATION] card_modifiers: added stat_key CHECK constraint")
     seed_users()
     seed_weights()
     # Migrate: if the old epoch-0 Week 1 exists, the week structure is wrong.
@@ -298,6 +341,7 @@ app.add_middleware(
     same_site="lax",
     https_only=False,
 )
+app.include_router(twitch_router)
 
 
 @app.post("/ingest/league/{league_id}")
@@ -502,7 +546,7 @@ _LATEST_TEAM_SUBQUERY = """
 
 
 @app.get("/roster/{user_id}")
-def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
+def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = Depends(get_current_user)):
     # Determine which week to scope points to
     if week_id is not None:
         week = db.get(Week, week_id)
@@ -513,14 +557,20 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
 
     now = int(time.time())
 
+    _WEEK_STAT_CASE = lambda col: (
+        f"COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR "
+        f"(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
+        f"THEN s.{col} ELSE 0 END), 0) as {col}"
+    )
+    _STAT_COLS = ",\n                   ".join(_WEEK_STAT_CASE(col) for col in SCORING_STATS)
+
     if week and week.is_locked:
         # Locked week: return the immutable snapshot with week-scoped points
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, 1 as is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-                                THEN s.fantasy_points ELSE 0 END), 0) as total_points
+                   {_STAT_COLS}
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
             JOIN players p ON p.id = c.player_id
@@ -529,7 +579,6 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
             GROUP BY c.id, c.card_type, p.id, p.name, p.avatar_url, t.name, t.logo_url
-            ORDER BY total_points DESC
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -543,8 +592,7 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
             SELECT c.id, c.card_type, c.is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-                                THEN s.fantasy_points ELSE 0 END), 0) as total_points
+                   {_STAT_COLS}
             FROM cards c
             JOIN players p ON p.id = c.player_id
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
@@ -552,35 +600,40 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id
             GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name, t.logo_url
-            ORDER BY c.is_active DESC, total_points DESC
+            ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
 
-    # Load modifiers for all cards in this roster
+    # Load modifiers and weights; compute total_points via card_fantasy_score()
     card_ids = [c["id"] for c in cards]
     modifiers_map = _card_modifiers_map(db, card_ids)
+    weights, rarity = _load_weights(db)
 
-    rarity = _rarity_params(db)
     for c in cards:
         mods = modifiers_map.get(c["id"], {})
         c["modifiers"] = _format_modifiers(mods)
-        # Card modifier bonus: average % across all modifiers on this card
-        # applied on top of the base score (which uses raw fantasy_points from DB)
-        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
-        rarity_mod = 1 + rarity.get(f"mod_{c['card_type']}", 0)
-        card_mod = 1 + avg_mod_bonus / 100
-        c["total_points"] = c["total_points"] * rarity_mod * card_mod
+        stat_sums = {stat: c.get(stat, 0) or 0 for stat in SCORING_STATS}
+        c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods)
+
+    active.sort(key=lambda c: c["total_points"], reverse=True)
+    bench.sort(key=lambda c: c["total_points"], reverse=True)
 
     combined = sum(c["total_points"] for c in active)
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    # Season points: per card so both rarity and card modifiers can be applied
+    # Season points: sum raw stats per card across all locked weeks, then apply card_fantasy_score()
     season_pts_rows = db.execute(text("""
         SELECT c.id as card_id, c.card_type,
-               COALESCE(SUM(s.fantasy_points), 0) as raw_points
+               COALESCE(SUM(s.kills), 0)        as kills,
+               COALESCE(SUM(s.assists), 0)      as assists,
+               COALESCE(SUM(s.deaths), 0)       as deaths,
+               COALESCE(SUM(s.gold_per_min), 0) as gold_per_min,
+               COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
+               COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
+               COALESCE(SUM(s.tower_damage), 0) as tower_damage
         FROM weekly_roster_entries wre
         JOIN weeks wk ON wk.id = wre.week_id
         JOIN cards c ON c.id = wre.card_id
@@ -596,11 +649,9 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db)):
     season_mods = _card_modifiers_map(db, season_card_ids)
     season_points = 0.0
     for row in season_pts_rows:
+        stat_sums = _stat_sums_from_row(row)
         mods = season_mods.get(row.card_id, {})
-        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
-        rarity_mod = 1 + rarity.get(f"mod_{row.card_type}", 0)
-        card_mod = 1 + avg_mod_bonus / 100
-        season_points += row.raw_points * rarity_mod * card_mod
+        season_points += _compute_card_points(stat_sums, row.card_type, weights, rarity, mods)
 
     return {
         "active": active, "bench": bench, "combined_value": combined,
@@ -1231,7 +1282,8 @@ def get_profile(user_id: int, db=Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     result = {"id": user.id, "username": user.username, "player_id": user.player_id,
-              "player_name": None, "player_avatar_url": None}
+              "player_name": None, "player_avatar_url": None,
+              "twitch_linked": bool(user.twitch_user_id)}
     if user.player_id:
         player = db.get(Player, user.player_id)
         if player:
@@ -1275,30 +1327,40 @@ def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user:
 
 
 def _leaderboard_rows(db, rows) -> list[dict]:
-    """Apply rarity + card modifier multipliers to raw leaderboard rows.
+    """Compute leaderboard totals using per-stat card_fantasy_score().
 
-    rows must have: user_id, username, card_id, card_type, raw_points
+    rows must have: user_id, username, card_id, card_type, player_name,
+                    kills, assists, deaths, gold_per_min, obs_placed, sen_placed, tower_damage
     """
-    rarity = _rarity_params(db)
+    weights, rarity = _load_weights(db)
     card_ids = list({r.card_id for r in rows if r.card_id})
     mods_map = _card_modifiers_map(db, card_ids)
 
     totals: dict[int, float] = {}
     usernames: dict[int, str] = {}
+    cards_by_user: dict[int, list] = {}
+
     for r in rows:
         uid = r.user_id
         usernames[uid] = r.username
-        if not r.card_id or not r.raw_points:
-            totals.setdefault(uid, 0.0)
+        totals.setdefault(uid, 0.0)
+        cards_by_user.setdefault(uid, [])
+        if not r.card_id:
             continue
+        stat_sums = _stat_sums_from_row(r)
         mods = mods_map.get(r.card_id, {})
-        avg_mod_bonus = sum(mods.values()) / len(mods) if mods else 0.0
-        rarity_mod = 1 + rarity.get(f"mod_{r.card_type}", 0)
-        card_mod = 1 + avg_mod_bonus / 100
-        totals[uid] = totals.get(uid, 0.0) + r.raw_points * rarity_mod * card_mod
+        card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods)
+        totals[uid] += card_pts
+        cards_by_user[uid].append({
+            "card_id": r.card_id,
+            "card_type": r.card_type,
+            "player_name": getattr(r, "player_name", None) or "",
+            "points": round(card_pts, 2),
+        })
 
     return sorted(
-        [{"id": uid, "username": usernames[uid], "points": round(totals[uid], 2)}
+        [{"id": uid, "username": usernames[uid], "points": round(totals[uid], 2),
+          "cards": sorted(cards_by_user.get(uid, []), key=lambda c: c["points"], reverse=True)}
          for uid in totals],
         key=lambda x: x["points"], reverse=True,
     )
@@ -1309,18 +1371,28 @@ def season_leaderboard(db=Depends(get_db)):
     rows = db.execute(text("""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
-               COALESCE(SUM(s.fantasy_points), 0) as raw_points
+               p.name as player_name,
+               COALESCE(SUM(s.kills), 0)        as kills,
+               COALESCE(SUM(s.assists), 0)      as assists,
+               COALESCE(SUM(s.deaths), 0)       as deaths,
+               COALESCE(SUM(s.gold_per_min), 0) as gold_per_min,
+               COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
+               COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
+               COALESCE(SUM(s.tower_damage), 0) as tower_damage
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
         LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
         LEFT JOIN cards c ON c.id = wre.card_id
+        LEFT JOIN players p ON p.id = c.player_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
-            AND m.start_time BETWEEN wk.start_time AND wk.end_time
-        GROUP BY u.id, u.username, c.id, c.card_type
+            AND (m.week_override_id = wk.id
+                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+        GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
     result = _leaderboard_rows(db, rows)
-    return [{"id": r["id"], "username": r["username"], "season_points": r["points"]} for r in result]
+    return [{"id": r["id"], "username": r["username"], "season_points": r["points"],
+             "cards": r["cards"]} for r in result]
 
 
 @app.get("/leaderboard/weekly")
@@ -1331,17 +1403,27 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     rows = db.execute(text("""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
-               COALESCE(SUM(s.fantasy_points), 0) as raw_points
+               p.name as player_name,
+               COALESCE(SUM(s.kills), 0)        as kills,
+               COALESCE(SUM(s.assists), 0)      as assists,
+               COALESCE(SUM(s.deaths), 0)       as deaths,
+               COALESCE(SUM(s.gold_per_min), 0) as gold_per_min,
+               COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
+               COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
+               COALESCE(SUM(s.tower_damage), 0) as tower_damage
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
+        LEFT JOIN players p ON p.id = c.player_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
-            AND m.start_time BETWEEN :ws AND :we
-        GROUP BY u.id, u.username, c.id, c.card_type
+            AND (m.week_override_id = :week_id
+                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+        GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)
-    return [{"id": r["id"], "username": r["username"], "week_points": r["points"]} for r in result]
+    return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
+             "cards": r["cards"]} for r in result]
 
 
 @app.put("/profile/password")
@@ -1442,5 +1524,11 @@ def get_config():
 _FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if not os.path.isdir(_FRONTEND_DIR):
     _FRONTEND_DIR = "frontend"  # docker image copies to /app/frontend
+
+_TWITCH_EXT_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "twitch-extension"))
+if not os.path.isdir(_TWITCH_EXT_DIR):
+    _TWITCH_EXT_DIR = "twitch-extension"
+if os.path.isdir(_TWITCH_EXT_DIR):
+    app.mount("/twitch-ext", StaticFiles(directory=_TWITCH_EXT_DIR), name="twitch-extension")
 
 app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FantasyLeague — Live</title>
+<link rel="stylesheet" href="extension.css">
+<script>window.EBS_URL = "%%EBS_URL%%";</script>
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script src="extension.js"></script>
+</head>
+<body>
+
+<div id="banner" class="banner"></div>
+
+<!-- Giveaway -->
+<h2>Broadcaster Controls</h2>
+
+<h3>Giveaway</h3>
+<p class="muted">Grants +1 token to one random viewer in the panel.</p>
+<button id="btn-giveaway">Trigger Giveaway</button>
+
+<!-- Token drop -->
+<h3>Token Drop</h3>
+<p class="muted">Grants +1 token to multiple random viewers.</p>
+<input type="number" id="drop-count" value="5" min="1" max="20" style="width:80px;display:inline-block">
+<span class="muted"> viewers</span>
+<button id="btn-drop">Drop Tokens</button>
+
+<!-- MVP -->
+<h3>Match MVP</h3>
+<p class="muted">Select the MVP for a match. Shown to all viewers.</p>
+<div id="match-list"><p class="muted">Loading matches…</p></div>
+
+<script>
+function onReady() {
+    loadMatches();
+    el("btn-giveaway").addEventListener("click", doGiveaway);
+    el("btn-drop").addEventListener("click", doDrop);
+}
+
+function doGiveaway() {
+    el("btn-giveaway").disabled = true;
+    ebsPost("/twitch/giveaway").then(function(data) {
+        if (data.winner_username) {
+            showBanner(el("banner"), "🎉 Winner: " + data.winner_username + " (pool: " + data.pool_size + ")", false);
+        } else {
+            showBanner(el("banner"), data.detail || "Error", true);
+        }
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed", true);
+    }).finally(function() {
+        el("btn-giveaway").disabled = false;
+    });
+}
+
+function doDrop() {
+    var count = parseInt(el("drop-count").value, 10) || 1;
+    el("btn-drop").disabled = true;
+    ebsPost("/twitch/token-drop", { count: count }).then(function(data) {
+        if (data.winners) {
+            showBanner(el("banner"), "Dropped to: " + data.winners.join(", "), false);
+        } else {
+            showBanner(el("banner"), data.detail || "Error", true);
+        }
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed", true);
+    }).finally(function() {
+        el("btn-drop").disabled = false;
+    });
+}
+
+function loadMatches() {
+    ebsGet("/twitch/matches/current").then(function(data) {
+        var container = el("match-list");
+        if (!data.matches || data.matches.length === 0) {
+            container.innerHTML = '<p class="muted">No matches found for the current week.</p>';
+            return;
+        }
+        container.innerHTML = "";
+        data.matches.forEach(function(match) {
+            var matchDiv = document.createElement("div");
+            matchDiv.className = "match-header";
+            matchDiv.textContent = "Match " + match.match_id;
+            container.appendChild(matchDiv);
+
+            var ul = document.createElement("ul");
+            ul.className = "player-list";
+            match.players.forEach(function(p) {
+                var li = document.createElement("li");
+                li.className = "player-item" + (match.mvp_player_id === p.player_id ? " active" : "");
+                li.innerHTML = '<span>' + p.player_name + '</span><span class="team-tag">' + p.team_name + '</span>';
+                li.addEventListener("click", function() {
+                    selectMVP(match.match_id, p.player_id, p.player_name, ul, li);
+                });
+                ul.appendChild(li);
+            });
+            container.appendChild(ul);
+        });
+    }).catch(function() {
+        el("match-list").innerHTML = '<p class="muted">Failed to load matches.</p>';
+    });
+}
+
+function selectMVP(matchId, playerId, playerName, ul, selectedLi) {
+    ebsPost("/twitch/mvp", { match_id: matchId, player_id: playerId }).then(function(data) {
+        if (data.player_id) {
+            Array.from(ul.querySelectorAll(".player-item")).forEach(function(li) {
+                li.classList.remove("active");
+            });
+            selectedLi.classList.add("active");
+            showBanner(el("banner"), "MVP set: " + playerName, false);
+        } else {
+            showBanner(el("banner"), data.detail || "Error setting MVP", true);
+        }
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed", true);
+    });
+}
+
+function onPubSub() {}  // live config doesn't need to react to PubSub
+
+init();
+</script>
+</body>
+</html>
