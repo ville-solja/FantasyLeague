@@ -51,6 +51,7 @@ rm data/fantasy.db && docker compose restart
 | [Admin Features](markdown/feature_description/admin.md) | Admin endpoints: ingest, weights, tokens, promo codes, audit log |
 | [Toornament Integration](markdown/feature_description/toornament.md) | Automatic result sync to toornament.com |
 | [Point Simulator](markdown/feature_description/point_simulator.md) | The `/simulate` endpoint for testing scoring weights |
+| [Profile & Account Management](markdown/feature_description/profile.md) | Username, password, Dota 2 player linking, and forgot-password flow |
 | [Configuration & Commands](markdown/feature_description/commands.md) | Environment variables and useful admin commands |
 
 ### User stories
