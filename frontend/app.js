@@ -2,7 +2,7 @@ const API = "";
 
 let activeUserId   = null;
 let activeUsername = localStorage.getItem("username");
-let activeIsAdmin  = localStorage.getItem("is_admin") === "true";
+let activeIsAdmin  = false;  // always set from server via loadMe(), never trusted from localStorage
 let activeMustChangePassword = false;
 let _tokenName     = "Tokens";
 let _tokenBalance  = null;
@@ -340,8 +340,8 @@ function switchTab(name) {
   const btn = document.getElementById(`tab-btn-${name}`);
   if (btn) btn.classList.add("active");
 
-  if (name === "profile")       loadProfile();
-  if (name === "team")        { loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
+  if (name === "profile")  { if (!activeUserId) return; loadProfile(); }
+  if (name === "team")     { if (!activeUserId) return; loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
   if (name === "leaderboard") {
     loadWeeks().then(() => { _populateLbWeekSelect(); switchLeaderboard(_lbMode); });
     loadLeaderboard(); loadTop();
@@ -349,7 +349,7 @@ function switchTab(name) {
   if (name === "players")       loadPlayers();
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
-  if (name === "admin")       { loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
 }
 
 // -------------------------------------------------------

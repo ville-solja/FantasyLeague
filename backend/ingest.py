@@ -39,47 +39,48 @@ def get_league_info(league_id: int):
 
 def ingest_league(league_id: int):
     db = SessionLocal()
+    try:
+        league_data = get_league_info(league_id)
+        league_name = league_data.get("name", "unknown")
 
-    league_data = get_league_info(league_id)
-    league_name = league_data.get("name", "unknown")
+        print(f"[LEAGUE] {league_name}")
 
-    print(f"[LEAGUE] {league_name}")
+        league = db.get(League, league_id)
+        if not league:
+            league = League(id=league_id, name=league_name)
+            db.add(league)
+        else:
+            league.name = league_name
 
-    league = db.get(League, league_id)
-    if not league:
-        league = League(id=league_id, name=league_name)
-        db.add(league)
-    else:
-        league.name = league_name
+        db.commit()
 
-    db.commit()
+        match_ids = get_league_matches(league_id)
+        print(f"[LEAGUE] {len(match_ids)} matches")
 
-    match_ids = get_league_matches(league_id)
-    print(f"[LEAGUE] {len(match_ids)} matches")
+        # Pre-fetch already-ingested match IDs in one query
+        existing = {
+            row[0] for row in
+            db.query(Match.match_id).filter(Match.match_id.in_(match_ids)).all()
+        }
 
-    # Pre-fetch already-ingested match IDs in one query
-    existing = {
-        row[0] for row in
-        db.query(Match.match_id).filter(Match.match_id.in_(match_ids)).all()
-    }
+        weights = {w.key: w.value for w in db.query(Weight).all()}
+        print(f"[INGEST] Loaded {len(weights)} weights")
 
-    weights = {w.key: w.value for w in db.query(Weight).all()}
-    print(f"[INGEST] Loaded {len(weights)} weights")
+        seen_players = set()
+        seen_teams = set()
 
-    seen_players = set()
-    seen_teams = set()
+        for match_id in match_ids:
+            if match_id in existing:
+                continue
 
-    for match_id in match_ids:
-        if match_id in existing:
-            continue
+            print(f"[MATCH] Ingesting {match_id}")
+            try:
+                ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
+            except Exception as e:
+                print(f"[SKIP] Match {match_id} failed: {e}")
+    finally:
+        db.close()
 
-        print(f"[MATCH] Ingesting {match_id}")
-        try:
-            ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
-        except Exception as e:
-            print(f"[SKIP] Match {match_id} failed: {e}")
-
-    db.close()
     try:
         ensure_dotabuff_league_logos()
     except Exception as e:

@@ -27,7 +27,7 @@ from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
 from image import generate_card_image, PIL_AVAILABLE
 from toornament import sync_toornament_results
 
-ROSTER_LIMIT = 5
+ROSTER_LIMIT   = int(os.getenv("ROSTER_LIMIT", "5"))
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 
@@ -245,6 +245,9 @@ async def lifespan(app: FastAPI):
     print(f"[DB] {DATABASE_URL}")
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL"))
+        conn.execute(text("PRAGMA busy_timeout=30000"))
+        conn.commit()
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
         if "avatar_url" not in cols:
             conn.execute(text("ALTER TABLE players ADD COLUMN avatar_url TEXT"))
@@ -303,6 +306,18 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE card_modifiers_new RENAME TO card_modifiers"))
             conn.commit()
             print("[MIGRATION] card_modifiers: added stat_key CHECK constraint")
+    with engine.connect() as conn:
+        for stmt in [
+            "CREATE INDEX IF NOT EXISTS ix_cards_owner_id ON cards(owner_id)",
+            "CREATE INDEX IF NOT EXISTS ix_cards_player_id ON cards(player_id)",
+            "CREATE INDEX IF NOT EXISTS ix_pms_player_id ON player_match_stats(player_id)",
+            "CREATE INDEX IF NOT EXISTS ix_pms_match_id ON player_match_stats(match_id)",
+            "CREATE INDEX IF NOT EXISTS ix_matches_start_time ON matches(start_time)",
+            "CREATE INDEX IF NOT EXISTS ix_wre_week_user ON weekly_roster_entries(week_id, user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_twitch_presence_pool ON twitch_presence(channel_id, seen_at)",
+        ]:
+            conn.execute(text(stmt))
+        conn.commit()
     seed_users()
     seed_weights()
     # Migrate: if the old epoch-0 Week 1 exists, the week structure is wrong.
@@ -329,17 +344,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 _secret_key = os.environ.get("SECRET_KEY", "")
+_is_dev = os.getenv("TWITCH_LOCAL_DEV") == "true" or os.getenv("DEBUG", "").lower() == "true"
 if not _secret_key:
+    if not _is_dev:
+        raise RuntimeError(
+            "[SECURITY] SECRET_KEY is not set. Set SECRET_KEY in your environment. "
+            "To bypass this check in local dev, set DEBUG=true or TWITCH_LOCAL_DEV=true."
+        )
     warnings.warn(
-        "[SECURITY] SECRET_KEY not set — using insecure default. Set SECRET_KEY in production.",
+        "[SECURITY] SECRET_KEY not set — using insecure default. Only acceptable in local dev.",
         stacklevel=1,
     )
     _secret_key = "dev-secret-change-me"
+_https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
 app.add_middleware(
     SessionMiddleware,
     secret_key=_secret_key,
     same_site="lax",
-    https_only=False,
+    https_only=_https_only,
 )
 app.include_router(twitch_router)
 
@@ -1460,13 +1482,15 @@ def create_code(body: CreateCodeBody, db=Depends(get_db), admin: dict = Depends(
 
 @app.get("/codes")
 def list_codes(db=Depends(get_db), _: dict = Depends(require_admin)):
-    codes = db.query(PromoCode).all()
-    result = []
-    for c in codes:
-        redemptions = db.query(CodeRedemption).filter(CodeRedemption.code_id == c.id).count()
-        result.append({"id": c.id, "code": c.code, "token_amount": c.token_amount,
-                       "redemptions": redemptions})
-    return result
+    rows = db.execute(text("""
+        SELECT p.id, p.code, p.token_amount, COUNT(r.id) as redemptions
+        FROM promo_codes p
+        LEFT JOIN code_redemptions r ON r.code_id = p.id
+        GROUP BY p.id, p.code, p.token_amount
+        ORDER BY p.id
+    """)).fetchall()
+    return [{"id": r.id, "code": r.code, "token_amount": r.token_amount,
+             "redemptions": r.redemptions} for r in rows]
 
 
 @app.delete("/codes/{code_id}")
@@ -1519,6 +1543,11 @@ def get_audit_logs(db=Depends(get_db), limit: int = 200, _: dict = Depends(requi
 @app.get("/config")
 def get_config():
     return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS}
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 _FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
