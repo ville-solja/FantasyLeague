@@ -45,7 +45,11 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
       role            — "viewer", "broadcaster", or "external"
     """
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
-        # Bypass for local development — behaves as a broadcaster so all actions are accessible
+        if os.getenv("ENV", "").lower() == "production":
+            raise HTTPException(
+                status_code=500,
+                detail="TWITCH_LOCAL_DEV must not be set in production",
+            )
         return {
             "channel_id": "dev_channel",
             "opaque_user_id": "Udev123",
@@ -322,19 +326,15 @@ def current_matches(
 def _active_pool(db: Session, channel_id: str) -> list[str]:
     """Linked viewers who sent a heartbeat within the presence TTL."""
     cutoff = int(time.time()) - _PRESENCE_TTL
-    presences = (
-        db.query(TwitchPresence)
-        .filter(
-            TwitchPresence.channel_id == channel_id,
-            TwitchPresence.seen_at >= cutoff,
-        )
-        .all()
-    )
-    linked_ids = {
-        u.twitch_user_id
-        for u in db.query(User).filter(User.twitch_user_id.isnot(None)).all()
-    }
-    return [p.twitch_user_id for p in presences if p.twitch_user_id in linked_ids]
+    from sqlalchemy import text as _text
+    rows = db.execute(_text("""
+        SELECT p.twitch_user_id
+        FROM twitch_presence p
+        JOIN users u ON u.twitch_user_id = p.twitch_user_id
+        WHERE p.channel_id = :channel_id
+          AND p.seen_at >= :cutoff
+    """), {"channel_id": channel_id, "cutoff": cutoff}).fetchall()
+    return [r[0] for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -391,8 +391,13 @@ def set_mvp(
         pool_size = len(pool)
         if pool:
             count = min(_TWITCH_DROP_MAX, len(pool))
-            for twitch_id in random.sample(pool, count):
-                user = db.query(User).filter_by(twitch_user_id=twitch_id).first()
+            winner_ids = random.sample(pool, count)
+            users_by_twitch_id = {
+                u.twitch_user_id: u
+                for u in db.query(User).filter(User.twitch_user_id.in_(winner_ids)).all()
+            }
+            for twitch_id in winner_ids:
+                user = users_by_twitch_id.get(twitch_id)
                 if user:
                     user.tokens = (user.tokens or 0) + 1
                     winner_names.append(user.username)

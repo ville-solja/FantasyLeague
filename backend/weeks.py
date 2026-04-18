@@ -57,16 +57,19 @@ def generate_weeks(db):
 
 def _snapshot_week(db, week: Week):
     """Snapshot current active rosters into WeeklyRosterEntry for this week."""
-    users = db.query(User).all()
-    for user in users:
-        existing = db.query(WeeklyRosterEntry).filter_by(
-            week_id=week.id, user_id=user.id
-        ).first()
-        if existing:
+    already_snapshotted = {
+        r[0] for r in
+        db.query(WeeklyRosterEntry.user_id).filter_by(week_id=week.id).all()
+    }
+    active_cards = (
+        db.query(Card)
+        .filter(Card.is_active == True, Card.owner_id.isnot(None))  # noqa: E712
+        .all()
+    )
+    for card in active_cards:
+        if card.owner_id in already_snapshotted:
             continue
-        active_cards = db.query(Card).filter_by(owner_id=user.id, is_active=True).all()
-        for card in active_cards:
-            db.add(WeeklyRosterEntry(week_id=week.id, user_id=user.id, card_id=card.id))
+        db.add(WeeklyRosterEntry(week_id=week.id, user_id=card.owner_id, card_id=card.id))
 
 
 def auto_lock_weeks(db):
@@ -86,7 +89,6 @@ def auto_lock_weeks(db):
         week.is_locked = True
         print(f"[WEEKS] Locked {week.label}")
     if unlocked:
-        db.commit()
         users = db.query(User).all()
         for u in users:
             u.tokens = (u.tokens or 0) + 1
@@ -99,7 +101,7 @@ def auto_lock_weeks(db):
             detail=f"weeks={week_labels} users={len(users)}",
         ))
         print(f"[WEEKS] Granted 1 token to {len(users)} users")
-        db.commit()
+        db.commit()  # single commit: snapshot + lock flag + token grants
 
 
 def get_current_week(db):
