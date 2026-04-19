@@ -39,6 +39,8 @@ td { padding: 6px 8px; border-bottom: 1px solid #1e1e1e; }
 .status { font-size: 0.8rem; color: #555; margin-top: 10px; min-height: 18px; }
 .status.ok  { color: #4caf50; }
 .status.err { color: #e05050; }
+input.invalid { border-color: #e05050; }
+.field-error { font-size: 0.75rem; color: #e05050; display: block; min-height: 16px; margin-bottom: 8px; }
 
 /* LEADERBOARD CARD BREAKDOWN */
 .lb-chevron { display: inline-block; margin-left: 5px; font-size: 0.9rem; color: #555;
