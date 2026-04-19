@@ -48,7 +48,7 @@ jobs:
           node-version: "20"
 
       - name: Install Playwright
-        run: cd tests/ui && npm ci && npx playwright install --with-deps chromium
+        run: cd tests/ui && npm install && npx playwright install --with-deps chromium
 
       - name: Run UI tests
         run: cd tests/ui && npm test
