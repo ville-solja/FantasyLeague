@@ -1,8 +1,11 @@
 import datetime
+import logging
 import os
 import time
 
 from models import AuditLog, Card, User, Week, WeeklyRosterEntry
+
+logger = logging.getLogger(__name__)
 
 _SECS_PER_WEEK = 7 * 24 * 3600
 
@@ -46,7 +49,7 @@ def generate_weeks(db):
         if start not in existing_starts:
             db.add(Week(label=f"Week {week_num}", start_time=start, end_time=end,
                         is_locked=False))
-            print(f"[WEEKS] Generated Week {week_num} ({start}–{end})")
+            logger.info("Generated Week %d (%d–%d)", week_num, start, end)
 
         week_num += 1
         if end > future_limit:
@@ -87,7 +90,7 @@ def auto_lock_weeks(db):
     for week in unlocked:
         _snapshot_week(db, week)
         week.is_locked = True
-        print(f"[WEEKS] Locked {week.label}")
+        logger.info("Locked %s", week.label)
     if unlocked:
         users = db.query(User).all()
         for u in users:
@@ -100,7 +103,7 @@ def auto_lock_weeks(db):
             action="weekly_token_grant",
             detail=f"weeks={week_labels} users={len(users)}",
         ))
-        print(f"[WEEKS] Granted 1 token to {len(users)} users")
+        logger.info("Granted 1 token to %d users (weeks: %s)", len(users), week_labels)
         db.commit()  # single commit: snapshot + lock flag + token grants
 
 

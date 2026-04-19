@@ -9,10 +9,13 @@ calls for local development.
 """
 import base64
 import json
+import logging
 import os
 import random
 import string
 import time
+
+logger = logging.getLogger(__name__)
 
 import jwt as pyjwt
 import requests as _requests
@@ -80,7 +83,7 @@ def _require_broadcaster(payload: dict):
 def _pubsub_broadcast(channel_id: str, message: dict):
     """Send a broadcast PubSub message to all open extension panels on a channel."""
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
-        print(f"[TWITCH PUBSUB] {json.dumps(message)}")
+        logger.info("Twitch PubSub (dev): %s", json.dumps(message))
         return
     secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
     client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
@@ -113,8 +116,8 @@ def _pubsub_broadcast(channel_id: str, message: dict):
             },
             timeout=5,
         )
-    except Exception as e:
-        print(f"[TWITCH PUBSUB] broadcast failed: {e}")
+    except Exception:
+        logger.exception("Twitch PubSub broadcast failed")
 
 
 # ---------------------------------------------------------------------------

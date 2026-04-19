@@ -4,6 +4,38 @@ Each user has a profile that holds their display name, linked Dota 2 player, and
 
 ---
 
+## Registration
+
+### `POST /register`
+
+Creates a new user account and immediately starts a session. No authentication required.
+
+```json
+{ "username": "SomeUser", "email": "user@example.com", "password": "secret123" }
+```
+
+On success, returns `{ username, is_admin, tokens }` and sets the session cookie.
+
+#### Field validation rules
+
+| Field | Rule | Error |
+|---|---|---|
+| `username` | Required. 1–64 characters. | 422 if missing or exceeds limit. 409 if already taken. |
+| `email` | Required. 3–254 characters. Must match `user@domain.tld` format. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
+| `password` | Required. 6–128 characters. | 422 if missing or outside length bounds. |
+
+The frontend validates all three fields before submitting and highlights the offending field inline. Server-side 409 conflicts (duplicate username or email) are also mapped back to the relevant field.
+
+#### Auth flow endpoints (no feature spec file — documented here for completeness)
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /login` | Authenticates with `username` + `password`; sets session cookie. Returns `{ username, is_admin, tokens, must_change_password }`. |
+| `POST /logout` | Clears the session. No body required. |
+| `GET /me` | Returns the current session's user info, or `{ logged_in: false }` if unauthenticated. Used on page load to restore UI state. |
+
+---
+
 ## Viewing a Profile
 
 ### `GET /profile/{user_id}`
