@@ -435,13 +435,3 @@ def set_mvp(
             "already_dropped": already_dropped,
         },
     }
-    db.add(AuditLog(
-        timestamp=int(time.time()),
-        actor_id=None,
-        actor_username="twitch",
-        action="twitch_token_drop",
-        detail=f"channel={channel_id} series={body.series_id} count={len(winner_names)} winners={','.join(winner_names)}",
-    ))
-    db.commit()
-    _pubsub_broadcast(channel_id, {"type": "token_drop", "winners": winner_names})
-    return {"winners": winner_names, "pool_size": len(pool)}
