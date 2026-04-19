@@ -47,5 +47,3 @@
 **Toornament** — The tournament bracket platform (toornament.com) where the Kanaliiga tournament is managed. The app automatically pushes series results there after each ingest cycle. See `toornament.md`.
 
 **Audit Log** — A time-ordered record of significant system events (ingests, token grants, week locks, admin actions). Visible to admins at `GET /audit-logs`.
-
-**Promo Code** — An admin-created alphanumeric code that grants a configurable number of tokens when redeemed. Each code can be redeemed once per user.

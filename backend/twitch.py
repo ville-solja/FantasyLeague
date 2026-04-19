@@ -130,7 +130,7 @@ class LinkCodeResponse(BaseModel):
 
 
 class LinkBody(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=6)
 
 
 def get_session_user(request: Request) -> dict:
@@ -418,6 +418,13 @@ def set_mvp(
                 detail=f"channel={channel_id} match={body.match_id} count={len(winner_names)} winners={','.join(winner_names)}",
             ))
 
+    db.add(AuditLog(
+        timestamp=int(time.time()),
+        actor_id=None,
+        actor_username="twitch",
+        action="twitch_mvp_set",
+        detail=f"channel={channel_id} match={body.match_id} player={player.name} re_select={bool(existing)}",
+    ))
     db.commit()
     _pubsub_broadcast(channel_id, {
         "type": "mvp",
@@ -435,13 +442,3 @@ def set_mvp(
             "already_dropped": already_dropped,
         },
     }
-    db.add(AuditLog(
-        timestamp=int(time.time()),
-        actor_id=None,
-        actor_username="twitch",
-        action="twitch_token_drop",
-        detail=f"channel={channel_id} series={body.series_id} count={len(winner_names)} winners={','.join(winner_names)}",
-    ))
-    db.commit()
-    _pubsub_broadcast(channel_id, {"type": "token_drop", "winners": winner_names})
-    return {"winners": winner_names, "pool_size": len(pool)}
