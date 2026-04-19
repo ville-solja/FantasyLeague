@@ -19,8 +19,10 @@ test("admin tab does not load content for a regular user", async ({ page, reques
   const adminTab = page.locator("#tab-admin");
   await expect(adminTab).toBeAttached();
 
-  // Guard returns early without calling loadWeights/loadUsers/loadCodes
-  await expect(adminTab.locator("table")).toHaveCount(0);
+  // Guard returns early — table bodies keep their placeholder content, not real data
+  await expect(page.locator("#weightsBody")).toContainText("—");
+  await expect(page.locator("#usersBody")).toContainText("—");
+  await expect(page.locator("#codesBody")).toContainText("—");
 });
 
 test("admin tab button is hidden for regular users", async ({ page, request }) => {

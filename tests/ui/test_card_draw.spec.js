@@ -80,16 +80,8 @@ test("draw with no tokens shows error", async ({ page, request }) => {
   const totalCards = Object.values(deck).reduce((a, b) => a + b, 0);
   test.skip(totalCards === 0, "Deck is empty — draw error path not reachable");
 
-  // Create user and drain all tokens via API
-  const user = await createTestUser(request);
-
-  // Draw all tokens away so balance is 0
-  // Use the API session of the request fixture (different session from page)
-  // So instead: create user with 0 tokens by direct check after login
-  // This is complex; simplest: just verify the error appears when balance is 0
-  // We know the deckStatus shows an error when draw fails.
-
-  // Register a fresh user via UI so the page session has their cookies
+  // Register via UI to establish a page session, then drain tokens via API.
+  // page.request shares the browser context's cookies, so it uses the same session.
   await page.goto("/");
   const ts = Date.now();
   const username = `nodraw_${ts}`;
@@ -99,23 +91,13 @@ test("draw with no tokens shows error", async ({ page, request }) => {
   await page.fill("#regEmail", `${username}@test.local`);
   await page.fill("#regPassword", "validpassword");
   await page.click("button:has-text('Create account')");
-  await expect(page.locator("#tab-team")).toBeVisible();
+  await expect(page.locator("#tab-team")).toBeVisible({ timeout: 10_000 });
 
-  // Drain tokens by drawing until balance hits 0
-  const revealModal = page.locator("#revealModal");
-  let attempts = 0;
-  while (attempts < 10) {
-    const bal = parseInt(await page.locator("#tokenBalance").textContent(), 10);
-    if (bal === 0) break;
-    await page.click("#drawBtn");
-    // Wait for the reveal modal to either appear (success) or skip (error/empty deck)
-    const appeared = await revealModal.waitFor({ state: "visible", timeout: 5_000 })
-      .then(() => true).catch(() => false);
-    if (appeared) {
-      await page.click("#revealModal button:has-text('Continue')");
-      await revealModal.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
-    }
-    attempts++;
+  // Drain tokens via API (fast — avoids UI animation timing issues)
+  const meRes = await page.request.get("/me");
+  const me = await meRes.json();
+  for (let i = 0; i < (me.tokens ?? 0); i++) {
+    await page.request.post("/draw");
   }
 
   // Now try to draw with 0 tokens
