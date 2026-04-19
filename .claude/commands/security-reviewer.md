@@ -23,6 +23,7 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/main.py` — all endpoint definitions
 - `backend/auth.py` — `get_current_user` and `require_admin` dependency definitions
 - `backend/twitch.py` — Twitch EBS router (if it exists)
+- `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
 
 ---
 

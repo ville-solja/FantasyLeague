@@ -72,7 +72,7 @@ Viewers who open the panel call `POST /twitch/heartbeat` every ~55 seconds. Only
 
 ## Twitch PubSub
 
-When a giveaway winner is selected, a token drop completes, or an MVP is set, the EBS calls:
+When an MVP is confirmed (which triggers a token drop) the EBS calls:
 
 ```
 POST https://api.twitch.tv/helix/extensions/pubsub
@@ -105,6 +105,9 @@ Upload the produced ZIP in the Twitch dev console. Set the version to **Local Te
 
 ### Step 4 — Install and test
 Add the extension to the broadcast channel. Open the Twitch Stream Manager to confirm the Quick Actions (Live Config) view appears. Test the account linking flow from the Fantasy profile tab.
+
+### Local development
+The `twitch-extension/` folder is served by the backend at `/twitch-ext` when the directory is present. The dev harness is accessible at `http://localhost:8000/twitch-ext/dev-harness.html` and simulates the extension panel without requiring a real Twitch session. It is not uploaded to Twitch CDN — only the packaged ZIP is.
 
 ---
 
@@ -161,4 +164,4 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts the MVP se
 - PubSub is broadcast-only from EBS to viewers. The extension cannot send PubSub to other viewers directly.
 - MVP selection has no scoring impact — it is engagement/display only in this phase.
 - The extension must be submitted to Twitch for review before public release, or used in developer test mode.
-- The `series_id` for token drops is broadcaster-supplied and opaque — it does not reference a DB series. Convention: `"week3-s2"` or `"2024-01-15"`.
+- The token drop deduplication key is set automatically to the match ID — once tokens are dropped for a given match they will not drop again even if the broadcaster re-confirms a different MVP.

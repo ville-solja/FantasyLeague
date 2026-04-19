@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -29,6 +29,10 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/twitch.py` — Twitch EBS router
 - `backend/database.py` — database setup and session factory
 - `backend/seed.py` — seeding and DEFAULT_WEIGHTS
+- `backend/email_utils.py` — email sending helpers
+- `backend/image.py` — image generation utilities
+- `backend/opendota_client.py` — OpenDota API client
+- `backend/dotabuff_league_logos.py` — Dotabuff logo fetching
 
 **Frontend:**
 - `frontend/app.js` — all client-side logic
