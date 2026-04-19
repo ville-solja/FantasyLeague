@@ -21,8 +21,4 @@ jobs:
         run: pip install -r backend/requirements.txt
 
       - name: Run pytest
-        run: |
-          python -m pytest tests/ --ignore=tests/ui -v --tb=short
-          status=$?
-          [ $status -eq 5 ] && echo "No unit tests collected — skipping" && exit 0
-          exit $status
+        run: python -m pytest tests/ --ignore=tests/ui -v --tb=short
