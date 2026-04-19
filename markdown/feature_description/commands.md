@@ -116,6 +116,8 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TOKEN_NAME` | `Tokens` | Display name for the token currency |
 | `INITIAL_TOKENS` | `5` | Tokens granted to newly registered users |
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
+| `DEBUG` | *(unset)* | Set to `true` to bypass `SECRET_KEY` requirement for local dev — **never set in production** |
+| `HTTPS_ONLY` | `false` | Set to `true` when behind an HTTPS reverse proxy; enables `Secure` flag on session cookies |
 | `SMTP_HOST` | *(empty)* | SMTP host for email (forgot-password). Disabled if unset. |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP username |
@@ -127,3 +129,4 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally — **never set in production** |
+| `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |

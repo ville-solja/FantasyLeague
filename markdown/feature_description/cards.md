@@ -4,7 +4,7 @@ Cards are the core collectible unit of the fantasy league. Each card represents 
 
 ## Card Rarities
 
-Each player has four cards in the deck with different rarities:
+Each player has four cards in the deck with different rarities. In API responses the rarity is returned as the `card_type` field with values `"common"`, `"rare"`, `"epic"`, or `"legendary"`.
 
 | Rarity | Count per player | Default rarity bonus | Default modifiers granted |
 |--------|-----------------|---------------------|--------------------------|
@@ -13,7 +13,7 @@ Each player has four cards in the deck with different rarities:
 | Epic | 2 | +2% | 2 |
 | Legendary | 1 | +3% | 3 |
 
-**Rarity bonus** is a flat multiplier applied to the card's total fantasy score after all other calculations. It is configurable in the admin panel under Scoring Weights (`rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`).
+**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations (e.g. +1% means the total is multiplied by 1.01). It is configurable in the admin panel under Scoring Weights (`rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`).
 
 ## Drawing Cards
 
@@ -144,6 +144,49 @@ The current system uses a single uniform `bonus_pct` for all modifiers. Future e
 - Card-specific modifiers that affect only one player's known strengths
 
 To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` present in `SCORING_STATS` (defined in `backend/scoring.py`) will be applied automatically.
+
+---
+
+## Roster Endpoints
+
+### `GET /roster/{user_id}`
+
+Returns the calling user's cards split into `active` and `bench` lists, with per-card fantasy points scoped to the requested week.
+
+**Query parameter:** `week_id` (optional integer). Omit to use the current editable week.
+
+- For a **locked** week: returns the immutable `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window.
+- For the **current editable** week: returns all owned cards from the `cards` table, split by `is_active`, with running points accumulated so far.
+
+```json
+{
+  "active": [{ "id": 42, "card_type": "rare", "player_name": "SomePlayer", "total_points": 34.5, "modifiers": [...], ... }],
+  "bench":  [...],
+  "combined_value": 130.2,
+  "season_points": 420.0,
+  "tokens": 4
+}
+```
+
+Requires authentication. Returns 401 if not logged in.
+
+---
+
+### `POST /roster/{card_id}/activate`
+
+Moves a benched card into the active roster. Requires authentication; the card must be owned by the caller.
+
+- Returns 409 `"Roster full"` if the user already has `ROSTER_LIMIT` active cards (default: 5).
+- Returns 409 `"A card for this player is already active"` if another card for the same player is already active.
+- Returns `{ "status": "ok", "card_id": N }` on success.
+
+---
+
+### `POST /roster/{card_id}/deactivate`
+
+Moves an active card to the bench. Requires authentication; the card must be owned by the caller.
+
+Returns `{ "status": "ok", "card_id": N }`.
 
 ---
 

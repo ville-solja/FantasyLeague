@@ -9,7 +9,7 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users with their ID, username, email, token count, admin status, and linked OpenDota player ID.
+Returns a list of all registered users. Each entry contains `id`, `username`, and `tokens`.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.
@@ -18,7 +18,7 @@ Grants a configurable number of tokens to a specific user.
 { "target_user_id": 5, "amount": 3 }
 ```
 
-Negative amounts are not validated server-side — use carefully. All grants are recorded in the audit log.
+Amount must be at least 1 — the endpoint returns 422 for values below 1. All grants are recorded in the audit log.
 
 ---
 
@@ -90,6 +90,9 @@ Ingest also runs automatically every 15 minutes in the background. The manual en
 
 ## Schedule
 
+### `GET /schedule`
+Returns the current season fixture list parsed from the Google Sheets source (cached for 1 hour). No authentication required. Used by the frontend to display upcoming and past series.
+
 ### `POST /schedule/refresh`
 Clears the 1-hour schedule cache, forcing the next `GET /schedule` request to re-fetch from the Google Sheets source.
 
@@ -138,4 +141,11 @@ Returns the most recent audit log entries, newest first. All significant admin a
 ## App Config
 
 ### `GET /config`
-Returns public configuration values used by the frontend (e.g. `TOKEN_NAME`, `APP_NAME`, roster limits). No authentication required.
+Returns public configuration values used by the frontend. No authentication required.
+
+```json
+{ "token_name": "Kana Tokens", "initial_tokens": 5 }
+```
+
+### `GET /health`
+Returns `{"status": "ok"}`. No authentication required. Used by container health checks.
