@@ -29,7 +29,8 @@ jobs:
         run: |
           cp .env.example .env
           printf '\nSECRET_KEY=ci-test-secret-key-not-for-production\nDEBUG=true\nAUTO_INGEST_LEAGUES=\n' >> .env
-          docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+          GITHUB_REPOSITORY=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]') \
+            docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
       - name: Wait for app to be ready
         run: |
