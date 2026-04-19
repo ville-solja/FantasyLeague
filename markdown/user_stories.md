@@ -25,6 +25,10 @@
    - 3.6 Modifier Management
    - 3.7 View Seasonal Reserve Cards
    - 3.8 View Permanent Collection *(post-MVP)*
+   - 3.9 Card Visual Identity
+   - 3.10 Rarity-Distinct Card Design
+   - 3.11 Modifier Labels on Card Image
+   - 3.12 Replaceable Card Template Artwork
 4. [Active Lineup and Reserve Management](#4-active-lineup-and-reserve-management)
    - 4.1 Place Cards into Active Slots
    - 4.2 Lock Active Cards
@@ -305,6 +309,53 @@ As a user, I want to track cards across seasons.
 - No gameplay effect
 - Supports filtering
 - Past season cards are stored separately so they are not included in current season logic
+
+---
+
+### 3.9 Card Visual Identity
+**User story**
+As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance without reading separate UI text.
+
+**Acceptance criteria**
+- Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
+- Team name is printed below the player name on the card image
+- Player avatar (from OpenDota) is composited as a circular portrait on the card image
+- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
+- If avatar or logo is unavailable, the card still renders correctly with the slot left empty
+- During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
+
+---
+
+### 3.10 Rarity-Distinct Card Design
+**User story**
+As a user, I want each rarity tier to have a visually distinct card frame so I can identify rarity from the card art alone.
+
+**Acceptance criteria**
+- Each rarity (Common, Rare, Epic, Legendary) uses a separate template PNG with its own border and colour scheme
+- Rarity frame is always visible regardless of player or team
+- Card image is returned correctly for all four rarities
+
+---
+
+### 3.11 Modifier Labels on Card Image
+**User story**
+As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
+
+**Acceptance criteria**
+- Each active modifier is shown in the lower band of the card as `STAT +X%`
+- After a reroll, the card image updates immediately to reflect the new modifiers
+- Cards with no modifiers (e.g. Common) show no modifier text in that area
+
+---
+
+### 3.12 Replaceable Card Template Artwork
+**User story**
+As an operator, I want to update card template artwork for each rarity by replacing files so the visual design can be refreshed between seasons without code changes.
+
+**Acceptance criteria**
+- Templates are loaded from a configurable assets directory at startup
+- Replacing any of the four template PNGs takes effect on the next card image request
+- Missing templates fail with a clear error rather than silently using a wrong rarity
 
 ---
 

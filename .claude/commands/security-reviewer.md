@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -23,6 +23,7 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/main.py` — all endpoint definitions
 - `backend/auth.py` — `get_current_user` and `require_admin` dependency definitions
 - `backend/twitch.py` — Twitch EBS router (if it exists)
+- `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
 
 ---
 
@@ -34,7 +35,7 @@ For **every** `@app.get`, `@app.post`, `@app.put`, `@app.patch`, `@app.delete` a
 Classify each endpoint as one of:
 - **Public** — intentionally no auth (login, logout, register, forgot-password, /me with session check, /config, /schedule, /health, /top, /leaderboard, /simulate, /players, /teams, /weeks, /deck)
 - **Auth required** — should have `Depends(get_current_user)` or `Depends(require_admin)`
-- **Admin required** — routes under `/admin/`, `/ingest/`, `/grant-tokens`, `/codes`, `/audit-logs`, `/recalculate`, `/weights` (POST)
+- **Admin required** — routes under `/admin/`, `/ingest/`, `/grant-tokens`, `/codes`, `/audit-logs`, `/recalculate`
 - **Twitch JWT required** — `/twitch/*` routes validated by `verify_twitch_jwt`
 
 Flag any endpoint that is **not public** but is missing the appropriate `Depends()`.
