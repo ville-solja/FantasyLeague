@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import random
 import re as _re
@@ -16,6 +17,7 @@ from sqlalchemy import text
 from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, PromoCode, CodeRedemption, AuditLog
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
+from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment
 from seed import seed_users, seed_cards, seed_weights
@@ -26,6 +28,8 @@ from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
 from image import generate_card_image, PIL_AVAILABLE
 from toornament import sync_toornament_results
+
+logger = logging.getLogger(__name__)
 
 ROSTER_LIMIT   = int(os.getenv("ROSTER_LIMIT", "5"))
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
@@ -45,21 +49,21 @@ def _week_maintenance_loop():
                 auto_lock_weeks(db)
             finally:
                 db.close()
-        except Exception as e:
-            print(f"[WEEKS] Maintenance error: {e}")
+        except Exception:
+            logger.exception("Week maintenance error")
         time.sleep(_WEEK_CHECK_INTERVAL)
 
 
 def _auto_ingest(league_ids: list[int]):
     for league_id in league_ids:
         try:
-            print(f"[AUTO-INGEST] League {league_id} starting")
+            logger.info("Auto-ingest: league %d starting", league_id)
             ingest_league(league_id)
             run_enrichment()
             seed_cards(league_id)
-            print(f"[AUTO-INGEST] League {league_id} done")
-        except Exception as e:
-            print(f"[AUTO-INGEST] League {league_id} failed: {e}")
+            logger.info("Auto-ingest: league %d done", league_id)
+        except Exception:
+            logger.exception("Auto-ingest: league %d failed", league_id)
 
 
 def _run_toornament_sync():
@@ -69,16 +73,19 @@ def _run_toornament_sync():
             result = sync_toornament_results(db)
         finally:
             db.close()
-        print(f"[TOORNAMENT] Sync: {result}")
-    except Exception as e:
-        print(f"[TOORNAMENT] Sync error: {e}")
+        logger.info("Toornament sync: %s", result)
+    except Exception:
+        logger.exception("Toornament sync error")
 
 
 def _ingest_poll_loop(league_ids: list[int]):
     """Background thread: periodically ingest new matches then sync to toornament."""
     while True:
-        _auto_ingest(league_ids)
-        _run_toornament_sync()
+        try:
+            _auto_ingest(league_ids)
+            _run_toornament_sync()
+        except Exception:
+            logger.exception("Unexpected error in ingest poll loop")
         time.sleep(_INGEST_POLL_INTERVAL)
 
 
@@ -242,103 +249,22 @@ def _format_modifiers(mods: dict) -> list[dict]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print(f"[DB] {DATABASE_URL}")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    )
+    logger.info("DB: %s", DATABASE_URL)
     Base.metadata.create_all(bind=engine)
-    with engine.connect() as conn:
-        conn.execute(text("PRAGMA journal_mode=WAL"))
-        conn.execute(text("PRAGMA busy_timeout=30000"))
-        conn.commit()
-        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
-        if "avatar_url" not in cols:
-            conn.execute(text("ALTER TABLE players ADD COLUMN avatar_url TEXT"))
-            conn.commit()
-        match_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(matches)")).fetchall()]
-        if "start_time" not in match_cols:
-            conn.execute(text("ALTER TABLE matches ADD COLUMN start_time INTEGER"))
-            conn.commit()
-        if "radiant_win" not in match_cols:
-            conn.execute(text("ALTER TABLE matches ADD COLUMN radiant_win BOOLEAN"))
-            conn.commit()
-        if "week_override_id" not in match_cols:
-            conn.execute(text("ALTER TABLE matches ADD COLUMN week_override_id INTEGER REFERENCES weeks(id)"))
-            conn.commit()
-        user_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
-        if "tokens" not in user_cols:
-            # Seed from draw_limit if it exists, otherwise default to INITIAL_TOKENS
-            if "draw_limit" in user_cols:
-                conn.execute(text(f"ALTER TABLE users ADD COLUMN tokens INTEGER DEFAULT {INITIAL_TOKENS}"))
-                conn.execute(text("UPDATE users SET tokens = COALESCE(draw_limit, 7)"))
-            else:
-                conn.execute(text(f"ALTER TABLE users ADD COLUMN tokens INTEGER DEFAULT {INITIAL_TOKENS}"))
-            conn.commit()
-        if "created_at" not in user_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN created_at INTEGER"))
-            conn.commit()
-        if "player_id" not in user_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN player_id INTEGER"))
-            conn.commit()
-        if "must_change_password" not in user_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
-            conn.commit()
-        team_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(teams)")).fetchall()]
-        if "logo_url" not in team_cols:
-            conn.execute(text("ALTER TABLE teams ADD COLUMN logo_url TEXT"))
-            conn.commit()
-        _cm_ddl = (conn.execute(text(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
-        )).scalar() or "")
-        if "ck_card_modifiers_stat_key" not in _cm_ddl:
-            conn.execute(text("""
-                CREATE TABLE card_modifiers_new (
-                    id       INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                    card_id  INTEGER REFERENCES cards(id),
-                    stat_key VARCHAR,
-                    bonus_pct FLOAT,
-                    CONSTRAINT ck_card_modifiers_stat_key
-                        CHECK (stat_key IN ('kills','assists','deaths','gold_per_min',
-                                            'obs_placed','sen_placed','tower_damage'))
-                )
-            """))
-            conn.execute(text(
-                "INSERT INTO card_modifiers_new SELECT id, card_id, stat_key, bonus_pct FROM card_modifiers"
-            ))
-            conn.execute(text("DROP TABLE card_modifiers"))
-            conn.execute(text("ALTER TABLE card_modifiers_new RENAME TO card_modifiers"))
-            conn.commit()
-            print("[MIGRATION] card_modifiers: added stat_key CHECK constraint")
-    with engine.connect() as conn:
-        for stmt in [
-            "CREATE INDEX IF NOT EXISTS ix_cards_owner_id ON cards(owner_id)",
-            "CREATE INDEX IF NOT EXISTS ix_cards_player_id ON cards(player_id)",
-            "CREATE INDEX IF NOT EXISTS ix_pms_player_id ON player_match_stats(player_id)",
-            "CREATE INDEX IF NOT EXISTS ix_pms_match_id ON player_match_stats(match_id)",
-            "CREATE INDEX IF NOT EXISTS ix_matches_start_time ON matches(start_time)",
-            "CREATE INDEX IF NOT EXISTS ix_wre_week_user ON weekly_roster_entries(week_id, user_id)",
-            "CREATE INDEX IF NOT EXISTS ix_twitch_presence_pool ON twitch_presence(channel_id, seen_at)",
-        ]:
-            conn.execute(text(stmt))
-        conn.commit()
+    run_migrations(engine)
     seed_users()
     seed_weights()
-    # Migrate: if the old epoch-0 Week 1 exists, the week structure is wrong.
-    # Wipe weeks + snapshots and regenerate with the corrected boundaries.
-    with engine.connect() as _mc:
-        _old = _mc.execute(text("SELECT id FROM weeks WHERE start_time = 0 LIMIT 1")).first()
-        if _old:
-            _mc.execute(text("DELETE FROM weekly_roster_entries"))
-            _mc.execute(text("DELETE FROM weeks"))
-            _mc.commit()
-            print("[MIGRATION] Reset weeks to corrected structure (lock-before-matches)")
-    # Week generation runs immediately in the maintenance loop (sleep is at the END).
-    # No separate init call needed here.
     _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
         threading.Thread(target=_ingest_poll_loop, args=(_league_ids,), daemon=True).start()
-        print(f"[INGEST] Poll thread started (interval={_INGEST_POLL_INTERVAL}s)")
-    t = threading.Thread(target=_week_maintenance_loop, daemon=True)
-    t.start()
-    print(f"[WEEKS] Maintenance thread started (interval={_WEEK_CHECK_INTERVAL}s)")
+        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+    threading.Thread(target=_week_maintenance_loop, daemon=True).start()
+    logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     yield
 
 
@@ -567,32 +493,25 @@ _LATEST_TEAM_SUBQUERY = """
 """
 
 
-@app.get("/roster/{user_id}")
-def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = Depends(get_current_user)):
-    # Determine which week to scope points to
-    if week_id is not None:
-        week = db.get(Week, week_id)
-    else:
-        # Default: the next upcoming (editable) week — roster being prepared,
-        # no matches yet so points = 0 until the week starts.
-        week = get_next_editable_week(db)
-
+def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
+    """Compute roster data for a user, scoped to the given week (or next editable week)."""
+    week = db.get(Week, week_id) if week_id is not None else get_next_editable_week(db)
     now = int(time.time())
 
-    _WEEK_STAT_CASE = lambda col: (
-        f"COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR "
-        f"(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
-        f"THEN s.{col} ELSE 0 END), 0) as {col}"
-    )
-    _STAT_COLS = ",\n                   ".join(_WEEK_STAT_CASE(col) for col in SCORING_STATS)
+    def _week_stat_case(col):
+        return (
+            f"COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR "
+            f"(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
+            f"THEN s.{col} ELSE 0 END), 0) as {col}"
+        )
+    stat_cols = ",\n                   ".join(_week_stat_case(col) for col in SCORING_STATS)
 
     if week and week.is_locked:
-        # Locked week: return the immutable snapshot with week-scoped points
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, 1 as is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   {_STAT_COLS}
+                   {stat_cols}
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
             JOIN players p ON p.id = c.player_id
@@ -604,17 +523,15 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = 
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
-        active = cards
-        bench = []
+        active, bench = cards, []
     else:
-        # Current/active week: editable roster, points scoped to this week only
         ws = week.start_time if week else 0
         we = week.end_time if week else now
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, c.is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   {_STAT_COLS}
+                   {stat_cols}
             FROM cards c
             JOIN players p ON p.id = c.player_id
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
@@ -628,7 +545,6 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = 
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
 
-    # Load modifiers and weights; compute total_points via card_fantasy_score()
     card_ids = [c["id"] for c in cards]
     modifiers_map = _card_modifiers_map(db, card_ids)
     weights, rarity = _load_weights(db)
@@ -642,11 +558,9 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = 
     active.sort(key=lambda c: c["total_points"], reverse=True)
     bench.sort(key=lambda c: c["total_points"], reverse=True)
 
-    combined = sum(c["total_points"] for c in active)
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    # Season points: sum raw stats per card across all locked weeks, then apply card_fantasy_score()
     season_pts_rows = db.execute(text("""
         SELECT c.id as card_id, c.card_type,
                COALESCE(SUM(s.kills), 0)        as kills,
@@ -669,19 +583,25 @@ def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = 
 
     season_card_ids = [r.card_id for r in season_pts_rows]
     season_mods = _card_modifiers_map(db, season_card_ids)
-    season_points = 0.0
-    for row in season_pts_rows:
-        stat_sums = _stat_sums_from_row(row)
-        mods = season_mods.get(row.card_id, {})
-        season_points += _compute_card_points(stat_sums, row.card_type, weights, rarity, mods)
+    season_points = sum(
+        _compute_card_points(_stat_sums_from_row(row), row.card_type, weights, rarity,
+                             season_mods.get(row.card_id, {}))
+        for row in season_pts_rows
+    )
 
     return {
-        "active": active, "bench": bench, "combined_value": combined,
+        "active": active, "bench": bench,
+        "combined_value": sum(c["total_points"] for c in active),
         "tokens": tokens,
         "season_points": season_points,
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
                  "start_time": week.start_time, "end_time": week.end_time} if week else None,
     }
+
+
+@app.get("/roster/{user_id}")
+def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = Depends(get_current_user)):
+    return _build_roster_response(db, user_id, week_id)
 
 
 @app.get("/cards/{card_id}")

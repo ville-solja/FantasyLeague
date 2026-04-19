@@ -3,8 +3,13 @@
 __pycache__/
 *.pyc
 data/fantasy.db
+data/fantasy.db-shm
+data/fantasy.db-wal
 
 # Local card preview scratch files (repo root)
 /tmp.png
 /tmp_card_with_logo.png
 /tmp_card_without_logo.png
+
+# Twitch extension build artifacts
+twitch-extension/*.zip
