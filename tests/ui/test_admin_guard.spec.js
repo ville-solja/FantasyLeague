@@ -41,6 +41,10 @@ test("admin tab is visible in the nav for all users", async ({ page, request }) 
 test("unauthenticated user cannot access team tab content", async ({ page }) => {
   await page.goto("/");
 
+  // App auto-opens login modal; dismiss it so we can interact with the nav
+  await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
+  await page.evaluate(() => document.getElementById("loginModal").classList.add("hidden"));
+
   // Without login, clicking team tab returns early (guard: !activeUserId)
   await page.click("#tab-btn-team");
   await page.waitForTimeout(300);

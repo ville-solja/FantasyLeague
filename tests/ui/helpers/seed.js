@@ -25,15 +25,13 @@ async function createTestUser(request, suffix = "") {
  * Assumes the page is at the app root and the header login button is visible.
  */
 async function loginViaUI(page, { username, password }) {
-  await page.click("#headerLoginBtn");
+  // The app auto-opens the login modal on page load when not authenticated.
+  // Wait for it to be visible rather than clicking the header button (which
+  // the modal overlay would intercept anyway).
+  await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.fill("#loginUsername", username);
   await page.fill("#loginPassword", password);
   await page.click("button:has-text('Login')");
-  // Wait for modal to close (login button hidden means session active)
-  await page.waitForSelector("#headerLoginBtn[style*='none'], #headerLoginBtn:not([style])", {
-    timeout: 5_000,
-  }).catch(() => {});
-  // More reliable: wait for token balance to appear
   await page.waitForSelector("#tokenBalance", { state: "visible", timeout: 5_000 }).catch(() => {});
 }
 
