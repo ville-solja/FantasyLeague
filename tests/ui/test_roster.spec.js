@@ -10,6 +10,7 @@ test.beforeEach(async ({ context }) => {
  * Caller must already be on the team tab.
  */
 async function drawOneCard(page) {
+  await expect(page.locator("#drawBtn")).toBeVisible({ timeout: 5_000 });
   await page.click("#drawBtn");
   await expect(page.locator("#revealModal")).toBeVisible({ timeout: 10_000 });
   await page.click("#revealModal button:has-text('Continue')");
@@ -33,8 +34,8 @@ test("drawn card appears in active roster or bench", async ({ page, request }) =
   await drawOneCard(page);
 
   // After draw the card must appear in either the active grid or bench grid
-  const activeCards = page.locator("#rosterActiveGrid [data-card-id], #rosterActiveGrid .card-row");
-  const benchCards  = page.locator("#benchGrid [data-card-id], #benchGrid .card-row");
+  const activeCards = page.locator("#rosterActiveGrid .card-slot");
+  const benchCards  = page.locator("#benchGrid .card-slot");
 
   // Wait for roster to reload
   await page.waitForTimeout(800);
