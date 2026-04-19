@@ -1,8 +1,12 @@
+import logging
+
 from database import SessionLocal
 from models import Match, Player, PlayerMatchStats, League, Team, Weight
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 from scoring import fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
+
+logger = logging.getLogger(__name__)
 
 
 def _match_logo_url(val) -> str | None:
@@ -43,7 +47,7 @@ def ingest_league(league_id: int):
         league_data = get_league_info(league_id)
         league_name = league_data.get("name", "unknown")
 
-        print(f"[LEAGUE] {league_name}")
+        logger.info("League: %s", league_name)
 
         league = db.get(League, league_id)
         if not league:
@@ -55,7 +59,7 @@ def ingest_league(league_id: int):
         db.commit()
 
         match_ids = get_league_matches(league_id)
-        print(f"[LEAGUE] {len(match_ids)} matches")
+        logger.info("League %d: %d matches found", league_id, len(match_ids))
 
         # Pre-fetch already-ingested match IDs in one query
         existing = {
@@ -64,7 +68,7 @@ def ingest_league(league_id: int):
         }
 
         weights = {w.key: w.value for w in db.query(Weight).all()}
-        print(f"[INGEST] Loaded {len(weights)} weights")
+        logger.info("Loaded %d weights", len(weights))
 
         seen_players = set()
         seen_teams = set()
@@ -73,18 +77,18 @@ def ingest_league(league_id: int):
             if match_id in existing:
                 continue
 
-            print(f"[MATCH] Ingesting {match_id}")
+            logger.info("Ingesting match %d", match_id)
             try:
                 ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
-            except Exception as e:
-                print(f"[SKIP] Match {match_id} failed: {e}")
+            except Exception:
+                logger.exception("Skipping match %d — ingestion failed", match_id)
     finally:
         db.close()
 
     try:
         ensure_dotabuff_league_logos()
-    except Exception as e:
-        print(f"[DOTABUFF] League logo step failed: {e}")
+    except Exception:
+        logger.exception("Dotabuff league logo step failed")
 
 
 # -----------------------
@@ -94,11 +98,11 @@ def ingest_league(league_id: int):
 def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict):
     data = opendota_get_json(f"{OPEN_DOTA_URL}/matches/{match_id}", label=f"match {match_id}")
     if data is None:
-        print(f"[SKIP] Match {match_id} unavailable after retries")
+        logger.warning("Skipping match %d — unavailable after retries", match_id)
         return
 
     if data.get("duration", 0) < 900:
-        print(f"[SKIP] Match {match_id} too short")
+        logger.info("Skipping match %d — too short (%ds)", match_id, data.get("duration", 0))
         return
 
     radiant_team_id = data.get("radiant_team_id")
@@ -108,7 +112,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     radiant_logo = _match_logo_url(data.get("radiant_logo"))
     dire_logo = _match_logo_url(data.get("dire_logo"))
 
-    print(f"[MATCH] {match_id} | {radiant_name} vs {dire_name}")
+    logger.info("Match %d | %s vs %s", match_id, radiant_name, dire_name)
 
     for team_id, team_name, row_logo in (
         (radiant_team_id, radiant_name, radiant_logo),
@@ -136,16 +140,24 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     )
     db.add(match)
 
-    for p in data.get("players", []):
-        account_id = p.get("account_id")
+    # Pre-fetch which players are already in the DB to avoid N+1 lookups
+    raw_players = data.get("players", [])
+    match_account_ids = [p.get("account_id") for p in raw_players if p.get("account_id") is not None]
+    new_account_ids = [aid for aid in match_account_ids if aid not in seen_players]
+    if new_account_ids:
+        existing_ids = {
+            row[0] for row in
+            db.query(Player.id).filter(Player.id.in_(new_account_ids)).all()
+        }
+        for aid in new_account_ids:
+            if aid not in existing_ids:
+                db.add(Player(id=aid, name=None))
+            seen_players.add(aid)
 
+    for p in raw_players:
+        account_id = p.get("account_id")
         if account_id is None:
             continue
-
-        if account_id not in seen_players:
-            if not db.get(Player, account_id):
-                db.add(Player(id=account_id, name=None))
-            seen_players.add(account_id)
 
         is_radiant = p.get("isRadiant")
         if is_radiant is None:
@@ -156,7 +168,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
 
         team_id = radiant_team_id if is_radiant else dire_team_id
 
-        print(f"[PLAYER] {account_id} -> {team_id}")
+        logger.debug("Player %d -> team %s", account_id, team_id)
 
         stat = PlayerMatchStats(
             player_id=account_id,

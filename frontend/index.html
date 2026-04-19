@@ -47,12 +47,15 @@
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <h2 style="margin-bottom:0;">Create account</h2>
-      <button class="ghost" onclick="closeLoginModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+      <button class="ghost" onclick="closeRegisterModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <input id="regUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') register()" />
-    <input id="regEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') register()" />
-    <input id="regPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') register()" />
-    <button style="width:100%;margin-bottom:10px;" onclick="register()">Create account</button>
+    <input id="regUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regUsername','regUsernameErr')" />
+    <span class="field-error" id="regUsernameErr"></span>
+    <input id="regEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regEmail','regEmailErr')" />
+    <span class="field-error" id="regEmailErr"></span>
+    <input id="regPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regPassword','regPasswordErr')" />
+    <span class="field-error" id="regPasswordErr"></span>
+    <button style="width:100%;margin-bottom:10px;margin-top:10px;" onclick="register()">Create account</button>
     <button class="ghost" style="width:100%;" onclick="showLogin()">Back to login</button>
     <div class="status" id="registerStatus"></div>
   </div>
@@ -178,7 +181,7 @@
       <h2>Dota 2 Player</h2>
       <p style="font-size:0.8rem;color:#555;margin-bottom:16px;">Link your OpenDota account ID. Future features may include granting you a card representing yourself as a player.</p>
       <div class="row">
-        <input id="profilePlayerId" type="number" placeholder="OpenDota account ID" />
+        <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
         <button onclick="savePlayerId()">Save</button>
       </div>
       <div id="profilePlayerPreview" style="display:none;margin-top:12px;display:flex;align-items:center;gap:8px;">

@@ -1,0 +1,66 @@
+name: UI Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Seed test database
+        run: python tests/ui/scripts/seed_db.py
+        env:
+          DB_PATH: data/fantasy.db
+
+      - name: Start app
+        run: |
+          cp .env.example .env
+          printf '\nSECRET_KEY=ci-test-secret-key-not-for-production\nDEBUG=true\nAUTO_INGEST_LEAGUES=\n' >> .env
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+
+      - name: Wait for app to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then
+              echo "App is ready"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 3
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright
+        run: cd tests/ui && npm ci && npx playwright install --with-deps chromium
+
+      - name: Run UI tests
+        run: cd tests/ui && npm test
+        env:
+          TEST_BASE_URL: http://localhost:8000
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/ui/playwright-report/
+
+      - name: Stop app
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml down

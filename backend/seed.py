@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 from models import User, Card, Weight, PlayerMatchStats, Match
 from auth import hash_password
 from weeks import generate_weeks, auto_lock_weeks
@@ -29,7 +32,7 @@ def seed_users():
                 password_hash=hash_password(u["password"]),
                 is_admin=u.get("is_admin", False),
             ))
-            print(f"[SEED] User {u['username']}")
+            logger.info("Seeded user %s", u["username"])
 
     db.commit()
     db.close()
@@ -67,7 +70,7 @@ def seed_cards(league_id: int):
 
     db.commit()
     db.close()
-    print(f"[SEED] {count} cards generated for league {league_id} across {len(player_ids)} players")
+    logger.info("Seeded %d cards for league %d across %d players", count, league_id, len(player_ids))
 
 
 DEFAULT_WEIGHTS = [
@@ -108,9 +111,9 @@ def seed_weights():
         try:
             parsed = json.loads(raw)
             env_overrides = {k: float(v) for k, v in parsed.items()}
-            print(f"[SEED] WEIGHTS_JSON overrides: {list(env_overrides.keys())}")
+            logger.info("WEIGHTS_JSON overrides: %s", list(env_overrides.keys()))
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"[SEED] WARNING: could not parse WEIGHTS_JSON — {e}")
+            logger.warning("Could not parse WEIGHTS_JSON — %s", e)
 
     db = SessionLocal()
     for w in DEFAULT_WEIGHTS:
@@ -118,9 +121,9 @@ def seed_weights():
         target_value = env_overrides.get(w["key"], w["value"])
         if existing is None:
             db.add(Weight(key=w["key"], label=w["label"], value=target_value))
-            print(f"[SEED] Weight {w['key']} = {target_value}")
+            logger.info("Weight %s = %s", w["key"], target_value)
         elif w["key"] in env_overrides and existing.value != target_value:
-            print(f"[SEED] Weight {w['key']} overridden by env: {existing.value} → {target_value}")
+            logger.info("Weight %s overridden by env: %s → %s", w["key"], existing.value, target_value)
             existing.value = target_value
     db.commit()
     db.close()

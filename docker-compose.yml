@@ -8,6 +8,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./twitch-extension:/app/twitch-extension
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     # Pass through vars from repo .env (Compose interpolation often misses them on Windows).
     env_file:
       - .env

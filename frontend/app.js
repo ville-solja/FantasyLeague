@@ -105,9 +105,28 @@ function closeLoginModal() {
   document.getElementById("loginModal").classList.add("hidden");
 }
 
+function closeRegisterModal() {
+  document.getElementById("registerModal").classList.add("hidden");
+}
+
 function showRegister() {
   document.getElementById("loginModal").classList.add("hidden");
   document.getElementById("registerModal").classList.remove("hidden");
+  _regClearErrors();
+}
+
+function _regFieldErr(inputId, errId, msg) {
+  document.getElementById(inputId).classList.add("invalid");
+  document.getElementById(errId).textContent = msg;
+}
+
+function _regClearField(inputId, errId) {
+  document.getElementById(inputId).classList.remove("invalid");
+  document.getElementById(errId).textContent = "";
+}
+
+function _regClearErrors() {
+  ["regUsername", "regEmail", "regPassword"].forEach(id => _regClearField(id, id + "Err"));
   document.getElementById("registerStatus").textContent = "";
 }
 
@@ -137,15 +156,60 @@ async function login() {
 }
 
 async function register() {
+  _regClearErrors();
   const username = document.getElementById("regUsername").value.trim();
   const email    = document.getElementById("regEmail").value.trim();
   const password = document.getElementById("regPassword").value;
-  if (!username || !email || !password) return setStatus("registerStatus", "All fields required", false);
+
+  let valid = true;
+  if (!username) {
+    _regFieldErr("regUsername", "regUsernameErr", "Username is required");
+    valid = false;
+  } else if (username.length > 64) {
+    _regFieldErr("regUsername", "regUsernameErr", "Username must be 64 characters or fewer");
+    valid = false;
+  }
+  if (!email) {
+    _regFieldErr("regEmail", "regEmailErr", "Email is required");
+    valid = false;
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    _regFieldErr("regEmail", "regEmailErr", "Enter a valid email address");
+    valid = false;
+  }
+  if (!password) {
+    _regFieldErr("regPassword", "regPasswordErr", "Password is required");
+    valid = false;
+  } else if (password.length < 6) {
+    _regFieldErr("regPassword", "regPasswordErr", "Password must be at least 6 characters");
+    valid = false;
+  } else if (password.length > 128) {
+    _regFieldErr("regPassword", "regPasswordErr", "Password must be 128 characters or fewer");
+    valid = false;
+  }
+  if (!valid) return;
 
   try {
     const res = await fetch(`${API}/register`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username, email, password}) });
     const data = await res.json();
-    if (!res.ok) return setStatus("registerStatus", data.detail, false);
+    if (!res.ok) {
+      const detail = data.detail;
+      if (Array.isArray(detail)) {
+        detail.forEach(err => {
+          const field = err.loc ? err.loc[err.loc.length - 1] : null;
+          if (field === "username") _regFieldErr("regUsername", "regUsernameErr", err.msg);
+          else if (field === "email") _regFieldErr("regEmail", "regEmailErr", err.msg);
+          else if (field === "password") _regFieldErr("regPassword", "regPasswordErr", err.msg);
+          else setStatus("registerStatus", err.msg, false);
+        });
+      } else if (typeof detail === "string" && detail.toLowerCase().includes("username")) {
+        _regFieldErr("regUsername", "regUsernameErr", detail);
+      } else if (typeof detail === "string" && (detail.toLowerCase().includes("email") || detail.toLowerCase().includes("mail"))) {
+        _regFieldErr("regEmail", "regEmailErr", detail);
+      } else {
+        setStatus("registerStatus", detail, false);
+      }
+      return;
+    }
 
     await loadMe();
     document.getElementById("registerModal").classList.add("hidden");
@@ -358,7 +422,7 @@ function switchTab(name) {
 
 function setStatus(id, msg, ok = true) {
   const el = document.getElementById(id);
-  el.textContent = msg;
+  el.textContent = Array.isArray(msg) ? msg.map(e => e.msg ?? JSON.stringify(e)).join("; ") : (msg ?? "Unknown error");
   el.className = "status " + (ok ? "ok" : "err");
 }
 

@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -34,7 +34,7 @@ For **every** `@app.get`, `@app.post`, `@app.put`, `@app.patch`, `@app.delete` a
 Classify each endpoint as one of:
 - **Public** — intentionally no auth (login, logout, register, forgot-password, /me with session check, /config, /schedule, /health, /top, /leaderboard, /simulate, /players, /teams, /weeks, /deck)
 - **Auth required** — should have `Depends(get_current_user)` or `Depends(require_admin)`
-- **Admin required** — routes under `/admin/`, `/ingest/`, `/grant-tokens`, `/codes`, `/audit-logs`, `/recalculate`, `/weights` (POST)
+- **Admin required** — routes under `/admin/`, `/ingest/`, `/grant-tokens`, `/codes`, `/audit-logs`, `/recalculate`
 - **Twitch JWT required** — `/twitch/*` routes validated by `verify_twitch_jwt`
 
 Flag any endpoint that is **not public** but is missing the appropriate `Depends()`.
