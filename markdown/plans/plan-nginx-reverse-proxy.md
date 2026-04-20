@@ -1,74 +1,227 @@
-# Plan: Fix Nginx Reverse Proxy for External Access
+# Plan: Fix Traefik Reverse Proxy for External Access
 
 ## Context
 
-The app is hosted at `fantasyleague.lehtipuu.lan` (LAN machine running Docker + Nginx). The public domain `fantasyleague.makkis.life` points to the router's external IP, which port-forwards to that machine. The site works locally but is inaccessible from outside the LAN.
+The app is hosted at `fantasyleague.lehtipuu.lan` (LAN machine running Docker + Traefik). The public domain `fantasyleague.makkis.life` points to the router's external IP, which port-forwards to that machine. The site works locally but is inaccessible from outside the LAN.
 
-**Root cause:** Nginx is issuing an HTTP redirect to `http://fantasyleague.lehtipuu.lan/...` instead of transparently proxying the request. External browsers follow the redirect but cannot resolve the `.lan` hostname, so the page never loads. The fix is entirely in the Nginx config on the host machine — no code changes to the app are needed.
+**Root cause — two compounding issues:**
 
-The app is already correctly configured for reverse proxy use:
-- Uvicorn runs with `--proxy-headers --forwarded-allow-ips "*"` (Dockerfile CMD)
-- `HTTPS_ONLY` env var controls the `Secure` cookie flag (defaults `false`, should be `true` once HTTPS works)
+1. **Traefik version mismatch.** The static config (`traefik.toml`) is written in **v1 format** (`[backends]`, `[frontends]`). The docker-compose labels use **v2 format** (`traefik.http.routers`, `traefik.http.services`). Whichever Traefik version is actually running, one half of the config is silently ignored.
 
----
+2. **Wrong backend port in the v1 static config.** The v1 backend URL is `http://fantasyleague.lehtipuu.lan` (port 80), but the container listens on port **8000**.
 
-## The Fix — Nginx Config on `fantasyleague.lehtipuu.lan`
+The fix standardises on **Traefik v2** (matching the docker-compose label format already in use) and adds the external HTTPS router via labels only — no static backend/frontend config needed.
 
-Replace the current Nginx site config (typically `/etc/nginx/sites-available/fantasyleague`) with:
-
-```nginx
-# Redirect plain HTTP → HTTPS
-server {
-    listen 80;
-    server_name fantasyleague.makkis.life;
-    return 301 https://$host$request_uri;
-}
-
-# HTTPS — proxy to the Docker container
-server {
-    listen 443 ssl;
-    server_name fantasyleague.makkis.life;
-
-    ssl_certificate     /etc/letsencrypt/live/fantasyleague.makkis.life/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/fantasyleague.makkis.life/privkey.pem;
-
-    location / {
-        proxy_pass         http://127.0.0.1:8000;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_read_timeout 60s;
-    }
-}
-```
-
-Key points:
-- `proxy_pass http://127.0.0.1:8000` — forwards to the Docker container, never redirects to the `.lan` hostname
-- `proxy_set_header Host $host` — passes `fantasyleague.makkis.life` as the Host header so the app sees the real domain
-- `X-Forwarded-Proto $scheme` — tells the app it's receiving HTTPS so session cookies get the Secure flag
-
-If no SSL cert exists yet, obtain one first:
-```bash
-sudo certbot --nginx -d fantasyleague.makkis.life
-```
+The app itself requires no changes:
+- Uvicorn already runs with `--proxy-headers --forwarded-allow-ips "*"`
+- `HTTPS_ONLY` env var controls the `Secure` cookie flag (set to `true` once HTTPS works)
 
 ---
 
-## App-side change — set `HTTPS_ONLY=true` in `.env`
+## Original Configuration
 
-Once HTTPS is working, uncomment this line in the `.env` file on the host:
+### `docker-compose.yml` (on host)
+```yaml
+services:
+  fantasyleague:
+    image: ghcr.io/ville-solja/fantasyleague:b06e0c4
+    container_name: fantasyleague
 
-```env
-HTTPS_ONLY=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fantasy.rule=Host(`fantasyleague.lehtipuu.lan`)"
+      - "traefik.http.routers.fantasy.entrypoints=web"
+      - "traefik.http.services.fantasy.loadbalancer.server.port=8000"
+
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
 ```
 
-Then restart the container:
-```bash
-docker compose restart
+**Problems:** only routes the internal `.lan` hostname; only HTTP (`web` entrypoint); no HTTPS or external domain.
+
+### `traefik.toml` (static config — v1 format, conflicts with v2 labels)
+```toml
+debug = false
+checkNewVersion = true
+logLevel = "ERROR"
+defaultEntryPoints = ["https", "http"]
+
+[traefikLog]
+  filePath = "/var/log/traefik.log"
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+    [entryPoints.http.redirect]
+    entryPoint = "https"
+  [entryPoints.https]
+  address = ":443"
+    [entryPoints.https.tls]
+
+[backends]
+  [backend.fantasyleague]
+    [backends.fantasyleague.servers.server0]
+      url="http://fantasyleague.lehtipuu.lan"   # ← wrong: port 80, not 8000
+
+[frontends]
+  [frontends.fantasyleague]
+    entryPoints = ["http", "https"]
+    backend = "fantasyleague"
+    passHostHeader = true
+
+    [frontends.fantasyleague.routes.fantasyleague1]
+    rule = "Host:fantasyleague.makkis.life"
 ```
 
-This enables the `Secure` flag on session cookies so they are never sent over plain HTTP.
+**Problems:** v1 format is ignored by a v2 Traefik instance; backend URL uses wrong port.
+
+---
+
+## Diff — `docker-compose.yml`
+
+```diff
+ services:
+   fantasyleague:
+     image: ghcr.io/ville-solja/fantasyleague:b06e0c4
+     container_name: fantasyleague
+
+     labels:
+       - "traefik.enable=true"
+-      - "traefik.http.routers.fantasy.rule=Host(`fantasyleague.lehtipuu.lan`)"
+-      - "traefik.http.routers.fantasy.entrypoints=web"
+-      - "traefik.http.services.fantasy.loadbalancer.server.port=8000"
++      # Local LAN access (HTTP)
++      - "traefik.http.routers.fantasy-lan.rule=Host(`fantasyleague.lehtipuu.lan`)"
++      - "traefik.http.routers.fantasy-lan.entrypoints=web"
++      - "traefik.http.routers.fantasy-lan.service=fantasy"
++      # External access — HTTP → HTTPS redirect
++      - "traefik.http.routers.fantasy-http.rule=Host(`fantasyleague.makkis.life`)"
++      - "traefik.http.routers.fantasy-http.entrypoints=web"
++      - "traefik.http.routers.fantasy-http.middlewares=https-redirect"
++      # External access — HTTPS with Let's Encrypt
++      - "traefik.http.routers.fantasy-https.rule=Host(`fantasyleague.makkis.life`)"
++      - "traefik.http.routers.fantasy-https.entrypoints=websecure"
++      - "traefik.http.routers.fantasy-https.tls=true"
++      - "traefik.http.routers.fantasy-https.tls.certresolver=letsencrypt"
++      - "traefik.http.routers.fantasy-https.service=fantasy"
++      # Shared service definition
++      - "traefik.http.services.fantasy.loadbalancer.server.port=8000"
++      # Redirect middleware
++      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
++      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+
+     restart: unless-stopped
++    environment:
++      - HTTPS_ONLY=true
+     networks:
+       - proxy
+
+ networks:
+   proxy:
+     external: true
+```
+
+---
+
+## Diff — `traefik.toml` (static config)
+
+Remove the v1 `[backends]` and `[frontends]` blocks entirely. They are ignored by Traefik v2 and conflict conceptually with label-based routing. The entrypoints and Let's Encrypt resolver must be declared in the static config:
+
+```diff
+ debug = false
+ checkNewVersion = true
+ logLevel = "ERROR"
+-defaultEntryPoints = ["https", "http"]
+
+ [traefikLog]
+   filePath = "/var/log/traefik.log"
+
+ [entryPoints]
+   [entryPoints.http]
+   address = ":80"
+-    [entryPoints.http.redirect]
+-    entryPoint = "https"
+   [entryPoints.https]
+   address = ":443"
+-    [entryPoints.https.tls]
+
+-[backends]
+-  [backend.fantasyleague]
+-    [backends.fantasyleague.servers.server0]
+-      url="http://fantasyleague.lehtipuu.lan"
+-
+-[frontends]
+-  [frontends.fantasyleague]
+-    entryPoints = ["http", "https"]
+-    backend = "fantasyleague"
+-    passHostHeader = true
+-
+-    [frontends.fantasyleague.routes.fantasyleague1]
+-    rule = "Host:fantasyleague.makkis.life"
+
++[certificatesResolvers]
++  [certificatesResolvers.letsencrypt.acme]
++    email = "your-email@example.com"
++    storage = "/letsencrypt/acme.json"
++    [certificatesResolvers.letsencrypt.acme.httpChallenge]
++      entryPoint = "http"
+
+ [providers]
+   [providers.docker]
+     network = "proxy"
+     exposedByDefault = false
+```
+
+> **Note:** The `[providers.docker]` block must exist in `traefik.toml` for Traefik v2 to read container labels at all. If it is missing, add it. The `letsencrypt/acme.json` path must be a bind-mounted volume on the Traefik container.
+
+---
+
+## Recommended `docker-compose.yml` (full, after changes)
+
+```yaml
+services:
+  fantasyleague:
+    image: ghcr.io/ville-solja/fantasyleague:b06e0c4
+    container_name: fantasyleague
+
+    labels:
+      - "traefik.enable=true"
+      # Local LAN access (HTTP)
+      - "traefik.http.routers.fantasy-lan.rule=Host(`fantasyleague.lehtipuu.lan`)"
+      - "traefik.http.routers.fantasy-lan.entrypoints=web"
+      - "traefik.http.routers.fantasy-lan.service=fantasy"
+      # External HTTP → HTTPS redirect
+      - "traefik.http.routers.fantasy-http.rule=Host(`fantasyleague.makkis.life`)"
+      - "traefik.http.routers.fantasy-http.entrypoints=web"
+      - "traefik.http.routers.fantasy-http.middlewares=https-redirect"
+      # External HTTPS with Let's Encrypt
+      - "traefik.http.routers.fantasy-https.rule=Host(`fantasyleague.makkis.life`)"
+      - "traefik.http.routers.fantasy-https.entrypoints=websecure"
+      - "traefik.http.routers.fantasy-https.tls=true"
+      - "traefik.http.routers.fantasy-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.fantasy-https.service=fantasy"
+      # Service
+      - "traefik.http.services.fantasy.loadbalancer.server.port=8000"
+      # Middleware
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+
+    environment:
+      - HTTPS_ONLY=true
+
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+```
 
 ---
 
@@ -78,16 +231,17 @@ This enables the `Secure` flag on session cookies so they are never sent over pl
 |---|---|---|
 | 1 | Router | Confirm ports 80 and 443 are forwarded to the LAN IP of `fantasyleague.lehtipuu.lan` |
 | 2 | DNS | Confirm `fantasyleague.makkis.life` A record points to the router's external IP |
-| 3 | Host machine | Obtain/verify SSL cert with `certbot` |
-| 4 | Host machine | Replace Nginx site config with the config above |
-| 5 | Host machine | `sudo nginx -t && sudo systemctl reload nginx` |
-| 6 | Host machine | Set `HTTPS_ONLY=true` in `.env`, then `docker compose restart` |
+| 3 | Traefik static config | Remove `[backends]` / `[frontends]` blocks; add `[certificatesResolvers]` and `[providers.docker]` |
+| 4 | Traefik container | Ensure `/letsencrypt/acme.json` is a bind-mounted volume; port 443 is exposed |
+| 5 | Host machine | Apply updated `docker-compose.yml` labels |
+| 6 | Host machine | `docker compose up -d --force-recreate` |
 
 ---
 
 ## Verification
 
-1. From an external network (phone on mobile data): open `https://fantasyleague.makkis.life` — site loads
-2. `curl -I https://fantasyleague.makkis.life` returns `200 OK` (not a 3xx to a `.lan` address)
-3. Log in and verify session persists (cookie is set with `Secure; SameSite=Lax`)
-4. Local access via `http://fantasyleague.lehtipuu.lan:8000` still works for development
+1. From an external network (phone on mobile data): open `https://fantasyleague.makkis.life` — site loads with valid HTTPS cert
+2. `curl -I http://fantasyleague.makkis.life` returns `301` redirect to `https://`
+3. `curl -I https://fantasyleague.makkis.life` returns `200 OK`
+4. Log in and verify session persists (cookie has `Secure; SameSite=Lax`)
+5. Local access via `http://fantasyleague.lehtipuu.lan` still works
