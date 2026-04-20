@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#1c0e04"/>
+      <stop offset="100%" stop-color="#080c16"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="52%" cy="55%" r="45%">
+      <stop offset="0%" stop-color="#ff5c14" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ff5c14" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background + border -->
+  <rect width="100" height="100" rx="10" fill="url(#bg)"/>
+  <rect width="100" height="100" rx="10" fill="none" stroke="#c8960a" stroke-width="1.5"/>
+
+  <!-- Warm glow -->
+  <ellipse cx="52" cy="60" rx="30" ry="25" fill="url(#glow)"/>
+
+  <!-- Tail feathers -->
+  <ellipse cx="26" cy="64" rx="9" ry="15" fill="#6e1a05" transform="rotate(-55 26 64)"/>
+  <ellipse cx="31" cy="58" rx="9" ry="14" fill="#8a2206" transform="rotate(-35 31 58)"/>
+  <ellipse cx="38" cy="54" rx="8" ry="12" fill="#9e2908" transform="rotate(-15 38 54)"/>
+
+  <!-- Body -->
+  <ellipse cx="56" cy="70" rx="23" ry="17" fill="#c04418"/>
+  <ellipse cx="54" cy="67" rx="19" ry="13" fill="#d45420"/>
+
+  <!-- Wing stripe -->
+  <ellipse cx="53" cy="71" rx="17" ry="9" fill="#b03a12"/>
+
+  <!-- Neck -->
+  <ellipse cx="54" cy="52" rx="9" ry="12" fill="#c04418"/>
+
+  <!-- Head -->
+  <circle cx="55" cy="40" r="14" fill="#c04418"/>
+  <circle cx="55" cy="40" r="12" fill="#d45420"/>
+
+  <!-- Comb bumps -->
+  <ellipse cx="47" cy="27" rx="4" ry="5.5" fill="#e03010"/>
+  <ellipse cx="54" cy="24" rx="4.5" ry="6.5" fill="#f03818"/>
+  <ellipse cx="61" cy="27" rx="4" ry="5.5" fill="#e03010"/>
+
+  <!-- Wattle -->
+  <ellipse cx="64" cy="51" rx="3.5" ry="5" fill="#bb1800"/>
+
+  <!-- Eye white -->
+  <circle cx="63" cy="37" r="5" fill="#f0e8d8"/>
+  <!-- Iris -->
+  <circle cx="63.5" cy="37" r="3" fill="#1a0800"/>
+  <!-- Highlight -->
+  <circle cx="65" cy="35.5" r="1" fill="#fff"/>
+
+  <!-- Beak upper -->
+  <polygon points="69,42 82,47 69,48" fill="#d4820a"/>
+  <!-- Beak lower -->
+  <polygon points="69,48 80,50 69,52" fill="#b86808"/>
+
+  <!-- Legs -->
+  <rect x="44" y="85" width="5" height="9" rx="2.5" fill="#d4820a"/>
+  <rect x="56" y="85" width="5" height="9" rx="2.5" fill="#d4820a"/>
+  <!-- Feet -->
+  <line x1="44" y1="94" x2="37" y2="99" stroke="#d4820a" stroke-width="2" stroke-linecap="round"/>
+  <line x1="46" y1="94" x2="46" y2="100" stroke="#d4820a" stroke-width="2" stroke-linecap="round"/>
+  <line x1="56" y1="94" x2="56" y2="100" stroke="#d4820a" stroke-width="2" stroke-linecap="round"/>
+  <line x1="61" y1="94" x2="68" y2="99" stroke="#d4820a" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Gold shield emblem (tiny, bottom-right) -->
+  <polygon points="88,82 83,86 83,92 88,96 93,92 93,86" fill="none" stroke="#c8960a" stroke-width="1" opacity="0.6"/>
+</svg>
