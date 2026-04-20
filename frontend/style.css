@@ -384,3 +384,14 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron { transform: rotate(90deg); c
   }
 }
 
+.version-badge {
+  position: fixed;
+  bottom: 6px;
+  right: 10px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  user-select: none;
+  z-index: 9999;
+}
+

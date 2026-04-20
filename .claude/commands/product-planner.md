@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -63,7 +63,7 @@ As a [role], I want to [action] so that [goal].
 
 ### 2c. Draft the plan
 
-Write a complete plan following the style of `markdown/plans/plan-security-audit.md`:
+Write a complete plan following the style of `markdown/plans/plan-player-profile-enrichment.md`:
 
 ```
 # Plan: [Feature Name]
