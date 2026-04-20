@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200">
+  <defs>
+    <radialGradient id="bg300" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1c0e04"/>
+      <stop offset="100%" stop-color="#060810"/>
+    </radialGradient>
+    <radialGradient id="glow300" cx="42%" cy="55%" r="40%">
+      <stop offset="0%" stop-color="#ff5c14" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ff5c14" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowRight" cx="80%" cy="50%" r="30%">
+      <stop offset="0%" stop-color="#c8960a" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#c8960a" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Emblem shield clip -->
+    <clipPath id="shieldClip">
+      <polygon points="230,30 195,50 195,110 230,140 265,110 265,50"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="300" height="200" fill="url(#bg300)"/>
+  <rect width="300" height="200" fill="none" stroke="#c8960a" stroke-width="1.5"/>
+
+  <!-- Subtle inner border -->
+  <rect x="6" y="6" width="288" height="188" rx="4" fill="none" stroke="#c8960a" stroke-width="0.5" opacity="0.4"/>
+
+  <!-- Corner ornaments -->
+  <polygon points="6,6 22,6 6,22" fill="#c8960a" opacity="0.35"/>
+  <polygon points="294,6 278,6 294,22" fill="#c8960a" opacity="0.35"/>
+  <polygon points="6,194 22,194 6,178" fill="#c8960a" opacity="0.35"/>
+  <polygon points="294,194 278,194 294,178" fill="#c8960a" opacity="0.35"/>
+
+  <!-- Glow behind chicken -->
+  <ellipse cx="120" cy="115" rx="85" ry="70" fill="url(#glow300)"/>
+
+  <!-- Background shield glyph (right side) -->
+  <polygon points="230,30 195,50 195,110 230,140 265,110 265,50"
+    fill="none" stroke="#c8960a" stroke-width="1" opacity="0.2"/>
+  <polygon points="230,45 207,60 207,105 230,128 253,105 253,60"
+    fill="none" stroke="#c8960a" stroke-width="0.75" opacity="0.15"/>
+  <!-- Radiant star hint -->
+  <circle cx="230" cy="87" r="18" fill="none" stroke="#c8960a" stroke-width="0.75" opacity="0.2"/>
+  <line x1="230" y1="65" x2="230" y2="109" stroke="#c8960a" stroke-width="0.5" opacity="0.2"/>
+  <line x1="207" y1="87" x2="253" y2="87" stroke="#c8960a" stroke-width="0.5" opacity="0.2"/>
+  <line x1="214" y1="70" x2="246" y2="104" stroke="#c8960a" stroke-width="0.5" opacity="0.2"/>
+  <line x1="246" y1="70" x2="214" y2="104" stroke="#c8960a" stroke-width="0.5" opacity="0.2"/>
+
+  <!-- === CHICKEN === -->
+
+  <!-- Tail feathers -->
+  <ellipse cx="44" cy="118" rx="14" ry="24" fill="#5a1504" transform="rotate(-60 44 118)"/>
+  <ellipse cx="52" cy="108" rx="13" ry="22" fill="#6e1a05" transform="rotate(-42 52 108)"/>
+  <ellipse cx="62" cy="100" rx="12" ry="20" fill="#8a2206" transform="rotate(-22 62 100)"/>
+  <ellipse cx="74" cy="96" rx="11" ry="17" fill="#9e2908" transform="rotate(-5 74 96)"/>
+
+  <!-- Body -->
+  <ellipse cx="120" cy="130" rx="52" ry="38" fill="#b03a12"/>
+  <ellipse cx="118" cy="125" rx="44" ry="31" fill="#c84c1a"/>
+  <ellipse cx="116" cy="122" rx="36" ry="24" fill="#d45420"/>
+
+  <!-- Wing detail -->
+  <ellipse cx="115" cy="133" rx="38" ry="20" fill="#b03a12"/>
+  <ellipse cx="112" cy="131" rx="30" ry="15" fill="#bc4016"/>
+
+  <!-- Neck -->
+  <ellipse cx="116" cy="92" rx="18" ry="22" fill="#c04418"/>
+  <ellipse cx="116" cy="90" rx="15" ry="18" fill="#d45420"/>
+
+  <!-- Head -->
+  <circle cx="118" cy="72" r="28" fill="#c04418"/>
+  <circle cx="118" cy="72" r="25" fill="#d45420"/>
+
+  <!-- Comb -->
+  <ellipse cx="104" cy="46" rx="7" ry="10" fill="#e03010"/>
+  <ellipse cx="115" cy="42" rx="8" ry="12" fill="#f03818"/>
+  <ellipse cx="126" cy="46" rx="7" ry="10" fill="#e03010"/>
+  <!-- Comb highlights -->
+  <ellipse cx="115" cy="41" rx="4" ry="6" fill="#ff5530" opacity="0.5"/>
+
+  <!-- Wattle -->
+  <ellipse cx="136" cy="96" rx="7" ry="10" fill="#bb1800"/>
+  <ellipse cx="134" cy="94" rx="4" ry="6" fill="#dd2208" opacity="0.6"/>
+
+  <!-- Eye -->
+  <circle cx="130" cy="66" r="9" fill="#f0e8d8"/>
+  <circle cx="131" cy="66" r="6" fill="#1a0800"/>
+  <circle cx="133" cy="63.5" r="2" fill="#fff"/>
+  <!-- Pupil shine -->
+  <circle cx="129" cy="67" r="1" fill="#3a1800" opacity="0.5"/>
+
+  <!-- Beak upper -->
+  <polygon points="143,71 172,77 143,80" fill="#d4820a"/>
+  <!-- Beak lower -->
+  <polygon points="143,80 168,84 143,89" fill="#b06808"/>
+  <!-- Beak line -->
+  <line x1="143" y1="80" x2="170" y2="80" stroke="#8b5006" stroke-width="1"/>
+
+  <!-- Legs -->
+  <rect x="97" y="166" width="11" height="22" rx="5" fill="#d4820a"/>
+  <rect x="124" y="166" width="11" height="22" rx="5" fill="#d4820a"/>
+  <!-- Toes left -->
+  <line x1="97" y1="188" x2="82" y2="197" stroke="#d4820a" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="102" y1="188" x2="100" y2="199" stroke="#d4820a" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="108" y1="188" x2="114" y2="198" stroke="#d4820a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Toes right -->
+  <line x1="124" y1="188" x2="118" y2="198" stroke="#d4820a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="129" y1="188" x2="131" y2="199" stroke="#d4820a" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="135" y1="188" x2="148" y2="197" stroke="#d4820a" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- === TEXT === -->
+  <!-- "DOTA 2" label -->
+  <text x="230" y="164" font-family="Georgia, serif" font-size="11" font-weight="700"
+    fill="#c8960a" text-anchor="middle" letter-spacing="4" opacity="0.85">DOTA 2</text>
+  <!-- Divider -->
+  <line x1="195" y1="152" x2="265" y2="152" stroke="#c8960a" stroke-width="0.75" opacity="0.5"/>
+  <!-- Sub-label -->
+  <text x="230" y="178" font-family="Georgia, serif" font-size="8"
+    fill="#8b6914" text-anchor="middle" letter-spacing="3" opacity="0.7">COURIER</text>
+</svg>

@@ -17,17 +17,18 @@
 <div id="view-unlinked">
   <h2>Link your account</h2>
   <p>Connect your FantasyLeague account to receive token drops from the broadcaster.</p>
-  <ol style="padding-left:16px;line-height:2">
+  <ol style="padding-left:16px;line-height:1.7;margin-bottom:10px">
     <li>Log into the <strong>FantasyLeague site</strong>.</li>
-    <li>Go to Profile → click <strong>Generate Twitch Code</strong>.</li>
-    <li>Enter the 6-character code here:</li>
+    <li>Profile → <strong>Generate Twitch Code</strong>.</li>
+    <li>Enter the 6-character code below and press Link.</li>
   </ol>
-  <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+  <div style="display:flex;gap:8px;align-items:center">
     <input id="link-code-input" type="text" maxlength="6" placeholder="ABC123"
-      style="width:90px;font-size:1.2rem;letter-spacing:0.2em;text-transform:uppercase;padding:6px 8px" />
-    <button id="btn-link">Link</button>
+      style="width:100px;font-size:1.2rem;letter-spacing:0.15em;text-transform:uppercase;
+             padding:7px 8px;margin-bottom:0;flex-shrink:0" />
+    <button id="btn-link" style="width:auto;flex:1;margin-top:0">Link</button>
   </div>
-  <p class="muted" id="link-status" style="margin-top:6px"></p>
+  <p id="link-status" style="margin-top:6px;color:#f66;font-size:11px"></p>
 </div>
 
 <!-- Linked state -->
@@ -88,13 +89,15 @@ function doLink() {
     el("btn-link").disabled = true;
     el("link-status").textContent = "";
     ebsPost("/twitch/link", { code: code }).then(function(data) {
+        console.log("[panel] /twitch/link response", data);
         if (data.linked) {
             loadStatus();
         } else {
             el("link-status").textContent = data.detail || "Linking failed. Check your code and try again.";
         }
-    }).catch(function() {
-        el("link-status").textContent = "Request failed. Try again.";
+    }).catch(function(err) {
+        console.error("[panel] /twitch/link error", err);
+        el("link-status").textContent = "Request failed — check console for details.";
     }).finally(function() {
         el("btn-link").disabled = false;
     });

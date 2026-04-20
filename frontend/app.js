@@ -26,6 +26,18 @@ async function loadConfig() {
     if (res.ok) {
       const cfg = await res.json();
       _tokenName = cfg.token_name || "Tokens";
+      const parts = [];
+      if (cfg.app_release) parts.push(cfg.app_release);
+      if (cfg.app_version) parts.push(cfg.app_version);
+      const versionEl = document.getElementById("version-badge");
+      if (versionEl) {
+        if (parts.length) {
+          versionEl.textContent = parts.join(" · ");
+          versionEl.style.display = "";
+        } else {
+          versionEl.style.display = "none";
+        }
+      }
     }
   } catch (_) { /* non-fatal */ }
 }
