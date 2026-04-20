@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -21,7 +21,8 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 ## Files to read
 
 - `backend/main.py` — all endpoint definitions
-- `backend/auth.py` — `get_current_user` and `require_admin` dependency definitions
+- `backend/auth.py` — `hash_password` and `verify_password` helpers
+- `backend/main.py` — `get_current_user` and `require_admin` dependency definitions (defined here, not in auth.py)
 - `backend/twitch.py` — Twitch EBS router (if it exists)
 
 ---

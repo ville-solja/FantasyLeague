@@ -50,7 +50,12 @@ function init() {
 function ebsGet(path) {
     return fetch(window.EBS_URL + path, {
         headers: { "Authorization": "Bearer " + ext.token },
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) {
+        return r.json().then(function (data) {
+            if (!r.ok) { data._status = r.status; }
+            return data;
+        });
+    });
 }
 
 function ebsPost(path, body) {
@@ -61,7 +66,12 @@ function ebsPost(path, body) {
             "Content-Type": "application/json",
         },
         body: body ? JSON.stringify(body) : undefined,
-    }).then(function (r) { return r.json(); });
+    }).then(function (r) {
+        return r.json().then(function (data) {
+            if (!r.ok) { data._status = r.status; }
+            return data;
+        });
+    });
 }
 
 // ── Heartbeat ────────────────────────────────────────────────────────────────
