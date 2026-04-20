@@ -127,6 +127,21 @@ Each finding is classified **High / Medium / Low** with a concrete recommendatio
 
 ---
 
+### `/developer`
+**Role: Developer / Implementer**
+Implements a feature from an approved plan file. Given a plan slug, it reads the plan, understands the existing codebase, writes code following project conventions, runs tests, and updates documentation stubs.
+- Reads the plan's Critical Files table and all referenced source files before writing
+- Follows existing FastAPI/SQLAlchemy/vanilla-JS patterns exactly
+- Runs `pytest` and a quick import check after implementation
+- Fills in `markdown/feature_description/` stubs with actual endpoint signatures and env vars
+- Flags any verification failure and stops rather than marking work as done
+
+**When to run:** After `/product-planner` has created a plan and it has been reviewed. Run `/security-reviewer` and `/qa-engineer` after the developer finishes.
+
+**Usage:** `/developer <plan-slug>` — e.g. `/developer azure-cloud-hosting`
+
+---
+
 ### Scheduled: Dependency Scout
 A weekly scheduled job (runs Monday 09:23) checks every pinned package in `backend/requirements.txt` against PyPI and flags outdated or security-relevant versions. It is session-scoped — re-register it at the start of a session with:
 

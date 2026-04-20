@@ -9,6 +9,7 @@ import time
 import warnings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -34,6 +35,8 @@ logger = logging.getLogger(__name__)
 ROSTER_LIMIT   = int(os.getenv("ROSTER_LIMIT", "5"))
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
+_APP_VERSION   = os.getenv("APP_VERSION", "APP_VERSION")
+_APP_RELEASE   = os.getenv("APP_RELEASE", "")
 
 _WEEK_CHECK_INTERVAL  = int(os.getenv("WEEK_CHECK_INTERVAL",  "300"))   # seconds, default 5 min
 _INGEST_POLL_INTERVAL = int(os.getenv("INGEST_POLL_INTERVAL", "900"))   # seconds, default 15 min
@@ -288,6 +291,16 @@ app.add_middleware(
     secret_key=_secret_key,
     same_site="lax",
     https_only=_https_only,
+)
+# Twitch extension iframes are served from *.ext-twitch.tv — a different origin.
+# All /twitch/* endpoints authenticate via JWT (not cookies), so allow_origins="*"
+# is safe: cross-origin requests cannot carry session cookies, so regular
+# session-protected endpoints are unaffected.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 app.include_router(twitch_router)
 
@@ -1462,7 +1475,7 @@ def get_audit_logs(db=Depends(get_db), limit: int = 200, _: dict = Depends(requi
 
 @app.get("/config")
 def get_config():
-    return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS}
+    return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS, "app_version": _APP_VERSION, "app_release": _APP_RELEASE}
 
 
 @app.get("/health")

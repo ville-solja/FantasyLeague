@@ -27,7 +27,7 @@
       style="width:90px;font-size:1.2rem;letter-spacing:0.2em;text-transform:uppercase;padding:6px 8px" />
     <button id="btn-link">Link</button>
   </div>
-  <p class="muted" id="link-status" style="margin-top:6px"></p>
+  <p id="link-status" style="margin-top:6px;color:#f66;font-size:11px"></p>
 </div>
 
 <!-- Linked state -->
@@ -88,13 +88,15 @@ function doLink() {
     el("btn-link").disabled = true;
     el("link-status").textContent = "";
     ebsPost("/twitch/link", { code: code }).then(function(data) {
+        console.log("[panel] /twitch/link response", data);
         if (data.linked) {
             loadStatus();
         } else {
             el("link-status").textContent = data.detail || "Linking failed. Check your code and try again.";
         }
-    }).catch(function() {
-        el("link-status").textContent = "Request failed. Try again.";
+    }).catch(function(err) {
+        console.error("[panel] /twitch/link error", err);
+        el("link-status").textContent = "Request failed — check console for details.";
     }).finally(function() {
         el("btn-link").disabled = false;
     });
