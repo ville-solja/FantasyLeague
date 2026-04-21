@@ -25,9 +25,9 @@ async function createTestUser(request, suffix = "") {
  * Assumes the page is at the app root and the header login button is visible.
  */
 async function loginViaUI(page, { username, password }) {
-  // The app auto-opens the login modal on page load when not authenticated.
-  // Wait for it to be visible rather than clicking the header button (which
-  // the modal overlay would intercept anyway).
+  // Click the header Login button to open the modal (the app no longer
+  // auto-opens it so the schedule is viewable without an account).
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.fill("#loginUsername", username);
   await page.fill("#loginPassword", password);

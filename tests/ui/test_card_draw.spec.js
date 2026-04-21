@@ -85,6 +85,7 @@ test("draw with no tokens shows error", async ({ page, request }) => {
   await page.goto("/");
   const ts = Date.now();
   const username = `nodraw_${ts}`;
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
   await page.fill("#regUsername", username);
