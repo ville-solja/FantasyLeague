@@ -45,7 +45,7 @@ Flag any agent missing these headers.
 
 ### 4. Coverage gap check
 - List all `.md` files present in `.claude/commands/`. Check that each one has a corresponding entry in `CLAUDE.MD` under the `## Developer Agents` section.
-- Check for new files in `markdown/feature_description/` that are not referenced by any agent's `## Files to read` section.
+- Check for new files in `markdown/features/core/` and `markdown/features/reference/` that are not referenced by any agent's `## Files to read` section.
 - Check for new Python files in `backend/` (excluding `__pycache__` and `tests/`) that are not referenced in any agent's `## Files to read` section.
 
 ### 5. CLAUDE.MD consistency

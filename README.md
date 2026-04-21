@@ -40,25 +40,8 @@ rm data/fantasy.db && docker compose restart
 
 ## Documentation
 
-### Feature descriptions
-
-| Topic | Description |
-|---|---|
-| [Terminology](markdown/feature_description/terminology.md) | Definitions for all domain concepts (League, Card, Deck, Roster, Week, etc.) |
-| [Cards & Rarities](markdown/feature_description/cards.md) | Card generation, rarity distribution, and modifiers |
-| [Weeks & Leaderboards](markdown/feature_description/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
-| [Data Ingest](markdown/feature_description/ingest.md) | How match data flows from OpenDota into the app |
-| [Admin Features](markdown/feature_description/admin.md) | Admin endpoints: ingest, weights, tokens, promo codes, audit log |
-| [Toornament Integration](markdown/feature_description/toornament.md) | Automatic result sync to toornament.com |
-| [Point Simulator](markdown/feature_description/point_simulator.md) | The `/simulate` endpoint for testing scoring weights |
-| [Profile & Account Management](markdown/feature_description/profile.md) | Username, password, Dota 2 player linking, and forgot-password flow |
-| [Configuration & Commands](markdown/feature_description/commands.md) | Environment variables and useful admin commands |
-| [Twitch Extension](markdown/feature_description/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |
-| [Version Visibility](markdown/feature_description/version-visibility.md) | Faint build version badge on every page for debugging |
-
-### User stories
-
-Full system requirements and user stories: [markdown/user_stories.md](markdown/user_stories.md)
+- [Feature documentation](markdown/features/README.md) — Core features and reference details, split into two tiers
+- [User stories](markdown/stories/_index.md) — Full system requirements by section
 
 ## Stack
 

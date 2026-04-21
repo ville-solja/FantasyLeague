@@ -53,19 +53,15 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron { transform: rotate(90deg); c
 .lb-chip-pts { font-weight: bold; opacity: 0.9; }
 
 /* DECK SUMMARY */
-.rarity-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
-.rarity-box { background: #111; border: 1px solid #2a2a2a; border-radius: 4px;
-              padding: 12px 8px; text-align: center; }
-.rarity-box .count { font-size: 1.4rem; font-weight: bold; margin-bottom: 4px; }
-.rarity-box .label { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-.rarity-box.common    { border-color: #3a3a3a; }
-.rarity-box.common    .count { color: #aaa; }
-.rarity-box.rare      { border-color: #1e3a5a; }
-.rarity-box.rare      .count { color: #6ab0e0; }
-.rarity-box.epic      { border-color: #3a1a5a; }
-.rarity-box.epic      .count { color: #b06ae0; }
-.rarity-box.legendary { border-color: #5a3a0a; }
-.rarity-box.legendary .count { color: #e0a030; }
+.rarity-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.rarity-card-box { position: relative; border-radius: 4px; overflow: hidden; aspect-ratio: 597/845; }
+.rarity-card-thumb { width: 100%; height: 100%; object-fit: fill; display: block; border-radius: 4px; }
+.rarity-card-box .count {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 1.3rem; font-weight: bold; color: #fff;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.95), 0 0 12px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
 
 /* CARD REVEAL MODAL */
 .reveal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9);
@@ -153,19 +149,22 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron { transform: rotate(90deg); c
 .modal .status { margin-top: 8px; }
 
 /* SCHEDULE */
-.badge-division { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
+.badge-division { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; flex-shrink: 0; }
 .badge-division.div1 { background: #1a1a2a; color: #6a6aaa; }
 .badge-division.div2 { background: #1a2a1a; color: #6aaa6a; }
-.series-row { display: grid; grid-template-columns: 46px 1fr 52px 1fr 86px minmax(0, 150px);
-              align-items: center; column-gap: 10px; padding: 7px 0; border-bottom: 1px solid #1a1a1a; font-size: 0.85rem; }
-.series-row.past { opacity: 0.45; }
+.series-row { display: grid; grid-template-columns: 40px 1fr 64px 1fr minmax(0, 170px);
+              align-items: center; column-gap: 10px; padding: 10px 0; border-bottom: 1px solid #161616; font-size: 0.85rem; }
+.series-row.past { opacity: 0.6; }
 .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .series-team.right { text-align: right; }
-.series-score { font-weight: bold; color: #e0e0e0; text-align: center; }
-.series-score.no-result { color: #333; }
-.series-meta { color: #555; font-size: 0.78rem; text-align: right; white-space: nowrap; }
+.series-score { font-weight: 700; color: #e0e0e0; text-align: center; font-size: 1rem; letter-spacing: 1px; }
+.series-score.no-result { color: #383838; font-weight: 400; font-size: 0.85rem; }
+.series-links { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; font-size: 0.78rem; }
 .stream-link { color: #6ab0e0; text-decoration: none; }
 .stream-link:hover { text-decoration: underline; }
+.series-time { color: #555; white-space: nowrap; }
+.schedule-section { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 1.5px; padding: 18px 0 6px; }
+.schedule-date-hd { font-size: 0.72rem; color: #444; padding: 10px 0 2px; }
 .stale-notice { font-size: 0.75rem; color: #666; margin-bottom: 12px; }
 
 /* ENTITY LINKS */
@@ -383,6 +382,27 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron { transform: rotate(90deg); c
     animation: none !important;
   }
 }
+
+/* TWO-COLUMN SIDEBAR TABS */
+#tab-team .grid,
+#tab-leaderboard .grid,
+#tab-admin .grid {
+    grid-template-columns: 1fr 360px;
+    align-items: start;
+}
+@media (max-width: 768px) {
+    #tab-team .grid,
+    #tab-leaderboard .grid,
+    #tab-admin .grid {
+        grid-template-columns: 1fr;
+    }
+}
+.tab-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* SIDEBAR PLAYER NAME TRUNCATION */
+.lb-name-cell { max-width: 0; overflow: hidden; }
+.lb-name-inner { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.lb-name-inner .entity-link { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 .version-badge {
   position: fixed;
