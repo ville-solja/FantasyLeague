@@ -1066,22 +1066,44 @@ function _populateLbWeekSelect() {
   if (!sel.innerHTML) sel.innerHTML = "<option disabled>No locked weeks yet</option>";
 }
 
+var _allLeaderboardRows = [];
+
 async function loadLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard`);
-    const rows = await res.json();
-    const tbody = document.getElementById("leaderboardBody");
-    if (!rows.length) { tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>"; return; }
-    tbody.innerHTML = rows.map((r, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td><img src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
-        <td>${r.matches}</td>
-        <td>${Number(r.avg_points).toFixed(1)}</td>
-      </tr>`).join("");
+    _allLeaderboardRows = await res.json();
+    _renderLeaderboard(false);
     setStatus("leaderboardStatus", "");
   } catch (e) {
     setStatus("leaderboardStatus", e.message, false);
+  }
+}
+
+function _renderLeaderboard(showAll) {
+  const tbody = document.getElementById("leaderboardBody");
+  const toggleBtn = document.getElementById("leaderboardToggle");
+  const rows = _allLeaderboardRows;
+  if (!rows.length) {
+    tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>";
+    if (toggleBtn) toggleBtn.style.display = "none";
+    return;
+  }
+  const visible = showAll ? rows : rows.slice(0, 10);
+  tbody.innerHTML = visible.map((r, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td class="lb-name-cell"><div class="lb-name-inner"><img src="${r.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
+      <td>${r.matches}</td>
+      <td>${Number(r.avg_points).toFixed(1)}</td>
+    </tr>`).join("");
+  if (toggleBtn) {
+    if (rows.length > 10) {
+      toggleBtn.style.display = "";
+      toggleBtn.textContent = showAll ? "Show less" : "Show all (" + rows.length + ")";
+      toggleBtn.onclick = function() { _renderLeaderboard(!showAll); };
+    } else {
+      toggleBtn.style.display = "none";
+    }
   }
 }
 
@@ -1512,6 +1534,24 @@ async function loadSchedule() {
     const past     = allSeries.filter(s => s.match_status === "past")
                               .sort((a, b) => b.datetime_iso.localeCompare(a.datetime_iso));
 
+    function _seriesDateLabel(s) {
+      const ts = (s.series_result && s.series_result.start_time)
+        ? s.series_result.start_time * 1000
+        : (s.datetime_iso ? new Date(s.datetime_iso).getTime() : null);
+      if (!ts) return "Unknown date";
+      return new Date(ts).toLocaleDateString("fi-FI", {weekday: "short", day: "numeric", month: "numeric", year: "numeric"});
+    }
+
+    function _groupByDate(series) {
+      const groups = [], index = {};
+      for (const s of series) {
+        const key = _seriesDateLabel(s);
+        if (!index[key]) { index[key] = []; groups.push({key, items: index[key]}); }
+        index[key].push(s);
+      }
+      return groups;
+    }
+
     const renderRow = s => {
       const isPast = s.match_status === "past";
       const divLabel = s.division === "div1"
@@ -1523,37 +1563,43 @@ async function loadSchedule() {
         ? `<span class="series-score">${r.team1_wins}–${r.team2_wins}</span>`
         : `<span class="series-score no-result">vs</span>`;
 
-      let meta;
-      if (r && r.start_time) {
-        const d = new Date(r.start_time * 1000);
-        meta = d.toLocaleDateString("fi-FI", {day: "numeric", month: "numeric"})
-             + " " + d.toLocaleTimeString("fi-FI", {hour: "2-digit", minute: "2-digit"});
-      } else {
-        meta = `${s.date || ""}${s.date && s.time ? " " : ""}${s.time || ""}`;
+      let linksContent = "";
+      if (isPast && r && r.match_ids && r.match_ids.length) {
+        linksContent = r.match_ids.map((id, i) =>
+          `<a class="stream-link" href="https://www.opendota.com/matches/${id}" target="_blank" rel="noopener">G${i + 1} ↗</a>`
+        ).join("");
+        if (s.stream_url) {
+          linksContent += `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
+        }
+      } else if (!isPast) {
+        const time = s.time ? `<span class="series-time">${s.time}</span>` : "";
+        const watch = s.stream_url
+          ? `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Watch"} ↗</a>`
+          : (s.stream_label ? `<span style="color:#555">${s.stream_label}</span>` : "");
+        linksContent = time + (time && watch ? " · " : "") + watch;
       }
-
-      const streamHtml = s.stream_url
-        ? `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Watch"} ↗</a>`
-        : (s.stream_label ? `<span style="color:#555;">${s.stream_label}</span>` : `<span></span>`);
 
       return `<div class="series-row${isPast ? " past" : ""}">
         ${divLabel}
         <span class="series-team">${s.team1_id ? teamLink(s.team1_id, s.team1) : (s.team1 || "—")}</span>
         ${scoreHtml}
         <span class="series-team right">${s.team2_id ? teamLink(s.team2_id, s.team2) : (s.team2 || "—")}</span>
-        <span class="series-meta">${meta}</span>
-        ${streamHtml}
+        <span class="series-links">${linksContent}</span>
       </div>`;
     };
 
-    const upcomingHtml = upcoming.map(renderRow).join("");
-    const pastHtml     = past.map(renderRow).join("");
-    const divider      = upcoming.length && past.length
-      ? `<div style="border-top:1px solid #2a2a2a;margin:16px 0 12px;"></div>`
-      : "";
+    const renderGroup = (groups) => groups.map(g =>
+      `<div class="schedule-date-hd">${g.key}</div>` + g.items.map(renderRow).join("")
+    ).join("");
 
-    content.innerHTML = upcomingHtml + divider + pastHtml;
-    if (!allSeries.length) content.innerHTML = "<span style='color:#555'>No dated fixtures found.</span>";
+    let html = "";
+    if (upcoming.length) {
+      html += `<div class="schedule-section">Upcoming</div>` + renderGroup(_groupByDate(upcoming));
+    }
+    if (past.length) {
+      html += `<div class="schedule-section">Results</div>` + renderGroup(_groupByDate(past));
+    }
+    content.innerHTML = html || "<span style='color:#555'>No dated fixtures found.</span>";
 
     setStatus("scheduleStatus", "");
   } catch (e) {
@@ -1570,9 +1616,7 @@ async function init() {
   await loadConfig();
   await loadMe();
   applyAuthState();
-  if (!activeUserId) {
-    showLogin();
-  } else {
+  if (activeUserId) {
     loadDeck();
     loadWeeks().then(() => loadRoster(_rosterWeekId));
   }
