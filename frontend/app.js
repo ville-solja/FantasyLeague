@@ -47,12 +47,15 @@ function updateTokenDisplay(balance) {
   const el = document.getElementById("tokenBalance");
   const counter = document.getElementById("drawCounter");
   if (counter && balance !== null && activeUserId) {
-    counter.textContent = `${balance} ${_tokenName} remaining`;
+    counter.innerHTML = `<img src="/assets/placeholder-24x24.svg" alt="" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;opacity:0.6;" />${balance} ${_tokenName} remaining`;
   }
   if (!el) return;
   if (balance !== null && activeUserId) {
-    el.textContent = `${balance} ${_tokenName}`;
-    el.style.display = "";
+    const img = el.querySelector("img");
+    const textNode = [...el.childNodes].find(n => n.nodeType === Node.TEXT_NODE);
+    if (textNode) textNode.nodeValue = `${balance} ${_tokenName}`;
+    else el.appendChild(document.createTextNode(`${balance} ${_tokenName}`));
+    el.style.display = "inline-flex";
   } else {
     el.style.display = "none";
   }
