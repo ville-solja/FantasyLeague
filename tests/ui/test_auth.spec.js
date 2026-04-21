@@ -11,6 +11,7 @@ test.beforeEach(async ({ context }) => {
 
 test("short password shows inline field error without submitting", async ({ page }) => {
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
 
@@ -26,6 +27,7 @@ test("short password shows inline field error without submitting", async ({ page
 
 test("empty username shows inline field error", async ({ page }) => {
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
 
@@ -39,6 +41,7 @@ test("empty username shows inline field error", async ({ page }) => {
 
 test("invalid email format shows inline field error", async ({ page }) => {
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
 
@@ -81,6 +84,7 @@ test("duplicate username shows username field error", async ({ page, request }) 
   const user = await createTestUser(request);
 
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
 
@@ -99,6 +103,7 @@ test("duplicate username shows username field error", async ({ page, request }) 
 
 test("register modal X button closes the modal", async ({ page }) => {
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
   await expect(page.locator("#registerModal")).toBeVisible();
@@ -115,6 +120,7 @@ test("login with wrong password shows error in login modal", async ({ page, requ
   const user = await createTestUser(request);
 
   await page.goto("/");
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.fill("#loginUsername", user.username);
   await page.fill("#loginPassword", "wrongpassword");
