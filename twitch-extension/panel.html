@@ -22,12 +22,10 @@
     <li>Profile → <strong>Generate Twitch Code</strong>.</li>
     <li>Enter the 6-character code below and press Link.</li>
   </ol>
-  <div style="display:flex;gap:8px;align-items:center">
-    <input id="link-code-input" type="text" maxlength="6" placeholder="ABC123"
-      style="width:100px;font-size:1.2rem;letter-spacing:0.15em;text-transform:uppercase;
-             padding:7px 8px;margin-bottom:0;flex-shrink:0" />
-    <button id="btn-link" style="width:auto;flex:1;margin-top:0">Link</button>
-  </div>
+  <input id="link-code-input" type="text" maxlength="6" placeholder="ABC123"
+    style="font-size:1.3rem;letter-spacing:0.2em;text-transform:uppercase;
+           padding:8px;text-align:center" />
+  <button id="btn-link">Link</button>
   <p id="link-status" style="margin-top:6px;color:#f66;font-size:11px"></p>
 </div>
 
@@ -53,13 +51,15 @@
 </div>
 
 <script>
+// Attach button listeners immediately — DOM is ready, no need to wait for JWT.
+el("btn-link").addEventListener("click", doLink);
+el("link-code-input").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") doLink();
+});
+
 function onReady() {
     startHeartbeat(55000);
     loadStatus();
-    el("btn-link").addEventListener("click", doLink);
-    el("link-code-input").addEventListener("keydown", function(e) {
-        if (e.key === "Enter") doLink();
-    });
 }
 
 function loadStatus() {
