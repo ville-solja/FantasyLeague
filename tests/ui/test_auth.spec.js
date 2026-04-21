@@ -63,6 +63,7 @@ test("successful registration navigates to team tab", async ({ page, request }) 
   const ts = Date.now();
   const username = `newuser_${ts}`;
 
+  await page.click("#headerLoginBtn");
   await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
   await page.click("button:has-text('Create new account')");
   await page.fill("#regUsername", username);
