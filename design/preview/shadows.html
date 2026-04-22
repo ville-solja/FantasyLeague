@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Shadows & Glows</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--fg); }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .c { height: 100px; border-radius: var(--r-md); background: var(--bg-card); border: 1px solid var(--border); display: flex; flex-direction: column; justify-content: flex-end; padding: 10px; }
+  .c .tag { font-family: var(--font-display); font-size: 11px; letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); }
+  .c .meta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="c" style="box-shadow: var(--sh-sm);"><span class="tag">Shadow SM</span><span class="meta">0 1 2 rgba(0,0,0,.4)</span></div>
+    <div class="c" style="box-shadow: var(--sh-md);"><span class="tag">Shadow MD</span><span class="meta">0 4 12 rgba(0,0,0,.5)</span></div>
+    <div class="c" style="box-shadow: var(--sh-lg);"><span class="tag">Shadow LG · Hover</span><span class="meta">0 12 28 rgba(0,0,0,.6)</span></div>
+    <div class="c" style="box-shadow: var(--sh-xl);"><span class="tag">Shadow XL · Modal</span><span class="meta">0 24 56 rgba(0,0,0,.7)</span></div>
+    <div class="c" style="box-shadow: var(--sh-glow-orange); border-color: var(--accent);"><span class="tag" style="color: var(--accent);">Glow · Orange</span><span class="meta">CTA hover / reveal</span></div>
+    <div class="c" style="box-shadow: var(--sh-glow-amber); border-color: var(--k-amber-500);"><span class="tag" style="color: var(--k-amber-500);">Glow · Amber</span><span class="meta">Legendary reveal</span></div>
+    <div class="c" style="box-shadow: var(--sh-glow-rare); border-color: var(--k-rarity-rare);"><span class="tag" style="color: var(--k-rarity-rare);">Glow · Rare</span><span class="meta">Rare card slot</span></div>
+    <div class="c" style="box-shadow: var(--sh-glow-epic); border-color: var(--k-rarity-epic);"><span class="tag" style="color: var(--k-rarity-epic);">Glow · Epic</span><span class="meta">Epic card slot</span></div>
+  </div>
+</body>
+</html>

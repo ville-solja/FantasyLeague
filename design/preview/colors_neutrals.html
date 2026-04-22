@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Colors: Neutrals</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); }
+  .row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .sw { aspect-ratio: 1.1 / 1; border-radius: var(--r-md); display: flex; flex-direction: column; justify-content: space-between; padding: 10px; border: 1px solid var(--border-soft); }
+  .sw .hex { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; }
+  .sw .name { font-family: var(--font-display); font-size: 10px; letter-spacing: var(--tr-wider); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw" style="background:#000; color:#fff;"><span class="name">Ink 000</span><span class="hex">#000000</span></div>
+    <div class="sw" style="background:var(--k-ink-950); color:#fff;"><span class="name">Ink 950 · Page BG</span><span class="hex">#0a0a0c</span></div>
+    <div class="sw" style="background:var(--k-ink-900); color:#fff;"><span class="name">Ink 900</span><span class="hex">#121216</span></div>
+    <div class="sw" style="background:var(--k-ink-800); color:#fff;"><span class="name">Ink 800 · Card</span><span class="hex">#1a1a20</span></div>
+    <div class="sw" style="background:var(--k-ink-700); color:#fff;"><span class="name">Ink 700 · Hover</span><span class="hex">#24242c</span></div>
+    <div class="sw" style="background:var(--k-ink-600); color:#fff;"><span class="name">Ink 600 · Border</span><span class="hex">#33333d</span></div>
+    <div class="sw" style="background:var(--k-ink-500); color:#fff;"><span class="name">Ink 500</span><span class="hex">#4a4a55</span></div>
+    <div class="sw" style="background:var(--k-ink-400); color:#fff;"><span class="name">Ink 400 · Muted 2</span><span class="hex">#6a6a75</span></div>
+    <div class="sw" style="background:var(--k-ink-300); color:#000;"><span class="name">Ink 300 · Muted 1</span><span class="hex">#8f8f99</span></div>
+    <div class="sw" style="background:var(--k-ink-200); color:#000;"><span class="name">Ink 200</span><span class="hex">#b8b8c0</span></div>
+    <div class="sw" style="background:var(--k-ink-100); color:#000;"><span class="name">Ink 100 · Body</span><span class="hex">#e4e4e8</span></div>
+    <div class="sw" style="background:#fff; color:#000;"><span class="name">Ink White</span><span class="hex">#ffffff</span></div>
+  </div>
+</body>
+</html>

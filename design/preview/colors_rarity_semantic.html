@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Colors: Rarity & Semantic</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); display: grid; gap: 14px; }
+  .group { display: grid; gap: 6px; }
+  .label { font-family: var(--font-display); font-size: 11px; letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--fg-dim); }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .sw { height: 64px; border-radius: var(--r-md); display: flex; flex-direction: column; justify-content: space-between; padding: 8px 10px; }
+  .sw .hex { font-family: var(--font-mono); font-size: 10px; }
+  .sw .name { font-family: var(--font-display); font-size: 11px; letter-spacing: var(--tr-wider); text-transform: uppercase; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="group">
+    <div class="label">Rarity — Fantasy card slots</div>
+    <div class="row">
+      <div class="sw" style="background:rgba(154,154,162,0.12); border:1px solid var(--k-rarity-common); color: var(--k-rarity-common);"><span class="name">Common</span><span class="hex">#9a9aa2</span></div>
+      <div class="sw" style="background:rgba(90,160,232,0.12); border:1px solid var(--k-rarity-rare); color: var(--k-rarity-rare); box-shadow: var(--sh-glow-rare);"><span class="name">Rare</span><span class="hex">#5aa0e8</span></div>
+      <div class="sw" style="background:rgba(176,106,224,0.12); border:1px solid var(--k-rarity-epic); color: var(--k-rarity-epic); box-shadow: var(--sh-glow-epic);"><span class="name">Epic</span><span class="hex">#b06ae0</span></div>
+      <div class="sw" style="background:rgba(240,168,58,0.12); border:1px solid var(--k-rarity-legendary); color: var(--k-rarity-legendary); box-shadow: var(--sh-glow-amber);"><span class="name">Legendary</span><span class="hex">#f0a83a</span></div>
+    </div>
+  </div>
+  <div class="group">
+    <div class="label">Semantic</div>
+    <div class="row">
+      <div class="sw" style="background:var(--k-ok); color:#0a0a0c;"><span class="name">OK</span><span class="hex">#3ecf6a</span></div>
+      <div class="sw" style="background:var(--k-warn); color:#0a0a0c;"><span class="name">Warn</span><span class="hex">#f0a83a</span></div>
+      <div class="sw" style="background:var(--k-err); color:#fff;"><span class="name">Error</span><span class="hex">#e05050</span></div>
+      <div class="sw" style="background:var(--k-info); color:#0a0a0c;"><span class="name">Info</span><span class="hex">#5aa0e8</span></div>
+      <div class="sw" style="background:var(--k-twitch); color:#fff;"><span class="name">Twitch</span><span class="hex">#9147ff</span></div>
+      <div class="sw" style="background:linear-gradient(90deg, var(--k-orange-700), var(--k-orange-500), var(--k-amber-500)); color:#fff;"><span class="name">Gradient — Flame</span><span class="hex">700 → 500 → amber</span></div>
+    </div>
+  </div>
+</body>
+</html>
