@@ -1493,7 +1493,7 @@ function renderPlayerProfile(profile) {
   }
   function heroSection(label, heroes, limit) {
     const items = (heroes || []).slice(0, limit).map(heroLine).join(", ") || "—";
-    return `<div style="margin-bottom:6px;"><span style="font-size:0.72rem;color:#444;text-transform:uppercase;letter-spacing:1px;">${label}</span><br><span style="font-size:0.82rem;">${items}</span></div>`;
+    return `<div style="margin-bottom:6px;"><span class="player-bio-eyebrow">${label}</span><br><span style="font-size:var(--fs-sm);">${items}</span></div>`;
   }
 
   const heroes = `<div style="margin-top:14px;">
@@ -1505,7 +1505,7 @@ function renderPlayerProfile(profile) {
   const bans = (facts.ban_correlations || []).slice(0, 5);
   const banSection = bans.length ? `
     <div style="margin-top:12px;">
-      <div style="font-size:0.72rem;color:#444;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Ban correlations</div>
+      <div class="player-bio-eyebrow" style="margin-bottom:6px;">Ban correlations</div>
       ${bans.map(b => `
         <div style="background:#1a0a0a;border:1px solid #3a1a1a;border-radius:4px;padding:5px 8px;margin-bottom:4px;font-size:0.82rem;">
           <span style="color:#e06;">${b.hero_name}</span>

@@ -72,7 +72,7 @@
       <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
       <img id="revealCardImg" class="reveal-card-img" alt="" width="200" height="283" style="display:none;" />
     </div>
-    <div class="player-name" id="revealPlayer" style="font-size:1.1rem;margin-bottom:4px;"></div>
+    <div class="player-name" id="revealPlayer"></div>
     <div id="revealTeam" style="font-size:0.82rem;color:#888;margin-bottom:12px;"></div>
     <div id="revealDestination" style="font-size:0.75rem;color:#666;margin-bottom:20px;"></div>
     <button id="rerollBtn" onclick="openRerollConfirm()" style="margin-bottom:8px;width:100%;background:#1a2a1a;border:1px solid #2a4a2a;color:#5a9;">Reroll Modifiers (1 token)</button>
@@ -95,8 +95,8 @@
       <div style="display:flex;align-items:center;gap:14px;">
         <img id="playerModalAvatar" style="width:48px;height:48px;border-radius:50%;display:none;" onerror="this.style.display='none'" />
         <div>
-          <div id="playerModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
-          <div id="playerModalTeam" style="font-size:0.8rem;color:#555;"></div>
+          <div id="playerModalName" class="player-modal-name"></div>
+          <div id="playerModalTeam" class="player-modal-team"></div>
         </div>
       </div>
       <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
@@ -119,8 +119,8 @@
   <div class="modal modal-wide">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div>
-        <div id="teamModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
-        <div id="teamModalMeta" style="font-size:0.8rem;color:#555;"></div>
+        <div id="teamModalName" class="player-modal-name"></div>
+        <div id="teamModalMeta" class="player-modal-team"></div>
       </div>
       <button class="ghost" onclick="closeTeamModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
