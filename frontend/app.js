@@ -47,15 +47,14 @@ function updateTokenDisplay(balance) {
   const el = document.getElementById("tokenBalance");
   const counter = document.getElementById("drawCounter");
   if (counter && balance !== null && activeUserId) {
-    counter.innerHTML = `<img src="/assets/placeholder-24x24.svg" alt="" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;opacity:0.6;" />${balance} ${_tokenName} remaining`;
+    counter.textContent = `${balance} ${_tokenName} remaining`;
   }
   if (!el) return;
   if (balance !== null && activeUserId) {
-    const img = el.querySelector("img");
-    const textNode = [...el.childNodes].find(n => n.nodeType === Node.TEXT_NODE);
-    if (textNode) textNode.nodeValue = `${balance} ${_tokenName}`;
-    else el.appendChild(document.createTextNode(`${balance} ${_tokenName}`));
-    el.style.display = "inline-flex";
+    const numEl = document.getElementById("headerTokenNum");
+    if (numEl) numEl.textContent = balance;
+    el.style.display = "flex";
+    if (typeof lucide !== "undefined") lucide.createIcons();
   } else {
     el.style.display = "none";
   }
@@ -77,7 +76,7 @@ function applyAuthState() {
   document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");
-  if (tokenEl) tokenEl.style.display = loggedIn ? "" : "none";
+  if (tokenEl) tokenEl.style.display = loggedIn ? "flex" : "none";
 
   if (!loggedIn) switchTab("leaderboard");
 }
@@ -1304,6 +1303,21 @@ async function recalculate() {
   }
 }
 
+async function enrichProfiles() {
+  setStatus("enrichStatus", "Enriching...");
+  try {
+    const res = await fetch(`${API}/admin/enrich-profiles`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus("enrichStatus", `Done. Enriched: ${data.enriched}, skipped: ${data.skipped}, errors: ${data.errors}`, true);
+    } else {
+      setStatus("enrichStatus", data.detail || "Failed", false);
+    }
+  } catch (e) {
+    setStatus("enrichStatus", e.message, false);
+  }
+}
+
 // -------------------------------------------------------
 // ENTITY LINKS
 // -------------------------------------------------------
@@ -1398,6 +1412,8 @@ async function openPlayerModal(playerId) {
   document.getElementById("playerModalStats").innerHTML = "";
   document.getElementById("playerModalHistory").innerHTML = "";
   document.getElementById("playerModalStatus").textContent = "";
+  const profileEl = document.getElementById("playerProfile");
+  if (profileEl) { profileEl.style.display = "none"; profileEl.innerHTML = ""; }
 
   try {
     const res = await fetch(`${API}/players/${playerId}`);
@@ -1442,9 +1458,67 @@ async function openPlayerModal(playerId) {
         </tr>`;
       }).join("");
     }
+
+    // Non-blocking profile fetch — modal shows immediately even if profile unavailable
+    fetch(`${API}/players/${playerId}/profile`).then(async r => {
+      if (!r.ok) return;
+      renderPlayerProfile(await r.json());
+    }).catch(() => {});
   } catch (e) {
     setStatus("playerModalStatus", e.message, false);
   }
+}
+
+function renderPlayerProfile(profile) {
+  const facts = profile && profile.facts;
+  if (!facts) return;
+  const el = document.getElementById("playerProfile");
+  if (!el) return;
+
+  const statGrid = `
+    <div class="player-modal-stat-grid" style="margin-top:8px;">
+      <div class="player-modal-stat"><div class="val">${facts.kanaliiga_seasons}</div><div class="lbl">Seasons</div></div>
+      <div class="player-modal-stat"><div class="val">${Number(facts.avg_kills).toFixed(1)}</div><div class="lbl">Avg K</div></div>
+      <div class="player-modal-stat"><div class="val">${Number(facts.avg_deaths).toFixed(1)}</div><div class="lbl">Avg D</div></div>
+      <div class="player-modal-stat"><div class="val">${Number(facts.avg_assists).toFixed(1)}</div><div class="lbl">Avg A</div></div>
+      <div class="player-modal-stat"><div class="val">${Math.round(facts.avg_gpm)}</div><div class="lbl">Avg GPM</div></div>
+      <div class="player-modal-stat"><div class="val">${Number(facts.avg_wards).toFixed(1)}</div><div class="lbl">Avg wards</div></div>
+      <div class="player-modal-stat"><div class="val">${facts.role_tendency}</div><div class="lbl">Role</div></div>
+    </div>`;
+
+  function heroLine(h) {
+    return h.win_rate !== undefined
+      ? `<span style="color:#aaa">${h.hero_name}</span> <span style="color:#555;font-size:0.78rem;">(${h.games}g, ${Math.round(h.win_rate*100)}%wr)</span>`
+      : `<span style="color:#aaa">${h.hero_name}</span> <span style="color:#555;font-size:0.78rem;">(${h.games}g)</span>`;
+  }
+  function heroSection(label, heroes, limit) {
+    const items = (heroes || []).slice(0, limit).map(heroLine).join(", ") || "—";
+    return `<div style="margin-bottom:6px;"><span class="player-bio-eyebrow">${label}</span><br><span style="font-size:var(--fs-sm);">${items}</span></div>`;
+  }
+
+  const heroes = `<div style="margin-top:14px;">
+    ${heroSection("Career heroes", facts.top_heroes_alltime, 10)}
+    ${heroSection("Tournament heroes", facts.tournament_heroes, 5)}
+    ${heroSection("Recent pub heroes", facts.recent_pub_heroes, 5)}
+  </div>`;
+
+  const bans = (facts.ban_correlations || []).slice(0, 5);
+  const banSection = bans.length ? `
+    <div style="margin-top:12px;">
+      <div class="player-bio-eyebrow" style="margin-bottom:6px;">Ban correlations</div>
+      ${bans.map(b => `
+        <div style="background:#1a0a0a;border:1px solid #3a1a1a;border-radius:4px;padding:5px 8px;margin-bottom:4px;font-size:0.82rem;">
+          <span style="color:#e06;">${b.hero_name}</span>
+          <span style="color:#666;"> — banned in ${Math.round(b.ban_rate*100)}% of tournament matches (${b.banned_in}/${b.tournament_match_count})</span>
+        </div>`).join("")}
+    </div>` : "";
+
+  const bioSection = profile.bio_text
+    ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;">${profile.bio_text}</div>`
+    : "";
+
+  el.innerHTML = statGrid + heroes + banSection + bioSection;
+  el.style.display = "block";
 }
 
 function closePlayerModal() {
@@ -1628,4 +1702,6 @@ async function init() {
   loadTop();
 }
 
-init();
+init().then(() => {
+  if (typeof lucide !== "undefined") lucide.createIcons();
+});

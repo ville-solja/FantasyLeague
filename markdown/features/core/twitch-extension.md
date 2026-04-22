@@ -89,7 +89,12 @@ When `TWITCH_LOCAL_DEV=true`, the HTTP call is skipped and the message is printe
 ### Step 1 — Register the extension
 Go to [dev.twitch.tv/console/extensions](https://dev.twitch.tv/console/extensions) → Create Extension. Note the **Client ID** and **Extension Secret** (base64).
 
-### Step 2 — Configure environment
+### Step 2 — Enable the Configuration Service
+In the extension settings on the Twitch dev console, under "Select how you will configure your extension", choose **Extension Configuration Service**.
+
+> **Note:** Leave the "Developer Writable Channel Segment Version" field empty. It is a channel-gating mechanism, not a place to store the EBS URL — putting a URL there has no effect and may cause the extension to be inactive on channels unexpectedly.
+
+### Step 3 — Configure environment
 Add to `.env`:
 ```
 TWITCH_EXTENSION_CLIENT_ID=<client id from console>
@@ -97,13 +102,37 @@ TWITCH_EXTENSION_SECRET=<base64 secret from console>
 TWITCH_DROP_MAX=20
 ```
 
-### Step 3 — Package and upload
+### Step 4 — Package and upload
+The EBS URL is no longer baked into the package — it is set at runtime via the Configuration Service (Step 5). Packaging requires no environment variables:
 ```bash
-TWITCH_EBS_URL=https://your-domain.example.com bash twitch-extension/package.sh
+bash twitch-extension/package.sh
 ```
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** for testing on a real stream visible only to whitelisted testers.
 
-### Step 4 — Install and test
+### Step 5 — Set the EBS URL via the Configuration Service
+This is a one-time developer action. Get a client credentials token first:
+```bash
+curl -s -X POST "https://id.twitch.tv/oauth2/token" \
+  -d "client_id=<extension-client-id>" \
+  -d "client_secret=<extension-client-secret>" \
+  -d "grant_type=client_credentials" \
+  | jq -r .access_token
+```
+Then write the EBS URL into the global config segment:
+```bash
+curl -X PUT https://api.twitch.tv/helix/extensions/configurations \
+  -H "Authorization: Bearer <access-token-from-above>" \
+  -H "Client-Id: <extension-client-id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "extension_id": "<extension-client-id>",
+    "segment": "global",
+    "content": "{\"ebs_url\":\"https://your-domain.example.com\"}"
+  }'
+```
+The extension reads this value at startup via `Twitch.ext.configuration.global.content`. Changing the backend URL in future only requires re-running this `PUT` — no rebuild or re-upload needed.
+
+### Step 6 — Install and test
 Add the extension to the broadcast channel. Open the Twitch Stream Manager to confirm the Quick Actions (Live Config) view appears. Test the account linking flow from the Fantasy profile tab.
 
 ### Local development

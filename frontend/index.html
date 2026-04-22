@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Kanaliiga Fantasy</title>
+  <link rel="stylesheet" href="/colors_and_type.css">
   <link rel="stylesheet" href="/style.css">
+  <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
@@ -70,7 +72,7 @@
       <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
       <img id="revealCardImg" class="reveal-card-img" alt="" width="200" height="283" style="display:none;" />
     </div>
-    <div class="player-name" id="revealPlayer" style="font-size:1.1rem;margin-bottom:4px;"></div>
+    <div class="player-name" id="revealPlayer"></div>
     <div id="revealTeam" style="font-size:0.82rem;color:#888;margin-bottom:12px;"></div>
     <div id="revealDestination" style="font-size:0.75rem;color:#666;margin-bottom:20px;"></div>
     <button id="rerollBtn" onclick="openRerollConfirm()" style="margin-bottom:8px;width:100%;background:#1a2a1a;border:1px solid #2a4a2a;color:#5a9;">Reroll Modifiers (1 token)</button>
@@ -93,13 +95,14 @@
       <div style="display:flex;align-items:center;gap:14px;">
         <img id="playerModalAvatar" style="width:48px;height:48px;border-radius:50%;display:none;" onerror="this.style.display='none'" />
         <div>
-          <div id="playerModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
-          <div id="playerModalTeam" style="font-size:0.8rem;color:#555;"></div>
+          <div id="playerModalName" class="player-modal-name"></div>
+          <div id="playerModalTeam" class="player-modal-team"></div>
         </div>
       </div>
       <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
     <div id="playerModalStats"></div>
+    <div id="playerProfile" style="display:none;margin-top:4px;"></div>
     <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
     <div style="overflow-x:auto;">
       <table>
@@ -116,8 +119,8 @@
   <div class="modal modal-wide">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div>
-        <div id="teamModalName" style="font-size:1.1rem;color:#e0e0e0;margin-bottom:4px;"></div>
-        <div id="teamModalMeta" style="font-size:0.8rem;color:#555;"></div>
+        <div id="teamModalName" class="player-modal-name"></div>
+        <div id="teamModalMeta" class="player-modal-team"></div>
       </div>
       <button class="ghost" onclick="closeTeamModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
@@ -131,15 +134,21 @@
 </div>
 
 <!-- MAIN -->
-<div class="header">
-  <h1>Kanaliiga Fantasy</h1>
+<header class="header">
+  <div class="header-left">
+    <div class="header-title">KANALIIGA DOTA 2 FANTASY LEAGUE</div>
+  </div>
   <div class="header-right">
-    <span id="tokenBalance" style="font-size:0.85rem;color:#aaa;margin-right:8px;display:none;align-items:center;gap:5px;"><img src="/assets/placeholder-24x24.svg" alt="" style="width:18px;height:18px;vertical-align:middle;margin-right:3px;opacity:0.7;" /></span>
-    <span id="headerUserLabel"></span>
+    <div id="tokenBalance" class="header-tokens" style="display:none;">
+      <i data-lucide="coins" class="header-token-icon"></i>
+      <span id="headerTokenNum" class="header-token-num"></span>
+      <span class="header-token-label">Tokens</span>
+    </div>
+    <span id="headerUserLabel" class="header-account"></span>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
   </div>
-</div>
+</header>
 
 <div class="tabs" id="tabBar">
   <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
@@ -432,6 +441,13 @@
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
         <button onclick="recalculate()">Recalculate</button>
         <div class="status" id="recalcStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Re-enrich Player Profiles</h2>
+        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
+        <button onclick="enrichProfiles()">Re-enrich profiles</button>
+        <div class="status" id="enrichStatus"></div>
       </div>
 
       <div class="panel">

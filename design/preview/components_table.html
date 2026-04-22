@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Table</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; font-family: var(--font-body); font-size: 13px; }
+  th { font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: var(--tr-widest); text-transform: uppercase; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--fg-dim); }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--border-soft); }
+  tr:hover td { background: var(--bg-card-hi); }
+  .num { font-family: var(--font-display); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); text-align: right; }
+  .rank { font-family: var(--font-display); font-weight: 900; color: var(--accent); }
+</style>
+</head>
+<body>
+<table>
+  <thead><tr><th>Rank</th><th>User</th><th style="text-align:right;">Season pts</th><th style="text-align:right;">Last wk</th></tr></thead>
+  <tbody>
+    <tr><td class="rank">01</td><td>muffa_caster</td><td class="num">1,204.8</td><td class="num">+202.1</td></tr>
+    <tr><td class="rank">02</td><td>lawek</td><td class="num">1,188.2</td><td class="num">+187.5</td></tr>
+    <tr><td class="rank">03</td><td>sipuli_pos1</td><td class="num">1,152.0</td><td class="num">+155.9</td></tr>
+    <tr><td class="rank">04</td><td>kana_admin</td><td class="num">1,098.7</td><td class="num">+133.2</td></tr>
+  </tbody>
+</table>
+</body>
+</html>

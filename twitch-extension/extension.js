@@ -1,14 +1,49 @@
 // Twitch Extension — shared JS for panel, config, and live_config views.
-// Loaded by each HTML view. window.EBS_URL must be set before this script loads.
+// EBS URL is read at runtime from Twitch.ext.configuration.global
+// (set once by the developer in the Twitch Extensions console).
+// The dev harness stubs Twitch.ext.configuration so local dev works unchanged.
 
 "use strict";
 
 var ext = {
-    token: null,
-    userId: null,
+    token:     null,
+    userId:    null,
     channelId: null,
-    role: null,
+    role:      null,
+    ebsUrl:    null,
 };
+
+// ── Readiness gate ──────────────────────────────────────────────────────────
+// onReady() fires once both the EBS URL (from Configuration Service) and the
+// Twitch JWT are available. Subsequent onAuthorized refreshes (token renewal)
+// also call onReady so pages can re-fetch with the new token.
+
+var _cfgReady  = false;
+var _authReady = false;
+
+function _onCfgChanged() {
+    var global = window.Twitch.ext.configuration.global;
+    if (global && global.content) {
+        try {
+            var cfg = JSON.parse(global.content);
+            if (cfg.ebs_url) {
+                ext.ebsUrl = cfg.ebs_url;
+                _cfgReady  = true;
+                if (_authReady && typeof onReady === "function") onReady();
+            }
+        } catch (e) {
+            console.warn("[ext] bad global config JSON", e);
+        }
+    }
+}
+
+function _onAuth(auth) {
+    ext.token     = auth.token;
+    ext.userId    = auth.userId;
+    ext.channelId = auth.channelId;
+    _authReady    = true;
+    if (_cfgReady && typeof onReady === "function") onReady();
+}
 
 // ── Initialise ──────────────────────────────────────────────────────────────
 
@@ -27,13 +62,9 @@ function init() {
     }
     _initAttempts = 0;
 
-    window.Twitch.ext.onAuthorized(function (auth) {
-        ext.token    = auth.token;
-        ext.userId   = auth.userId;
-        ext.channelId = auth.channelId;
+    window.Twitch.ext.configuration.onChanged(_onCfgChanged);
 
-        if (typeof onReady === "function") onReady();
-    });
+    window.Twitch.ext.onAuthorized(_onAuth);
 
     window.Twitch.ext.listen("broadcast", function (_target, _contentType, rawMsg) {
         try {
@@ -48,7 +79,7 @@ function init() {
 // ── EBS helpers ─────────────────────────────────────────────────────────────
 
 function ebsGet(path) {
-    return fetch(window.EBS_URL + path, {
+    return fetch(ext.ebsUrl + path, {
         headers: { "Authorization": "Bearer " + ext.token },
     }).then(function (r) {
         return r.json().then(function (data) {
@@ -59,7 +90,7 @@ function ebsGet(path) {
 }
 
 function ebsPost(path, body) {
-    return fetch(window.EBS_URL + path, {
+    return fetch(ext.ebsUrl + path, {
         method: "POST",
         headers: {
             "Authorization": "Bearer " + ext.token,
@@ -91,11 +122,11 @@ function stopHeartbeat() {
 
 // ── Utility ──────────────────────────────────────────────────────────────────
 
-function showBanner(el, msg, isError) {
-    el.textContent = msg;
-    el.className = "banner " + (isError ? "error" : "success");
-    el.style.display = "block";
-    setTimeout(function () { el.style.display = "none"; }, 5000);
+function showBanner(bannerEl, msg, isError) {
+    bannerEl.textContent = msg;
+    bannerEl.className   = "banner " + (isError ? "error" : "success");
+    bannerEl.style.display = "block";
+    setTimeout(function () { bannerEl.style.display = "none"; }, 5000);
 }
 
 function el(id) { return document.getElementById(id); }

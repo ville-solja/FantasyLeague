@@ -1,0 +1,267 @@
+/* ============================================================
+   Kanaliiga Design System — Foundations
+   Colors, type, fonts, semantic tokens.
+   ============================================================ */
+
+/* ---- FONT FACES -------------------------------------------- */
+@font-face {
+  font-family: 'Big Shoulders Text';
+  src: url('fonts/BigShouldersText-VariableFont_wght.ttf') format('truetype-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root {
+
+  /* ---- Brand orange (from Kanaliiga logo flame + DOTA badge) */
+  --k-orange-50:  #fff2e8;
+  --k-orange-100: #ffd8b8;
+  --k-orange-300: #f59256;
+  --k-orange-500: #e85d1c;   /* primary flame orange */
+  --k-orange-600: #d24e13;   /* hover / pressed */
+  --k-orange-700: #a83c0a;
+  --k-orange-900: #5a1f05;
+
+  /* Secondary red — from logo flame tip & Dota 2 sunset sky */
+  --k-red-500: #c8321a;
+  --k-red-700: #7a1d0d;
+
+  /* Accent amber — legendary rarity + Dota emblem glow */
+  --k-amber-500: #f0a83a;
+  --k-amber-300: #ffc96a;
+
+  /* ---- Neutrals (true black to near-black, logo outline) --- */
+  --k-ink-000: #000000;
+  --k-ink-950: #0a0a0c;   /* page bg */
+  --k-ink-900: #121216;   /* surface 1 */
+  --k-ink-800: #1a1a20;   /* surface 2 / cards */
+  --k-ink-700: #24242c;   /* surface 3 / hover */
+  --k-ink-600: #33333d;   /* borders strong */
+  --k-ink-500: #4a4a55;   /* borders */
+  --k-ink-400: #6a6a75;   /* muted text 2 */
+  --k-ink-300: #8f8f99;   /* muted text 1 */
+  --k-ink-200: #b8b8c0;
+  --k-ink-100: #e4e4e8;
+  --k-ink-050: #f4f4f7;
+  --k-ink-white: #ffffff;
+
+  /* ---- Rarity (from card templates + reveal modal) --------- */
+  --k-rarity-common:     #9a9aa2;
+  --k-rarity-rare:       #5aa0e8;
+  --k-rarity-epic:       #b06ae0;
+  --k-rarity-legendary:  var(--k-amber-500);
+
+  /* ---- Semantic ------------------------------------------- */
+  --k-ok:    #3ecf6a;
+  --k-warn:  #f0a83a;
+  --k-err:   #e05050;
+  --k-info:  #5aa0e8;
+  --k-twitch:#9147ff;
+
+  /* ---- Surfaces ------------------------------------------- */
+  --bg:          var(--k-ink-950);
+  --bg-elevated: var(--k-ink-900);
+  --bg-card:     var(--k-ink-800);
+  --bg-card-hi:  var(--k-ink-700);
+  --fg:          var(--k-ink-100);
+  --fg-muted:    var(--k-ink-300);
+  --fg-dim:      var(--k-ink-400);
+  --border:      var(--k-ink-600);
+  --border-soft: var(--k-ink-700);
+
+  /* Accents (semantic) */
+  --accent:        var(--k-orange-500);
+  --accent-hover:  var(--k-orange-600);
+  --accent-fg:     var(--k-ink-white);
+  --accent-ghost:  rgba(232, 93, 28, 0.12);
+
+  /* ---- Type scale (display = Big Shoulders Text) ---------- */
+  --font-display: 'Big Shoulders Text', 'Oswald', 'Anton', 'Impact', sans-serif;
+  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono:    ui-monospace, 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+
+  /* weight tokens — Big Shoulders likes extremes */
+  --w-regular: 400;
+  --w-medium:  500;
+  --w-bold:    700;
+  --w-black:   900;
+
+  /* sizes */
+  --fs-xs:   11px;
+  --fs-sm:   13px;
+  --fs-base: 15px;
+  --fs-md:   17px;
+  --fs-lg:   20px;
+  --fs-xl:   26px;
+  --fs-2xl:  36px;
+  --fs-3xl:  52px;
+  --fs-4xl:  72px;
+  --fs-hero: 112px;
+
+  /* line heights */
+  --lh-tight:  1.05;
+  --lh-snug:   1.2;
+  --lh-body:   1.55;
+  --lh-loose:  1.75;
+
+  /* tracking (display type loves wide tracking) */
+  --tr-tight:  -0.01em;
+  --tr-normal: 0;
+  --tr-wide:   0.04em;
+  --tr-wider:  0.12em;
+  --tr-widest: 0.22em;
+
+  /* ---- Spacing (4pt base) --------------------------------- */
+  --s-0: 0;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+  --s-20: 80px;
+  --s-24: 96px;
+
+  /* ---- Radii — restrained; brand is angular/hex ----------- */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+
+  /* ---- Borders -------------------------------------------- */
+  --bw-hair:   1px;
+  --bw-thin:   1.5px;
+  --bw-thick:  2px;
+  --bw-banner: 3px;  /* hex VS banner edge */
+
+  /* ---- Shadows — dramatic, like stream posters ------------ */
+  --sh-sm:  0 1px 2px rgba(0,0,0,0.4);
+  --sh-md:  0 4px 12px rgba(0,0,0,0.5);
+  --sh-lg:  0 12px 28px rgba(0,0,0,0.6);
+  --sh-xl:  0 24px 56px rgba(0,0,0,0.7);
+  --sh-glow-orange: 0 0 28px rgba(232,93,28,0.55);
+  --sh-glow-amber:  0 0 32px rgba(240,168,58,0.55);
+  --sh-glow-rare:   0 0 18px rgba(90,160,232,0.45);
+  --sh-glow-epic:   0 0 20px rgba(176,106,224,0.45);
+
+  /* ---- Gradients ------------------------------------------ */
+  --grad-orange:   linear-gradient(90deg, var(--k-orange-700) 0%, var(--k-orange-500) 50%, var(--k-amber-500) 100%);
+  --grad-flame:    linear-gradient(180deg, var(--k-amber-500) 0%, var(--k-orange-500) 45%, var(--k-red-500) 100%);
+  --grad-dusk:     linear-gradient(180deg, #1a0b08 0%, #3a1a0c 50%, #0a0a0c 100%);
+  --grad-protect:  linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 100%);
+
+  /* ---- Motion --------------------------------------------- */
+  --ease-out:  cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in:   cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  --ease-io:   cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* small overshoot for card reveals */
+  --t-fast:   120ms;
+  --t-base:   200ms;
+  --t-slow:   360ms;
+  --t-reveal: 680ms;
+
+  /* ---- Layout --------------------------------------------- */
+  --max-width: 1360px;
+  --gutter: 24px;
+}
+
+/* ============================================================
+   SEMANTIC ELEMENTS
+   ============================================================ */
+html { background: var(--bg); color: var(--fg); }
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* Display headings — Big Shoulders, uppercase, wide tracking.
+   This is the signature Kanaliiga voice. */
+h1, .k-h1 {
+  font-family: var(--font-display);
+  font-weight: var(--w-black);
+  font-size: var(--fs-4xl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 0;
+}
+
+h2, .k-h2 {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 0;
+}
+
+h3, .k-h3 {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-xl);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 0;
+}
+
+/* Eyebrow — tiny caps label used everywhere in overlays */
+.k-eyebrow {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-widest);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+p, .k-body {
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  margin: 0 0 var(--s-4);
+}
+
+.k-body-sm { font-size: var(--fs-sm); color: var(--fg-muted); }
+.k-caption { font-size: var(--fs-xs); color: var(--fg-dim); text-transform: uppercase; letter-spacing: var(--tr-wider); }
+
+code, .k-mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--k-amber-300);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+a:hover { color: var(--k-orange-300); border-bottom-color: currentColor; }
+
+/* Numeric display — for score / timer / leaderboard digits */
+.k-numeric {
+  font-family: var(--font-display);
+  font-weight: var(--w-black);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tr-normal);
+}

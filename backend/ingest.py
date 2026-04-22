@@ -1,7 +1,7 @@
 import logging
 
 from database import SessionLocal
-from models import Match, Player, PlayerMatchStats, League, Team, Weight
+from models import Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 from scoring import fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -181,8 +181,15 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
             obs_placed=p.get("obs_placed", 0),
             sen_placed=p.get("sen_placed", 0),
             tower_damage=p.get("tower_damage", 0),
+            hero_id=p.get("hero_id"),
             fantasy_points=fantasy_score(p, weights)
         )
         db.add(stat)
+
+    existing_bans = db.query(MatchBan).filter(MatchBan.match_id == match_id).count()
+    if not existing_bans:
+        for pb in data.get("picks_bans", []):
+            if not pb.get("is_pick"):
+                db.add(MatchBan(match_id=match_id, hero_id=pb.get("hero_id")))
 
     db.commit()
