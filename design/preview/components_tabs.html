@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Tabs</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 22px 24px; background: var(--bg); color: var(--fg); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-soft); }
+  .tab { padding: 10px 18px; font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: var(--tr-wider); text-transform: uppercase; cursor: pointer; background: none; border: none; color: var(--fg-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--fg); }
+</style>
+</head>
+<body>
+  <div class="tabs">
+    <button class="tab">My Team</button>
+    <button class="tab">Profile</button>
+    <button class="tab active">Leaderboards</button>
+    <button class="tab">Players</button>
+    <button class="tab">Teams</button>
+    <button class="tab">Schedule</button>
+    <button class="tab">Admin</button>
+  </div>
+</body>
+</html>

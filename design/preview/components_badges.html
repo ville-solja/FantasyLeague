@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Rarity Badges</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--fg); display: grid; gap: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .badge { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: var(--tr-widest); text-transform: uppercase; padding: 4px 10px; border-radius: var(--r-xs); border: 1px solid; }
+  .b-common { background: rgba(154,154,162,.10); color: var(--k-rarity-common); border-color: var(--k-rarity-common); }
+  .b-rare { background: rgba(90,160,232,.12); color: var(--k-rarity-rare); border-color: var(--k-rarity-rare); }
+  .b-epic { background: rgba(176,106,224,.12); color: var(--k-rarity-epic); border-color: var(--k-rarity-epic); }
+  .b-legendary { background: rgba(240,168,58,.14); color: var(--k-rarity-legendary); border-color: var(--k-rarity-legendary); box-shadow: var(--sh-glow-amber); }
+  .div1 { background: #1a1a2a; color: #7a7aca; border-color: #3a3a6a; }
+  .div2 { background: #1a2a1a; color: #7aca7a; border-color: #3a6a3a; }
+  .status { background: rgba(62,207,106,.12); color: var(--k-ok); border-color: var(--k-ok); }
+  .locked { background: rgba(224,80,80,.12); color: var(--k-err); border-color: var(--k-err); }
+  .pill { font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: var(--tr-wider); text-transform: uppercase; padding: 3px 9px; border-radius: var(--r-pill); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .label { font-family: var(--font-display); font-size: 10px; letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+  <div>
+    <div class="label" style="margin-bottom:6px;">Rarity</div>
+    <div class="row">
+      <span class="badge b-common">Common</span>
+      <span class="badge b-rare">Rare</span>
+      <span class="badge b-epic">Epic</span>
+      <span class="badge b-legendary">Legendary</span>
+    </div>
+  </div>
+  <div>
+    <div class="label" style="margin-bottom:6px;">Division · Status</div>
+    <div class="row">
+      <span class="badge div1">Div 1</span>
+      <span class="badge div2">Div 2</span>
+      <span class="badge status"><span class="dot" style="background: var(--k-ok);"></span>Live</span>
+      <span class="badge locked"><span class="dot" style="background: var(--k-err);"></span>Roster locked</span>
+      <span class="pill" style="background: var(--accent); color:#fff;">Season 14</span>
+    </div>
+  </div>
+</body>
+</html>

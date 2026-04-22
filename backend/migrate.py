@@ -57,6 +57,13 @@ def run_migrations(engine) -> None:
             ))
             conn.commit()
 
+        # player_match_stats: hero_id
+        pms_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(player_match_stats)")).fetchall()]
+        if "hero_id" not in pms_cols:
+            conn.execute(text("ALTER TABLE player_match_stats ADD COLUMN hero_id INTEGER"))
+            conn.commit()
+            logger.info("Migration: player_match_stats — added hero_id column")
+
         # teams: logo_url
         team_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(teams)")).fetchall()]
         if "logo_url" not in team_cols:

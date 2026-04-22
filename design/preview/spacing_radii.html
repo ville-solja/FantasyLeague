@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Spacing & Radii</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); display: grid; gap: 18px; }
+  .group { display: grid; gap: 8px; }
+  .label { font-family: var(--font-display); font-size: 11px; letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--fg-dim); }
+  .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+  .sp { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sp .bar { background: var(--accent); height: 16px; }
+  .sp .tag { font-family: var(--font-mono); font-size: 10px; color: var(--fg-dim); }
+  .r { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .r .box { width: 52px; height: 52px; background: var(--bg-card); border: 1px solid var(--border); }
+  .r .tag { font-family: var(--font-mono); font-size: 10px; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+  <div class="group">
+    <div class="label">Spacing — 4pt base</div>
+    <div class="row">
+      <div class="sp"><div class="bar" style="width:4px;"></div><span class="tag">s-1 · 4</span></div>
+      <div class="sp"><div class="bar" style="width:8px;"></div><span class="tag">s-2 · 8</span></div>
+      <div class="sp"><div class="bar" style="width:12px;"></div><span class="tag">s-3 · 12</span></div>
+      <div class="sp"><div class="bar" style="width:16px;"></div><span class="tag">s-4 · 16</span></div>
+      <div class="sp"><div class="bar" style="width:20px;"></div><span class="tag">s-5 · 20</span></div>
+      <div class="sp"><div class="bar" style="width:24px;"></div><span class="tag">s-6 · 24</span></div>
+      <div class="sp"><div class="bar" style="width:32px;"></div><span class="tag">s-8 · 32</span></div>
+      <div class="sp"><div class="bar" style="width:48px;"></div><span class="tag">s-12 · 48</span></div>
+      <div class="sp"><div class="bar" style="width:64px;"></div><span class="tag">s-16 · 64</span></div>
+    </div>
+  </div>
+  <div class="group">
+    <div class="label">Radii — angular, not pill</div>
+    <div class="row">
+      <div class="r"><div class="box" style="border-radius: 2px;"></div><span class="tag">xs · 2</span></div>
+      <div class="r"><div class="box" style="border-radius: 4px;"></div><span class="tag">sm · 4 · buttons</span></div>
+      <div class="r"><div class="box" style="border-radius: 6px;"></div><span class="tag">md · 6 · cards</span></div>
+      <div class="r"><div class="box" style="border-radius: 10px;"></div><span class="tag">lg · 10 · modals</span></div>
+      <div class="r"><div class="box" style="border-radius: 14px;"></div><span class="tag">xl · 14</span></div>
+      <div class="r"><div class="box" style="border-radius: 999px;"></div><span class="tag">pill · avatars</span></div>
+    </div>
+  </div>
+</body>
+</html>

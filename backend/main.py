@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import os
 import random
@@ -15,12 +16,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, PromoCode, CodeRedemption, AuditLog
+from models import Player, PlayerMatchStats, Match, Card, CardModifier, User, Weight, Team, Week, PromoCode, CodeRedemption, AuditLog, PlayerProfile
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
 from migrate import run_migrations
 from ingest import ingest_league
-from enrich import run_enrichment
+from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_cards, seed_weights
 from scoring import fantasy_score, card_fantasy_score, SCORING_STATS
 from auth import hash_password, verify_password
@@ -38,8 +39,10 @@ INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 _APP_VERSION   = os.getenv("APP_VERSION", "APP_VERSION")
 _APP_RELEASE   = os.getenv("APP_RELEASE", "")
 
-_WEEK_CHECK_INTERVAL  = int(os.getenv("WEEK_CHECK_INTERVAL",  "300"))   # seconds, default 5 min
-_INGEST_POLL_INTERVAL = int(os.getenv("INGEST_POLL_INTERVAL", "900"))   # seconds, default 15 min
+_WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",       "300"))
+_INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",      "900"))
+_ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL", "300"))
+_ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",     "3"))
 
 
 def _week_maintenance_loop():
@@ -55,6 +58,18 @@ def _week_maintenance_loop():
         except Exception:
             logger.exception("Week maintenance error")
         time.sleep(_WEEK_CHECK_INTERVAL)
+
+
+def _profile_enrichment_loop():
+    """Background thread: periodically enrich player profiles with hero stats and AI bios."""
+    while True:
+        try:
+            result = run_profile_enrichment(batch_size=_ENRICHMENT_BATCH_SIZE)
+            if result["enriched"] or result["errors"]:
+                logger.info("Profile enrichment: %s", result)
+        except Exception:
+            logger.exception("Profile enrichment loop error")
+        time.sleep(_ENRICHMENT_INTERVAL)
 
 
 def _auto_ingest(league_ids: list[int]):
@@ -268,6 +283,8 @@ async def lifespan(app: FastAPI):
         logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
     threading.Thread(target=_week_maintenance_loop, daemon=True).start()
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
+    threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
+    logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
     yield
 
 
@@ -824,6 +841,30 @@ def get_player(player_id: int, db=Depends(get_db)):
         } if best else None,
         "match_history": history,
     }
+
+
+@app.get("/players/{player_id}/profile")
+def get_player_profile(player_id: int, db=Depends(get_db)):
+    profile = db.get(PlayerProfile, player_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    facts = json.loads(profile.facts_json) if profile.facts_json else None
+    return {
+        "player_id":        player_id,
+        "facts":            facts,
+        "bio_text":         profile.bio_text,
+        "facts_fetched_at": profile.facts_fetched_at,
+        "bio_generated_at": profile.bio_generated_at,
+    }
+
+
+@app.post("/admin/enrich-profiles")
+def admin_enrich_profiles(db=Depends(get_db), admin: dict = Depends(require_admin)):
+    result = run_profile_enrichment()
+    _audit(db, "admin_enrich_profiles", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"enriched={result['enriched']} skipped={result['skipped']} errors={result['errors']}")
+    db.commit()
+    return result
 
 
 @app.get("/teams")

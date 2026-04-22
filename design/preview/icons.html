@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Iconography</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); display: grid; gap: 12px; }
+  .k-eyebrow { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .cell svg { stroke: var(--accent); }
+  .cell .name { font-family: var(--font-mono); font-size: 10px; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+  <span class="k-eyebrow">ICONOGRAPHY · LUCIDE · STROKE 2 · CURRENTCOLOR</span>
+  <div class="grid">
+    <div class="cell"><i data-lucide="trophy" width="22" height="22"></i><span class="name">trophy</span></div>
+    <div class="cell"><i data-lucide="swords" width="22" height="22"></i><span class="name">swords</span></div>
+    <div class="cell"><i data-lucide="shield" width="22" height="22"></i><span class="name">shield</span></div>
+    <div class="cell"><i data-lucide="users" width="22" height="22"></i><span class="name">users</span></div>
+    <div class="cell"><i data-lucide="calendar" width="22" height="22"></i><span class="name">calendar</span></div>
+    <div class="cell"><i data-lucide="zap" width="22" height="22"></i><span class="name">zap</span></div>
+    <div class="cell"><i data-lucide="coins" width="22" height="22"></i><span class="name">coins</span></div>
+    <div class="cell"><i data-lucide="shuffle" width="22" height="22"></i><span class="name">shuffle</span></div>
+    <div class="cell"><i data-lucide="flame" width="22" height="22"></i><span class="name">flame</span></div>
+    <div class="cell"><i data-lucide="lock" width="22" height="22"></i><span class="name">lock</span></div>
+    <div class="cell"><i data-lucide="bar-chart-3" width="22" height="22"></i><span class="name">chart</span></div>
+    <div class="cell"><i data-lucide="refresh-cw" width="22" height="22"></i><span class="name">refresh</span></div>
+    <div class="cell"><i data-lucide="play" width="22" height="22"></i><span class="name">play</span></div>
+    <div class="cell"><i data-lucide="twitch" width="22" height="22"></i><span class="name">twitch</span></div>
+    <div class="cell"><i data-lucide="x" width="22" height="22"></i><span class="name">close</span></div>
+    <div class="cell"><i data-lucide="check" width="22" height="22"></i><span class="name">check</span></div>
+  </div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

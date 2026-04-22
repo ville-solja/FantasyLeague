@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga Fantasy — UI Kit</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 0 0 80px; }
+  .main { padding: 24px 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; }
+  .rarity-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+  .rarity-box { background: var(--k-ink-900); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 10px; text-align: center; }
+  .rarity-box .n { font-family: var(--font-display); font-weight: 900; font-size: 24px; margin-bottom: 2px; }
+  .rarity-box .l { font-family: var(--font-display); font-size: 10px; letter-spacing: var(--tr-widest); text-transform: uppercase; font-weight: 700; color: var(--fg-dim); }
+  .rarity-box.common    { border-color: var(--k-rarity-common); } .rarity-box.common .n { color: var(--k-rarity-common); }
+  .rarity-box.rare      { border-color: var(--k-rarity-rare); }   .rarity-box.rare .n { color: var(--k-rarity-rare); }
+  .rarity-box.epic      { border-color: var(--k-rarity-epic); }   .rarity-box.epic .n { color: var(--k-rarity-epic); }
+  .rarity-box.legendary { border-color: var(--k-rarity-legendary); box-shadow: var(--sh-glow-amber); } .rarity-box.legendary .n { color: var(--k-rarity-legendary); }
+  .hero { position: relative; padding: 34px 28px 28px; background: url('../../assets/bg_dota_landscape.png') center/cover no-repeat; border-bottom: 1px solid var(--border); }
+  .hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10,10,12,.35) 0%, rgba(10,10,12,.92) 100%); pointer-events: none; }
+  .hero > * { position: relative; z-index: 1; }
+  .hero-inner { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+  .hero-title { font-family: var(--font-display); font-weight: 900; font-size: 56px; letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg); line-height: 1; }
+  .hero-eyebrow { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .hero-sub { font-family: var(--font-body); font-size: 14px; color: var(--fg-muted); margin-top: 6px; max-width: 520px; }
+  .cards-row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="app"></div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+
+<script type="text/babel" src="Header.jsx"></script>
+<script type="text/babel" src="Tabs.jsx"></script>
+<script type="text/babel" src="Panel.jsx"></script>
+<script type="text/babel" src="CardSlot.jsx"></script>
+<script type="text/babel" src="Views.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const ROSTER = [
+  { player: "Lawek", team: "REAKTOR", pts: "78.4", rarity: "common" },
+  { player: "Muffa", team: "VINCIT",  pts: "122.8", rarity: "rare" },
+  { player: "Sipuli", team: "SIILI",  pts: "151.0", rarity: "epic" },
+  { player: "Kukko", team: "CGI",     pts: "250.2", rarity: "legendary" },
+  { player: "Terho", team: "FUTURICE", pts: "84.1", rarity: "common" },
+];
+const LB = [
+  { user: "muffa_caster", season: "1,204.8", last: "202.1" },
+  { user: "lawek",        season: "1,188.2", last: "187.5" },
+  { user: "sipuli_pos1",  season: "1,152.0", last: "155.9" },
+  { user: "kana_admin",   season: "1,098.7", last: "133.2" },
+];
+
+function App() {
+  const [tab, setTab] = useState("My Team");
+  useEffect(() => { lucide.createIcons(); });
+
+  return (
+    <>
+      <Header />
+      <Tabs tabs={["My Team","Profile","Leaderboards","Players","Teams","Schedule","Admin"]} active={tab} onChange={setTab} />
+
+      {tab === "My Team" && <>
+        <div className="hero">
+          <div className="hero-inner">
+            <div>
+              <div className="hero-eyebrow">WEEK 7 · 20–26 APR · LOCKS SUN 23:59</div>
+              <div className="hero-title">YOUR ROSTER</div>
+              <div className="hero-sub">Five active cards earn fantasy points from matches this week. Bench cards stay in your deck.</div>
+            </div>
+            <Button icon="shuffle">Draw a card</Button>
+          </div>
+        </div>
+        <div className="main">
+          <div className="grid">
+            <Panel span={2} eyebrow="DECK" title="CARD COUNTS" right={<Button variant="ghost" icon="refresh-cw">Refresh</Button>}>
+              <div className="rarity-grid">
+                <div className="rarity-box common"><div className="n">14</div><div className="l">Common</div></div>
+                <div className="rarity-box rare"><div className="n">6</div><div className="l">Rare</div></div>
+                <div className="rarity-box epic"><div className="n">3</div><div className="l">Epic</div></div>
+                <div className="rarity-box legendary"><div className="n">1</div><div className="l">Legendary</div></div>
+              </div>
+              <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                <Button icon="shuffle">Draw a card</Button>
+                <span style={{fontSize:12,color:'var(--fg-dim)'}}>12 tokens · next free draw Mon</span>
+              </div>
+            </Panel>
+            <Panel span={2} eyebrow="ACTIVE" title="ROSTER">
+              <div className="cards-row">
+                {ROSTER.map(c => <CardSlot key={c.player} {...c}/>)}
+              </div>
+              <div style={{display:'flex',gap:24,marginTop:8,fontSize:12,color:'var(--fg-dim)'}}>
+                <span>This week: <strong style={{color:'var(--fg)',fontFamily:'var(--font-display)'}}>686.5</strong> pts</span>
+                <span>Season: <strong style={{color:'var(--fg)',fontFamily:'var(--font-display)'}}>4,218.2</strong> pts</span>
+              </div>
+            </Panel>
+          </div>
+        </div>
+      </>}
+
+      {tab === "Leaderboards" && (
+        <div className="main">
+          <div className="grid">
+            <Panel span={2} eyebrow="SEASON" title="STANDINGS" right={<><Button variant="secondary">Season</Button><Button variant="ghost">Weekly</Button></>}>
+              <LeaderboardTable rows={LB} />
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {tab === "Schedule" && (
+        <div className="main">
+          <div className="grid">
+            <Panel span={2} eyebrow="SEASON 14" title="SCHEDULE" right={<Button variant="ghost" icon="refresh-cw">Refresh</Button>}>
+              <div style={{display:'grid',gap:10}}>
+                <MatchupRow div={1} home="REAKTOR"   away="INNOFACTOR" scoreH="2" scoreA="1" meta="Tue 20:00 · Twitch" />
+                <MatchupRow div={2} home="CGI"       away="FUTURICE"   scoreH="0" scoreA="2" meta="Sun 18:00 · Finished" past />
+                <MatchupRow div={1} home="VINCIT"    away="SIILI"      meta="Thu 19:30 · B02" />
+                <MatchupRow div={2} home="TIETOEVRY" away="NORDCLOUD"  meta="Fri 20:00 · B02" />
+              </div>
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {(tab === "Profile" || tab === "Players" || tab === "Teams" || tab === "Admin") && (
+        <div className="main">
+          <div className="grid">
+            <Panel span={2} eyebrow={tab.toUpperCase()} title={tab}>
+              <p style={{color:'var(--fg-muted)',fontSize:14}}>Screen stubbed — component coverage is shown on the My Team, Leaderboards and Schedule tabs.</p>
+            </Panel>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+</script>
+</body>
+</html>
