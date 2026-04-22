@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FantasyLeague — Config</title>
 <link rel="stylesheet" href="extension.css">
-<script>window.EBS_URL = "%%EBS_URL%%";</script>
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
 <script src="extension.js"></script>
 </head>
@@ -31,12 +30,13 @@
 <p class="muted" style="margin-top:6px;font-size:0.8rem">Quick Actions are only visible while you are live or in Stream Manager. The MVP button will not appear on the channel page.</p>
 
 <h3 style="margin-top:14px">EBS URL</h3>
-<p class="muted">The backend URL is set at build time. Contact the extension developer to change it.</p>
-<p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display"></p>
+<p class="muted">Set via the Twitch Extensions Configuration Service (global segment). Contact the extension developer to change it.</p>
+<p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display">Loading…</p>
 
 <script>
-el("ebs-display").textContent = window.EBS_URL || "(not set)";
-// Config view has no Twitch auth actions — purely informational.
+function onReady() {
+    el("ebs-display").textContent = ext.ebsUrl || "(not configured — set ebs_url in the global config segment)";
+}
 </script>
 </body>
 </html>
