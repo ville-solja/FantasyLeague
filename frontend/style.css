@@ -163,8 +163,11 @@ button {
   border: none;
   border-radius: var(--r-sm);
   padding: 7px 14px;
-  font-family: var(--font-body);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
   font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
   transition: background var(--t-fast);
@@ -511,6 +514,31 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   color: var(--fg-dim);
   text-transform: uppercase;
   letter-spacing: var(--tr-wider);
+}
+
+/* Modal entity names */
+.player-modal-name {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.player-modal-team {
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+}
+
+/* Eyebrow labels inside the player bio section */
+.player-bio-eyebrow {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-widest);
+  text-transform: uppercase;
+  color: var(--fg-dim);
 }
 
 /* ============================================================

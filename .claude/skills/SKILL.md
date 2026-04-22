@@ -1,5 +1,5 @@
 ---
-name: kanaliiga-design
+name: ui-design
 description: Use this skill to generate well-branded interfaces and assets for Kanaliiga (Finnish amateur Dota 2 "Corporate Esports League") and its Fantasy app, either for production or throwaway prototypes/mocks/decks/stream overlays. Contains essential design guidelines, colors, type, fonts, assets, and UI kit components for prototyping.
 user-invocable: true
 ---
@@ -7,13 +7,13 @@ user-invocable: true
 Read the README.md file within this skill, and explore the other available files. Key entry points:
 
 - `README.md` — brand context, content fundamentals, visual foundations, iconography (READ FIRST)
-- `colors_and_type.css` — all design tokens; include via `<link rel="stylesheet">` in every artifact
-- `fonts/BigShouldersText-VariableFont_wght.ttf` — the single brand display font (self-host)
-- `assets/logo_kanaliiga_primary.png` — primary logo (chicken + flame shield)
-- `assets/bg_dota_landscape.png` — Dota dusk-map hero background
-- `assets/banner_vs.png` — signature hex VS banner
-- `ui_kits/fantasy_web/` — Kanaliiga Fantasy web-app components + click-through
-- `ui_kits/stream_overlay/` — broadcast matchup overlay
+- `design/colors_and_type.css` — all design tokens; include via `<link rel="stylesheet">` in every artifact
+- `design/fonts/BigShouldersText-VariableFont_wght.ttf` — the single brand display font (self-host)
+- `design/assets/logo_kanaliiga_primary.png` — primary logo (chicken + flame shield)
+- `design/assets/bg_dota_landscape.png` — Dota dusk-map hero background
+- `design/assets/banner_vs.png` — signature hex VS banner
+- `design/ui_kits/fantasy_web/` — Kanaliiga Fantasy web-app components + click-through
+- `design/ui_kits/stream_overlay/` — broadcast matchup overlay
 
 If creating visual artifacts (slides, mocks, throwaway prototypes, stream scenes, marketing): copy assets out and create static HTML files for the user to view. If working on production code for the FantasyLeague repo, copy assets and read the rules here to become an expert in designing with this brand.
 
