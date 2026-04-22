@@ -27,7 +27,7 @@ from auth import hash_password, verify_password
 from email_utils import send_email
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from weeks import generate_weeks, auto_lock_weeks, get_next_editable_week
-from image import generate_card_image, PIL_AVAILABLE
+from image import generate_card_image, PIL_AVAILABLE, _ASSETS_DIR
 from toornament import sync_toornament_results
 
 logger = logging.getLogger(__name__)
@@ -1492,5 +1492,8 @@ if not os.path.isdir(_TWITCH_EXT_DIR):
     _TWITCH_EXT_DIR = "twitch-extension"
 if os.path.isdir(_TWITCH_EXT_DIR):
     app.mount("/twitch-ext", StaticFiles(directory=_TWITCH_EXT_DIR), name="twitch-extension")
+
+if os.path.isdir(_ASSETS_DIR):
+    app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
 
 app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

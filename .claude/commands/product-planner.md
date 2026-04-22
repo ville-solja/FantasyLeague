@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -25,10 +25,10 @@ If no feature description was provided as `$ARGUMENTS`, stop and ask the user to
 
 Read the following files before drafting anything:
 
-- `markdown/user_stories.md` — read the full file. Find the **last section number** in the Table of Contents (e.g. if the last entry is `13.2 Twitch Integration - token drops`, the next section is `14`). Note the exact format of the TOC entries and story blocks.
-- `markdown/feature_description/` — Glob `markdown/feature_description/*.md` to list existing feature doc filenames. Note the naming convention (lowercase, hyphens).
+- `markdown/stories/_index.md` — read the full index. Find the **last section number** in the table (e.g. if the last row is `17`, the next section is `18`). Note the naming convention of section files (`NN-slug.md`).
+- `markdown/features/README.md` — read the two-tier feature index. Note which tier (Core vs Reference) fits the new feature, and the naming convention (lowercase, hyphens).
 - `markdown/plans/` — Glob `markdown/plans/*.md` to list existing plan filenames. Avoid creating a duplicate slug.
-- `README.md` — read the documentation table under the `### Feature descriptions` heading. You'll need to report its exact format for the follow-up instructions.
+- `README.md` — read the documentation links section.
 
 ---
 
@@ -39,12 +39,12 @@ Using `$ARGUMENTS` and everything you read in Phase 1:
 ### 2a. Derive names
 
 - **Plan slug**: lowercase the feature name, replace spaces with hyphens, strip punctuation. Example: "Weekly Summary Email" → `weekly-summary-email`. Check it does not already exist in `markdown/plans/`.
-- **Feature doc name**: same slug. Check it does not already exist in `markdown/feature_description/`.
-- **Section number**: the integer after the last existing TOC section (e.g. last = 13 → new = 14).
+- **Feature doc name**: same slug. Check it does not already exist in `markdown/features/core/` or `markdown/features/reference/`. New features default to `reference/` unless they are major user-facing surfaces.
+- **Section number**: the integer after the last row in `markdown/stories/_index.md` (e.g. last row is 17 → new = 18). Determine the filename as `markdown/stories/{NN}-{slug}.md` (zero-padded to 2 digits).
 
 ### 2b. Draft user stories
 
-Write 2–5 user stories in the **exact format** used throughout `markdown/user_stories.md`:
+Write 2–5 user stories in the **exact format** used in `markdown/stories/` section files:
 
 ```
 ### [N.M] [Story Title]
@@ -98,7 +98,7 @@ Implementation steps may be high-level stubs if full details aren't known yet. D
 
 ### 2d. Draft the feature description stub
 
-Write a stub following the style of `markdown/feature_description/profile.md` or `markdown/feature_description/weeks.md`:
+Write a stub following the style of `markdown/features/core/weeks.md` or `markdown/features/reference/ingest.md`:
 
 ```
 # [Feature Name]
@@ -138,19 +138,13 @@ Write all three artifacts now:
 ### File 1: `markdown/plans/plan-{slug}.md`
 The complete plan from 2c (including the User Stories section).
 
-### File 2: `markdown/user_stories.md` — append two blocks
+### File 2: `markdown/stories/{NN}-{slug}.md`
+A new section file containing the stories from 2b, starting with `# N. [Feature Name]`.
+Then update `markdown/stories/_index.md` to append a new row to the table for this section.
 
-**Block A — TOC entry:** Append a new line to the Table of Contents, continuing the numbering. Place it after the last entry in the TOC list. Format:
-```
-[N]. [[Feature Name]](#N-feature-name-anchor)
-   - N.1 [Story Title]
-   - N.2 [Story Title]
-```
-
-**Block B — Story section:** Append after the last `---` separator at the end of the file. Include the full story text from 2b, preceded by a `---` separator and a `## N. [Feature Name]` section header.
-
-### File 3: `markdown/feature_description/{slug}.md`
+### File 3: `markdown/features/reference/{slug}.md` (or `core/` if it is a major user-facing surface)
 The stub from 2d.
+Then update `markdown/features/README.md` to add a row to the appropriate tier table.
 
 ---
 
@@ -161,12 +155,12 @@ After writing all files, output exactly this structure:
 ```
 Created:
   markdown/plans/plan-{slug}.md
-  markdown/feature_description/{slug}.md
-  Appended section {N} to markdown/user_stories.md (stories {N}.1–{N}.M)
+  markdown/stories/{NN}-{slug}.md
+  markdown/features/{tier}/{slug}.md
+  Updated markdown/stories/_index.md (added section {N})
+  Updated markdown/features/README.md (added row to {Core|Reference} table)
 
 Manual follow-up:
-  [ ] Add row to README.md documentation table:
-      | [{Feature Name}](markdown/feature_description/{slug}.md) | {one-line description} |
   [ ] Implement the plan (markdown/plans/plan-{slug}.md)
 ```
 

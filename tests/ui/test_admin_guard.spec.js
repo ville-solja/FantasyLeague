@@ -37,10 +37,6 @@ test("admin tab button is hidden for regular users", async ({ page, request }) =
 test("unauthenticated user cannot access team tab content", async ({ page }) => {
   await page.goto("/");
 
-  // App auto-opens login modal; dismiss it so we can test the guard
-  await page.waitForSelector("#loginModal:not(.hidden)", { timeout: 5_000 });
-  await page.evaluate(() => document.getElementById("loginModal").classList.add("hidden"));
-
   // Tab button is hidden when not logged in; call switchTab directly
   await page.evaluate(() => window.switchTab("team"));
   await page.waitForTimeout(300);
