@@ -199,9 +199,10 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup):
         return None
     try:
         rows = db.execute(text("""
-            SELECT radiant_team_id, radiant_win, start_time FROM matches
+            SELECT match_id, radiant_team_id, radiant_win, start_time FROM matches
             WHERE (radiant_team_id = :a AND dire_team_id = :b)
                OR (radiant_team_id = :b AND dire_team_id = :a)
+            ORDER BY start_time ASC
         """), {"a": team1_id, "b": team2_id}).fetchall()
     except Exception:
         return None
@@ -209,8 +210,9 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup):
         return None
     team1_wins = 0
     team2_wins = 0
-    start_times = [r[2] for r in rows if r[2] is not None]
-    for radiant_id, radiant_win, _ in rows:
+    start_times = [r[3] for r in rows if r[3] is not None]
+    match_ids = [r[0] for r in rows if r[0] is not None]
+    for match_id, radiant_id, radiant_win, _ in rows:
         if radiant_win is None:
             continue
         if radiant_id == team1_id:
@@ -224,6 +226,7 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup):
         "team2_wins": team2_wins,
         "game_count": len(rows),
         "start_time": min(start_times) if start_times else None,
+        "match_ids": match_ids,
     }
 
 

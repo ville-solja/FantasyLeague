@@ -77,9 +77,9 @@ After all implementation steps are complete:
 
 ## Phase 4 — Update documentation
 
-1. Open `markdown/user_stories.md`. For each user story implemented in the plan, find its `### N.M` block and confirm it matches the implementation. Do not edit stories unless there is a genuine discrepancy between plan and code.
+1. Open the relevant story file in `markdown/stories/`. For each user story implemented in the plan, find its `### N.M` block and confirm it matches the implementation. Do not edit stories unless there is a genuine discrepancy between plan and code.
 
-2. If the plan created a feature description stub (`markdown/feature_description/$ARGUMENTS.md`), open it and fill in any sections that are now known: actual endpoint signatures, actual env var names and defaults. Replace `*(planned)*` with the real method+route. Keep the stub marker line at the bottom.
+2. If the plan created a feature description stub in `markdown/features/`, open it and fill in any sections that are now known: actual endpoint signatures, actual env var names and defaults. Replace `*(planned)*` with the real method+route. Keep the stub marker line at the bottom.
 
 3. If new environment variables were added, verify they are listed in `.env.example` with a comment.
 
@@ -104,7 +104,7 @@ Follow-up:
   [ ] Run /security-reviewer if backend/main.py was changed
   [ ] Run /qa-engineer to confirm test suite passes
   [ ] Run /documentation-steward to check for doc drift
-  [ ] Add README.md table row if a new feature_description file was created
+  [ ] Update markdown/features/README.md if a new feature file was created
 ```
 
 If any verification step failed, list it as `✗` with a short explanation and stop — do not mark the implementation as complete.

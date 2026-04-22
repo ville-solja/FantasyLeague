@@ -2,6 +2,10 @@
 
 Visible only to logged-in users.
 
+## Layout
+
+On desktop (≥ 768 px) the tab uses a two-column grid: **My Roster** occupies the main column (`1fr`) on the left and **Deck** occupies a fixed 300 px sidebar on the right. On narrow viewports (< 768 px) the columns collapse to a single stack — Roster first, Deck sidebar below.
+
 ## Deck panel
 
 Shows the current pool of unowned cards available to draw, broken down by rarity (Common, Rare, Epic, Legendary) with a count for each. Below the rarity grid:

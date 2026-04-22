@@ -116,10 +116,11 @@ function mvpGoTo(step) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
-function onReady() {
-    el("btn-start-mvp").addEventListener("click", loadSeries);
-    el("btn-confirm-mvp").addEventListener("click", confirmMVP);
-}
+// Attach button listeners immediately — DOM is ready, no need to wait for JWT.
+el("btn-start-mvp").addEventListener("click", loadSeries);
+el("btn-confirm-mvp").addEventListener("click", confirmMVP);
+
+function onReady() {}
 
 // ── Step 1: load series ─────────────────────────────────────────────────────
 
