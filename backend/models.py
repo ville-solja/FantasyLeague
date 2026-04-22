@@ -39,6 +39,7 @@ class PlayerMatchStats(Base):
     obs_placed = Column(Integer, default=0)
     sen_placed = Column(Integer, default=0)
     tower_damage = Column(Integer, default=0)
+    hero_id      = Column(Integer, nullable=True)
 
 
 class Team(Base):
@@ -187,6 +188,24 @@ class TwitchTokenDrop(Base):
     series_id  = Column(String)   # broadcaster-supplied series identifier
     dropped_at = Column(Integer)  # Unix timestamp
     count      = Column(Integer)  # number of tokens actually distributed
+
+
+class MatchBan(Base):
+    __tablename__ = "match_bans"
+
+    id       = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("matches.match_id"))
+    hero_id  = Column(Integer)
+
+
+class PlayerProfile(Base):
+    __tablename__ = "player_profiles"
+
+    player_id        = Column(Integer, ForeignKey("players.id"), primary_key=True)
+    facts_json       = Column(String, nullable=True)
+    bio_text         = Column(String, nullable=True)
+    facts_fetched_at = Column(Integer, nullable=True)
+    bio_generated_at = Column(Integer, nullable=True)
 
 
 class ToornamentSyncLog(Base):

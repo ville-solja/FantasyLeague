@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Type: Body, Numeric, Mono</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 22px 24px; background: var(--bg); color: var(--fg); display:grid; gap:14px; }
+  .spec { display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: baseline; border-bottom: 1px solid var(--border-soft); padding-bottom: 10px; }
+  .sample { color: var(--fg); }
+  .sample-muted { color: var(--fg-muted); }
+  .meta { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+  .num { font-family: var(--font-display); font-weight: 900; font-size: 44px; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1; }
+  .num-unit { font-size: 20px; color: var(--fg-muted); margin-left: 8px; font-weight: 700; letter-spacing: 0.08em; }
+  .caption { font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--fg-muted); }
+  code.k-mono { color: var(--k-amber-300); background: var(--bg-card); padding: 3px 8px; border-radius: 3px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="spec">
+    <p class="sample" style="margin:0; font-family: var(--font-body); font-size: 15px; line-height: 1.55;">Draft real Kanaliiga players onto your fantasy roster. Rosters lock Sunday 23:59 EEST.</p>
+    <span class="meta">Body · Inter 15 / 1.55</span>
+  </div>
+  <div class="spec">
+    <span class="sample-muted" style="font-family: var(--font-body); font-size: 13px; line-height: 1.5;">14 matches · avg 104.8 pts · peak 250.2 this week</span>
+    <span class="meta">Body SM · 13 · muted</span>
+  </div>
+  <div class="spec">
+    <span class="caption">MATCH HISTORY</span>
+    <span class="meta">Caption · 11 · +0.18em</span>
+  </div>
+  <div class="spec">
+    <span class="num">1,455<span class="num-unit">GPM</span></span>
+    <span class="meta">Numeric · display 900 · tabular</span>
+  </div>
+  <div class="spec" style="border-bottom: none;">
+    <code class="k-mono">WEIGHTS_JSON={"kills":2.5,"assists":1.2,"deaths":-1.0}</code>
+    <span class="meta">Mono · 13 · amber-300</span>
+  </div>
+</body>
+</html>

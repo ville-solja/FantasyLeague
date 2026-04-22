@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Stream Overlay (Matchup)</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body { margin:0; background:#000; color:#fff; font-family: var(--font-display); }
+  .stage { position: relative; width: 1920px; height: 1080px; transform-origin: top left; background: url('../../assets/bg_dota_landscape.png') center/cover no-repeat; }
+  .scrim { position:absolute; inset:0; background: linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.6) 100%); }
+  .corner { position: absolute; font-family: var(--font-display); font-weight: 900; text-transform: uppercase; letter-spacing: var(--tr-wider); color: #fff; font-size: 44px; }
+  .tl { top: 36px; left: 48px; }
+  .tr { top: 36px; right: 48px; text-align: right; }
+
+  .logos { position: absolute; top: 36px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 30px; }
+  .logos img.k { height: 220px; }
+  .logos .dota { display: flex; flex-direction: column; align-items: flex-start; }
+  .logos .dota .badge { background: linear-gradient(90deg,#e85d1c,#f0a83a); color:#fff; padding: 8px 20px; font-size: 44px; letter-spacing: 4px; font-weight: 900; border-radius: 2px; }
+  .logos .dota .s { color: var(--accent); font-size: 64px; font-weight: 900; margin-top: 10px; letter-spacing: 2px; }
+
+  /* ---------- VS BANNER (single arrow-shaped plate) ----------
+     One 1500×120 white plate with arrow-point ends.
+     Team names sit in the flat middle area.
+     Dark score notches are cut into the plate at the inner edges (flanking the hex).
+     Center hex sits on top of the plate, overlapping it.
+  */
+  .vs-wrap {
+    position: absolute;
+    left: 50%; bottom: 96px;
+    transform: translateX(-50%);
+    width: 1500px;
+    height: 120px;
+    filter: drop-shadow(0 10px 24px rgba(0,0,0,.55));
+  }
+
+  /* The single white banner with arrow tips at both ends */
+  .banner-shape {
+    position: absolute; inset: 0;
+    background: #f4f4f0;
+    clip-path: polygon(
+      0 50%,           /* left tip */
+      60px 0,          /* left-top corner */
+      calc(100% - 60px) 0,  /* right-top corner */
+      100% 50%,        /* right tip */
+      calc(100% - 60px) 100%, /* right-bottom */
+      60px 100%        /* left-bottom */
+    );
+  }
+
+  /* Team name layer — sits above the shape, with flex so names are balanced */
+  .names-row {
+    position: absolute; inset: 0;
+    display: flex;
+    align-items: center;
+    /* Reserve the center 340px for the hex + score notches */
+    padding: 0 110px;
+  }
+  .names-row .slot {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .names-row .slot.home { justify-content: flex-end; padding-right: 200px; }
+  .names-row .slot.away { justify-content: flex-start; padding-left: 200px; }
+  .names-row .n {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 52px;
+    letter-spacing: 4px;
+    color: #14141a;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Dark score notches — positioned at the inner edges near the hex */
+  .score-notch {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 130px;
+    background: #14141a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 72px;
+    line-height: 1;
+    z-index: 2;
+  }
+  .score-notch.home {
+    left: 50%;
+    margin-left: -250px; /* sits to the left of the hex */
+    clip-path: polygon(24px 0, 100% 0, calc(100% - 20px) 100%, 0 100%);
+  }
+  .score-notch.away {
+    right: 50%;
+    margin-right: -250px; /* sits to the right of the hex */
+    clip-path: polygon(20px 0, calc(100% - 24px) 0, 100% 100%, 0 100%);
+  }
+
+  /* Center VS hex — sits on top, slightly taller than the banner */
+  .vs-hex {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 190px; height: 165px;
+    clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
+    background: linear-gradient(180deg, var(--accent) 0%, #b43a0e 100%);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 3;
+  }
+  .vs-hex::before {
+    content: '';
+    position: absolute; inset: 5px;
+    clip-path: polygon(50% 0, 100% 28%, 100% 72%, 50% 100%, 0 72%, 0 28%);
+    background: #14141a;
+  }
+  .vs-hex span {
+    position: relative; z-index: 1;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 76px;
+    letter-spacing: 4px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .caster { position: absolute; left: 48px; bottom: 32px; font-size: 24px; font-weight: 500; color: #fff; letter-spacing: 2px; font-family: var(--font-body); }
+  .caster strong { font-family: var(--font-display); font-weight: 900; color: var(--accent); letter-spacing: 4px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="scrim"></div>
+  <div class="corner tl">DIVISION 1</div>
+  <div class="corner tr">GROUP STAGE (B02)</div>
+
+  <div class="logos">
+    <img class="k" src="../../assets/logo_kanaliiga_primary.png" alt="Kanaliiga">
+    <div class="dota">
+      <span class="badge">◆ DOTA 2</span>
+      <span class="s">SEASON 14</span>
+    </div>
+  </div>
+
+  <div class="vs-wrap">
+    <div class="banner-shape"></div>
+    <div class="names-row">
+      <div class="slot home"><span class="n">REAKTOR</span></div>
+      <div class="slot away"><span class="n">INNOFACTOR</span></div>
+    </div>
+    <div class="score-notch home">0</div>
+    <div class="score-notch away">0</div>
+    <div class="vs-hex"><span>VS</span></div>
+  </div>
+
+  <div class="caster">Casting by <strong>MUFFA</strong></div>
+</div>
+<script>
+  function fit() {
+    const s = document.getElementById('stage');
+    const sx = window.innerWidth / 1920;
+    const sy = window.innerHeight / 1080;
+    const scale = Math.min(sx, sy);
+    s.style.transform = `scale(${scale})`;
+    document.body.style.height = (1080 * scale) + 'px';
+  }
+  fit(); window.addEventListener('resize', fit);
+</script>
+</body>
+</html>

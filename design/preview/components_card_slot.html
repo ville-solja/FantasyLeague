@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanaliiga — Card Slot (Fantasy)</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--bg); color: var(--fg); }
+  .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .slot { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; border-radius: var(--r-md); background: var(--bg-card); border: 1px solid var(--border); }
+  .art { width: 110px; height: 156px; border-radius: 8px; display:flex; align-items:center; justify-content:center; font-family: var(--font-display); font-weight: 900; letter-spacing: var(--tr-wider); text-transform: uppercase; font-size: 14px; }
+  .common .art    { background: linear-gradient(180deg,#2a2a32,#14141a); color: var(--k-rarity-common); border: 1px solid var(--k-rarity-common); }
+  .rare .art      { background: linear-gradient(180deg,#0f1e2e,#08101a); color: var(--k-rarity-rare); border: 1px solid var(--k-rarity-rare); box-shadow: var(--sh-glow-rare); }
+  .epic .art      { background: linear-gradient(180deg,#1a0d2a,#0c0616); color: var(--k-rarity-epic); border: 1px solid var(--k-rarity-epic); box-shadow: var(--sh-glow-epic); }
+  .legendary .art { background: linear-gradient(180deg,#2a1a0a,#1a0a04); color: var(--k-rarity-legendary); border: 1px solid var(--k-rarity-legendary); box-shadow: var(--sh-glow-amber); }
+  .name { font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: var(--tr-wider); text-transform: uppercase; }
+  .pts { font-family: var(--font-display); font-weight: 900; font-size: 18px; }
+  .common .pts { color: var(--k-rarity-common); }
+  .rare .pts { color: var(--k-rarity-rare); }
+  .epic .pts { color: var(--k-rarity-epic); }
+  .legendary .pts { color: var(--k-rarity-legendary); }
+  .rar { font-family: var(--font-display); font-size: 9px; letter-spacing: var(--tr-widest); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="slot common"><div class="art">LAWEK</div><span class="rar">Common</span><span class="name">Lawek</span><span class="pts">64.2</span></div>
+    <div class="slot rare"><div class="art">MUFFA</div><span class="rar">Rare</span><span class="name">Muffa</span><span class="pts">98.4</span></div>
+    <div class="slot epic"><div class="art">SIPULI</div><span class="rar">Epic</span><span class="name">Sipuli</span><span class="pts">151.0</span></div>
+    <div class="slot legendary"><div class="art">KUKKO</div><span class="rar">Legendary</span><span class="name">Kukko</span><span class="pts">250.2</span></div>
+  </div>
+</body>
+</html>
