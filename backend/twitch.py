@@ -63,9 +63,11 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
     if not secret_b64:
         raise HTTPException(status_code=500, detail="TWITCH_EXTENSION_SECRET not configured")
     try:
+        # Twitch extension secrets are URL-safe base64; add padding and use urlsafe decoder
+        padded = secret_b64 + "=" * (-len(secret_b64) % 4)
         payload = pyjwt.decode(
             token,
-            base64.b64decode(secret_b64),
+            base64.urlsafe_b64decode(padded),
             algorithms=["HS256"],
         )
     except pyjwt.ExpiredSignatureError:
@@ -254,13 +256,21 @@ def current_matches(
     if not week:
         return {"week": None, "series": []}
 
-    # Only matches that have already started (streamer can't pick MVP for a future game)
+    # Only matches that have already started (streamer can't pick MVP for a future game).
+    # Respect week_override_id so admin-reassigned matches appear correctly.
     week_end = min(week.end_time, now)
+    from sqlalchemy import or_, and_
     matches = (
         db.query(Match)
         .filter(
-            Match.start_time >= week.start_time,
-            Match.start_time <= week_end,
+            or_(
+                Match.week_override_id == week.id,
+                and_(
+                    Match.week_override_id == None,  # noqa: E711
+                    Match.start_time >= week.start_time,
+                    Match.start_time <= week_end,
+                ),
+            )
         )
         .order_by(Match.start_time)
         .all()
