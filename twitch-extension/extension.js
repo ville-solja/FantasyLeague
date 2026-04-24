@@ -74,6 +74,13 @@ function init() {
             console.warn("[ext] bad PubSub message", rawMsg);
         }
     });
+
+    // If the Configuration Service global segment never delivers an EBS URL,
+    // onReady() will never fire and the panel stays blank. Surface a clear
+    // message so the viewer knows setup is incomplete.
+    setTimeout(function () {
+        if (!_cfgReady && typeof onConfigTimeout === "function") onConfigTimeout();
+    }, 8000);
 }
 
 // ── EBS helpers ─────────────────────────────────────────────────────────────

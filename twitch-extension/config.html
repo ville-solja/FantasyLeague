@@ -33,10 +33,6 @@
 <p class="muted">Set via the Twitch Extensions Configuration Service (global segment). Contact the extension developer to change it.</p>
 <p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display">Loading…</p>
 
-<script>
-function onReady() {
-    el("ebs-display").textContent = ext.ebsUrl || "(not configured — set ebs_url in the global config segment)";
-}
-</script>
+<script src="config.js"></script>
 </body>
 </html>
