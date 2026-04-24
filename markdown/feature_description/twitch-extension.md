@@ -26,7 +26,8 @@ twitch-extension/
 ├── extension.js        # Shared JS (EBS calls, PubSub, heartbeat)
 ├── extension.css       # Shared styles
 ├── dev-harness.html    # Local dev only — not uploaded to Twitch
-└── package.sh          # Builds Twitch CDN ZIP
+├── package.sh          # Builds Twitch CDN ZIP
+└── set-ebs-url.sh      # One-time / on-redeploy: sets EBS URL via Configuration Service API
 ```
 
 The broadcaster actions (giveaway, token drop, MVP selection) are in the **Live Config** view, which appears as the extension's **Quick Actions** in the Twitch Stream Manager dashboard — matching stories 13.1, 13.2, and 13.4.
@@ -110,27 +111,13 @@ bash twitch-extension/package.sh
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** for testing on a real stream visible only to whitelisted testers.
 
 ### Step 5 — Set the EBS URL via the Configuration Service
-This is a one-time developer action. Get a client credentials token first:
+Fill in the three values at the top of `twitch-extension/set-ebs-url.sh` (see the comments in the file for where to find each one), then run:
 ```bash
-curl -s -X POST "https://id.twitch.tv/oauth2/token" \
-  -d "client_id=<extension-client-id>" \
-  -d "client_secret=<extension-client-secret>" \
-  -d "grant_type=client_credentials" \
-  | jq -r .access_token
+bash twitch-extension/set-ebs-url.sh https://your-domain.example.com
 ```
-Then write the EBS URL into the global config segment:
-```bash
-curl -X PUT https://api.twitch.tv/helix/extensions/configurations \
-  -H "Authorization: Bearer <access-token-from-above>" \
-  -H "Client-Id: <extension-client-id>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "extension_id": "<extension-client-id>",
-    "segment": "global",
-    "content": "{\"ebs_url\":\"https://your-domain.example.com\"}"
-  }'
-```
-The extension reads this value at startup via `Twitch.ext.configuration.global.content`. Changing the backend URL in future only requires re-running this `PUT` — no rebuild or re-upload needed.
+The script fetches a short-lived access token and writes the URL into the extension's global config segment in one step. The extension reads `Twitch.ext.configuration.global.content` at startup, so the change takes effect immediately — no rebuild or re-upload needed.
+
+To update the URL in future, just run the script again with the new URL.
 
 ### Step 6 — Install and test
 Add the extension to the broadcast channel. Open the Twitch Stream Manager to confirm the Quick Actions (Live Config) view appears. Test the account linking flow from the Fantasy profile tab.

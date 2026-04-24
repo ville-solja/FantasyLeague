@@ -15,8 +15,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Files to include (dev-harness and package.sh are excluded)
 FILES=(
     panel.html
+    panel.js
     config.html
+    config.js
     live_config.html
+    live_config.js
     extension.js
     extension.css
 )
