@@ -59,21 +59,28 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
             "role": "broadcaster",
         }
     token = authorization.removeprefix("Bearer ")
-    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
+    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "").strip().strip('"').strip("'")
     if not secret_b64:
         raise HTTPException(status_code=500, detail="TWITCH_EXTENSION_SECRET not configured")
     try:
         # Twitch extension secrets are URL-safe base64; add padding and use urlsafe decoder
         padded = secret_b64 + "=" * (-len(secret_b64) % 4)
+        secret_bytes = base64.urlsafe_b64decode(padded)
         payload = pyjwt.decode(
             token,
-            base64.urlsafe_b64decode(padded),
+            secret_bytes,
             algorithms=["HS256"],
         )
     except pyjwt.ExpiredSignatureError:
+        logger.error("Twitch JWT expired")
         raise HTTPException(status_code=401, detail="Twitch token expired")
-    except pyjwt.InvalidTokenError:
+    except pyjwt.InvalidTokenError as exc:
+        logger.error("Twitch JWT invalid (secret len=%d decoded_bytes=%d): %s",
+                     len(secret_b64), len(secret_bytes), exc)
         raise HTTPException(status_code=401, detail="Invalid Twitch token")
+    except Exception as exc:
+        logger.error("Twitch JWT decode unexpected error: %s", exc)
+        raise HTTPException(status_code=500, detail="JWT decode error")
     return payload
 
 
@@ -91,6 +98,7 @@ def _pubsub_broadcast(channel_id: str, message: dict):
     client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
     if not secret_b64 or not client_id:
         return
+    padded = secret_b64 + "=" * (-len(secret_b64) % 4)
     token = pyjwt.encode(
         {
             "exp": int(time.time()) + 60,
@@ -99,7 +107,7 @@ def _pubsub_broadcast(channel_id: str, message: dict):
             "channel_id": channel_id,
             "pubsub_perms": {"send": ["broadcast"]},
         },
-        base64.b64decode(secret_b64),
+        base64.urlsafe_b64decode(padded),
         algorithm="HS256",
     )
     try:
