@@ -143,15 +143,18 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     # Pre-fetch which players are already in the DB to avoid N+1 lookups
     raw_players = data.get("players", [])
     match_account_ids = [p.get("account_id") for p in raw_players if p.get("account_id") is not None]
+    name_by_id = {p["account_id"]: p.get("personaname") for p in raw_players if p.get("account_id") is not None}
     new_account_ids = [aid for aid in match_account_ids if aid not in seen_players]
     if new_account_ids:
-        existing_ids = {
-            row[0] for row in
-            db.query(Player.id).filter(Player.id.in_(new_account_ids)).all()
+        existing_players = {
+            row[0]: row[1] for row in
+            db.query(Player.id, Player.name).filter(Player.id.in_(new_account_ids)).all()
         }
         for aid in new_account_ids:
-            if aid not in existing_ids:
-                db.add(Player(id=aid, name=None))
+            if aid not in existing_players:
+                db.add(Player(id=aid, name=name_by_id.get(aid)))
+            elif not existing_players[aid] and name_by_id.get(aid):
+                db.query(Player).filter(Player.id == aid).update({"name": name_by_id[aid]})
             seen_players.add(aid)
 
     for p in raw_players:
