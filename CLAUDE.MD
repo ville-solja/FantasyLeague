@@ -146,6 +146,30 @@ Implements a feature from an approved plan file. Given a plan slug, it reads the
 
 ---
 
+### `/ui-design`
+**Role: UI Designer**
+Generates well-branded interfaces and assets for Kanaliiga and its Fantasy app — production code edits or throwaway prototypes, mocks, and stream overlays.
+- Reads brand context, design tokens, and the Fantasy web UI kit before producing any output
+- Enforces non-negotiable brand rules: Big Shoulders Text ALL CAPS, orange/red flame palette, no emoji, no pill buttons, no left-border accent cards
+- Produces either production edits to `frontend/` or self-contained HTML artifacts depending on the request
+
+**When to run:** When building or redesigning any UI surface — new page, component, stream overlay, or design system change.
+
+---
+
+### `/ux-reviewer`
+**Role: UX Reviewer**
+Audits the Fantasy web app for usability and experience problems. Produces a prioritised findings table and a Top 5 improvements list, without touching code.
+- Checks flow completeness, state coverage (loading/empty/error), information hierarchy, cross-tab consistency, accessibility basics, and copy quality
+- Scoped to one tab or the full app depending on the argument
+- Severity: High (blocks task) / Medium (friction) / Low (polish)
+
+**When to run:** After a significant frontend change, before a release, or when a usability complaint is raised.
+
+**Usage:** `/ux-reviewer` for a full review, or `/ux-reviewer <tab-name>` to scope to one tab.
+
+---
+
 ---
 
 ## Development Workflow — Agent-Assisted Release Process
@@ -187,6 +211,7 @@ Run these after implementation completes. All are read-only; they report finding
 | `/qa-engineer` | Any backend change | pytest suite pass/fail |
 | `/scoring-analyst` | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, division-by-zero, stat mapping |
 | `/documentation-steward` | Any significant backend change | Doc drift, missing env vars, terminology mismatches |
+| `/ux-reviewer` | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | `/product-analyst` | After a sprint or milestone | Story coverage percentage, prioritised gaps |
 | `/systems-architect` | Before a refactor or new subsystem | Architecture risks, N+1 queries, background job resilience |
 

@@ -59,21 +59,28 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
             "role": "broadcaster",
         }
     token = authorization.removeprefix("Bearer ")
-    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
+    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "").strip().strip('"').strip("'")
     if not secret_b64:
         raise HTTPException(status_code=500, detail="TWITCH_EXTENSION_SECRET not configured")
     try:
         # Twitch extension secrets are URL-safe base64; add padding and use urlsafe decoder
         padded = secret_b64 + "=" * (-len(secret_b64) % 4)
+        secret_bytes = base64.urlsafe_b64decode(padded)
         payload = pyjwt.decode(
             token,
-            base64.urlsafe_b64decode(padded),
+            secret_bytes,
             algorithms=["HS256"],
         )
     except pyjwt.ExpiredSignatureError:
+        logger.error("Twitch JWT expired")
         raise HTTPException(status_code=401, detail="Twitch token expired")
-    except pyjwt.InvalidTokenError:
+    except pyjwt.InvalidTokenError as exc:
+        logger.error("Twitch JWT invalid (secret len=%d decoded_bytes=%d): %s",
+                     len(secret_b64), len(secret_bytes), exc)
         raise HTTPException(status_code=401, detail="Invalid Twitch token")
+    except Exception as exc:
+        logger.error("Twitch JWT decode unexpected error: %s", exc)
+        raise HTTPException(status_code=500, detail="JWT decode error")
     return payload
 
 
@@ -91,6 +98,7 @@ def _pubsub_broadcast(channel_id: str, message: dict):
     client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
     if not secret_b64 or not client_id:
         return
+    padded = secret_b64 + "=" * (-len(secret_b64) % 4)
     token = pyjwt.encode(
         {
             "exp": int(time.time()) + 60,
@@ -99,7 +107,7 @@ def _pubsub_broadcast(channel_id: str, message: dict):
             "channel_id": channel_id,
             "pubsub_perms": {"send": ["broadcast"]},
         },
-        base64.b64decode(secret_b64),
+        base64.urlsafe_b64decode(padded),
         algorithm="HS256",
     )
     try:
@@ -284,10 +292,27 @@ def current_matches(
         key = (min(t1, t2), max(t1, t2))
         series_map.setdefault(key, []).append(m)
 
+    # Bulk-fetch all teams and MVPs needed for this week in two queries
+    all_team_ids = {tid for pair in series_map for tid in pair if tid}
+    teams_by_id: dict[int, Team] = {
+        t.id: t for t in db.query(Team).filter(Team.id.in_(all_team_ids)).all()
+    } if all_team_ids else {}
+
+    match_ids = [m.match_id for m in matches]
+    mvps_by_match: dict[int, TwitchMVP] = {
+        mv.match_id: mv
+        for mv in db.query(TwitchMVP).filter(TwitchMVP.match_id.in_(match_ids)).all()
+    } if match_ids else {}
+
+    mvp_player_ids = {mv.player_id for mv in mvps_by_match.values()}
+    mvp_players_by_id: dict[int, Player] = {
+        p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
+    } if mvp_player_ids else {}
+
     result_series = []
     for (tid_lo, tid_hi), series_matches in series_map.items():
-        team1 = db.get(Team, tid_lo) if tid_lo else None
-        team2 = db.get(Team, tid_hi) if tid_hi else None
+        team1 = teams_by_id.get(tid_lo) if tid_lo else None
+        team2 = teams_by_id.get(tid_hi) if tid_hi else None
 
         match_list = []
         for i, m in enumerate(series_matches):  # already sorted by start_time
@@ -307,18 +332,16 @@ def current_matches(
                 }
                 for pms, p, t in stats
             ]
-            existing_mvp = db.query(TwitchMVP).filter_by(match_id=m.match_id).first()
+            existing_mvp = mvps_by_match.get(m.match_id)
+            mvp_player = mvp_players_by_id.get(existing_mvp.player_id) if existing_mvp else None
             match_list.append({
                 "match_id": m.match_id,
                 "match_number": i + 1,
                 "start_time": m.start_time,
                 "players": players,
                 "mvp_player_id": existing_mvp.player_id if existing_mvp else None,
-                "mvp_player_name": None,
+                "mvp_player_name": mvp_player.name if mvp_player else None,
             })
-            if existing_mvp:
-                mvp_player = db.get(Player, existing_mvp.player_id)
-                match_list[-1]["mvp_player_name"] = mvp_player.name if mvp_player else None
 
         result_series.append({
             "team1_name": team1.name if team1 else f"Team {tid_lo}",

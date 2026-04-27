@@ -1,6 +1,6 @@
-# 1. User Accounts and Access
+# Users and Access
 
-### 1.1 User Registration
+### Registration
 **User story**
 As a new user, I want to register an account by providing a unique email and username so that I can participate in the fantasy league.
 
@@ -13,7 +13,7 @@ As a new user, I want to register an account by providing a unique email and use
 
 ---
 
-### 1.2 User Login
+### Login
 **User story**
 As a registered user, I want to log in securely so that I can access my cards, team, and leaderboard.
 
@@ -25,7 +25,7 @@ As a registered user, I want to log in securely so that I can access my cards, t
 
 ---
 
-### 1.3 User Receive Temporary Password
+### Temporary Password
 **User story**
 As a user, I want to have the ability to receive a new password in case I've forgotten the current one.
 
@@ -35,7 +35,7 @@ As a user, I want to have the ability to receive a new password in case I've for
 
 ---
 
-### 1.4 User Password Reset
+### Password Reset
 **User story**
 As a user, once logged in, I want to be able to reset my password.
 
@@ -45,7 +45,7 @@ As a user, once logged in, I want to be able to reset my password.
 
 ---
 
-### 1.5 User Logout
+### Logout
 **User story**
 As a logged-in user, I want to log out so that my account stays secure on shared devices.
 
@@ -55,7 +55,7 @@ As a logged-in user, I want to log out so that my account stays secure on shared
 
 ---
 
-### 1.6 Admin-only Access
+### Admin-only Access
 **User story**
 As an admin, I want a protected admin area so that only authorized users can manage league configuration and season operations.
 
@@ -66,7 +66,7 @@ As an admin, I want a protected admin area so that only authorized users can man
 
 ---
 
-### 1.7 User Profile Tab
+### Profile Tab
 **User story**
 As a logged-in user, I want a profile page where I can update my account details.
 
@@ -75,3 +75,16 @@ As a logged-in user, I want a profile page where I can update my account details
 - User can change their password via a current password + new password form
 - User can optionally link their account to an OpenDota player ID
 - When a valid player ID is saved and the player exists in league data, the player's name and avatar are shown as a preview
+
+---
+
+### Profile Header Link
+**User story**
+As a logged-in user, I want to click my username in the header to open my Profile tab so that I can reach profile settings without hunting through the tab strip.
+
+**Acceptance criteria**
+- When logged in, the username in the top-right header is rendered as a button, not plain text
+- Clicking the username button switches the active tab to Profile
+- The button is visually distinct from surrounding text but cohesive with the header style
+- When logged out the username button is hidden (no empty button visible)
+- After a successful username change, the header button text updates immediately without a page reload

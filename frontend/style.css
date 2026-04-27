@@ -91,6 +91,17 @@ h2 {
   color: var(--fg-muted);
 }
 
+.header-profile-btn {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  padding: 4px 10px;
+  color: var(--accent);
+}
+.header-profile-btn:hover { color: var(--accent-hover); }
+
 /* ============================================================
    TABS
    ============================================================ */
@@ -396,7 +407,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 300;
 }
 .modal-overlay.hidden { display: none; }
 .modal {
@@ -555,6 +566,11 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .card-grid::-webkit-scrollbar { height: 5px; }
 .card-grid::-webkit-scrollbar-track { background: transparent; }
 .card-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--r-xs); }
+
+#benchGrid {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
 
 .card-slot {
   flex: 0 0 auto;
@@ -726,13 +742,18 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
    TWO-COLUMN SIDEBAR TABS
    ============================================================ */
 #tab-team .grid,
-#tab-leaderboard .grid,
+#tab-players .grid,
 #tab-admin .grid {
   grid-template-columns: 1fr 360px;
   align-items: start;
 }
+#tab-leaderboard .grid {
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
 @media (max-width: 768px) {
   #tab-team .grid,
+  #tab-players .grid,
   #tab-leaderboard .grid,
   #tab-admin .grid {
     grid-template-columns: 1fr;

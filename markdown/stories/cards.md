@@ -1,6 +1,6 @@
-# 3. Card Collection and Deck Rules
+# Cards
 
-### 3.1 Generate Cards
+### Generate Deck
 **User story**
 As a system administrator, I want the seasonal card deck to reflect real Dota 2 league players participating in the season.
 
@@ -12,7 +12,7 @@ As a system administrator, I want the seasonal card deck to reflect real Dota 2 
 
 ---
 
-### 3.2 Card Drawing
+### Draw Card
 **User story**
 As a user, I want to be able to draw cards from the deck.
 
@@ -24,20 +24,7 @@ As a user, I want to be able to draw cards from the deck.
 
 ---
 
-### 3.3 Remove Cards from Pool
-**User story**
-As a system administrator, I want to remove players from card pools.
-
-**Phase:** Not in MVP. A clear justification is needed, e.g. a player known to be unable to participate for the whole season.
-
-**Acceptance criteria**
-- Admin selects and deletes a player from the admin tab
-- Users receive 1 token per removed card
-- All card types for that player are removed from the season
-
----
-
-### 3.4 Card Rarity
+### Card Rarity
 **User story**
 As a user, I want each drawn card to have a rarity.
 
@@ -47,17 +34,17 @@ As a user, I want each drawn card to have a rarity.
 
 ---
 
-### 3.5 Assign Randomized Modifiers
+### Stat Modifiers
 **User story**
-As a user, I want each card to have a defined number of modifiers.
+As a user, I want each card to have a defined number of stat modifiers.
 
 **Acceptance criteria**
-- Modifiers are stored in the cards table
+- Modifiers are assigned at draw time based on rarity and configured weights
 - Visible whenever the card is accessed
 
 ---
 
-### 3.6 Modifier Management
+### Modifier Management
 **User story**
 As an admin, I want to be able to adjust the weights of modifiers in order to tune balance.
 
@@ -68,7 +55,7 @@ As an admin, I want to be able to adjust the weights of modifiers in order to tu
 
 ---
 
-### 3.7 View Seasonal Reserve Cards
+### View Collection
 **User story**
 As a user, I want to browse my roster and bench.
 
@@ -80,24 +67,9 @@ As a user, I want to browse my roster and bench.
 
 ---
 
-### 3.8 View Permanent Collection
+### Card Visual Identity
 **User story**
-As a user, I want to track cards across seasons.
-
-**Phase:** Not in MVP.
-
-**Acceptance criteria**
-- Shows all owned cards across seasons
-- Higher quality replaces lower; no duplicates
-- No gameplay effect
-- Supports filtering
-- Past season cards are stored separately so they are not included in current season logic
-
----
-
-### 3.9 Card Visual Identity
-**User story**
-As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance without reading separate UI text.
+As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance.
 
 **Acceptance criteria**
 - Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
@@ -109,18 +81,17 @@ As a user, I want each card to display the player's name, team name, photo, and 
 
 ---
 
-### 3.10 Rarity-Distinct Card Design
+### Rarity-Distinct Card Design
 **User story**
 As a user, I want each rarity tier to have a visually distinct card frame so I can identify rarity from the card art alone.
 
 **Acceptance criteria**
 - Each rarity (Common, Rare, Epic, Legendary) uses a separate template PNG with its own border and colour scheme
 - Rarity frame is always visible regardless of player or team
-- Card image is returned correctly for all four rarities
 
 ---
 
-### 3.11 Modifier Labels on Card Image
+### Modifier Labels on Card Image
 **User story**
 As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
 
@@ -131,7 +102,7 @@ As a user, I want my card's stat modifiers printed directly on the card image so
 
 ---
 
-### 3.12 Replaceable Card Template Artwork
+### Replaceable Card Template Artwork
 **User story**
 As an operator, I want to update card template artwork for each rarity by replacing files so the visual design can be refreshed between seasons without code changes.
 
@@ -139,3 +110,29 @@ As an operator, I want to update card template artwork for each rarity by replac
 - Templates are loaded from a configurable assets directory at startup
 - Replacing any of the four template PNGs takes effect on the next card image request
 - Missing templates fail with a clear error rather than silently using a wrong rarity
+
+---
+
+### Player Link from Card
+**User story**
+As a user, I want to click the player name displayed on a viewed card so that I can read the player's stats and bio without navigating away from the card.
+
+**Acceptance criteria**
+- The player name shown in the card reveal modal is rendered as a clickable link when a valid player exists
+- Clicking it opens the player detail modal with the correct player loaded
+- The reveal modal remains open and visible behind the player modal
+- Cards without a linked player show the name as non-clickable plain text
+- Closing the player modal leaves the reveal modal open and unchanged
+- Pressing Escape closes only the top-most open modal (player popup first, then card reveal if pressed again)
+
+---
+
+### Mid-Season Card Top-Up *(not yet implemented)*
+**User story**
+As an admin, I want to add a new batch of cards to the deck mid-season so that new users joining late have cards to draw.
+
+**Acceptance criteria**
+- Admin can trigger a top-up that adds one additional set (1L/2E/4R/8C per player) to the unowned pool
+- Top-up is idempotent per generation — running it twice does not double the pool
+- Existing owned cards are unaffected
+- Audit log records the top-up event
