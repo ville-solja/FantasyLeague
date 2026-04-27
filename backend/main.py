@@ -950,6 +950,7 @@ def roster_leaderboard(db=Depends(get_db)):
             FROM player_match_stats
             GROUP BY player_id
         ) pts ON pts.player_id = c.player_id
+        WHERE u.is_tester = 0
         GROUP BY u.id, u.username, owned.total
         ORDER BY roster_value DESC
     """)).fetchall()
