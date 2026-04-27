@@ -50,13 +50,14 @@ def seed_cards(league_id: int):
     )
     player_ids = [r[0] for r in player_ids]
 
+    seeded_player_ids = {
+        r[0] for r in
+        db.query(Card.player_id).filter(Card.league_id == league_id).distinct().all()
+    }
+
     count = 0
     for player_id in player_ids:
-        already_seeded = db.query(Card).filter(
-            Card.player_id == player_id,
-            Card.league_id == league_id,
-        ).count()
-        if already_seeded:
+        if player_id in seeded_player_ids:
             continue
         for card_type, quantity in CARD_SCHEMA:
             for _ in range(quantity):

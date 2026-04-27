@@ -36,3 +36,5 @@ Implementation details, integrations, and operator tooling.
 | [Configuration & Commands](reference/commands.md) | Environment variables and useful admin commands |
 | [My Team Tab Layout](reference/my-team-tab-layout.md) | Two-column desktop layout for the My Team tab |
 | [Card Player Popup Navigation](reference/card-player-popup.md) | Clickable player name on viewed card; modal stacking fix |
+| [Tester Account Exclusion](reference/tester-account-exclusion.md) | `is_tester` flag; admin toggle; leaderboard filtering |
+| [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |

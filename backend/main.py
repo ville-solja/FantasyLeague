@@ -204,11 +204,6 @@ def _load_weights(db) -> tuple[dict, dict]:
     return all_weights, rarity
 
 
-def _rarity_params(db) -> dict:
-    _, rarity = _load_weights(db)
-    return rarity
-
-
 def _stat_sums_from_row(row) -> dict:
     """Extract SCORING_STATS values from a SQLAlchemy Row or dict."""
     if hasattr(row, "_mapping"):
@@ -631,7 +626,9 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
 
 @app.get("/roster/{user_id}")
-def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), _: dict = Depends(get_current_user)):
+def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if user_id != current_user["user_id"] and not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Cannot view another user's roster")
     return _build_roster_response(db, user_id, week_id)
 
 
@@ -1089,8 +1086,21 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
 @app.get("/users")
 def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
     users = db.query(User).order_by(User.username).all()
-    return [{"id": u.id, "username": u.username, "tokens": u.tokens if u.tokens is not None else 0}
+    return [{"id": u.id, "username": u.username, "tokens": u.tokens if u.tokens is not None else 0,
+             "is_tester": bool(u.is_tester)}
             for u in users]
+
+
+@app.post("/users/{user_id}/toggle-tester")
+def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_tester = not bool(user.is_tester)
+    _audit(db, "admin_toggle_tester", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"{user.username} is_tester={user.is_tester}")
+    db.commit()
+    return {"user_id": user.id, "username": user.username, "is_tester": user.is_tester}
 
 
 @app.post("/grant-tokens")
@@ -1369,13 +1379,13 @@ def season_leaderboard(db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
-               COALESCE(SUM(s.kills), 0)        as kills,
-               COALESCE(SUM(s.assists), 0)      as assists,
-               COALESCE(SUM(s.deaths), 0)       as deaths,
-               COALESCE(SUM(s.gold_per_min), 0) as gold_per_min,
-               COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
-               COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
-               COALESCE(SUM(s.tower_damage), 0) as tower_damage
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills        ELSE 0 END), 0) as kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.assists      ELSE 0 END), 0) as assists,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths       ELSE 0 END), 0) as deaths,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min ELSE 0 END), 0) as gold_per_min,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed   ELSE 0 END), 0) as obs_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.sen_placed   ELSE 0 END), 0) as sen_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.tower_damage ELSE 0 END), 0) as tower_damage
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
         LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
@@ -1385,6 +1395,7 @@ def season_leaderboard(db=Depends(get_db)):
         LEFT JOIN matches m ON m.match_id = s.match_id
             AND (m.week_override_id = wk.id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+        WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
     result = _leaderboard_rows(db, rows)
@@ -1401,13 +1412,13 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
-               COALESCE(SUM(s.kills), 0)        as kills,
-               COALESCE(SUM(s.assists), 0)      as assists,
-               COALESCE(SUM(s.deaths), 0)       as deaths,
-               COALESCE(SUM(s.gold_per_min), 0) as gold_per_min,
-               COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
-               COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
-               COALESCE(SUM(s.tower_damage), 0) as tower_damage
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills        ELSE 0 END), 0) as kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.assists      ELSE 0 END), 0) as assists,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths       ELSE 0 END), 0) as deaths,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min ELSE 0 END), 0) as gold_per_min,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed   ELSE 0 END), 0) as obs_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.sen_placed   ELSE 0 END), 0) as sen_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.tower_damage ELSE 0 END), 0) as tower_damage
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
@@ -1416,6 +1427,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         LEFT JOIN matches m ON m.match_id = s.match_id
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+        WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)

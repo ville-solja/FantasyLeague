@@ -56,6 +56,12 @@ def run_migrations(engine) -> None:
                 "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"
             ))
             conn.commit()
+        if "is_tester" not in user_cols:
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN is_tester BOOLEAN DEFAULT 0"
+            ))
+            conn.commit()
+            logger.info("Migration: users — added is_tester column")
 
         # player_match_stats: hero_id
         pms_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(player_match_stats)")).fetchall()]
