@@ -3,7 +3,9 @@
     "allow": [
       "WebFetch(domain:docs.google.com)",
       "Bash(docker compose *)",
-      "Bash(python -m pytest tests/ -v --tb=short)"
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -c \"import main\")",
+      "Bash(python3 -c \"import main\")"
     ]
   }
 }

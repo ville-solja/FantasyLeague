@@ -67,12 +67,13 @@ function updateTokenDisplay(balance) {
 function applyAuthState() {
   const loggedIn = !!activeUserId;
 
-  document.getElementById("headerUserLabel").textContent = loggedIn ? activeUsername : "";
+  const userLabel = document.getElementById("headerUserLabel");
+  userLabel.textContent    = loggedIn ? activeUsername : "";
+  userLabel.style.display  = loggedIn ? "" : "none";
   document.getElementById("headerLoginBtn").style.display  = loggedIn ? "none" : "";
   document.getElementById("headerLogoutBtn").style.display = loggedIn ? "" : "none";
 
   document.getElementById("tab-btn-team").style.display    = loggedIn ? "" : "none";
-  document.getElementById("tab-btn-profile").style.display = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");
@@ -421,10 +422,15 @@ function switchTab(name) {
   if (name === "profile")  { if (!activeUserId) return; loadProfile(); }
   if (name === "team")     { if (!activeUserId) return; loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
   if (name === "leaderboard") {
-    loadWeeks().then(() => { _populateLbWeekSelect(); switchLeaderboard(_lbMode); });
-    loadLeaderboard(); loadTop();
+    loadSeasonLeaderboard();
+    loadWeeks().then(() => {
+      _populateLbWeekSelect();
+      const sel = document.getElementById("lbWeekSelect");
+      const weekId = sel ? parseInt(sel.value) : null;
+      if (weekId) loadWeeklyLeaderboard(weekId);
+    });
   }
-  if (name === "players")       loadPlayers();
+  if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
   if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
@@ -574,7 +580,16 @@ function showCard(card, footer, opts = {}) {
   cardEl.className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
-  document.getElementById("revealPlayer").textContent = drawFx ? "" : (card.player_name || "");
+  const revealPlayerEl = document.getElementById("revealPlayer");
+  if (card.player_id && !drawFx) {
+    const span = document.createElement("span");
+    span.className = "entity-link";
+    span.onclick = () => openPlayerModal(card.player_id);
+    span.textContent = card.player_name || "";
+    revealPlayerEl.replaceChildren(span);
+  } else {
+    revealPlayerEl.textContent = drawFx ? "" : (card.player_name || "");
+  }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
@@ -973,27 +988,6 @@ async function deactivateCard(cardId) {
 // LEADERBOARDS
 // -------------------------------------------------------
 
-let _lbMode = "season";
-
-function switchLeaderboard(mode) {
-  _lbMode = mode;
-  const seasonBtn = document.getElementById("lbSeasonBtn");
-  const weeklyBtn = document.getElementById("lbWeeklyBtn");
-  const weekSel   = document.getElementById("lbWeekSelect");
-  const header    = document.getElementById("lbPtsHeader");
-  if (seasonBtn) seasonBtn.className = mode === "season" ? "secondary" : "ghost";
-  if (weeklyBtn) weeklyBtn.className = mode === "weekly"  ? "secondary" : "ghost";
-  if (weekSel)   weekSel.style.display = mode === "weekly" ? "" : "none";
-  if (header)    header.textContent = mode === "season" ? "Season pts" : "Week pts";
-  if (mode === "season") {
-    loadSeasonLeaderboard();
-  } else {
-    const sel = document.getElementById("lbWeekSelect");
-    const weekId = sel ? parseInt(sel.value) : null;
-    if (weekId) loadWeeklyLeaderboard(weekId);
-  }
-}
-
 async function onLbWeekChange() {
   const sel = document.getElementById("lbWeekSelect");
   if (sel) loadWeeklyLeaderboard(parseInt(sel.value));
@@ -1004,10 +998,10 @@ function toggleLbDetail(userId) {
   if (el) el.classList.toggle("hidden");
 }
 
-function _lbStandingsRow(r, i, ptsKey) {
+function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const isMe = activeUserId && String(r.id) === String(activeUserId);
   const baseStyle = isMe ? "color:#f0b429;font-weight:bold;" : "";
-  const cards = r.cards || [];
+  const cards = showCards ? (r.cards || []) : [];
   const hasCards = cards.length > 0;
   const cursorStyle = hasCards ? "cursor:pointer;" : "";
   const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
@@ -1031,15 +1025,15 @@ async function loadSeasonLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard/season`);
     const rows = await res.json();
-    const tbody = document.getElementById("standingsBody");
+    const tbody = document.getElementById("seasonStandingsBody");
     if (!rows.length) {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points")).join("");
-    setStatus("standingsStatus", "");
+    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points", false)).join("");
+    setStatus("seasonStandingsStatus", "");
   } catch (e) {
-    setStatus("standingsStatus", e.message, false);
+    setStatus("seasonStandingsStatus", e.message, false);
   }
 }
 
@@ -1047,15 +1041,15 @@ async function loadWeeklyLeaderboard(weekId) {
   try {
     const res = await fetch(`${API}/leaderboard/weekly?week_id=${weekId}`);
     const rows = await res.json();
-    const tbody = document.getElementById("standingsBody");
+    const tbody = document.getElementById("weeklyStandingsBody");
     if (!rows.length) {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
     tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join("");
-    setStatus("standingsStatus", "");
+    setStatus("weeklyStandingsStatus", "");
   } catch (e) {
-    setStatus("standingsStatus", e.message, false);
+    setStatus("weeklyStandingsStatus", e.message, false);
   }
 }
 
@@ -1155,14 +1149,27 @@ async function loadUsers() {
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
     document.getElementById("usersBody").innerHTML = rows.map(u => `
       <tr>
-        <td>${u.username}</td>
+        <td>${u.username}${u.is_tester ? ' <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>' : ""}</td>
         <td>${u.tokens}</td>
-        <td style="display:flex;gap:6px;align-items:center;">
+        <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
           <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
+          <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
         </td>
       </tr>`).join("");
     setStatus("usersStatus", "");
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function toggleTester(userId) {
+  try {
+    const res = await fetch(`${API}/users/${userId}/toggle-tester`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("usersStatus", data.detail, false);
+    setStatus("usersStatus", `${data.username} ${data.is_tester ? "marked as tester" : "unmarked as tester"}`);
+    loadUsers();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
   }
@@ -1322,13 +1329,17 @@ async function enrichProfiles() {
 // ENTITY LINKS
 // -------------------------------------------------------
 
+function _escHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function playerLink(id, name) {
-  return `<span class="entity-link" onclick="openPlayerModal(${id})">${name}</span>`;
+  return `<span class="entity-link" onclick="openPlayerModal(${id})">${_escHtml(name)}</span>`;
 }
 
 function teamLink(id, name) {
-  if (!id) return name || "—";
-  return `<span class="entity-link" onclick="openTeamModal(${id})">${name}</span>`;
+  if (!id) return _escHtml(name) || "—";
+  return `<span class="entity-link" onclick="openTeamModal(${id})">${_escHtml(name)}</span>`;
 }
 
 // -------------------------------------------------------
@@ -1497,27 +1508,16 @@ function renderPlayerProfile(profile) {
   }
 
   const heroes = `<div style="margin-top:14px;">
-    ${heroSection("Career heroes", facts.top_heroes_alltime, 10)}
+    ${heroSection("Career heroes", facts.top_heroes_alltime, 5)}
     ${heroSection("Tournament heroes", facts.tournament_heroes, 5)}
     ${heroSection("Recent pub heroes", facts.recent_pub_heroes, 5)}
   </div>`;
-
-  const bans = (facts.ban_correlations || []).slice(0, 5);
-  const banSection = bans.length ? `
-    <div style="margin-top:12px;">
-      <div class="player-bio-eyebrow" style="margin-bottom:6px;">Ban correlations</div>
-      ${bans.map(b => `
-        <div style="background:#1a0a0a;border:1px solid #3a1a1a;border-radius:4px;padding:5px 8px;margin-bottom:4px;font-size:0.82rem;">
-          <span style="color:#e06;">${b.hero_name}</span>
-          <span style="color:#666;"> — banned in ${Math.round(b.ban_rate*100)}% of tournament matches (${b.banned_in}/${b.tournament_match_count})</span>
-        </div>`).join("")}
-    </div>` : "";
 
   const bioSection = profile.bio_text
     ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;">${profile.bio_text}</div>`
     : "";
 
-  el.innerHTML = statGrid + heroes + banSection + bioSection;
+  el.innerHTML = statGrid + heroes + bioSection;
   el.style.display = "block";
 }
 
@@ -1684,6 +1684,18 @@ async function loadSchedule() {
     content.innerHTML = "";
   }
 }
+
+// -------------------------------------------------------
+// KEYBOARD
+// -------------------------------------------------------
+
+document.addEventListener("keydown", function(e) {
+  if (e.key !== "Escape") return;
+  const visible = id => !document.getElementById(id).classList.contains("hidden");
+  if (visible("playerModal")) { closePlayerModal(); return; }
+  if (visible("teamModal"))   { closeTeamModal();   return; }
+  if (visible("revealModal")) { closeReveal();       return; }
+});
 
 // -------------------------------------------------------
 // INIT

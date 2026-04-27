@@ -1,6 +1,6 @@
-# 13. Twitch Integration
+# Twitch Integration
 
-### 13.1 MVP Selection and Token Drop
+### MVP Selection and Token Drop
 **User story**
 As a broadcaster, I want to select the MVP of a completed match from the Quick Actions panel so that tokens are automatically dropped to viewers who are watching.
 
@@ -14,7 +14,7 @@ As a broadcaster, I want to select the MVP of a completed match from the Quick A
 
 ---
 
-### 13.2 Viewer Panel
+### Viewer Panel
 **User story**
 As a viewer, I want to open the Twitch panel during a Kanaliiga stream so I can see my token balance, the current MVP, and be eligible for token drops.
 
@@ -24,11 +24,11 @@ As a viewer, I want to open the Twitch panel during a Kanaliiga stream so I can 
 - Linked viewers see their token balance and linked username
 - MVP announcements arrive via PubSub and display as a temporary banner
 - Token drop winner announcements also display via PubSub and refresh the token count
-- If the EBS URL is missing from config or the EBS cannot be reached, the panel shows a clear error message rather than a blank state (timeout ≤8 seconds)
+- If the EBS URL is missing or unreachable, the panel shows a clear error rather than a blank state
 
 ---
 
-### 13.3 Account Linking
+### Account Linking
 **User story**
 As a Fantasy League user, I want to link my Twitch account so I am eligible for token drops while watching the stream.
 
@@ -41,24 +41,22 @@ As a Fantasy League user, I want to link my Twitch account so I am eligible for 
 
 ---
 
-### 13.4 Broadcaster Extension Installation
+### Broadcaster Extension Installation
 **User story**
 As a broadcaster for Kanaliiga, I want to install the Twitch extension and start using it immediately — without manually configuring any backend URLs.
 
 **Acceptance criteria**
-- Broadcaster installs the Kanaliiga FantasyLeague extension from the Twitch extension directory (or developer test install)
 - Extension works immediately after install — EBS URL is pre-configured globally by the Kanaliiga developer, no per-channel action required
 - Quick Actions (Live Config view) are visible in the Twitch Stream Manager dashboard after install
-- The Fantasy app documents where to find and install the extension
 
 ---
 
-### 13.5 Operator EBS URL Configuration
+### Operator EBS URL Configuration
 **User story**
 As the Kanaliiga developer, I want to set the EBS URL once in the Twitch developer console so that all channel installs of the extension automatically point to the correct backend.
 
 **Acceptance criteria**
-- Required developer console settings are documented with a prerequisite checklist (Configuration Service enabled, channel segment version empty, correct secret field, extension in Local Test or higher)
-- Running `bash twitch-extension/set-ebs-url.sh <url>` sets the global Configuration Service segment, which propagates to all installs without a rebuild
+- Required developer console settings are documented with a prerequisite checklist
+- Running `bash twitch-extension/set-ebs-url.sh <url>` sets the global Configuration Service segment
 - The extension reads `Twitch.ext.configuration.global.content` at startup — URL change takes effect immediately on next panel load
 - `.env` requires only `TWITCH_EXTENSION_CLIENT_ID`, `TWITCH_EXTENSION_SECRET`, and `TWITCH_DROP_MAX`

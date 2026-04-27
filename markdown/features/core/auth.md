@@ -50,7 +50,7 @@ Clears the session cookie. No request body required. Always returns `{ "status":
 
 ### `GET /me`
 
-Returns the current session user. Returns `{ logged_in: false }` if unauthenticated.
+Returns the current session user. Returns 401 if unauthenticated.
 
 ```json
 {

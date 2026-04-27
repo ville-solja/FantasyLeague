@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 6 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -14,10 +14,28 @@ You formalise the creation of new features by reading existing documentation, as
 At the start of any new feature, before writing any implementation code.
 Run `/agent-steward` first if the codebase has changed recently, to ensure your file references are current.
 
-**Usage:** `/product-planner <description>` — e.g. `/product-planner Add a weekly summary email to notify users of their points`
+**Usage:**
+- `/product-planner <description>` — e.g. `/product-planner Add a weekly summary email`
+- `/product-planner issue <N>` — fetch GitHub issue #N and plan it directly
+- `/product-planner issue <N> from github` — same; the trailing phrase is ignored
 
 ## Precondition check
-If no feature description was provided as `$ARGUMENTS`, stop and ask the user to re-invoke with a description: `/product-planner <description of the feature>`.
+If no arguments were provided, stop and ask the user to re-invoke with a description or issue number.
+
+---
+
+## Phase 0 — Resolve GitHub issue (if applicable)
+
+**If `$ARGUMENTS` matches the pattern `issue <N>` or `issue #<N>` (with optional trailing text like "from github"):**
+
+1. Run `git remote get-url origin` via Bash to get the repo URL.
+2. Extract `{owner}/{repo}` from the URL (strip `.git` suffix, handle both SSH and HTTPS forms).
+3. Fetch `https://api.github.com/repos/{owner}/{repo}/issues/{N}` using WebFetch.
+4. Extract `title` and `body` from the JSON response.
+5. Use `"{title} — {body}"` as the feature description for all subsequent phases.
+6. Note the issue number in the plan's Context section: *"Resolves GitHub issue #{N}."*
+
+If the fetch fails or returns an error, fall back to treating `$ARGUMENTS` as a plain description.
 
 ---
 
@@ -25,7 +43,7 @@ If no feature description was provided as `$ARGUMENTS`, stop and ask the user to
 
 Read the following files before drafting anything:
 
-- `markdown/stories/_index.md` — read the full index. Find the **last section number** in the table (e.g. if the last row is `17`, the next section is `18`). Note the naming convention of section files (`NN-slug.md`).
+- `markdown/stories/_index.md` — read the full index. Note which topic files already exist and their naming convention (lowercase, hyphens, e.g. `cards.md`, `team-tokens-scoring.md`). Identify the correct file to append the new stories to, or determine that a new file is needed.
 - `markdown/features/README.md` — read the two-tier feature index. Note which tier (Core vs Reference) fits the new feature, and the naming convention (lowercase, hyphens).
 - `markdown/plans/` — Glob `markdown/plans/*.md` to list existing plan filenames. Avoid creating a duplicate slug.
 - `README.md` — read the documentation links section.
@@ -40,14 +58,14 @@ Using `$ARGUMENTS` and everything you read in Phase 1:
 
 - **Plan slug**: lowercase the feature name, replace spaces with hyphens, strip punctuation. Example: "Weekly Summary Email" → `weekly-summary-email`. Check it does not already exist in `markdown/plans/`.
 - **Feature doc name**: same slug. Check it does not already exist in `markdown/features/core/` or `markdown/features/reference/`. New features default to `reference/` unless they are major user-facing surfaces.
-- **Section number**: the integer after the last row in `markdown/stories/_index.md` (e.g. last row is 17 → new = 18). Determine the filename as `markdown/stories/{NN}-{slug}.md` (zero-padded to 2 digits).
+- **Story target**: identify the existing story file the new stories belong in (e.g. new admin tooling → `admin.md`). If no existing file fits, create a new one named `{slug}.md`.
 
 ### 2b. Draft user stories
 
 Write 2–5 user stories in the **exact format** used in `markdown/stories/` section files:
 
 ```
-### [N.M] [Story Title]
+### [Story Title]
 **User story**
 As a [role], I want to [action] so that [goal].
 
@@ -56,14 +74,13 @@ As a [role], I want to [action] so that [goal].
 - Specific, testable criterion
 ```
 
-- Use the section number determined in 2a (N = new section, M starts at 1).
 - Write separate stories for distinct roles or user flows (e.g. one for the user-facing flow, one for the admin configuration).
 - Acceptance criteria must be concrete and testable — not vague goals.
-- If a story is clearly post-MVP or requires external dependency, add `**Phase:** Post-MVP` after the user story line.
+- If a story is clearly post-MVP or requires external dependency, add `*(not yet implemented)*` after the story title.
 
 ### 2c. Draft the plan
 
-Write a complete plan following the style of `markdown/plans/plan-player-profile-enrichment.md`:
+Write a complete plan following the style of `markdown/plans/plan-mid-season-card-topup.md`:
 
 ```
 # Plan: [Feature Name]
@@ -138,9 +155,10 @@ Write all three artifacts now:
 ### File 1: `markdown/plans/plan-{slug}.md`
 The complete plan from 2c (including the User Stories section).
 
-### File 2: `markdown/stories/{NN}-{slug}.md`
-A new section file containing the stories from 2b, starting with `# N. [Feature Name]`.
-Then update `markdown/stories/_index.md` to append a new row to the table for this section.
+### File 2: stories — append or create
+If an existing thematic file in `markdown/stories/` fits (e.g. new card behaviour → `cards.md`), append the stories from 2b to that file under a new `##` heading.
+If no existing file fits, create `markdown/stories/{slug}.md` with a `# [Feature Name]` heading.
+Then update `markdown/stories/_index.md` to add or update the row for the target file.
 
 ### File 3: `markdown/features/reference/{slug}.md` (or `core/` if it is a major user-facing surface)
 The stub from 2d.
@@ -155,9 +173,9 @@ After writing all files, output exactly this structure:
 ```
 Created:
   markdown/plans/plan-{slug}.md
-  markdown/stories/{NN}-{slug}.md
+  markdown/stories/{slug}.md  (or "appended to markdown/stories/{existing-file}.md")
   markdown/features/{tier}/{slug}.md
-  Updated markdown/stories/_index.md (added section {N})
+  Updated markdown/stories/_index.md
   Updated markdown/features/README.md (added row to {Core|Reference} table)
 
 Manual follow-up:
@@ -172,4 +190,5 @@ Manual follow-up:
 - User stories: bold labels (`**User story**`, `**Acceptance criteria**`), bullet-point AC, no AC numbering
 - Feature descriptions: `#` title, `##` for sections, mark unimplemented routes as `*(planned)*`
 - Never fabricate endpoint signatures, model fields, or env vars that don't exist and aren't clearly implied by the feature description
-- If `$ARGUMENTS` is ambiguous, make reasonable assumptions based on the project's existing patterns and note them in the plan's Context section
+- If the description is ambiguous, make reasonable assumptions based on the project's existing patterns and note them in the plan's Context section
+- If the feature was sourced from a GitHub issue, include *"Resolves GitHub issue #N."* at the end of the Context section
