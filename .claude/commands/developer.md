@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -77,7 +77,7 @@ After all implementation steps are complete:
 
 ## Phase 4 — Update documentation
 
-1. Open the relevant story file in `markdown/stories/`. For each user story implemented in the plan, find its `### N.M` block and confirm it matches the implementation. Do not edit stories unless there is a genuine discrepancy between plan and code.
+1. Open the relevant story file in `markdown/stories/`. Find the story block that corresponds to each user story implemented in the plan and confirm it matches the implementation. Do not edit stories unless there is a genuine discrepancy between plan and code.
 
 2. If the plan created a feature description stub in `markdown/features/`, open it and fill in any sections that are now known: actual endpoint signatures, actual env var names and defaults. Replace `*(planned)*` with the real method+route. Keep the stub marker line at the bottom.
 

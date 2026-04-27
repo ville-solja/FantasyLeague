@@ -299,17 +299,43 @@
   <div class="grid">
 
     <div class="panel">
+      <h2 style="margin-bottom:12px;">Season Standings</h2>
+      <table>
+        <thead><tr><th>Rank</th><th>User</th><th>Season pts</th></tr></thead>
+        <tbody id="seasonStandingsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="seasonStandingsStatus"></div>
+    </div>
+
+    <div class="panel">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-        <h2 style="margin:0;">Standings</h2>
-        <button class="secondary" id="lbSeasonBtn" onclick="switchLeaderboard('season')" style="font-size:0.82rem;">Season</button>
-        <button class="ghost" id="lbWeeklyBtn" onclick="switchLeaderboard('weekly')" style="font-size:0.82rem;">Weekly</button>
-        <select id="lbWeekSelect" onchange="onLbWeekChange()" style="display:none;font-size:0.82rem;"></select>
+        <h2 style="margin:0;">Weekly Standings</h2>
+        <select id="lbWeekSelect" onchange="onLbWeekChange()" style="font-size:0.82rem;"></select>
       </div>
       <table>
-        <thead><tr><th>Rank</th><th>User</th><th id="lbPtsHeader">Season pts</th></tr></thead>
-        <tbody id="standingsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+        <thead><tr><th>Rank</th><th>User</th><th>Week pts</th></tr></thead>
+        <tbody id="weeklyStandingsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
       </table>
-      <div class="status" id="standingsStatus"></div>
+      <div class="status" id="weeklyStandingsStatus"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TAB: PLAYERS -->
+<div id="tab-players" class="tab-content">
+  <div class="grid">
+    <div class="panel">
+      <h2>Players</h2>
+      <div style="display:flex;gap:10px;margin-bottom:12px;">
+        <input type="text" id="playersSearch" placeholder="Filter by name or team..." oninput="filterPlayers()" style="max-width:280px;" />
+        <button class="secondary" onclick="loadPlayers()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Player</th><th>Team</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
+        <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="playersStatus"></div>
     </div>
 
     <div class="tab-col">
@@ -335,24 +361,6 @@
       </div>
     </div>
 
-  </div>
-</div>
-
-<!-- TAB: PLAYERS -->
-<div id="tab-players" class="tab-content">
-  <div class="grid">
-    <div class="panel" style="grid-column: span 2;">
-      <h2>Players</h2>
-      <div style="display:flex;gap:10px;margin-bottom:12px;">
-        <input type="text" id="playersSearch" placeholder="Filter by name or team..." oninput="filterPlayers()" style="max-width:280px;" />
-        <button class="secondary" onclick="loadPlayers()">Refresh</button>
-      </div>
-      <table>
-        <thead><tr><th>Player</th><th>Team</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
-        <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
-      </table>
-      <div class="status" id="playersStatus"></div>
-    </div>
   </div>
 </div>
 

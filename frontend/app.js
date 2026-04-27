@@ -422,10 +422,15 @@ function switchTab(name) {
   if (name === "profile")  { if (!activeUserId) return; loadProfile(); }
   if (name === "team")     { if (!activeUserId) return; loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
   if (name === "leaderboard") {
-    loadWeeks().then(() => { _populateLbWeekSelect(); switchLeaderboard(_lbMode); });
-    loadLeaderboard(); loadTop();
+    loadSeasonLeaderboard();
+    loadWeeks().then(() => {
+      _populateLbWeekSelect();
+      const sel = document.getElementById("lbWeekSelect");
+      const weekId = sel ? parseInt(sel.value) : null;
+      if (weekId) loadWeeklyLeaderboard(weekId);
+    });
   }
-  if (name === "players")       loadPlayers();
+  if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
   if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
@@ -983,27 +988,6 @@ async function deactivateCard(cardId) {
 // LEADERBOARDS
 // -------------------------------------------------------
 
-let _lbMode = "season";
-
-function switchLeaderboard(mode) {
-  _lbMode = mode;
-  const seasonBtn = document.getElementById("lbSeasonBtn");
-  const weeklyBtn = document.getElementById("lbWeeklyBtn");
-  const weekSel   = document.getElementById("lbWeekSelect");
-  const header    = document.getElementById("lbPtsHeader");
-  if (seasonBtn) seasonBtn.className = mode === "season" ? "secondary" : "ghost";
-  if (weeklyBtn) weeklyBtn.className = mode === "weekly"  ? "secondary" : "ghost";
-  if (weekSel)   weekSel.style.display = mode === "weekly" ? "" : "none";
-  if (header)    header.textContent = mode === "season" ? "Season pts" : "Week pts";
-  if (mode === "season") {
-    loadSeasonLeaderboard();
-  } else {
-    const sel = document.getElementById("lbWeekSelect");
-    const weekId = sel ? parseInt(sel.value) : null;
-    if (weekId) loadWeeklyLeaderboard(weekId);
-  }
-}
-
 async function onLbWeekChange() {
   const sel = document.getElementById("lbWeekSelect");
   if (sel) loadWeeklyLeaderboard(parseInt(sel.value));
@@ -1014,10 +998,10 @@ function toggleLbDetail(userId) {
   if (el) el.classList.toggle("hidden");
 }
 
-function _lbStandingsRow(r, i, ptsKey) {
+function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const isMe = activeUserId && String(r.id) === String(activeUserId);
   const baseStyle = isMe ? "color:#f0b429;font-weight:bold;" : "";
-  const cards = r.cards || [];
+  const cards = showCards ? (r.cards || []) : [];
   const hasCards = cards.length > 0;
   const cursorStyle = hasCards ? "cursor:pointer;" : "";
   const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
@@ -1041,15 +1025,15 @@ async function loadSeasonLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard/season`);
     const rows = await res.json();
-    const tbody = document.getElementById("standingsBody");
+    const tbody = document.getElementById("seasonStandingsBody");
     if (!rows.length) {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points")).join("");
-    setStatus("standingsStatus", "");
+    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points", false)).join("");
+    setStatus("seasonStandingsStatus", "");
   } catch (e) {
-    setStatus("standingsStatus", e.message, false);
+    setStatus("seasonStandingsStatus", e.message, false);
   }
 }
 
@@ -1057,15 +1041,15 @@ async function loadWeeklyLeaderboard(weekId) {
   try {
     const res = await fetch(`${API}/leaderboard/weekly?week_id=${weekId}`);
     const rows = await res.json();
-    const tbody = document.getElementById("standingsBody");
+    const tbody = document.getElementById("weeklyStandingsBody");
     if (!rows.length) {
       tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
       return;
     }
     tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join("");
-    setStatus("standingsStatus", "");
+    setStatus("weeklyStandingsStatus", "");
   } catch (e) {
-    setStatus("standingsStatus", e.message, false);
+    setStatus("weeklyStandingsStatus", e.message, false);
   }
 }
 
