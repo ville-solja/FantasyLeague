@@ -13,6 +13,7 @@ For each match ID not already in the database:
 - Stores team IDs, match result (`radiant_win`), and start timestamp
 - Stores per-player stats: kills, assists, deaths, GPM, observer wards, sentry wards, tower damage
 - Calculates and stores fantasy points for each player using current scoring weights
+- Seeds the player's display name (`personaname`) into the `players` table if the player is new or had no name yet
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid
 
 Rate limit handling: 429 responses trigger exponential backoff before retrying. Server errors (5xx) are retried up to 3 times.

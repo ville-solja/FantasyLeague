@@ -35,3 +35,4 @@ Implementation details, integrations, and operator tooling.
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |
 | [Configuration & Commands](reference/commands.md) | Environment variables and useful admin commands |
 | [My Team Tab Layout](reference/my-team-tab-layout.md) | Two-column desktop layout for the My Team tab |
+| [Card Player Popup Navigation](reference/card-player-popup.md) | Clickable player name on viewed card; modal stacking fix |

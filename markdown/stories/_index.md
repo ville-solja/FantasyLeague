@@ -21,3 +21,4 @@ Full system requirements by section. Each file covers one functional area.
 | 15 | [Player Profile Enrichment](15-player-profile.md) | Bio display, auto-enrichment, admin trigger |
 | 16 | [Version Visibility](16-version.md) | Build version badge, environment-aware display |
 | 17 | [My Team Tab Layout](17-ui-improvements.md) | Roster-first layout, deck sidebar |
+| 18 | [Card Player Popup Navigation](18-card-player-popup.md) | Clickable player name on card, modal stacking |

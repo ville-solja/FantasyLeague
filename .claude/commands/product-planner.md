@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 4 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -14,10 +14,28 @@ You formalise the creation of new features by reading existing documentation, as
 At the start of any new feature, before writing any implementation code.
 Run `/agent-steward` first if the codebase has changed recently, to ensure your file references are current.
 
-**Usage:** `/product-planner <description>` — e.g. `/product-planner Add a weekly summary email to notify users of their points`
+**Usage:**
+- `/product-planner <description>` — e.g. `/product-planner Add a weekly summary email`
+- `/product-planner issue <N>` — fetch GitHub issue #N and plan it directly
+- `/product-planner issue <N> from github` — same; the trailing phrase is ignored
 
 ## Precondition check
-If no feature description was provided as `$ARGUMENTS`, stop and ask the user to re-invoke with a description: `/product-planner <description of the feature>`.
+If no arguments were provided, stop and ask the user to re-invoke with a description or issue number.
+
+---
+
+## Phase 0 — Resolve GitHub issue (if applicable)
+
+**If `$ARGUMENTS` matches the pattern `issue <N>` or `issue #<N>` (with optional trailing text like "from github"):**
+
+1. Run `git remote get-url origin` via Bash to get the repo URL.
+2. Extract `{owner}/{repo}` from the URL (strip `.git` suffix, handle both SSH and HTTPS forms).
+3. Fetch `https://api.github.com/repos/{owner}/{repo}/issues/{N}` using WebFetch.
+4. Extract `title` and `body` from the JSON response.
+5. Use `"{title} — {body}"` as the feature description for all subsequent phases.
+6. Note the issue number in the plan's Context section: *"Resolves GitHub issue #{N}."*
+
+If the fetch fails or returns an error, fall back to treating `$ARGUMENTS` as a plain description.
 
 ---
 
@@ -172,4 +190,5 @@ Manual follow-up:
 - User stories: bold labels (`**User story**`, `**Acceptance criteria**`), bullet-point AC, no AC numbering
 - Feature descriptions: `#` title, `##` for sections, mark unimplemented routes as `*(planned)*`
 - Never fabricate endpoint signatures, model fields, or env vars that don't exist and aren't clearly implied by the feature description
-- If `$ARGUMENTS` is ambiguous, make reasonable assumptions based on the project's existing patterns and note them in the plan's Context section
+- If the description is ambiguous, make reasonable assumptions based on the project's existing patterns and note them in the plan's Context section
+- If the feature was sourced from a GitHub issue, include *"Resolves GitHub issue #N."* at the end of the Context section
