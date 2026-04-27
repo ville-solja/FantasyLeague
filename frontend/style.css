@@ -742,13 +742,18 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
    TWO-COLUMN SIDEBAR TABS
    ============================================================ */
 #tab-team .grid,
-#tab-leaderboard .grid,
+#tab-players .grid,
 #tab-admin .grid {
   grid-template-columns: 1fr 360px;
   align-items: start;
 }
+#tab-leaderboard .grid {
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
 @media (max-width: 768px) {
   #tab-team .grid,
+  #tab-players .grid,
   #tab-leaderboard .grid,
   #tab-admin .grid {
     grid-template-columns: 1fr;
