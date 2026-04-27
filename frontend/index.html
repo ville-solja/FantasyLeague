@@ -144,7 +144,7 @@
       <span id="headerTokenNum" class="header-token-num"></span>
       <span class="header-token-label">Tokens</span>
     </div>
-    <span id="headerUserLabel" class="header-account"></span>
+    <button id="headerUserLabel" class="secondary header-profile-btn" onclick="switchTab('profile')" style="display:none;"></button>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
   </div>
@@ -152,7 +152,6 @@
 
 <div class="tabs" id="tabBar">
   <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
-  <button class="tab" id="tab-btn-profile"     onclick="switchTab('profile')">Profile</button>
   <button class="tab active" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">Leaderboards</button>
   <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>

@@ -84,6 +84,7 @@ class User(Base):
     email = Column(String, unique=True)
     password_hash = Column(String)
     is_admin = Column(Boolean, default=False)
+    is_tester = Column(Boolean, default=False)
     tokens = Column(Integer, default=0)
     created_at = Column(Integer, nullable=True)  # Unix timestamp of registration
     player_id = Column(Integer, nullable=True)   # linked OpenDota account_id

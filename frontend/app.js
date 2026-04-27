@@ -67,12 +67,13 @@ function updateTokenDisplay(balance) {
 function applyAuthState() {
   const loggedIn = !!activeUserId;
 
-  document.getElementById("headerUserLabel").textContent = loggedIn ? activeUsername : "";
+  const userLabel = document.getElementById("headerUserLabel");
+  userLabel.textContent    = loggedIn ? activeUsername : "";
+  userLabel.style.display  = loggedIn ? "" : "none";
   document.getElementById("headerLoginBtn").style.display  = loggedIn ? "none" : "";
   document.getElementById("headerLogoutBtn").style.display = loggedIn ? "" : "none";
 
   document.getElementById("tab-btn-team").style.display    = loggedIn ? "" : "none";
-  document.getElementById("tab-btn-profile").style.display = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");
@@ -1164,14 +1165,27 @@ async function loadUsers() {
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
     document.getElementById("usersBody").innerHTML = rows.map(u => `
       <tr>
-        <td>${u.username}</td>
+        <td>${u.username}${u.is_tester ? ' <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>' : ""}</td>
         <td>${u.tokens}</td>
-        <td style="display:flex;gap:6px;align-items:center;">
+        <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
           <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
+          <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
         </td>
       </tr>`).join("");
     setStatus("usersStatus", "");
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function toggleTester(userId) {
+  try {
+    const res = await fetch(`${API}/users/${userId}/toggle-tester`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("usersStatus", data.detail, false);
+    setStatus("usersStatus", `${data.username} ${data.is_tester ? "marked as tester" : "unmarked as tester"}`);
+    loadUsers();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
   }
@@ -1331,13 +1345,17 @@ async function enrichProfiles() {
 // ENTITY LINKS
 // -------------------------------------------------------
 
+function _escHtml(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function playerLink(id, name) {
-  return `<span class="entity-link" onclick="openPlayerModal(${id})">${name}</span>`;
+  return `<span class="entity-link" onclick="openPlayerModal(${id})">${_escHtml(name)}</span>`;
 }
 
 function teamLink(id, name) {
-  if (!id) return name || "—";
-  return `<span class="entity-link" onclick="openTeamModal(${id})">${name}</span>`;
+  if (!id) return _escHtml(name) || "—";
+  return `<span class="entity-link" onclick="openTeamModal(${id})">${_escHtml(name)}</span>`;
 }
 
 // -------------------------------------------------------
@@ -1506,27 +1524,16 @@ function renderPlayerProfile(profile) {
   }
 
   const heroes = `<div style="margin-top:14px;">
-    ${heroSection("Career heroes", facts.top_heroes_alltime, 10)}
+    ${heroSection("Career heroes", facts.top_heroes_alltime, 5)}
     ${heroSection("Tournament heroes", facts.tournament_heroes, 5)}
     ${heroSection("Recent pub heroes", facts.recent_pub_heroes, 5)}
   </div>`;
-
-  const bans = (facts.ban_correlations || []).slice(0, 5);
-  const banSection = bans.length ? `
-    <div style="margin-top:12px;">
-      <div class="player-bio-eyebrow" style="margin-bottom:6px;">Ban correlations</div>
-      ${bans.map(b => `
-        <div style="background:#1a0a0a;border:1px solid #3a1a1a;border-radius:4px;padding:5px 8px;margin-bottom:4px;font-size:0.82rem;">
-          <span style="color:#e06;">${b.hero_name}</span>
-          <span style="color:#666;"> — banned in ${Math.round(b.ban_rate*100)}% of tournament matches (${b.banned_in}/${b.tournament_match_count})</span>
-        </div>`).join("")}
-    </div>` : "";
 
   const bioSection = profile.bio_text
     ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;">${profile.bio_text}</div>`
     : "";
 
-  el.innerHTML = statGrid + heroes + banSection + bioSection;
+  el.innerHTML = statGrid + heroes + bioSection;
   el.style.display = "block";
 }
 
