@@ -31,6 +31,7 @@ def seed_users():
                 email=u["email"],
                 password_hash=hash_password(u["password"]),
                 is_admin=u.get("is_admin", False),
+                is_tester=u.get("is_tester", False),
             ))
             logger.info("Seeded user %s", u["username"])
 

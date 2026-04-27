@@ -1,5 +1,5 @@
 [
-  { "id": 1, "username": "tester1", "email": "tester1@example.com", "password": "admin123", "is_admin": true },
-  { "id": 2, "username": "tester2", "email": "tester2@example.com", "password": "tester2",  "is_admin": false },
-  { "id": 3, "username": "tester3", "email": "tester3@example.com", "password": "tester3",  "is_admin": false }
+  { "id": 1, "username": "tester1", "email": "tester1@example.com", "password": "admin123", "is_admin": true,  "is_tester": true },
+  { "id": 2, "username": "tester2", "email": "tester2@example.com", "password": "tester2",  "is_admin": false, "is_tester": true },
+  { "id": 3, "username": "tester3", "email": "tester3@example.com", "password": "tester3",  "is_admin": false, "is_tester": true }
 ]

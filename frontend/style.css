@@ -407,7 +407,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 300;
 }
 .modal-overlay.hidden { display: none; }
 .modal {
