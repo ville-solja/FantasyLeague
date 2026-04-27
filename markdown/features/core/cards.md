@@ -235,14 +235,18 @@ Draws one card from the shared pool. Requires authentication.
 {
   "id": 42,
   "card_type": "rare",
+  "player_id": 123456789,
   "player_name": "SomePlayer",
   "avatar_url": "https://...",
   "team_name": "SomeTeam",
   "team_logo_url": "https://...",
+  "is_active": true,
   "modifiers": [{ "stat": "kills", "bonus_pct": 10.0 }],
   "tokens": 4
 }
 ```
+
+`is_active` is `true` if the card was placed directly into the active roster, `false` if it went to the bench.
 
 The card is automatically placed in the active roster if fewer than `ROSTER_LIMIT` slots are filled; otherwise it goes to the bench. The action is recorded in the audit log (`token_draw`).
 

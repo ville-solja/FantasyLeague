@@ -492,6 +492,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     return {
         "id": chosen.id,
         "card_type": chosen.card_type,
+        "player_id": chosen.player_id,
         "player_name": chosen.player_name,
         "avatar_url": chosen.avatar_url,
         "team_name": chosen.team_name,

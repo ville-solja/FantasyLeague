@@ -24,7 +24,7 @@ cd backend && python -m pytest tests/ -v --tb=short
 
 A Playwright browser test suite in `tests/ui/` drives a running instance of the app through a headless Chromium browser. Tests cover critical user flows and are each independent — they seed their own test data via the API and do not share state.
 
-### Covered flows *(planned)*
+### Covered flows
 
 | Test file | What it covers |
 |---|---|

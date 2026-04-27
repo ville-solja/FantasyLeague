@@ -574,7 +574,16 @@ function showCard(card, footer, opts = {}) {
   cardEl.className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
-  document.getElementById("revealPlayer").textContent = drawFx ? "" : (card.player_name || "");
+  const revealPlayerEl = document.getElementById("revealPlayer");
+  if (card.player_id && !drawFx) {
+    const span = document.createElement("span");
+    span.className = "entity-link";
+    span.onclick = () => openPlayerModal(card.player_id);
+    span.textContent = card.player_name || "";
+    revealPlayerEl.replaceChildren(span);
+  } else {
+    revealPlayerEl.textContent = drawFx ? "" : (card.player_name || "");
+  }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
@@ -1684,6 +1693,18 @@ async function loadSchedule() {
     content.innerHTML = "";
   }
 }
+
+// -------------------------------------------------------
+// KEYBOARD
+// -------------------------------------------------------
+
+document.addEventListener("keydown", function(e) {
+  if (e.key !== "Escape") return;
+  const visible = id => !document.getElementById(id).classList.contains("hidden");
+  if (visible("playerModal")) { closePlayerModal(); return; }
+  if (visible("teamModal"))   { closeTeamModal();   return; }
+  if (visible("revealModal")) { closeReveal();       return; }
+});
 
 // -------------------------------------------------------
 // INIT
