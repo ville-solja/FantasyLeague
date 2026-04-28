@@ -177,31 +177,42 @@ async function register() {
   const password = document.getElementById("regPassword").value;
 
   let valid = true;
+  let firstInvalidId = null;
   if (!username) {
     _regFieldErr("regUsername", "regUsernameErr", "Username is required");
+    firstInvalidId = firstInvalidId || "regUsername";
     valid = false;
   } else if (username.length > 64) {
     _regFieldErr("regUsername", "regUsernameErr", "Username must be 64 characters or fewer");
+    firstInvalidId = firstInvalidId || "regUsername";
     valid = false;
   }
   if (!email) {
     _regFieldErr("regEmail", "regEmailErr", "Email is required");
+    firstInvalidId = firstInvalidId || "regEmail";
     valid = false;
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     _regFieldErr("regEmail", "regEmailErr", "Enter a valid email address");
+    firstInvalidId = firstInvalidId || "regEmail";
     valid = false;
   }
   if (!password) {
     _regFieldErr("regPassword", "regPasswordErr", "Password is required");
+    firstInvalidId = firstInvalidId || "regPassword";
     valid = false;
   } else if (password.length < 6) {
     _regFieldErr("regPassword", "regPasswordErr", "Password must be at least 6 characters");
+    firstInvalidId = firstInvalidId || "regPassword";
     valid = false;
   } else if (password.length > 128) {
     _regFieldErr("regPassword", "regPasswordErr", "Password must be 128 characters or fewer");
+    firstInvalidId = firstInvalidId || "regPassword";
     valid = false;
   }
-  if (!valid) return;
+  if (!valid) {
+    if (firstInvalidId) document.getElementById(firstInvalidId).scrollIntoView({block: "center"});
+    return;
+  }
 
   try {
     const res = await fetch(`${API}/register`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username, email, password}) });
@@ -413,6 +424,9 @@ async function savePlayerId() {
 // -------------------------------------------------------
 
 function switchTab(name) {
+  if (activeMustChangePassword && name !== "profile") {
+    name = "profile";
+  }
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
   document.getElementById(`tab-${name}`).classList.add("active");
@@ -468,6 +482,9 @@ async function loadDeck() {
 }
 
 async function drawCard() {
+  const btn = document.getElementById("drawBtn");
+  if (btn && btn.disabled) return;
+  if (btn) btn.disabled = true;
   try {
     const res = await fetch(`${API}/draw`, { method: "POST" });
     const data = await res.json();
@@ -482,6 +499,8 @@ async function drawCard() {
     loadRoster(_rosterWeekId);
   } catch (e) {
     setStatus("deckStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1001,6 +1020,7 @@ function toggleLbDetail(userId) {
 function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const isMe = activeUserId && String(r.id) === String(activeUserId);
   const baseStyle = isMe ? "color:#f0b429;font-weight:bold;" : "";
+  const youLabel = isMe ? ` <span style="font-size:0.75rem;opacity:0.7;font-weight:normal;">(You)</span>` : "";
   const cards = showCards ? (r.cards || []) : [];
   const hasCards = cards.length > 0;
   const cursorStyle = hasCards ? "cursor:pointer;" : "";
@@ -1008,7 +1028,7 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const pts = Number(r[ptsKey] || 0).toFixed(1);
   const mainRow = `<tr style="${baseStyle}${cursorStyle}" ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
     <td>${i + 1}</td>
-    <td>${r.username}${chevron}</td>
+    <td>${_escHtml(r.username)}${youLabel}${chevron}</td>
     <td>${pts}</td>
   </tr>`;
   if (!hasCards) return mainRow;
@@ -1055,11 +1075,16 @@ async function loadWeeklyLeaderboard(weekId) {
 
 function _populateLbWeekSelect() {
   const sel = document.getElementById("lbWeekSelect");
-  if (!sel || !_weeks.length) return;
-  sel.innerHTML = _weeks.filter(w => w.is_locked).map(w =>
-    `<option value="${w.id}">${w.label}</option>`
-  ).join("");
-  if (!sel.innerHTML) sel.innerHTML = "<option disabled>No locked weeks yet</option>";
+  if (!sel) return;
+  const locked = _weeks.filter(w => w.is_locked);
+  sel.innerHTML = locked.map(w => `<option value="${w.id}">${w.label}</option>`).join("");
+  if (!locked.length) {
+    sel.style.display = "none";
+    const tbody = document.getElementById("weeklyStandingsBody");
+    if (tbody) tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No weeks locked yet</td></tr>";
+  } else {
+    sel.style.display = "";
+  }
 }
 
 var _allLeaderboardRows = [];
@@ -1264,6 +1289,8 @@ async function refreshSchedule() {
 async function ingestLeague() {
   const id = document.getElementById("leagueId").value;
   if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
+  const btn = document.getElementById("ingestBtn");
+  if (btn) btn.disabled = true;
   setStatus("ingestStatus", "Ingesting... this may take a while");
   try {
     const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST" });
@@ -1271,6 +1298,8 @@ async function ingestLeague() {
     setStatus("ingestStatus", res.ok ? `Done. League ${data.league_id} ingested.` : data.detail, res.ok);
   } catch (e) {
     setStatus("ingestStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1300,6 +1329,8 @@ async function loadAuditLog() {
 }
 
 async function recalculate() {
+  const btn = document.getElementById("recalculateBtn");
+  if (btn) btn.disabled = true;
   setStatus("recalcStatus", "Recalculating...");
   try {
     const res = await fetch(`${API}/recalculate`, { method: "POST" });
@@ -1307,10 +1338,14 @@ async function recalculate() {
     setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
   } catch (e) {
     setStatus("recalcStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
 async function enrichProfiles() {
+  const btn = document.getElementById("enrichBtn");
+  if (btn) btn.disabled = true;
   setStatus("enrichStatus", "Enriching...");
   try {
     const res = await fetch(`${API}/admin/enrich-profiles`, { method: "POST" });
@@ -1322,6 +1357,8 @@ async function enrichProfiles() {
     }
   } catch (e) {
     setStatus("enrichStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1650,7 +1687,7 @@ async function loadSchedule() {
       let linksContent = "";
       if (isPast && r && r.match_ids && r.match_ids.length) {
         linksContent = r.match_ids.map((id, i) =>
-          `<a class="stream-link" href="https://www.opendota.com/matches/${id}" target="_blank" rel="noopener">G${i + 1} ↗</a>`
+          `<a class="stream-link" href="https://www.opendota.com/matches/${id}" target="_blank" rel="noopener noreferrer">G${i + 1} ↗</a>`
         ).join("");
         if (s.stream_url) {
           linksContent += `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
@@ -1699,9 +1736,12 @@ async function loadSchedule() {
 document.addEventListener("keydown", function(e) {
   if (e.key !== "Escape") return;
   const visible = id => !document.getElementById(id).classList.contains("hidden");
-  if (visible("playerModal")) { closePlayerModal(); return; }
-  if (visible("teamModal"))   { closeTeamModal();   return; }
-  if (visible("revealModal")) { closeReveal();       return; }
+  if (visible("playerModal"))  { closePlayerModal();  return; }
+  if (visible("teamModal"))    { closeTeamModal();    return; }
+  if (visible("revealModal"))  { closeReveal();       return; }
+  if (visible("registerModal")){ closeRegisterModal(); return; }
+  if (visible("forgotModal"))  { showLogin();         return; }
+  if (visible("loginModal"))   { closeLoginModal();   return; }
 });
 
 // -------------------------------------------------------

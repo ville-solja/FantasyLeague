@@ -927,6 +927,25 @@ def admin_enrich_profiles(db=Depends(get_db), admin: dict = Depends(require_admi
     return result
 
 
+class TopUpCardsBody(BaseModel):
+    league_id: int
+
+
+@app.post("/admin/top-up-cards")
+def top_up_cards(body: TopUpCardsBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
+    """Add one full card batch (1L/2E/4R/8C per player) as a new generation to the unowned pool."""
+    from sqlalchemy import func
+    max_gen = db.query(func.max(Card.generation)).filter(
+        Card.league_id == body.league_id
+    ).scalar() or 1
+    next_gen = max_gen + 1
+    seed_cards(body.league_id, generation=next_gen)
+    _audit(db, "admin_top_up_cards", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"league_id={body.league_id} generation={next_gen}")
+    db.commit()
+    return {"league_id": body.league_id, "generation_added": next_gen}
+
+
 @app.get("/teams")
 def list_teams(db=Depends(get_db)):
     results = db.execute(text("""

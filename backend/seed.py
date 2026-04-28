@@ -43,7 +43,7 @@ def seed_users():
     db.close()
 
 
-def seed_cards(league_id: int):
+def seed_cards(league_id: int, generation: int = 1):
     db = SessionLocal()
 
     player_ids = (
@@ -55,14 +55,17 @@ def seed_cards(league_id: int):
     )
     player_ids = [r[0] for r in player_ids]
 
-    seeded_player_ids = {
+    already_seeded = {
         r[0] for r in
-        db.query(Card.player_id).filter(Card.league_id == league_id).distinct().all()
+        db.query(Card.player_id).filter(
+            Card.league_id == league_id,
+            Card.generation == generation,
+        ).distinct().all()
     }
 
     count = 0
     for player_id in player_ids:
-        if player_id in seeded_player_ids:
+        if player_id in already_seeded:
             continue
         for card_type, quantity in CARD_SCHEMA:
             for _ in range(quantity):
@@ -71,12 +74,14 @@ def seed_cards(league_id: int):
                     owner_id=None,
                     card_type=card_type,
                     league_id=league_id,
+                    generation=generation,
                 ))
                 count += 1
 
     db.commit()
     db.close()
-    logger.info("Seeded %d cards for league %d across %d players", count, league_id, len(player_ids))
+    logger.info("Seeded %d cards (gen %d) for league %d across %d players",
+                count, generation, league_id, len(player_ids))
 
 
 DEFAULT_WEIGHTS = [

@@ -449,7 +449,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   border-bottom: var(--bw-hair) solid var(--k-ink-900);
   font-size: var(--fs-sm);
 }
-.series-row.past { opacity: 0.6; }
+.series-row.past { color: var(--fg-dim, #888); }
 .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .series-team.right { text-align: right; }
 .series-score {

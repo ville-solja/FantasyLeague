@@ -206,7 +206,7 @@
     <div class="panel">
       <h2>Twitch Account</h2>
       <div id="twitchLinked" style="display:none">
-        <p style="color:#9147ff;font-weight:600;margin-bottom:6px">✓ Twitch account linked</p>
+        <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
         <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live Kanaliiga streams.</p>
       </div>
       <div id="twitchUnlinked" style="display:none">
@@ -429,7 +429,7 @@
         <h2>Promo Codes</h2>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
           <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
-          <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" />
+          <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
           <button onclick="createCode()">Create</button>
           <button class="secondary" onclick="loadCodes()">Refresh</button>
         </div>
@@ -450,21 +450,21 @@
       <div class="panel">
         <h2>Recalculate Fantasy Points</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
-        <button onclick="recalculate()">Recalculate</button>
+        <button id="recalculateBtn" onclick="recalculate()">Recalculate</button>
         <div class="status" id="recalcStatus"></div>
       </div>
 
       <div class="panel">
         <h2>Re-enrich Player Profiles</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
-        <button onclick="enrichProfiles()">Re-enrich profiles</button>
+        <button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button>
         <div class="status" id="enrichStatus"></div>
       </div>
 
       <div class="panel">
         <h2>Ingest League</h2>
         <input id="leagueId" type="number" placeholder="League ID e.g. 19369" style="width:100%;margin-bottom:8px;" />
-        <button onclick="ingestLeague()" style="width:100%;">Ingest</button>
+        <button id="ingestBtn" onclick="ingestLeague()" style="width:100%;">Ingest</button>
         <div class="status" id="ingestStatus"></div>
       </div>
 

@@ -77,6 +77,7 @@ class Card(Base):
     card_type = Column(String)  # "common", "rare", "epic", "legendary"
     league_id = Column(Integer, ForeignKey("leagues.id"))
     is_active = Column(Boolean, default=False)
+    generation = Column(Integer, default=1, nullable=False)
 
 
 <<<<<<< HEAD
