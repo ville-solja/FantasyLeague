@@ -92,6 +92,15 @@ def run_migrations(engine) -> None:
                 logger.info("Migration: player_match_stats — added %s column", _col)
 >>>>>>> 25cc59e (Initial commit)
 
+        # cards: generation
+        card_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()]
+        if "generation" not in card_cols:
+            conn.execute(text(
+                "ALTER TABLE cards ADD COLUMN generation INTEGER NOT NULL DEFAULT 1"
+            ))
+            conn.commit()
+            logger.info("Migration: cards — added generation column")
+
         # teams: logo_url
         team_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(teams)")).fetchall()]
         if "logo_url" not in team_cols:

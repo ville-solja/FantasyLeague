@@ -131,7 +131,7 @@ As a user, I want to click the player name displayed on a viewed card so that I 
 
 ---
 
-### Mid-Season Card Top-Up *(not yet implemented)*
+### Mid-Season Card Top-Up
 **User story**
 As an admin, I want to add a new batch of cards to the deck mid-season so that new users joining late have cards to draw.
 
