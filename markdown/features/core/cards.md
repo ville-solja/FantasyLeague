@@ -27,6 +27,8 @@ Each player has four cards in the deck with different rarities. In API responses
 
 The deck is shared across all users. Each card can only be owned by one user at a time. Cards are generated per season by an admin ingestion action, seeded from a given OpenDota league ID.
 
+Each seeding batch is assigned a `generation` integer (starting at 1). Mid-season top-ups add a second batch at generation 2, a third at generation 3, and so on. Generation tracking is what makes seeding idempotent — a player is skipped only if a card for that player already exists in the current generation, not across all generations. See `POST /admin/top-up-cards` in `core/admin.md`.
+
 ## Card States
 
 | State | Meaning |

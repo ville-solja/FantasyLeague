@@ -447,6 +447,7 @@ function switchTab(name) {
   if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
+  if (name === "howtoplay")     loadHowToPlay();
   if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
 }
 
@@ -1726,6 +1727,59 @@ async function loadSchedule() {
   } catch (e) {
     setStatus("scheduleStatus", e.message, false);
     content.innerHTML = "";
+  }
+}
+
+// -------------------------------------------------------
+// HOW TO PLAY
+// -------------------------------------------------------
+
+async function loadHowToPlay() {
+  const res = await fetch(`${API}/weights`);
+  if (!res.ok) return;
+  const weights = await res.json();
+  const byKey = Object.fromEntries(weights.map(w => [w.key, w]));
+
+  const statsKeys = ['kills', 'assists', 'deaths', 'gold_per_min', 'obs_placed', 'sen_placed', 'tower_damage'];
+  const statsLabels = {
+    kills: 'Kills', assists: 'Assists', deaths: 'Deaths',
+    gold_per_min: 'Gold per minute', obs_placed: 'Observer wards',
+    sen_placed: 'Sentry wards', tower_damage: 'Tower damage',
+  };
+  const tbody = document.getElementById('howtoplay-stats-tbody');
+  if (tbody) {
+    tbody.innerHTML = statsKeys.map(k => {
+      const w = byKey[k];
+      return `<tr><td>${statsLabels[k]}</td><td>${w ? w.value : '—'}</td></tr>`;
+    }).join('');
+  }
+
+  const rarityKeys = ['rarity_common', 'rarity_rare', 'rarity_epic', 'rarity_legendary'];
+  const rarityTbody = document.getElementById('howtoplay-rarity-tbody');
+  if (rarityTbody) {
+    rarityTbody.innerHTML = rarityKeys.map(k => {
+      const w = byKey[k];
+      const label = k.replace('rarity_', '').replace(/^\w/, c => c.toUpperCase());
+      return `<tr><td>${label}</td><td>+${w ? w.value : 0}%</td></tr>`;
+    }).join('');
+  }
+
+  const modKeys = ['modifier_count_common', 'modifier_count_rare', 'modifier_count_epic', 'modifier_count_legendary'];
+  const modTbody = document.getElementById('howtoplay-mods-tbody');
+  if (modTbody) {
+    const bonusPct = byKey['modifier_bonus_pct']?.value ?? 10;
+    modTbody.innerHTML = modKeys.map(k => {
+      const w = byKey[k];
+      const label = k.replace('modifier_count_', '').replace(/^\w/, c => c.toUpperCase());
+      const count = w ? w.value : 0;
+      return `<tr><td>${label}</td><td>${count} modifier${count !== 1 ? 's' : ''} (+${bonusPct}% each)</td></tr>`;
+    }).join('');
+  }
+
+  const mvpEl = document.getElementById('howtoplay-mvp-bonus');
+  if (mvpEl) {
+    const mvpPct = byKey['mvp_bonus_pct']?.value ?? 10;
+    mvpEl.textContent = `+${mvpPct}%`;
   }
 }
 

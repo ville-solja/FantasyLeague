@@ -130,6 +130,40 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         logger.exception("Twitch PubSub broadcast failed")
 
 
+def _post_chat_message(channel_id: str, message: str):
+    """Post a message to Twitch chat via the Helix Send Chat Message API.
+
+    Requires TWITCH_BOT_ACCESS_TOKEN (user token with user:write:chat scope)
+    and TWITCH_BOT_USER_ID (Twitch user ID of the sending account).
+    Silently skips if either var is unset.
+    """
+    if os.getenv("TWITCH_LOCAL_DEV") == "true":
+        logger.info("Twitch chat (dev): %s", message)
+        return
+    bot_token   = os.getenv("TWITCH_BOT_ACCESS_TOKEN", "").strip()
+    bot_user_id = os.getenv("TWITCH_BOT_USER_ID", "").strip()
+    client_id   = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
+    if not bot_token or not bot_user_id or not client_id:
+        return
+    try:
+        _requests.post(
+            "https://api.twitch.tv/helix/chat/messages",
+            headers={
+                "Authorization": f"Bearer {bot_token}",
+                "Client-Id": client_id,
+                "Content-Type": "application/json",
+            },
+            json={
+                "broadcaster_id": channel_id,
+                "sender_id": bot_user_id,
+                "message": message,
+            },
+            timeout=5,
+        )
+    except Exception:
+        logger.exception("Twitch chat message failed")
+
+
 # ---------------------------------------------------------------------------
 # Account linking
 # ---------------------------------------------------------------------------
@@ -465,6 +499,16 @@ def set_mvp(
         "match_id": body.match_id,
         "token_drop_winners": winner_names,
     })
+
+    token_name = os.getenv("TOKEN_NAME", "tokens")
+    chat_msg = f"Match MVP: {player.name}!"
+    if winner_names:
+        winners_str = ", ".join(winner_names)
+        chat_msg += f" Token drop winners (+1 {token_name}): {winners_str}"
+    elif not already_dropped and pool_size == 0:
+        chat_msg += " (No linked viewers in the drop pool.)"
+    _post_chat_message(channel_id, chat_msg)
+
     return {
         "match_id": body.match_id,
         "player_id": body.player_id,
