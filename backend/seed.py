@@ -7,6 +7,10 @@ logger = logging.getLogger(__name__)
 from models import User, Card, Weight, PlayerMatchStats, Match
 from auth import hash_password
 from weeks import generate_weeks, auto_lock_weeks
+<<<<<<< HEAD
+=======
+from scoring import SCORING_STATS
+>>>>>>> 25cc59e (Initial commit)
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
 
@@ -77,6 +81,7 @@ def seed_cards(league_id: int):
 
 DEFAULT_WEIGHTS = [
     # --- Scoring stat weights ---
+<<<<<<< HEAD
     {"key": "kills",             "label": "Kills",                              "value": 3.0},
     {"key": "assists",           "label": "Assists",                            "value": 2.0},
     {"key": "deaths",            "label": "Deaths",                             "value": -1.0},
@@ -84,6 +89,22 @@ DEFAULT_WEIGHTS = [
     {"key": "obs_placed",        "label": "Observer wards placed",              "value": 1.0},
     {"key": "sen_placed",        "label": "Sentry wards placed",                "value": 1.5},
     {"key": "tower_damage",      "label": "Tower damage",                       "value": 0.002},
+=======
+    {"key": "kills",                    "label": "Kills",                          "value": 0.3},
+    {"key": "last_hits",                "label": "Last hits",                      "value": 0.003},
+    {"key": "denies",                   "label": "Denies",                         "value": 0.0003},
+    {"key": "gold_per_min",             "label": "Gold per minute",                "value": 0.002},
+    {"key": "obs_placed",               "label": "Observer wards placed",          "value": 0.5},
+    {"key": "towers_killed",            "label": "Towers destroyed",               "value": 1.0},
+    {"key": "roshan_kills",             "label": "Roshan kills",                   "value": 1.0},
+    {"key": "teamfight_participation",  "label": "Participation (100% = 1.0)",     "value": 3.0},
+    {"key": "camps_stacked",            "label": "Camps stacked",                  "value": 0.5},
+    {"key": "rune_pickups",             "label": "Runes picked up",                "value": 0.25},
+    {"key": "firstblood_claimed",       "label": "First blood",                    "value": 4.0},
+    {"key": "stuns",                    "label": "Stuns (seconds)",                "value": 0.05},
+    {"key": "death_pool",               "label": "Deaths — pool (0 deaths)",        "value": 3.0},
+    {"key": "death_deduction",          "label": "Deaths — deduction per death",    "value": 0.3},
+>>>>>>> 25cc59e (Initial commit)
     # --- Rarity bonuses — flat % multiplier on a card's total score ---
     {"key": "rarity_common",     "label": "Rarity bonus — Common (%)",          "value": 0.0},
     {"key": "rarity_rare",       "label": "Rarity bonus — Rare (%)",            "value": 1.0},
@@ -117,6 +138,18 @@ def seed_weights():
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning("Could not parse WEIGHTS_JSON — %s", e)
 
+<<<<<<< HEAD
+=======
+    required = set(SCORING_STATS) | {"death_pool", "death_deduction",
+                                     "rarity_common", "rarity_rare", "rarity_epic", "rarity_legendary",
+                                     "modifier_count_common", "modifier_count_rare", "modifier_count_epic", "modifier_count_legendary",
+                                     "modifier_bonus_pct"}
+    present = {w["key"] for w in DEFAULT_WEIGHTS}
+    missing = sorted(required - present)
+    if missing:
+        raise ValueError(f"DEFAULT_WEIGHTS missing required keys: {missing}")
+
+>>>>>>> 25cc59e (Initial commit)
     db = SessionLocal()
     for w in DEFAULT_WEIGHTS:
         existing = db.get(Weight, w["key"])

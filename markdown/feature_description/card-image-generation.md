@@ -81,12 +81,27 @@ Modifier lines are rendered in the lower band of the card (below the portrait ar
 | Stat key | Card label |
 |---|---|
 | `kills` | KILLS |
+<<<<<<< HEAD
 | `assists` | ASSISTS |
 | `deaths` | DEATHS |
 | `gold_per_min` | GPM |
 | `obs_placed` | OBSERVER WARDS |
 | `sen_placed` | SENTRY WARDS |
 | `tower_damage` | TOWER DAMAGE |
+=======
+| `last_hits` | LAST HITS |
+| `denies` | DENIES |
+| `deaths` | DEATHS |
+| `gold_per_min` | GPM |
+| `obs_placed` | OBSERVER WARDS |
+| `towers_killed` | TOWERS |
+| `roshan_kills` | ROSHAN |
+| `teamfight_participation` | TEAMFIGHT |
+| `camps_stacked` | CAMPS STACKED |
+| `rune_pickups` | RUNES |
+| `firstblood_claimed` | FIRST BLOOD |
+| `stuns` | STUNS |
+>>>>>>> 25cc59e (Initial commit)
 
 Lines are sorted alphabetically by stat key and stacked from `y=620` downward. If there are no modifiers (e.g. a Common card), the lower band is left empty.
 
