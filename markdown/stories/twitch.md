@@ -60,3 +60,26 @@ As the Kanaliiga developer, I want to set the EBS URL once in the Twitch develop
 - Running `bash twitch-extension/set-ebs-url.sh <url>` sets the global Configuration Service segment
 - The extension reads `Twitch.ext.configuration.global.content` at startup — URL change takes effect immediately on next panel load
 - `.env` requires only `TWITCH_EXTENSION_CLIENT_ID`, `TWITCH_EXTENSION_SECRET`, and `TWITCH_DROP_MAX`
+
+---
+
+### MVP Fantasy Score Bonus
+**User story**
+As a fantasy league player, I want the designated MVP of a match to earn an extra percentage on their fantasy score for that match so that the broadcast MVP appointment has real in-game value.
+
+**Acceptance criteria**
+- When a broadcaster confirms an MVP via the Twitch extension, that player's `fantasy_points` for that specific match is multiplied by `(1 + mvp_bonus_pct / 100)`
+- If the broadcaster later changes the MVP to a different player for the same match, the old player's bonus is removed and the new player receives it
+- The bonus is reflected immediately in roster point totals, leaderboard standings, and the player match history
+- An MVP match is visually distinguishable from a regular match in the player detail modal
+
+---
+
+### Configurable MVP Bonus Weight
+**User story**
+As an admin, I want to configure the MVP fantasy bonus percentage from the admin weights panel so I can tune its value without code changes.
+
+**Acceptance criteria**
+- A weight key `mvp_bonus_pct` (label: "MVP bonus (%)") is present in the admin weights panel with a default of `10.0`
+- Changing the value and running `POST /recalculate` re-applies the updated bonus to all MVP-flagged matches
+- `mvp_bonus_pct = 0` effectively disables the bonus without removing the MVP flag from past matches

@@ -67,3 +67,33 @@ As a developer, I want automated browser tests for critical user flows so that U
 - Tests run against a locally started instance of the app
 - Each test is independent — it seeds its own data and does not rely on leftover state from prior tests
 - Suite produces a pass/fail exit code usable by CI and runs automatically on pull requests to `main`
+
+---
+
+## How to Play
+
+### How to Play Tab
+**User story**
+As a new user, I want a tab that explains how the fantasy app works so that I can get started without reading external documentation.
+
+**Acceptance criteria**
+- A "How to Play" tab is visible to all users (logged in and logged out) in the main navigation
+- Tab contains three clearly separated sections: Getting Started, Twitch & MVP, and Scoring & Modifiers
+- Getting Started section explains: draw a card using a token, activate up to 5 cards into the roster, roster locks weekly, points accumulate from locked rosters
+- Getting Started section explains how to obtain more tokens: week lock bonus, Twitch extension drops, promo codes
+- Twitch & MVP section explains the broadcaster MVP selection flow and that the selected MVP receives a point bonus for that match
+- Scoring & Modifiers section lists the scoring stats and reads live weight values from the server to show current multipliers
+- Scoring section explains card rarity bonuses and card modifier bonuses using live weight values
+- Tab renders correctly with no active session (weights endpoint is public)
+
+---
+
+### Streamer MVP Instructions
+**User story**
+As a Kanaliiga streamer, I want the How to Play tab to explain the Twitch extension MVP flow so that I can set it up and use it without reading separate documentation.
+
+**Acceptance criteria**
+- The Twitch & MVP section explains: install the extension, use Quick Actions to select a series → match → player
+- Explains that token drops fire automatically on MVP confirmation (once per match)
+- Explains that the MVP selection also grants a fantasy score bonus to that player's match
+- The section is visible to all users (not restricted to admins or streamers)
