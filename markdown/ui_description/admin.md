@@ -27,7 +27,13 @@ Visible only to admin users. All actions require an active admin session cookie 
 
 ## Scoring Weights panel
 
+<<<<<<< HEAD
 - Lists all scoring weight keys with their current values in editable number inputs.
 - Each row has a **Save** button to update that weight individually.
 - Weights include per-stat multipliers (kills, assists, deaths, GPM, observer wards, sentry wards, tower damage) and rarity bonus percentages (Common +0%, Rare +1%, Epic +2%, Legendary +3% by default). Rarity bonuses are stored as percentages and applied as a multiplier on top of raw fantasy points.
 - Changes take effect immediately for new calculations; use Recalculate to apply to historical data.
+=======
+- Read-only table of all configured weight keys and values (loaded from `GET /weights`).
+- Includes scoring stat weights, death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_common` … `rarity_legendary`), and modifier tuning keys (`modifier_count_*`, `modifier_bonus_pct`).
+- Operational changes are made outside the UI (typically `WEIGHTS_JSON` overrides merged on startup and/or direct DB edits to the `weights` table), then use **Recalculate** to backfill `player_match_stats.fantasy_points` if needed.
+>>>>>>> 25cc59e (Initial commit)

@@ -11,11 +11,20 @@ Source: `GET https://api.opendota.com/api/leagues/{league_id}/matchIds`
 For each match ID not already in the database:
 - Fetches full match data via `GET /api/matches/{match_id}`
 - Stores team IDs, match result (`radiant_win`), and start timestamp
+<<<<<<< HEAD
 - Stores per-player stats: kills, assists, deaths, GPM, observer wards, sentry wards, tower damage
+=======
+- Stores per-player stats: kills, deaths, GPM, observer wards, last hits, denies, towers destroyed, Roshan kills, teamfight participation, camps stacked, rune pickups, first blood, stuns
+>>>>>>> 25cc59e (Initial commit)
 - Calculates and stores fantasy points for each player using current scoring weights
 - Seeds the player's display name (`personaname`) into the `players` table if the player is new or had no name yet
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid
 
+<<<<<<< HEAD
+=======
+Note: the `assists`, `sen_placed`, and `tower_damage` columns are retained in the database for historical records but are no longer included in fantasy scoring.
+
+>>>>>>> 25cc59e (Initial commit)
 Rate limit handling: 429 responses trigger exponential backoff before retrying. Server errors (5xx) are retried up to 3 times.
 
 ### 2. Player Enrichment (OpenDota)

@@ -134,9 +134,18 @@ As a user, I want to spend a token to re-roll a card's stat modifiers so that I 
 
 ### Score Active Cards
 **Acceptance criteria**
+<<<<<<< HEAD
 - Uses Dota 2 match data
 - Only active (locked) cards score
 - No double counting of matches
+=======
+- Uses Dota 2 match data from OpenDota
+- Only active (locked) cards score
+- No double counting of matches
+- Scored stats (weight × value loop): `kills`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
+- Death scoring: separate clamped pool contribution (defaults: `death_pool = 3.0`, `death_deduction = 0.3`, floored at 0 — i.e. 0 deaths = 3.0 pts, then −0.3 per death)
+- Death formula params (`death_pool`, `death_deduction`) and all stat weights are configurable via the `weights` table (defaults/overrides from `backend/seed.py` + optional `WEIGHTS_JSON` on startup)
+>>>>>>> 25cc59e (Initial commit)
 
 ---
 
@@ -145,6 +154,11 @@ As a user, I want to spend a token to re-roll a card's stat modifiers so that I 
 - Rarity bonus applied on top of raw fantasy points (common +0%, rare +1%, epic +2%, legendary +3% by default)
 - Per-stat modifiers applied at scoring time based on the card's assigned modifiers
 - Rarity modifier percentages are configurable
+<<<<<<< HEAD
+=======
+- Modifiers can only target stats in `SCORING_STATS` plus `deaths` (DB-enforced); they amplify that stat's contribution (including amplifying the death-pool contribution when `stat_key = deaths`)
+- New draws and rerolls only assign modifiers from the current valid stat pool (13 stats: 12 scored stats + `deaths`)
+>>>>>>> 25cc59e (Initial commit)
 
 ---
 
