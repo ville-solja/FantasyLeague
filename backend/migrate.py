@@ -63,18 +63,12 @@ def run_migrations(engine) -> None:
             conn.commit()
             logger.info("Migration: users — added is_tester column")
 
-<<<<<<< HEAD
-        # player_match_stats: hero_id
-=======
         # player_match_stats: hero_id + expanded scoring columns
->>>>>>> 25cc59e (Initial commit)
         pms_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(player_match_stats)")).fetchall()]
         if "hero_id" not in pms_cols:
             conn.execute(text("ALTER TABLE player_match_stats ADD COLUMN hero_id INTEGER"))
             conn.commit()
             logger.info("Migration: player_match_stats — added hero_id column")
-<<<<<<< HEAD
-=======
         for _col, _col_type in [
             ("last_hits",               "INTEGER DEFAULT 0"),
             ("denies",                  "INTEGER DEFAULT 0"),
@@ -90,7 +84,6 @@ def run_migrations(engine) -> None:
                 conn.execute(text(f"ALTER TABLE player_match_stats ADD COLUMN {_col} {_col_type}"))
                 conn.commit()
                 logger.info("Migration: player_match_stats — added %s column", _col)
->>>>>>> 25cc59e (Initial commit)
 
         # cards: generation
         card_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()]
@@ -107,13 +100,6 @@ def run_migrations(engine) -> None:
             conn.execute(text("ALTER TABLE teams ADD COLUMN logo_url TEXT"))
             conn.commit()
 
-<<<<<<< HEAD
-        # card_modifiers: add CHECK constraint via table rebuild
-        _cm_ddl = (conn.execute(text(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
-        )).scalar() or "")
-        if "ck_card_modifiers_stat_key" not in _cm_ddl:
-=======
         # card_modifiers: CHECK constraint — rebuild if missing or contains old stat keys
         _cm_ddl = (conn.execute(text(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
@@ -124,7 +110,7 @@ def run_migrations(engine) -> None:
             or "sen_placed" in _cm_ddl
         )
         if _needs_cm_rebuild:
->>>>>>> 25cc59e (Initial commit)
+            conn.execute(text("DROP TABLE IF EXISTS card_modifiers_new"))
             conn.execute(text("""
                 CREATE TABLE card_modifiers_new (
                     id        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -132,30 +118,28 @@ def run_migrations(engine) -> None:
                     stat_key  VARCHAR,
                     bonus_pct FLOAT,
                     CONSTRAINT ck_card_modifiers_stat_key
-<<<<<<< HEAD
-                        CHECK (stat_key IN ('kills','assists','deaths','gold_per_min',
-                                            'obs_placed','sen_placed','tower_damage'))
-=======
                         CHECK (stat_key IN (
                             'kills','deaths','gold_per_min','obs_placed',
                             'last_hits','denies','towers_killed','roshan_kills',
                             'teamfight_participation','camps_stacked','rune_pickups',
                             'firstblood_claimed','stuns'
                         ))
->>>>>>> 25cc59e (Initial commit)
                 )
             """))
-            conn.execute(text(
-                "INSERT INTO card_modifiers_new SELECT id, card_id, stat_key, bonus_pct FROM card_modifiers"
-            ))
+            conn.execute(text("""
+                INSERT INTO card_modifiers_new
+                SELECT id, card_id, stat_key, bonus_pct FROM card_modifiers
+                WHERE stat_key IN (
+                    'kills','deaths','gold_per_min','obs_placed',
+                    'last_hits','denies','towers_killed','roshan_kills',
+                    'teamfight_participation','camps_stacked','rune_pickups',
+                    'firstblood_claimed','stuns'
+                )
+            """))
             conn.execute(text("DROP TABLE card_modifiers"))
             conn.execute(text("ALTER TABLE card_modifiers_new RENAME TO card_modifiers"))
             conn.commit()
-<<<<<<< HEAD
-            logger.info("Migration: card_modifiers — added stat_key CHECK constraint")
-=======
             logger.info("Migration: card_modifiers — updated stat_key CHECK constraint")
->>>>>>> 25cc59e (Initial commit)
 
     # Indexes (all IF NOT EXISTS — safe to repeat)
     with engine.connect() as conn:
