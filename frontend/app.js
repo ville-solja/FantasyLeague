@@ -1491,11 +1491,7 @@ async function openPlayerModal(playerId) {
 
     if (!p.match_history.length) {
       document.getElementById("playerModalHistory").innerHTML =
-<<<<<<< HEAD
-        "<tr><td colspan='6' style='color:#444'>No matches yet</td></tr>";
-=======
         "<tr><td colspan='4' style='color:#444'>No matches yet</td></tr>";
->>>>>>> 25cc59e (Initial commit)
     } else {
       document.getElementById("playerModalHistory").innerHTML = p.match_history.map(m => {
         const date = m.start_time
@@ -1506,11 +1502,6 @@ async function openPlayerModal(playerId) {
           <td>${Number(m.fantasy_points).toFixed(1)}</td>
           <td>${m.kills}/${m.assists}/${m.deaths}</td>
           <td>${Math.round(m.gold_per_min)}</td>
-<<<<<<< HEAD
-          <td>${m.obs_placed + m.sen_placed}</td>
-          <td>${Math.round(m.tower_damage)}</td>
-=======
->>>>>>> 25cc59e (Initial commit)
         </tr>`;
       }).join("");
     }
@@ -1740,18 +1731,35 @@ async function loadHowToPlay() {
   const weights = await res.json();
   const byKey = Object.fromEntries(weights.map(w => [w.key, w]));
 
-  const statsKeys = ['kills', 'assists', 'deaths', 'gold_per_min', 'obs_placed', 'sen_placed', 'tower_damage'];
+  const statsKeys = [
+    'kills', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
+    'towers_killed', 'roshan_kills', 'teamfight_participation',
+    'camps_stacked', 'rune_pickups', 'firstblood_claimed', 'stuns',
+  ];
   const statsLabels = {
-    kills: 'Kills', assists: 'Assists', deaths: 'Deaths',
-    gold_per_min: 'Gold per minute', obs_placed: 'Observer wards',
-    sen_placed: 'Sentry wards', tower_damage: 'Tower damage',
+    kills:                   'Kills',
+    last_hits:               'Last hits',
+    denies:                  'Denies',
+    gold_per_min:            'Gold per minute',
+    obs_placed:              'Observer wards',
+    towers_killed:           'Towers killed',
+    roshan_kills:            'Roshan kills',
+    teamfight_participation: 'Teamfight participation (0–1)',
+    camps_stacked:           'Camps stacked',
+    rune_pickups:            'Rune pickups',
+    firstblood_claimed:      'First blood',
+    stuns:                   'Stun seconds',
   };
   const tbody = document.getElementById('howtoplay-stats-tbody');
   if (tbody) {
-    tbody.innerHTML = statsKeys.map(k => {
+    const rows = statsKeys.map(k => {
       const w = byKey[k];
       return `<tr><td>${statsLabels[k]}</td><td>${w ? w.value : '—'}</td></tr>`;
-    }).join('');
+    });
+    const pool = byKey['death_pool']?.value ?? 3.0;
+    const ded  = byKey['death_deduction']?.value ?? 0.3;
+    rows.push(`<tr><td>Deaths (survival bonus)</td><td>+${pool} at 0 deaths, −${ded} per death (min 0)</td></tr>`);
+    tbody.innerHTML = rows.join('');
   }
 
   const rarityKeys = ['rarity_common', 'rarity_rare', 'rarity_epic', 'rarity_legendary'];

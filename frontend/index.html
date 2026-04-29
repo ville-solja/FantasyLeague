@@ -106,11 +106,7 @@
     <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
     <div style="overflow-x:auto;">
       <table>
-<<<<<<< HEAD
-        <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th></tr></thead>
-=======
         <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th></tr></thead>
->>>>>>> 25cc59e (Initial commit)
         <tbody id="playerModalHistory"></tbody>
       </table>
     </div>
@@ -452,7 +448,7 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Scoring &amp; Modifiers</h2>
 
-      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Fantasy points are calculated per match from raw in-game stats. Each stat is multiplied by its weight and the results are summed.</p>
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Fantasy points are calculated per match from raw in-game stats. Most stats are multiplied by a weight and summed. Deaths use a <strong>survival bonus pool</strong>: you start with a fixed point reward for surviving, reduced by a set amount per death — never going below zero.</p>
 
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
 

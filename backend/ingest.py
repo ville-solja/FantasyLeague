@@ -185,8 +185,6 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
             sen_placed=p.get("sen_placed", 0),
             tower_damage=p.get("tower_damage", 0),
             hero_id=p.get("hero_id"),
-<<<<<<< HEAD
-=======
             last_hits=p.get("last_hits", 0),
             denies=p.get("denies", 0),
             towers_killed=p.get("towers_killed", 0),
@@ -196,7 +194,6 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
             rune_pickups=p.get("rune_pickups", 0),
             firstblood_claimed=int(bool(p.get("firstblood_claimed"))),
             stuns=float(p.get("stuns") or 0),
->>>>>>> 25cc59e (Initial commit)
             fantasy_points=fantasy_score(p, weights)
         )
         db.add(stat)
