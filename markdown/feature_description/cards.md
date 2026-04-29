@@ -13,7 +13,11 @@ Each player has four cards in the deck with different rarities. In API responses
 | Epic | 2 | +2% | 2 |
 | Legendary | 1 | +3% | 3 |
 
+<<<<<<< HEAD
 **Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations (e.g. +1% means the total is multiplied by 1.01). It is configurable in the admin panel under Scoring Weights (`rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`).
+=======
+**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after per-stat scoring + modifiers (e.g. +1% means the total is multiplied by 1.01). It is stored as `rarity_common` / `rarity_rare` / `rarity_epic` / `rarity_legendary` rows in the `weights` table (surfaced read-only in the Admin tab).
+>>>>>>> 25cc59e (Initial commit)
 
 ## Drawing Cards
 
@@ -38,6 +42,7 @@ The deck is shared across all users. Each card can only be owned by one user at 
 
 ## Scoring
 
+<<<<<<< HEAD
 Fantasy points for a card are derived from the real-life player's match stats during the locked week:
 
 ```
@@ -51,6 +56,27 @@ points = kills × kill_weight
 ```
 
 Weights are configured by the admin under **Scoring Weights** in the admin panel. Changes apply to future recalculations only.
+=======
+Fantasy points for a card are derived from the real-life player's match stats during the locked week.
+
+**Per-match base score** (stored on `player_match_stats.fantasy_points` as `fantasy_score(stats, weights)` in `backend/scoring.py`):
+
+```
+base_points = Σ weight[stat] × stat_value   for stat in SCORING_STATS
+           + max(0, death_pool − deaths × death_deduction)
+```
+
+`SCORING_STATS` is the canonical list of stats that participate in the weight loop; deaths use the separate pool/deduction weights (`death_pool`, `death_deduction`).
+
+**Per-card score for a week** (computed when aggregating roster points):
+
+```
+card_base = card_fantasy_score(stat_sums, weights, card_modifiers)   # applies per-stat modifier bonus_pct
+card_points = card_base × (1 + rarity_bonus_for_card_type)
+```
+
+Weights live in the `weights` table (defaults seeded from `backend/seed.py`, optional `WEIGHTS_JSON` overrides merged on startup). The Admin tab shows the current values read-only; use **Recalculate** after changing weights if you need historical `player_match_stats.fantasy_points` rewritten.
+>>>>>>> 25cc59e (Initial commit)
 
 ## Card Modifiers
 
@@ -58,6 +84,7 @@ Card modifiers are per-stat bonuses assigned to a card at draw time. They boost 
 
 ### How modifiers work
 
+<<<<<<< HEAD
 Each modifier targets one of the scoring stats (kills, assists, deaths, GPM, observer wards, sentry wards, tower damage) and carries a `bonus_pct` percentage value.
 
 The modifier always benefits the card owner:
@@ -65,10 +92,27 @@ The modifier always benefits the card owner:
   `contribution = stat_value × weight × (1 + bonus_pct / 100)`
 - For **negative-weight stats** (deaths):  
   `contribution = stat_value × weight × (1 - bonus_pct / 100)` — the penalty is reduced
+=======
+Each modifier targets one stat in `SCORING_STATS` plus optionally `deaths` (modifiers on `deaths` amplify the death-pool contribution, not a `deaths × weight` term — there is no per-death linear weight in scoring).
+
+At scoring time (`card_fantasy_score` in `backend/scoring.py`), for each `stat` in `SCORING_STATS`:
+
+```
+contribution = stat_value × weight × (1 + bonus_pct / 100)
+```
+
+Death pool points use:
+
+```
+death_points = max(0, death_pool − deaths × death_deduction)
+total += death_points × (1 + bonus_pct_on_deaths / 100)
+```
+>>>>>>> 25cc59e (Initial commit)
 
 ### Full scoring formula with modifiers
 
 ```
+<<<<<<< HEAD
 For each stat:
   base = stat_value × stat_weight
   if modifier present and weight > 0:  points += base × (1 + modifier_bonus_pct / 100)
@@ -77,6 +121,10 @@ For each stat:
 
 After summing all stats:
   card_points = stat_total × (1 + rarity_bonus_pct / 100)
+=======
+base = card_fantasy_score(stat_sums, weights, card_modifiers)
+card_points = base × (1 + rarity_bonus_pct / 100)
+>>>>>>> 25cc59e (Initial commit)
 ```
 
 ### Modifier assignment at draw time
@@ -84,10 +132,17 @@ After summing all stats:
 When a card is drawn from the deck, modifiers are randomly assigned:
 
 1. **How many**: determined by `modifier_count_<rarity>` weight (e.g. `modifier_count_rare = 1` → 1 modifier on a rare card).
+<<<<<<< HEAD
 2. **Which stats**: randomly sampled without replacement from the 7 scoring stats.
 3. **Bonus %**: all modifiers on a card share the same `modifier_bonus_pct` value.
 
 All three settings are configurable in the admin panel under Scoring Weights.
+=======
+2. **Which stats**: randomly sampled without replacement from the eligible stat pool (`SCORING_STATS` + `deaths`).
+3. **Bonus %**: all modifiers on a card share the same `modifier_bonus_pct` value.
+
+All three settings are configurable via `weights` rows (same mechanism as scoring weights).
+>>>>>>> 25cc59e (Initial commit)
 
 ### Modifier visibility
 
@@ -143,7 +198,11 @@ The current system uses a single uniform `bonus_pct` for all modifiers. Future e
 - Special named modifiers with flavour text
 - Card-specific modifiers that affect only one player's known strengths
 
+<<<<<<< HEAD
 To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` present in `SCORING_STATS` (defined in `backend/scoring.py`) will be applied automatically.
+=======
+To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` in `SCORING_STATS` or `deaths` (and reflected in the DB check constraint in `backend/models.py`) will be applied automatically.
+>>>>>>> 25cc59e (Initial commit)
 
 ---
 

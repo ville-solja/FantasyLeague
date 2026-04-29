@@ -1453,7 +1453,11 @@ async function openPlayerModal(playerId) {
 
     if (!p.match_history.length) {
       document.getElementById("playerModalHistory").innerHTML =
+<<<<<<< HEAD
         "<tr><td colspan='6' style='color:#444'>No matches yet</td></tr>";
+=======
+        "<tr><td colspan='4' style='color:#444'>No matches yet</td></tr>";
+>>>>>>> 25cc59e (Initial commit)
     } else {
       document.getElementById("playerModalHistory").innerHTML = p.match_history.map(m => {
         const date = m.start_time
@@ -1464,8 +1468,11 @@ async function openPlayerModal(playerId) {
           <td>${Number(m.fantasy_points).toFixed(1)}</td>
           <td>${m.kills}/${m.assists}/${m.deaths}</td>
           <td>${Math.round(m.gold_per_min)}</td>
+<<<<<<< HEAD
           <td>${m.obs_placed + m.sen_placed}</td>
           <td>${Math.round(m.tower_damage)}</td>
+=======
+>>>>>>> 25cc59e (Initial commit)
         </tr>`;
       }).join("");
     }

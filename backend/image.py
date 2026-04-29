@@ -64,6 +64,7 @@ _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
 
 # Human-readable stat names (must match frontend roster copy / SCORING_STATS)
 _STAT_LABELS_CARD = {
+<<<<<<< HEAD
     "kills": "Kills",
     "assists": "Assists",
     "deaths": "Deaths",
@@ -71,6 +72,22 @@ _STAT_LABELS_CARD = {
     "obs_placed": "Observer wards",
     "sen_placed": "Sentry wards",
     "tower_damage": "Tower damage",
+=======
+    # Must stay aligned with `SCORING_STATS` + deaths (card modifier pool)
+    "kills": "Kills",
+    "last_hits": "Last hits",
+    "denies": "Denies",
+    "deaths": "Deaths",
+    "gold_per_min": "GPM",
+    "obs_placed": "Observer wards",
+    "towers_killed": "Towers",
+    "roshan_kills": "Roshan",
+    "teamfight_participation": "Teamfight",
+    "camps_stacked": "Camps stacked",
+    "rune_pickups": "Runes",
+    "firstblood_claimed": "First blood",
+    "stuns": "Stuns",
+>>>>>>> 25cc59e (Initial commit)
 }
 
 _FONT_PATHS = [

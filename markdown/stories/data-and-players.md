@@ -11,7 +11,12 @@
 
 ### Import Match Data
 **Acceptance criteria**
+<<<<<<< HEAD
 - Match data (kills, assists, deaths, GPM, wards, tower damage) fetched per player per match
+=======
+- Match data fetched per player per match includes the full stored stat set used by the app (core box-score fields like kills/assists/deaths/GPM plus expanded stats like last hits/denies/towers/Roshan/teamfight participation/camps stacked/runes/first blood/stuns, plus observer/sentry wards placed and tower damage where available)
+- Only the scoring stat subset participates in fantasy scoring; non-scoring stored fields (e.g. assists, sentry wards, tower damage) are retained for display/profile context but do not contribute points
+>>>>>>> 25cc59e (Initial commit)
 - Fantasy points calculated and stored per player-match record
 
 ---
@@ -42,7 +47,12 @@ As an operator, I want the server to automatically fetch fresh match data when i
 As a user, I want to see key performance stats and an optional AI bio for each player in the player browser so I can understand who they are beyond raw match scores.
 
 **Acceptance criteria**
+<<<<<<< HEAD
 - Player detail modal shows: Kanaliiga match count, avg fantasy points, avg K/D/A, avg GPM, avg wards/match, best match score
+=======
+- Player detail modal shows: Kanaliiga match count, avg fantasy points, avg K/D/A, avg GPM, avg wards/match (profile/enrichment context), best match score
+- Match history table shows fantasy points, K/A/D, and GPM (not every stored raw stat column)
+>>>>>>> 25cc59e (Initial commit)
 - Hero section shows top career heroes, tournament heroes played, and recent pub heroes (up to 5 per category)
 - AI bio appears if generated; section hidden entirely if no profile exists
 - Stats block visible even when `ANTHROPIC_API_KEY` is unset (bio omitted)

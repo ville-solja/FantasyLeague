@@ -1,0 +1,29 @@
+{
+  "kills": 0.3,
+  "last_hits": 0.003,
+  "denies": 0.0003,
+  "gold_per_min": 0.002,
+  "obs_placed": 0.5,
+  "towers_killed": 1.0,
+  "roshan_kills": 1.0,
+  "teamfight_participation": 3.0,
+  "camps_stacked": 0.5,
+  "rune_pickups": 0.25,
+  "firstblood_claimed": 4.0,
+  "stuns": 0.05,
+
+  "death_pool": 3.0,
+  "death_deduction": 0.3,
+
+  "rarity_common": 0.0,
+  "rarity_rare": 1.0,
+  "rarity_epic": 2.0,
+  "rarity_legendary": 3.0,
+
+  "modifier_count_common": 0.0,
+  "modifier_count_rare": 1.0,
+  "modifier_count_epic": 2.0,
+  "modifier_count_legendary": 3.0,
+
+  "modifier_bonus_pct": 10.0
+}
