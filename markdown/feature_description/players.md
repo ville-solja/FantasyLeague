@@ -53,15 +53,39 @@ Returns full detail for a single player, including a complete per-match history 
       "match_id": 8001,
       "start_time": 1741560000,
       "fantasy_points": 52.1,
+<<<<<<< HEAD
       "kills": 12, "assists": 8, "deaths": 1,
       "gold_per_min": 720.0,
       "obs_placed": 0, "sen_placed": 0, "tower_damage": 5400,
       "team_id": 42, "team_name": "SomeTeam"
+=======
+      "kills": 12,
+      "assists": 8,
+      "deaths": 1,
+      "gold_per_min": 720.0,
+      "obs_placed": 2,
+      "last_hits": 310,
+      "denies": 10,
+      "towers_killed": 1,
+      "roshan_kills": 0,
+      "teamfight_participation": 0.58,
+      "camps_stacked": 3,
+      "rune_pickups": 2,
+      "firstblood_claimed": 0,
+      "stuns": 38.2,
+      "team_id": 42,
+      "team_name": "SomeTeam"
+>>>>>>> 25cc59e (Initial commit)
     }
   ]
 }
 ```
 
+<<<<<<< HEAD
+=======
+Note: additional columns may exist on `player_match_stats` in the database for display/context (e.g. `sen_placed`, `tower_damage`), but `GET /players/{player_id}` only returns the fields selected by the API (the scoring stat set + assists + observer wards + team metadata).
+
+>>>>>>> 25cc59e (Initial commit)
 Returns 404 if the player has not been ingested.
 
 ---

@@ -1,5 +1,9 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint
 from database import Base
+<<<<<<< HEAD
+=======
+from scoring import SCORING_STATS
+>>>>>>> 25cc59e (Initial commit)
 
 
 class Player(Base):
@@ -41,6 +45,20 @@ class PlayerMatchStats(Base):
     tower_damage = Column(Integer, default=0)
     hero_id      = Column(Integer, nullable=True)
 
+<<<<<<< HEAD
+=======
+    # Expanded scoring stats
+    last_hits               = Column(Integer, default=0)
+    denies                  = Column(Integer, default=0)
+    towers_killed           = Column(Integer, default=0)
+    roshan_kills            = Column(Integer, default=0)
+    teamfight_participation = Column(Float,   default=0.0)
+    camps_stacked           = Column(Integer, default=0)
+    rune_pickups            = Column(Integer, default=0)
+    firstblood_claimed      = Column(Integer, default=0)
+    stuns                   = Column(Float,   default=0.0)
+
+>>>>>>> 25cc59e (Initial commit)
 
 class Team(Base):
     __tablename__ = "teams"
@@ -61,7 +79,12 @@ class Card(Base):
     is_active = Column(Boolean, default=False)
 
 
+<<<<<<< HEAD
 _VALID_STAT_KEYS = "('kills','assists','deaths','gold_per_min','obs_placed','sen_placed','tower_damage')"
+=======
+_VALID_STAT_KEYS_LIST = list(SCORING_STATS) + ["deaths"]
+_VALID_STAT_KEYS = "(" + ",".join(f"'{k}'" for k in _VALID_STAT_KEYS_LIST) + ")"
+>>>>>>> 25cc59e (Initial commit)
 
 
 class CardModifier(Base):

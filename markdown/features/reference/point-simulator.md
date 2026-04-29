@@ -25,12 +25,28 @@ Runs a fantasy score simulation for every player in the specified match.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `kills` | float | DB default | Points awarded per kill |
+<<<<<<< HEAD
 | `assists` | float | DB default | Points awarded per assist |
 | `deaths` | float | DB default | Points per death (typically negative) |
 | `gold_per_min` | float | DB default | Points per GPM |
 | `obs_placed` | float | DB default | Points per observer ward placed |
 | `sen_placed` | float | DB default | Points per sentry ward placed |
 | `tower_damage` | float | DB default | Points per tower damage dealt |
+=======
+| `last_hits` | float | DB default | Points per last hit |
+| `denies` | float | DB default | Points per deny |
+| `gold_per_min` | float | DB default | Points per GPM |
+| `obs_placed` | float | DB default | Points per observer ward placed |
+| `towers_killed` | float | DB default | Points per tower destroyed |
+| `roshan_kills` | float | DB default | Points per Roshan kill |
+| `teamfight_participation` | float | DB default | Participation scalar where `1.0 = 100%` |
+| `camps_stacked` | float | DB default | Points per camp stacked |
+| `rune_pickups` | float | DB default | Points per rune picked up |
+| `firstblood_claimed` | float | DB default | Points for claiming first blood (0/1) |
+| `stuns` | float | DB default | Points per second of stuns applied |
+| `death_pool` | float | DB default | Base points awarded for 0 deaths |
+| `death_deduction` | float | DB default | Points deducted per death (floored at 0) |
+>>>>>>> 25cc59e (Initial commit)
 
 Any field that is omitted falls back to the current season weight stored in the database. Only the stats you want to test need to be included.
 
@@ -40,6 +56,7 @@ Any field that is omitted falls back to the current season weight stored in the 
 {
   "match_id": 8123456789,
   "weights_used": {
+<<<<<<< HEAD
     "kills": 3.0,
     "assists": 2.0,
     "deaths": -1.5,
@@ -47,6 +64,22 @@ Any field that is omitted falls back to the current season weight stored in the 
     "obs_placed": 1.0,
     "sen_placed": 1.5,
     "tower_damage": 0.002
+=======
+    "kills": 0.3,
+    "last_hits": 0.003,
+    "denies": 0.0003,
+    "gold_per_min": 0.002,
+    "obs_placed": 0.5,
+    "towers_killed": 1.0,
+    "roshan_kills": 1.0,
+    "teamfight_participation": 3.0,
+    "camps_stacked": 0.5,
+    "rune_pickups": 0.25,
+    "firstblood_claimed": 4.0,
+    "stuns": 0.05,
+    "death_pool": 3.0,
+    "death_deduction": 0.3
+>>>>>>> 25cc59e (Initial commit)
   },
   "players": [
     {
@@ -56,12 +89,27 @@ Any field that is omitted falls back to the current season weight stored in the 
       "fantasy_points": 34.5,
       "stats": {
         "kills": 8,
+<<<<<<< HEAD
         "assists": 12,
         "deaths": 2,
         "gold_per_min": 650.0,
         "obs_placed": 3,
         "sen_placed": 5,
         "tower_damage": 4200
+=======
+        "deaths": 2,
+        "last_hits": 260,
+        "denies": 10,
+        "gold_per_min": 650.0,
+        "obs_placed": 3,
+        "towers_killed": 1,
+        "roshan_kills": 0,
+        "teamfight_participation": 0.6,
+        "camps_stacked": 2,
+        "rune_pickups": 4,
+        "firstblood_claimed": 0,
+        "stuns": 10.0
+>>>>>>> 25cc59e (Initial commit)
       }
     }
   ]
@@ -88,12 +136,27 @@ Players are returned sorted by `fantasy_points` descending. The `weights_used` o
 
 ```
 fantasy_points = kills × kills_weight
+<<<<<<< HEAD
                + assists × assists_weight
                + deaths × deaths_weight
                + gold_per_min × gpm_weight
                + obs_placed × obs_weight
                + sen_placed × sen_weight
                + tower_damage × tower_dmg_weight
+=======
+               + last_hits × last_hits_weight
+               + denies × denies_weight
+               + gold_per_min × gpm_weight
+               + obs_placed × obs_weight
+               + towers_killed × tower_weight
+               + roshan_kills × roshan_weight
+               + teamfight_participation × participation_weight   (where 1.0 = 100%)
+               + camps_stacked × stack_weight
+               + rune_pickups × rune_weight
+               + firstblood_claimed × firstblood_weight
+               + stuns × stun_weight
+               + max(0, death_pool − deaths × death_deduction)
+>>>>>>> 25cc59e (Initial commit)
 ```
 
 ## Configuring season weights
@@ -101,7 +164,11 @@ fantasy_points = kills × kills_weight
 Weights used as defaults in the simulator (and in live scoring) are set via the `WEIGHTS_JSON` environment variable. Changes take effect on the next restart. Example:
 
 ```
+<<<<<<< HEAD
 WEIGHTS_JSON={"kills": 3.0, "deaths": -1.5, "gold_per_min": 0.025}
+=======
+WEIGHTS_JSON={"kills": 0.3, "death_pool": 3.0, "death_deduction": 0.3}
+>>>>>>> 25cc59e (Initial commit)
 ```
 
 Keys not present in `WEIGHTS_JSON` retain their hardcoded defaults. See `backend/seed.py` for the full default value list.

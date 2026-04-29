@@ -155,12 +155,28 @@ class MatchWeekBody(BaseModel):
 
 class SimulateBody(BaseModel):
     kills: float | None = None
+<<<<<<< HEAD
     assists: float | None = None
     deaths: float | None = None
     gold_per_min: float | None = None
     obs_placed: float | None = None
     sen_placed: float | None = None
     tower_damage: float | None = None
+=======
+    last_hits: float | None = None
+    denies: float | None = None
+    gold_per_min: float | None = None
+    obs_placed: float | None = None
+    towers_killed: float | None = None
+    roshan_kills: float | None = None
+    teamfight_participation: float | None = None
+    camps_stacked: float | None = None
+    rune_pickups: float | None = None
+    firstblood_claimed: float | None = None
+    stuns: float | None = None
+    death_pool: float | None = None
+    death_deduction: float | None = None
+>>>>>>> 25cc59e (Initial commit)
 
 
 def get_current_user(request: Request) -> dict:
@@ -204,11 +220,22 @@ def _load_weights(db) -> tuple[dict, dict]:
     return all_weights, rarity
 
 
+<<<<<<< HEAD
 def _stat_sums_from_row(row) -> dict:
     """Extract SCORING_STATS values from a SQLAlchemy Row or dict."""
     if hasattr(row, "_mapping"):
         return {stat: row._mapping.get(stat, 0) or 0 for stat in SCORING_STATS}
     return {stat: getattr(row, stat, 0) or 0 for stat in SCORING_STATS}
+=======
+_SCORED_STAT_COLS = list(SCORING_STATS) + ["deaths"]
+
+
+def _stat_sums_from_row(row) -> dict:
+    """Extract scored stat values (SCORING_STATS + deaths) from a SQLAlchemy Row or dict."""
+    if hasattr(row, "_mapping"):
+        return {stat: row._mapping.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
+    return {stat: getattr(row, stat, 0) or 0 for stat in _SCORED_STAT_COLS}
+>>>>>>> 25cc59e (Initial commit)
 
 
 def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity: dict, mods: dict) -> float:
@@ -230,7 +257,11 @@ def _assign_modifiers(db, card: Card, weights: dict):
         return
     bonus_pct = weights.get("modifier_bonus_pct", 10.0)
     # Pick `count` distinct stats to boost (capped at number of available stats)
+<<<<<<< HEAD
     chosen = random.sample(SCORING_STATS, min(count, len(SCORING_STATS)))
+=======
+    chosen = random.sample(_SCORED_STAT_COLS, min(count, len(_SCORED_STAT_COLS)))
+>>>>>>> 25cc59e (Initial commit)
     for stat in chosen:
         db.add(CardModifier(card_id=card.id, stat_key=stat, bonus_pct=bonus_pct))
 
@@ -530,7 +561,11 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             f"(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
             f"THEN s.{col} ELSE 0 END), 0) as {col}"
         )
+<<<<<<< HEAD
     stat_cols = ",\n                   ".join(_week_stat_case(col) for col in SCORING_STATS)
+=======
+    stat_cols = ",\n                   ".join(_week_stat_case(col) for col in _SCORED_STAT_COLS)
+>>>>>>> 25cc59e (Initial commit)
 
     if week and week.is_locked:
         results = db.execute(text(f"""
@@ -578,7 +613,11 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     for c in cards:
         mods = modifiers_map.get(c["id"], {})
         c["modifiers"] = _format_modifiers(mods)
+<<<<<<< HEAD
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in SCORING_STATS}
+=======
+        stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
+>>>>>>> 25cc59e (Initial commit)
         c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods)
 
     active.sort(key=lambda c: c["total_points"], reverse=True)
@@ -589,6 +628,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
     season_pts_rows = db.execute(text("""
         SELECT c.id as card_id, c.card_type,
+<<<<<<< HEAD
                COALESCE(SUM(s.kills), 0)        as kills,
                COALESCE(SUM(s.assists), 0)      as assists,
                COALESCE(SUM(s.deaths), 0)       as deaths,
@@ -596,6 +636,21 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                COALESCE(SUM(s.obs_placed), 0)   as obs_placed,
                COALESCE(SUM(s.sen_placed), 0)   as sen_placed,
                COALESCE(SUM(s.tower_damage), 0) as tower_damage
+=======
+               COALESCE(SUM(s.deaths), 0)                    as deaths,
+               COALESCE(SUM(s.kills), 0)                     as kills,
+               COALESCE(SUM(s.last_hits), 0)                 as last_hits,
+               COALESCE(SUM(s.denies), 0)                    as denies,
+               COALESCE(SUM(s.gold_per_min), 0)              as gold_per_min,
+               COALESCE(SUM(s.obs_placed), 0)                as obs_placed,
+               COALESCE(SUM(s.towers_killed), 0)             as towers_killed,
+               COALESCE(SUM(s.roshan_kills), 0)              as roshan_kills,
+               COALESCE(SUM(s.teamfight_participation), 0)   as teamfight_participation,
+               COALESCE(SUM(s.camps_stacked), 0)             as camps_stacked,
+               COALESCE(SUM(s.rune_pickups), 0)              as rune_pickups,
+               COALESCE(SUM(s.firstblood_claimed), 0)        as firstblood_claimed,
+               COALESCE(SUM(s.stuns), 0)                     as stuns
+>>>>>>> 25cc59e (Initial commit)
         FROM weekly_roster_entries wre
         JOIN weeks wk ON wk.id = wre.week_id
         JOIN cards c ON c.id = wre.card_id
@@ -804,8 +859,15 @@ def get_player(player_id: int, db=Depends(get_db)):
 
     stats = db.execute(text("""
         SELECT s.match_id, m.start_time, s.fantasy_points,
+<<<<<<< HEAD
                s.kills, s.assists, s.deaths, s.gold_per_min,
                s.obs_placed, s.sen_placed, s.tower_damage,
+=======
+               s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
+               s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
+               s.teamfight_participation, s.camps_stacked, s.rune_pickups,
+               s.firstblood_claimed, s.stuns,
+>>>>>>> 25cc59e (Initial commit)
                t.id as team_id, t.name as team_name
         FROM player_match_stats s
         LEFT JOIN matches m ON m.match_id = s.match_id
@@ -967,8 +1029,13 @@ _SIMULATE_DOCS = {
     "endpoint": "POST /simulate/{match_id}",
     "description": (
         "Simulate fantasy point scores for all players in a given match using custom "
+<<<<<<< HEAD
         "per-stat weights. Any stat weight not provided falls back to the current "
         "season default stored in the database. No authentication required."
+=======
+        "per-stat weights. Any weight not provided falls back to the current season "
+        "default stored in the database. No authentication required."
+>>>>>>> 25cc59e (Initial commit)
     ),
     "path_parameters": {
         "match_id": "integer — OpenDota match ID that has been ingested into the system",
@@ -976,6 +1043,7 @@ _SIMULATE_DOCS = {
     "request_body": {
         "content_type": "application/json",
         "fields": {
+<<<<<<< HEAD
             "kills":        "float | omit  — points per kill (default from DB)",
             "assists":      "float | omit  — points per assist (default from DB)",
             "deaths":       "float | omit  — points per death, typically negative (default from DB)",
@@ -988,6 +1056,27 @@ _SIMULATE_DOCS = {
             "kills": 2.0,
             "deaths": -1.5,
             "gold_per_min": 0.05,
+=======
+            "kills":                    "float | omit — points per kill (default from DB)",
+            "last_hits":                "float | omit — points per last hit (default from DB)",
+            "denies":                   "float | omit — points per deny (default from DB)",
+            "gold_per_min":             "float | omit — points per GPM (default from DB)",
+            "obs_placed":               "float | omit — points per observer ward placed (default from DB)",
+            "towers_killed":            "float | omit — points per tower destroyed (default from DB)",
+            "roshan_kills":             "float | omit — points per Roshan kill (default from DB)",
+            "teamfight_participation":  "float | omit — points for 100% teamfight participation (default from DB)",
+            "camps_stacked":            "float | omit — points per camp stacked (default from DB)",
+            "rune_pickups":             "float | omit — points per rune picked up (default from DB)",
+            "firstblood_claimed":       "float | omit — points for claiming first blood (default from DB)",
+            "stuns":                    "float | omit — points per second of stuns applied (default from DB)",
+            "death_pool":               "float | omit — base points awarded for 0 deaths (default from DB)",
+            "death_deduction":          "float | omit — points deducted per death (default from DB)",
+        },
+        "example": {
+            "kills": 0.5,
+            "death_pool": 5.0,
+            "death_deduction": 0.5,
+>>>>>>> 25cc59e (Initial commit)
         },
     },
     "response": {
@@ -1001,12 +1090,27 @@ _SIMULATE_DOCS = {
                 "fantasy_points": "float — score under the provided weights",
                 "stats": {
                     "kills": "integer",
+<<<<<<< HEAD
                     "assists": "integer",
                     "deaths": "integer",
                     "gold_per_min": "float",
                     "obs_placed": "integer",
                     "sen_placed": "integer",
                     "tower_damage": "integer",
+=======
+                    "deaths": "integer",
+                    "last_hits": "integer",
+                    "denies": "integer",
+                    "gold_per_min": "float",
+                    "obs_placed": "integer",
+                    "towers_killed": "integer",
+                    "roshan_kills": "integer",
+                    "teamfight_participation": "float",
+                    "camps_stacked": "integer",
+                    "rune_pickups": "integer",
+                    "firstblood_claimed": "integer",
+                    "stuns": "float",
+>>>>>>> 25cc59e (Initial commit)
                 },
             }
         ],
@@ -1039,17 +1143,32 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
 
+<<<<<<< HEAD
     # Load DB weights and apply overrides for scoring stats only
     db_weights = {w.key: w.value for w in db.query(Weight).all()}
     overrides = {k: v for k, v in body.model_dump().items() if v is not None}
     weights_used = {stat: overrides.get(stat, db_weights.get(stat, 0.0)) for stat in SCORING_STATS}
+=======
+    # Load DB weights and apply overrides for all scoring weight keys
+    db_weights = {w.key: w.value for w in db.query(Weight).all()}
+    overrides = {k: v for k, v in body.model_dump().items() if v is not None}
+    all_weight_keys = list(SCORING_STATS) + ["death_pool", "death_deduction"]
+    weights_used = {k: overrides.get(k, db_weights.get(k, 0.0)) for k in all_weight_keys}
+>>>>>>> 25cc59e (Initial commit)
 
     # Fetch all player stats for this match with player and team names
     rows = db.execute(text("""
         SELECT s.player_id, p.name as player_name,
                t.name as team_name,
+<<<<<<< HEAD
                s.kills, s.assists, s.deaths,
                s.gold_per_min, s.obs_placed, s.sen_placed, s.tower_damage
+=======
+               s.kills, s.deaths, s.gold_per_min, s.obs_placed,
+               s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
+               s.teamfight_participation, s.camps_stacked, s.rune_pickups,
+               s.firstblood_claimed, s.stuns
+>>>>>>> 25cc59e (Initial commit)
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
         LEFT JOIN teams t ON t.id = s.team_id
@@ -1060,12 +1179,27 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
     for r in rows:
         stats = {
             "kills": r.kills or 0,
+<<<<<<< HEAD
             "assists": r.assists or 0,
             "deaths": r.deaths or 0,
             "gold_per_min": r.gold_per_min or 0,
             "obs_placed": r.obs_placed or 0,
             "sen_placed": r.sen_placed or 0,
             "tower_damage": r.tower_damage or 0,
+=======
+            "deaths": r.deaths or 0,
+            "gold_per_min": r.gold_per_min or 0,
+            "obs_placed": r.obs_placed or 0,
+            "last_hits": r.last_hits or 0,
+            "denies": r.denies or 0,
+            "towers_killed": r.towers_killed or 0,
+            "roshan_kills": r.roshan_kills or 0,
+            "teamfight_participation": r.teamfight_participation or 0.0,
+            "camps_stacked": r.camps_stacked or 0,
+            "rune_pickups": r.rune_pickups or 0,
+            "firstblood_claimed": r.firstblood_claimed or 0,
+            "stuns": r.stuns or 0.0,
+>>>>>>> 25cc59e (Initial commit)
         }
         players.append({
             "player_id": r.player_id,
@@ -1124,6 +1258,7 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
         p = {
+<<<<<<< HEAD
             "kills": stat.kills,
             "assists": stat.assists,
             "deaths": stat.deaths,
@@ -1131,6 +1266,21 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
             "obs_placed": stat.obs_placed,
             "sen_placed": stat.sen_placed,
             "tower_damage": stat.tower_damage,
+=======
+            "kills": stat.kills or 0,
+            "deaths": stat.deaths or 0,
+            "gold_per_min": stat.gold_per_min or 0,
+            "obs_placed": stat.obs_placed or 0,
+            "last_hits": stat.last_hits or 0,
+            "denies": stat.denies or 0,
+            "towers_killed": stat.towers_killed or 0,
+            "roshan_kills": stat.roshan_kills or 0,
+            "teamfight_participation": stat.teamfight_participation or 0.0,
+            "camps_stacked": stat.camps_stacked or 0,
+            "rune_pickups": stat.rune_pickups or 0,
+            "firstblood_claimed": stat.firstblood_claimed or 0,
+            "stuns": stat.stuns or 0.0,
+>>>>>>> 25cc59e (Initial commit)
         }
         stat.fantasy_points = fantasy_score(p, weights)
     _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
@@ -1338,7 +1488,13 @@ def _leaderboard_rows(db, rows) -> list[dict]:
     """Compute leaderboard totals using per-stat card_fantasy_score().
 
     rows must have: user_id, username, card_id, card_type, player_name,
+<<<<<<< HEAD
                     kills, assists, deaths, gold_per_min, obs_placed, sen_placed, tower_damage
+=======
+                    deaths, kills, last_hits, denies, gold_per_min, obs_placed,
+                    towers_killed, roshan_kills, teamfight_participation,
+                    camps_stacked, rune_pickups, firstblood_claimed, stuns
+>>>>>>> 25cc59e (Initial commit)
     """
     weights, rarity = _load_weights(db)
     card_ids = list({r.card_id for r in rows if r.card_id})
@@ -1380,6 +1536,7 @@ def season_leaderboard(db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
+<<<<<<< HEAD
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills        ELSE 0 END), 0) as kills,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.assists      ELSE 0 END), 0) as assists,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths       ELSE 0 END), 0) as deaths,
@@ -1387,6 +1544,21 @@ def season_leaderboard(db=Depends(get_db)):
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed   ELSE 0 END), 0) as obs_placed,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.sen_placed   ELSE 0 END), 0) as sen_placed,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.tower_damage ELSE 0 END), 0) as tower_damage
+=======
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.denies                  ELSE 0 END), 0) as denies,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min            ELSE 0 END), 0) as gold_per_min,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed              ELSE 0 END), 0) as obs_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.towers_killed           ELSE 0 END), 0) as towers_killed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.roshan_kills            ELSE 0 END), 0) as roshan_kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.teamfight_participation ELSE 0 END), 0) as teamfight_participation,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.camps_stacked           ELSE 0 END), 0) as camps_stacked,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.rune_pickups            ELSE 0 END), 0) as rune_pickups,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.firstblood_claimed      ELSE 0 END), 0) as firstblood_claimed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.stuns                   ELSE 0 END), 0) as stuns
+>>>>>>> 25cc59e (Initial commit)
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
         LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
@@ -1413,6 +1585,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
+<<<<<<< HEAD
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills        ELSE 0 END), 0) as kills,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.assists      ELSE 0 END), 0) as assists,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths       ELSE 0 END), 0) as deaths,
@@ -1420,6 +1593,21 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed   ELSE 0 END), 0) as obs_placed,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.sen_placed   ELSE 0 END), 0) as sen_placed,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.tower_damage ELSE 0 END), 0) as tower_damage
+=======
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.denies                  ELSE 0 END), 0) as denies,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min            ELSE 0 END), 0) as gold_per_min,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed              ELSE 0 END), 0) as obs_placed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.towers_killed           ELSE 0 END), 0) as towers_killed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.roshan_kills            ELSE 0 END), 0) as roshan_kills,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.teamfight_participation ELSE 0 END), 0) as teamfight_participation,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.camps_stacked           ELSE 0 END), 0) as camps_stacked,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.rune_pickups            ELSE 0 END), 0) as rune_pickups,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.firstblood_claimed      ELSE 0 END), 0) as firstblood_claimed,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.stuns                   ELSE 0 END), 0) as stuns
+>>>>>>> 25cc59e (Initial commit)
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
