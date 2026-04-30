@@ -16,7 +16,7 @@ No backend changes are involved. The feature is purely a frontend interaction ch
 |---|---|
 | `frontend/index.html` | `#headerUserLabel` changed from `<span>` to `<button class="ghost header-profile-btn" onclick="switchTab('profile')">` |
 | `frontend/style.css` | `.header-profile-btn` — display font, bold weight, `0.04em` tracking, `4px 10px` padding |
-| `frontend/app.js` | `applyAuthState()` toggles `userLabel.style.display` alongside `textContent` |
+| `frontend/app-auth.js` | `applyAuthState()` toggles `userLabel.style.display` alongside `textContent` |
 
 ---
 
