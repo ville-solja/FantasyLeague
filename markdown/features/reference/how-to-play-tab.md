@@ -23,7 +23,7 @@ Explains the broadcaster and viewer flows:
 
 ### Scoring & Modifiers
 Live weight tables loaded from `GET /weights`:
-- **Stat weights table** — seven stats (Kills, Assists, Deaths, GPM, Observer Wards, Sentry Wards, Tower Damage) with current point-per-unit values
+- **Stat weights table** — twelve scoring stats (Kills, Last Hits, Denies, GPM, Observer Wards, Towers, Roshan, Teamfight Participation, Camps Stacked, Rune Pickups, First Blood, Stun Seconds) plus the deaths survival bonus row, with current values
 - **Rarity bonus table** — flat % multiplier applied to the card's total score, by rarity (Common through Legendary)
 - **Modifier table** — how many per-stat modifiers each rarity receives at draw time, and the bonus % each applies
 - **MVP bonus** — the current `mvp_bonus_pct` value shown inline
@@ -37,7 +37,7 @@ The tab is entirely frontend. No new backend endpoints are introduced.
 | Surface | Change |
 |---|---|
 | `frontend/index.html` | New tab button `#tab-btn-howtoplay`; new content div `#tab-howtoplay` |
-| `frontend/app.js` | `loadHowToPlay()` fetches `GET /weights` and populates three `<tbody>` elements and one inline span |
+| `frontend/app-init.js` | `loadHowToPlay()` fetches `GET /weights` and populates three `<tbody>` elements and one inline span |
 
 `switchTab('howtoplay')` calls `loadHowToPlay()`. The tab button has no auth-state visibility logic — it is always shown.
 

@@ -9,7 +9,8 @@
       "Bash(python -m pytest tests/test_scoring.py -v)",
       "Bash(grep -rn *)",
       "Bash(python -c \"import main; print\\('ok'\\)\")",
-      "Bash(python /home/mint/Programming/dota-kanaliiga-fantasy/backend/main.py)"
+      "Bash(python /home/mint/Programming/dota-kanaliiga-fantasy/backend/main.py)",
+      "Bash(python -m pytest tests/ -q)"
     ]
   }
 }
