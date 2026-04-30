@@ -85,6 +85,11 @@ def run_migrations(engine) -> None:
                 conn.commit()
                 logger.info("Migration: player_match_stats — added %s column", _col)
 
+        if "is_mvp" not in pms_cols:
+            conn.execute(text("ALTER TABLE player_match_stats ADD COLUMN is_mvp BOOLEAN DEFAULT 0"))
+            conn.commit()
+            logger.info("Migration: player_match_stats — added is_mvp column")
+
         # cards: generation
         card_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()]
         if "generation" not in card_cols:

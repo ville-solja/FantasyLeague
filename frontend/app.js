@@ -1497,9 +1497,10 @@ async function openPlayerModal(playerId) {
         const date = m.start_time
           ? new Date(m.start_time * 1000).toLocaleDateString("fi-FI", {day: "numeric", month: "numeric", year: "2-digit"})
           : "—";
+        const mvpBadge = m.is_mvp ? ' <span style="font-size:0.7rem;color:#f5c842;font-weight:700;letter-spacing:0.05em;">MVP</span>' : '';
         return `<tr>
           <td>${date}</td>
-          <td>${Number(m.fantasy_points).toFixed(1)}</td>
+          <td>${Number(m.fantasy_points).toFixed(1)}${mvpBadge}</td>
           <td>${m.kills}/${m.assists}/${m.deaths}</td>
           <td>${Math.round(m.gold_per_min)}</td>
         </tr>`;

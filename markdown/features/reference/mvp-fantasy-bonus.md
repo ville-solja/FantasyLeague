@@ -55,7 +55,3 @@ The weight has no dedicated env var override — it is set at startup via `WEIGH
 ## Frontend
 
 The `GET /players/{player_id}` match history response includes `is_mvp: true` on the relevant match row. The player detail modal renders a small "MVP" label next to the score for that match.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

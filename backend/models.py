@@ -52,6 +52,7 @@ class PlayerMatchStats(Base):
     rune_pickups            = Column(Integer, default=0)
     firstblood_claimed      = Column(Integer, default=0)
     stuns                   = Column(Float,   default=0.0)
+    is_mvp                  = Column(Boolean, default=False)
 
 class Team(Base):
     __tablename__ = "teams"

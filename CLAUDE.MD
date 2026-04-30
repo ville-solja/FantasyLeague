@@ -99,7 +99,7 @@ Validates the fantasy scoring pipeline through static analysis — no code execu
 **Role: Product Analyst**
 Maps each entry in `markdown/stories/` to the implementation and marks it as Fully implemented / Partial / Missing. Produces a coverage percentage and a prioritised list of gaps.
 
-**When to run:** Before sprint reviews or feature planning sessions. A CI version also runs automatically on GitHub Actions (`story-report.yml`) and commits its output to `markdown/story-report.md`.
+**When to run:** Before sprint reviews or feature planning sessions.
 
 ---
 
