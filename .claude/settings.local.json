@@ -5,12 +5,11 @@
       "Bash(docker compose *)",
       "Bash(python -m pytest tests/ -v --tb=short)",
       "Bash(python -c \"import main\")",
-<<<<<<< HEAD
-      "Bash(python3 -c \"import main\")"
-=======
       "Bash(python3 -c \"import main\")",
-      "Bash(python -m pytest tests/test_scoring.py -v)"
->>>>>>> 25cc59e (Initial commit)
+      "Bash(python -m pytest tests/test_scoring.py -v)",
+      "Bash(grep -rn *)",
+      "Bash(python -c \"import main; print\\('ok'\\)\")",
+      "Bash(python /home/mint/Programming/dota-kanaliiga-fantasy/backend/main.py)"
     ]
   }
 }

@@ -100,10 +100,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 
 | Variable | Default | Purpose |
 |---|---|---|
-<<<<<<< HEAD
-=======
 | `GITHUB_REPOSITORY` | *(required for prod compose)* | `owner/repo` used by `docker-compose.yml` to resolve the GHCR image (`ghcr.io/${GITHUB_REPOSITORY}:...`) |
->>>>>>> 25cc59e (Initial commit)
 | `AUTO_INGEST_LEAGUES` | `19368,19369` | Comma-separated OpenDota league IDs to poll |
 | `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week lock maintenance checks |

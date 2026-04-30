@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
-                    TwitchTokenDrop, User, Week)
+                    TwitchTokenDrop, User, Week, Weight)
+from scoring import fantasy_score
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
 
@@ -390,6 +391,29 @@ def current_matches(
 
 
 # ---------------------------------------------------------------------------
+# MVP bonus helpers
+# ---------------------------------------------------------------------------
+
+def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, weights: dict):
+    """Set or clear the MVP flag and adjust fantasy_points on a PlayerMatchStats row."""
+    row = db.query(PlayerMatchStats).filter_by(player_id=player_id, match_id=match_id).first()
+    if not row:
+        return
+    base_pts = fantasy_score({
+        "kills": row.kills or 0, "deaths": row.deaths or 0,
+        "gold_per_min": row.gold_per_min or 0, "obs_placed": row.obs_placed or 0,
+        "last_hits": row.last_hits or 0, "denies": row.denies or 0,
+        "towers_killed": row.towers_killed or 0, "roshan_kills": row.roshan_kills or 0,
+        "teamfight_participation": row.teamfight_participation or 0.0,
+        "camps_stacked": row.camps_stacked or 0, "rune_pickups": row.rune_pickups or 0,
+        "firstblood_claimed": row.firstblood_claimed or 0, "stuns": row.stuns or 0.0,
+    }, weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4) if apply else round(base_pts, 4)
+    row.is_mvp = apply
+
+
+# ---------------------------------------------------------------------------
 # Presence pool helper
 # ---------------------------------------------------------------------------
 
@@ -434,8 +458,11 @@ def set_mvp(
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    # Upsert MVP record
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+
+    # Upsert MVP record — save previous player_id before overwriting
     existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
+    old_player_id = existing.player_id if existing else None
     if existing:
         existing.player_id = body.player_id
         existing.channel_id = channel_id
@@ -447,6 +474,12 @@ def set_mvp(
             channel_id=channel_id,
             selected_at=int(time.time()),
         ))
+
+    # Clear bonus from previous MVP if different player
+    if old_player_id and old_player_id != body.player_id:
+        _apply_mvp_bonus(db, old_player_id, body.match_id, apply=False, weights=weights)
+    # Apply bonus to new MVP
+    _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
 
     # Token drop — once per match
     drop_key = str(body.match_id)

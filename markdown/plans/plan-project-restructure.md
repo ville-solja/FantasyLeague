@@ -1,7 +1,16 @@
 # Plan: Project Structure Reorganization
 
 ## Context
-Three structural problems make the codebase hard to navigate. `backend/main.py` is 1,553 lines with 50 endpoints all registered directly on `app` — no routers, no grouping. `frontend/app.js` is 1,719 lines of mixed global-scope code covering every tab and modal. `markdown/feature_description/` is a legacy orphaned directory (17 files) that predates the current `markdown/features/` hierarchy and is not referenced by any agent or CLAUDE.MD. This plan splits the two monolithic files into logical modules and removes the orphaned docs. No API surface changes, no new dependencies, no behaviour changes.
+Three structural problems make the codebase hard to navigate. `backend/main.py` is 1,636 lines with 51 endpoints all registered directly on `app` — no routers, no grouping. `frontend/app.js` is 1,829 lines of mixed global-scope code covering every tab and modal. `markdown/feature_description/` is a legacy orphaned directory (17 files) that predates the current `markdown/features/` hierarchy and is not referenced by any agent or CLAUDE.MD. This plan splits the two monolithic files into logical modules and removes the orphaned docs. No API surface changes, no new dependencies, no behaviour changes.
+
+Several backend modules already exist as separate files and do not need to be created:
+- `backend/auth.py` — `hash_password`, `verify_password`
+- `backend/database.py` — `get_db`, `SessionLocal`, `Base`, `engine`
+- `backend/email_utils.py` — `send_email`
+- `backend/dotabuff_league_logos.py` — logo scraping/caching
+- `backend/opendota_client.py` — rate-limited OpenDota HTTP client
+
+The remaining extraction targets are `get_current_user` / `require_admin` / `_audit` (still in `main.py`), card helpers, and the router groupings.
 
 ---
 
@@ -22,13 +31,15 @@ Delete:
 | `backend/deps.py` | **Create** — `get_current_user`, `require_admin`, `_audit` |
 | `backend/card_utils.py` | **Create** — all card scoring/modifier helpers |
 | `backend/routers/__init__.py` | **Create** — empty package marker |
-| `backend/main.py` | Add temporary `from deps import ...` and `from card_utils import *` aliases |
+| `backend/main.py` | Add `from deps import ...` and `from card_utils import *` aliases |
 
 ### Step 1 — Create `backend/deps.py`
 Cut from `main.py` and place here:
-- `get_current_user` (~lines 140–175)
-- `require_admin` (~line 178)
-- `_audit()` (~lines 180–188)
+- `get_current_user` (~lines 173–179)
+- `require_admin` (~line 181)
+- `_audit()` (~lines 187–196)
+
+Imports needed: `Request`, `HTTPException`, `Depends`, `SessionLocal`, `AuditLog`.
 
 Add to `main.py`: `from deps import get_current_user, require_admin, _audit`
 
@@ -52,28 +63,30 @@ Each router: create file → use `router = APIRouter()` → move endpoints (`@ap
 ### Critical Files
 | File | Endpoints |
 |---|---|
-| `backend/routers/players.py` | `/players/*`, `/teams/*`, `/admin/enrich-profiles` |
-| `backend/routers/auth.py` | `/login`, `/register`, `/logout`, `/forgot-password` |
-| `backend/routers/profile.py` | `/me`, `/profile/*`, `/profile/username`, `/profile/player-id`, `/profile/password` |
-| `backend/routers/leaderboard.py` | `/top`, `/leaderboard*`, `/weights`, `/simulate*`; local `_leaderboard_rows()` |
-| `backend/routers/cards.py` | `/deck`, `/draw`, `/weeks`, `/cards/*`, `/roster/*`; local `_build_roster_response()`, `_LATEST_TEAM_SUBQUERY` |
-| `backend/routers/admin.py` | `/admin/*`, `/users*`, `/ingest/*`, `/schedule*`, `/matches/*`, `/codes*`, `/redeem`, `/grant-tokens`, `/recalculate`, `/audit-logs` |
-| `backend/main.py` | Reduced to: imports, env constants, `lifespan` + background threads, middleware, `app.include_router()` calls, `/health`, `/config` |
+| `backend/routers/players.py` | `GET /players`, `GET /players/{id}`, `GET /players/{id}/profile`, `GET /teams`, `GET /teams/{id}` |
+| `backend/routers/auth.py` | `POST /login`, `POST /register`, `POST /logout`, `POST /forgot-password` |
+| `backend/routers/profile.py` | `GET /me`, `GET /profile/{user_id}`, `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password` |
+| `backend/routers/leaderboard.py` | `GET /top`, `GET /leaderboard`, `GET /leaderboard/roster`, `GET /leaderboard/season`, `GET /leaderboard/weekly`, `GET /weights`, `GET /simulate`, `POST /simulate/{match_id}`; local `_leaderboard_rows()` |
+| `backend/routers/cards.py` | `GET /deck`, `POST /draw`, `GET /weeks`, `GET /cards/{id}`, `GET /cards/{id}/image`, `POST /roster/{id}/reroll`, `POST /roster/{id}/activate`, `POST /roster/{id}/deactivate`, `GET /roster/{user_id}`; local `_build_roster_response()`, `_LATEST_TEAM_SUBQUERY` |
+| `backend/routers/admin.py` | `POST /ingest/league/{id}`, `GET /users`, `POST /users/{id}/toggle-tester`, `POST /grant-tokens`, `POST /recalculate`, `GET /schedule`, `POST /schedule/refresh`, `GET /schedule/debug`, `PUT /matches/{id}/week`, `POST /admin/sync-match-weeks`, `POST /admin/sync-toornament`, `POST /admin/enrich-profiles`, `POST /admin/top-up-cards`, `POST /codes`, `GET /codes`, `DELETE /codes/{id}`, `POST /redeem`, `GET /audit-logs` |
+| `backend/main.py` | Reduced to: imports, env constants, `lifespan` + background threads, middleware, `app.include_router()` calls, `GET /health`, `GET /config` |
 
 **Extraction order** (least to most dependencies — extract in this sequence):
-1. `routers/players.py` — only `get_db`, `require_admin`, models, `run_profile_enrichment`
-2. `routers/auth.py` — adds `hash_password`, `send_email`, `_audit`
-3. `routers/profile.py` — adds `verify_password`, `get_current_user`
+1. `routers/players.py` — only `get_db`, `require_admin`, models, `run_profile_enrichment` (from `enrich.py`)
+2. `routers/auth.py` — adds `hash_password` (from `auth.py`), `send_email` (from `email_utils.py`), `_audit`
+3. `routers/profile.py` — adds `verify_password` (from `auth.py`), `get_current_user`
 4. `routers/leaderboard.py` — adds `card_utils.*`, `scoring.*`
 5. `routers/cards.py` — adds `image.*`, `weeks.*`
 6. `routers/admin.py` — last; needs everything
 
 **Import rules:**
 - `get_db` → import from `database`
+- `hash_password`, `verify_password` → import from `auth`
+- `send_email` → import from `email_utils`
 - `get_current_user`, `require_admin`, `_audit` → import from `deps`
 - Card helpers → import from `card_utils`
 - `INITIAL_TOKENS`, `ROSTER_LIMIT` → re-read via `os.getenv()` in each router that needs them
-- `TOKEN_NAME`, `_APP_VERSION`, `_APP_RELEASE` → stay in `main.py` (only used in `/config`)
+- `TOKEN_NAME`, `_APP_VERSION`, `_APP_RELEASE` → stay in `main.py` (only used in `GET /config`)
 
 ---
 
@@ -84,15 +97,15 @@ All files use global scope (no ES modules). Load order in `index.html` is critic
 ### Critical Files
 | File | Contents |
 |---|---|
-| `frontend/app-globals.js` | `API`, all shared state vars, `setStatus()`, `_escHtml()`, `playerLink()`, `teamLink()`, `loadConfig()`, `updateTokenDisplay()`, `bumpCardImageCacheBust()`, `cardImageUrl()`, `switchTab()` |
-| `frontend/app-auth.js` | `applyAuthState()`, login/register/logout flows, `loadMe()`, `_applyTempPasswordBanner()` |
-| `frontend/app-cards.js` | `loadDeck()`, `drawCard()`, draw-reveal animation helpers, `showCard()`, `showReveal()`, `closeReveal()`, reroll confirm flow |
-| `frontend/app-roster.js` | `_rosterCards`, `_weeks`, `_rosterWeekId` state, `loadWeeks()`, `loadRoster()`, `_cardSlotHTML()`, activate/deactivate, `redeemCode()` |
-| `frontend/app-players.js` | `loadPlayers()`, `filterPlayers()`, `loadTeams()`, player modal, team modal, `loadSchedule()` |
-| `frontend/app-leaderboard.js` | `loadSeasonLeaderboard()`, `loadWeeklyLeaderboard()`, `_lbStandingsRow()`, `loadLeaderboard()`, `loadTop()`, week select |
-| `frontend/app-admin.js` | `loadWeights()`, `loadUsers()`, `toggleTester()`, `grantTokens()`, codes, schedule refresh, ingest, audit log, recalculate |
-| `frontend/app-profile.js` | `loadProfile()`, Twitch link status, `generateTwitchCode()`, `saveUsername()`, `changePassword()`, `savePlayerId()` |
-| `frontend/app-init.js` | `init()` function + DOMContentLoaded bootstrap call |
+| `frontend/app-globals.js` | `API`, all shared state vars (`activeUserId`, `activeUsername`, `activeIsAdmin`, `activeMustChangePassword`, `_tokenName`, `_tokenBalance`, `_cardImageBustSeq`), `setStatus()`, `_escHtml()`, `playerLink()`, `teamLink()`, `loadConfig()`, `updateTokenDisplay()`, `bumpCardImageCacheBust()`, `cardImageUrl()`, `switchTab()`, `toggleScoringInfo()` |
+| `frontend/app-auth.js` | `applyAuthState()`, `showLogin()`, `showForgotPassword()`, `submitForgotPassword()`, `closeLoginModal()`, `closeRegisterModal()`, `showRegister()`, `_regFieldErr()`, `_regClearField()`, `_regClearErrors()`, `login()`, `register()`, `logout()`, `loadMe()`, `_applyTempPasswordBanner()` |
+| `frontend/app-cards.js` | `loadDeck()`, `drawCard()`, draw-reveal animation helpers (`_normalizeDrawRarity`, `_stripDrawBurstClasses`, `_stripRevealImgWrapRarity`, `_prefersReducedMotion`, `_stripRevealDrawFx`, `DRAW_REVEAL_MIN_MS`, `DRAW_REVEAL_FLASH_MS`, `DRAW_RARITY_KEYS`, `_drawBurstHideTimer`, `REROLL_IMAGE_MIN_MS`), `showCard()`, `showReveal()`, `closeReveal()`, `openRerollConfirm()`, `closeRerollConfirm()`, `confirmReroll()`, `_openCardId` |
+| `frontend/app-roster.js` | `_rosterCards`, `_rosterWeekId` state, `showRosterCard()`, `loadWeeks()`, `_renderWeekSelector()`, `onRosterWeekChange()`, `loadRoster()`, `_cardSlotHTML()`, `activateCard()`, `deactivateCard()`, `redeemCode()` |
+| `frontend/app-players.js` | `_playersData`, `loadPlayers()`, `filterPlayers()`, `renderPlayers()`, `loadTeams()`, `openPlayerModal()`, `renderPlayerProfile()`, `closePlayerModal()`, `openTeamModal()`, `closeTeamModal()`, `loadSchedule()`, `showPlayerPreview()` |
+| `frontend/app-leaderboard.js` | `onLbWeekChange()`, `toggleLbDetail()`, `_lbStandingsRow()`, `loadSeasonLeaderboard()`, `loadWeeklyLeaderboard()`, `_populateLbWeekSelect()`, `_allLeaderboardRows`, `loadLeaderboard()`, `_renderLeaderboard()`, `loadTop()` |
+| `frontend/app-admin.js` | `loadWeights()`, `loadUsers()`, `toggleTester()`, `grantTokens()`, `loadCodes()`, `createCode()`, `deleteCode()`, `refreshSchedule()`, `ingestLeague()`, `loadAuditLog()`, `recalculate()`, `enrichProfiles()` |
+| `frontend/app-profile.js` | `loadProfile()`, `_renderTwitchLinkStatus()`, `_twitchCodeTimer`, `generateTwitchCode()`, `saveUsername()`, `changePassword()`, `savePlayerId()` |
+| `frontend/app-init.js` | `loadHowToPlay()`, `init()` function + DOMContentLoaded bootstrap call |
 
 **Note:** Declare `let _weeks = []` in `app-globals.js`; `loadWeeks()` in `app-roster.js` populates it; `_populateLbWeekSelect()` in `app-leaderboard.js` reads it safely because all scripts parse before any tab switch.
 
@@ -126,6 +139,7 @@ cd backend && python -m pytest tests/ -q
 ```bash
 cd backend && python -c "import main; print(len(main.app.routes), 'routes')"
 ```
+Expected: 51 routes (plus framework internals).
 
 ### Frontend (browser smoke test)
 1. All 9 script tags return HTTP 200, no JS errors on load
@@ -133,8 +147,9 @@ cd backend && python -c "import main; print(len(main.app.routes), 'routes')"
 3. Login → session set, My Team tab appears, token balance shows
 4. Draw card — modal opens, reveal animates
 5. Roster — week selector renders, activate/deactivate works
-6. Players tab — player list renders, player modal opens
-7. Admin tab — weights, users, codes, audit log all load
+6. Players tab — player list renders, player modal opens with profile section
+7. Admin tab — weights, users, codes, audit log, enrich profiles all load
 8. Profile tab — username pre-filled, Twitch link status renders
+9. How to Play tab — scoring table and death pool description render
 
 Any `ReferenceError: X is not defined` means a function was placed in a later file than needed — move it to `app-globals.js`.

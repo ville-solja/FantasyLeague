@@ -11,11 +11,7 @@ Source: `GET https://api.opendota.com/api/leagues/{league_id}/matchIds`
 For each match ID not already in the database:
 - Fetches full match data via `GET /api/matches/{match_id}`
 - Stores team IDs, match result (`radiant_win`), and start timestamp
-<<<<<<< HEAD
-- Stores per-player stats: kills, assists, deaths, GPM, observer wards, sentry wards, tower damage
-=======
 - Stores per-player stats: kills, assists, deaths, GPM, observer/sentry wards placed, tower damage (non-scoring but retained), hero id, plus expanded stats used by scoring (last hits/denies/towers/Roshan/teamfight participation/camps stacked/runes/first blood/stuns)
->>>>>>> 25cc59e (Initial commit)
 - Calculates and stores fantasy points for each player using current scoring weights
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid
 

@@ -819,7 +819,7 @@ def get_player(player_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Player not found")
 
     stats = db.execute(text("""
-        SELECT s.match_id, m.start_time, s.fantasy_points,
+        SELECT s.match_id, m.start_time, s.fantasy_points, s.is_mvp,
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
                s.teamfight_participation, s.camps_stacked, s.rune_pickups,
@@ -1197,6 +1197,10 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
             "stuns": stat.stuns or 0.0,
         }
         stat.fantasy_points = fantasy_score(p, weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    for stat in stats:
+        if stat.is_mvp:
+            stat.fantasy_points = round(stat.fantasy_points * (1 + bonus_pct / 100), 4)
     _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"records={len(stats)}")
     db.commit()

@@ -109,6 +109,7 @@ DEFAULT_WEIGHTS = [
     {"key": "modifier_count_legendary", "label": "Modifiers — Legendary (count)",  "value": 3.0},
     # --- Bonus % applied by each modifier ---
     {"key": "modifier_bonus_pct",       "label": "Modifier bonus (%)",             "value": 10.0},
+    {"key": "mvp_bonus_pct",            "label": "MVP bonus (%)",                  "value": 10.0},
 ]
 
 
