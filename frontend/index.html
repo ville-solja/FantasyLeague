@@ -157,6 +157,7 @@
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
   <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
+  <button class="tab" id="tab-btn-profile"     onclick="switchTab('profile')" style="display:none;">Profile</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin</button>
 </div>
 
@@ -282,11 +283,7 @@
       <div style="margin-top:10px;">
         <button class="ghost" style="font-size:0.8rem;" onclick="toggleScoringInfo()">How is scoring calculated?</button>
         <div id="scoringInfo" style="display:none;margin-top:10px;font-size:0.82rem;color:#888;line-height:1.6;">
-          Fantasy points are calculated from each player's match stats using configurable weights:<br>
-          <strong style="color:#aaa;">Kills × kill_weight + Assists × assist_weight − Deaths × death_weight
-          + GPM × gpm_weight + Observer wards × obs_weight + Sentry wards × sen_weight
-          + Tower damage × tower_dmg_weight</strong><br>
-          Weights are set via the <code>WEIGHTS_JSON</code> environment variable and applied on restart.
+          Stats, weights, rarity bonuses, and card modifiers are all explained on the <button class="inline-tab-link" onclick="switchTab('howtoplay')">How to Play</button> tab. Values are live — they update whenever an admin adjusts the weights.
         </div>
       </div>
       <div class="status" id="deckStatus"></div>
@@ -533,7 +530,7 @@
       <div class="panel">
         <h2>Refresh Schedule Cache</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
-        <button onclick="refreshSchedule()">Refresh</button>
+        <button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button>
         <div class="status" id="scheduleRefreshStatus"></div>
       </div>
 
