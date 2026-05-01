@@ -8,6 +8,7 @@ function applyAuthState() {
   document.getElementById("headerLogoutBtn").style.display = loggedIn ? "" : "none";
 
   document.getElementById("tab-btn-team").style.display    = loggedIn ? "" : "none";
+  document.getElementById("tab-btn-profile").style.display = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");

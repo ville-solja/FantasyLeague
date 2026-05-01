@@ -47,8 +47,11 @@ async function toggleTester(userId) {
 }
 
 async function grantTokens(targetId) {
-  const amount = parseInt(document.getElementById(`grant_${targetId}`).value);
+  const input = document.getElementById(`grant_${targetId}`);
+  const amount = parseInt(input.value);
   if (!amount || amount < 1) return setStatus("usersStatus", "Enter a valid amount", false);
+  const btn = input.nextElementSibling;
+  if (btn) btn.disabled = true;
   try {
     const res = await fetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target_user_id: targetId, amount}) });
     const data = await res.json();
@@ -56,6 +59,8 @@ async function grantTokens(targetId) {
     if (res.ok) loadUsers();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -70,7 +75,7 @@ async function loadCodes() {
       return;
     }
     document.getElementById("codesBody").innerHTML = rows.map(c => `
-      <tr>
+      <tr data-code-id="${c.id}">
         <td><code>${c.code}</code></td>
         <td>${c.token_amount}</td>
         <td>${c.redemptions}</td>
@@ -100,7 +105,25 @@ async function createCode() {
   }
 }
 
-async function deleteCode(codeId) {
+function deleteCode(codeId) {
+  const existing = document.getElementById(`deleteConfirm_${codeId}`);
+  if (existing) { existing.remove(); return; }
+  const row = document.querySelector(`[data-code-id="${codeId}"]`);
+  if (!row) return;
+  const confirm = document.createElement("tr");
+  confirm.id = `deleteConfirm_${codeId}`;
+  confirm.className = "delete-confirm-row";
+  confirm.innerHTML = `<td colspan="4" style="padding:8px 10px;">
+    <span class="delete-confirm-msg">Delete this code?</span>
+    <span style="margin-left:12px;display:inline-flex;gap:6px;">
+      <button class="danger" style="padding:3px 10px;" onclick="_confirmDeleteCode(${codeId})">Delete</button>
+      <button class="ghost" style="padding:3px 10px;" onclick="document.getElementById('deleteConfirm_${codeId}').remove()">Cancel</button>
+    </span>
+  </td>`;
+  row.after(confirm);
+}
+
+async function _confirmDeleteCode(codeId) {
   try {
     const res = await fetch(`${API}/codes/${codeId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("codesStatus", d.detail, false); }
@@ -112,6 +135,8 @@ async function deleteCode(codeId) {
 }
 
 async function refreshSchedule() {
+  const btn = document.getElementById("scheduleRefreshBtn");
+  if (btn) btn.disabled = true;
   setStatus("scheduleRefreshStatus", "Refreshing...");
   try {
     const res = await fetch(`${API}/schedule/refresh`, { method: "POST" });
@@ -121,6 +146,8 @@ async function refreshSchedule() {
     setStatus("scheduleRefreshStatus", count > 0 ? `Done. ${count} weeks loaded.` : (data.error || "No data returned"), count > 0);
   } catch (e) {
     setStatus("scheduleRefreshStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
