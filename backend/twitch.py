@@ -282,38 +282,23 @@ def current_matches(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return started/completed matches from current week grouped into series by team pair."""
+    """Return the 5 most recent series that have ingested match data, across any week."""
     now = int(time.time())
-    week = (
-        db.query(Week)
-        .filter(Week.start_time <= now, Week.end_time >= now)
-        .first()
-    )
-    if not week:
-        week = (
-            db.query(Week)
-            .filter(Week.is_locked == True)  # noqa: E712
-            .order_by(Week.start_time.desc())
-            .first()
-        )
-    if not week:
-        return {"week": None, "series": []}
+    lookback = now - 30 * 86400
 
-    # Only matches that have already started (streamer can't pick MVP for a future game).
-    # Respect week_override_id so admin-reassigned matches appear correctly.
-    week_end = min(week.end_time, now)
-    from sqlalchemy import or_, and_
+    ingested_match_ids = [
+        r.match_id
+        for r in db.query(PlayerMatchStats.match_id).distinct().all()
+    ]
+    if not ingested_match_ids:
+        return {"series": []}
+
     matches = (
         db.query(Match)
         .filter(
-            or_(
-                Match.week_override_id == week.id,
-                and_(
-                    Match.week_override_id == None,  # noqa: E711
-                    Match.start_time >= week.start_time,
-                    Match.start_time <= week_end,
-                ),
-            )
+            Match.match_id.in_(ingested_match_ids),
+            Match.start_time <= now,
+            Match.start_time >= lookback,
         )
         .order_by(Match.start_time)
         .all()
@@ -344,6 +329,19 @@ def current_matches(
         p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
     } if mvp_player_ids else {}
 
+    # Bulk-fetch all player stats for the window's matches in one query
+    stats_by_match: dict[int, list] = {}
+    if match_ids:
+        all_stats = (
+            db.query(PlayerMatchStats, Player, Team)
+            .join(Player, PlayerMatchStats.player_id == Player.id)
+            .join(Team, PlayerMatchStats.team_id == Team.id)
+            .filter(PlayerMatchStats.match_id.in_(match_ids))
+            .all()
+        )
+        for pms, p, t in all_stats:
+            stats_by_match.setdefault(pms.match_id, []).append((pms, p, t))
+
     result_series = []
     for (tid_lo, tid_hi), series_matches in series_map.items():
         team1 = teams_by_id.get(tid_lo) if tid_lo else None
@@ -351,13 +349,7 @@ def current_matches(
 
         match_list = []
         for i, m in enumerate(series_matches):  # already sorted by start_time
-            stats = (
-                db.query(PlayerMatchStats, Player, Team)
-                .join(Player, PlayerMatchStats.player_id == Player.id)
-                .join(Team, PlayerMatchStats.team_id == Team.id)
-                .filter(PlayerMatchStats.match_id == m.match_id)
-                .all()
-            )
+            stats = stats_by_match.get(m.match_id, [])
             players = [
                 {
                     "player_id": pms.player_id,
@@ -387,7 +379,7 @@ def current_matches(
     # Most-recently-played series first
     result_series.sort(key=lambda s: s["matches"][-1]["start_time"] if s["matches"] else 0, reverse=True)
 
-    return {"week": {"id": week.id, "label": week.label}, "series": result_series}
+    return {"series": result_series[:5]}
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +426,49 @@ def _active_pool(db: Session, channel_id: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # MVP selection — also triggers a one-time token drop for the match
 # ---------------------------------------------------------------------------
+
+def _execute_token_drop(
+    db: Session, channel_id: str, match_id: int, weights: dict
+) -> tuple[list[str], int, bool]:
+    """Grant tokens to a random sample of present linked viewers. Returns (winner_names, pool_size, already_dropped)."""
+    drop_key = str(match_id)
+    already_dropped = bool(
+        db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).first()
+    )
+    winner_names: list[str] = []
+    pool_size = 0
+
+    if not already_dropped:
+        pool = _active_pool(db, channel_id)
+        pool_size = len(pool)
+        if pool:
+            count = min(_TWITCH_DROP_MAX, len(pool))
+            winner_ids = random.sample(pool, count)
+            users_by_twitch_id = {
+                u.twitch_user_id: u
+                for u in db.query(User).filter(User.twitch_user_id.in_(winner_ids)).all()
+            }
+            for twitch_id in winner_ids:
+                user = users_by_twitch_id.get(twitch_id)
+                if user:
+                    user.tokens = (user.tokens or 0) + 1
+                    winner_names.append(user.username)
+            db.add(TwitchTokenDrop(
+                channel_id=channel_id,
+                series_id=drop_key,
+                dropped_at=int(time.time()),
+                count=len(winner_names),
+            ))
+            db.add(AuditLog(
+                timestamp=int(time.time()),
+                actor_id=None,
+                actor_username="twitch",
+                action="twitch_token_drop",
+                detail=f"channel={channel_id} match={match_id} count={len(winner_names)} winners={','.join(winner_names)}",
+            ))
+
+    return winner_names, pool_size, already_dropped
+
 
 class MVPBody(BaseModel):
     match_id: int
@@ -482,41 +517,9 @@ def set_mvp(
     _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
 
     # Token drop — once per match
-    drop_key = str(body.match_id)
-    already_dropped = bool(
-        db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).first()
+    winner_names, pool_size, already_dropped = _execute_token_drop(
+        db, channel_id, body.match_id, weights
     )
-    winner_names: list[str] = []
-    pool_size = 0
-
-    if not already_dropped:
-        pool = _active_pool(db, channel_id)
-        pool_size = len(pool)
-        if pool:
-            count = min(_TWITCH_DROP_MAX, len(pool))
-            winner_ids = random.sample(pool, count)
-            users_by_twitch_id = {
-                u.twitch_user_id: u
-                for u in db.query(User).filter(User.twitch_user_id.in_(winner_ids)).all()
-            }
-            for twitch_id in winner_ids:
-                user = users_by_twitch_id.get(twitch_id)
-                if user:
-                    user.tokens = (user.tokens or 0) + 1
-                    winner_names.append(user.username)
-            db.add(TwitchTokenDrop(
-                channel_id=channel_id,
-                series_id=drop_key,
-                dropped_at=int(time.time()),
-                count=len(winner_names),
-            ))
-            db.add(AuditLog(
-                timestamp=int(time.time()),
-                actor_id=None,
-                actor_username="twitch",
-                action="twitch_token_drop",
-                detail=f"channel={channel_id} match={body.match_id} count={len(winner_names)} winners={','.join(winner_names)}",
-            ))
 
     db.add(AuditLog(
         timestamp=int(time.time()),

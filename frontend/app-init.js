@@ -81,9 +81,14 @@ async function init() {
   applyAuthState();
   if (activeUserId) {
     loadDeck();
-    loadWeeks().then(() => loadRoster(_rosterWeekId));
+    loadWeeks().then(() => {
+      loadRoster(_rosterWeekId);
+      _populateLbWeekSelect();
+      loadSeasonLeaderboard();
+    });
+  } else {
+    loadWeeks().then(() => { _populateLbWeekSelect(); loadSeasonLeaderboard(); });
   }
-  loadWeeks().then(() => { _populateLbWeekSelect(); loadSeasonLeaderboard(); });
   loadLeaderboard();
   loadTop();
 }

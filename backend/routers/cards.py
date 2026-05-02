@@ -47,11 +47,18 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         )
     stat_cols = ",\n                   ".join(_week_stat_case(col) for col in _SCORED_STAT_COLS)
 
+    week_match_count = (
+        "COUNT(DISTINCT CASE WHEN (m.week_override_id = :week_id OR "
+        "(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
+        "THEN m.match_id END) as match_count"
+    )
+
     if week and week.is_locked:
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, 1 as is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
+                   {week_match_count},
                    {stat_cols}
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
@@ -72,6 +79,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             SELECT c.id, c.card_type, c.is_active,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
+                   {week_match_count},
                    {stat_cols}
             FROM cards c
             JOIN players p ON p.id = c.player_id
@@ -93,6 +101,9 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     for c in cards:
         mods = modifiers_map.get(c["id"], {})
         c["modifiers"] = _format_modifiers(mods)
+        if c.get("match_count", 1) == 0:
+            c["total_points"] = 0.0
+            continue
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
         c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods)
 
@@ -334,9 +345,8 @@ def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends
     active_count = db.query(Card).filter(
         Card.owner_id == user_id, Card.is_active == True
     ).count()
-    roster_limit = int(os.getenv("ROSTER_LIMIT", "5"))
-    if active_count >= roster_limit:
-        raise HTTPException(status_code=409, detail=f"Roster full ({roster_limit} cards max)")
+    if active_count >= ROSTER_LIMIT:
+        raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
 
     duplicate = db.query(Card).filter(
         Card.owner_id == user_id,

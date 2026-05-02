@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL
+from models import Week
 from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
@@ -31,10 +32,11 @@ INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 _APP_VERSION   = os.getenv("APP_VERSION", "APP_VERSION")
 _APP_RELEASE   = os.getenv("APP_RELEASE", "")
 
-_WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",       "300"))
-_INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",      "900"))
-_ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL", "300"))
-_ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",     "3"))
+_WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
+_INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
+_INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
+_ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
+_ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 
 def _week_maintenance_loop():
@@ -96,7 +98,16 @@ def _ingest_poll_loop(league_ids: list[int]):
             _run_toornament_sync()
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
-        time.sleep(_INGEST_POLL_INTERVAL)
+        db = SessionLocal()
+        try:
+            now = int(time.time())
+            active = db.query(Week).filter(
+                Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
+            ).first()
+        finally:
+            db.close()
+        interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
+        time.sleep(interval)
 
 
 @asynccontextmanager
@@ -150,6 +161,7 @@ app.add_middleware(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,  # Must stay False with allow_origins="*" — see comment above
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
