@@ -48,7 +48,9 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
 
 @router.post("/register")
 def register(request: Request, body: RegisterBody, db=Depends(get_db)):
-    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', body.email.strip()):
+    _e = body.email.strip()
+    _at = _e.find("@")
+    if _at < 1 or " " in _e or _e.count("@") != 1 or "." not in _e[_at + 2:] or _e.endswith("."):
         raise HTTPException(status_code=422, detail="Invalid email address")
     if db.query(User).filter(User.username == body.username).first():
         raise HTTPException(status_code=409, detail="Username already taken")
