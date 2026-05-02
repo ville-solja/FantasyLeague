@@ -54,6 +54,8 @@ def _leaderboard_rows(db, rows) -> list[dict]:
         cards_by_user.setdefault(uid, [])
         if not r.card_id:
             continue
+        if getattr(r, 'match_count', 1) == 0:
+            continue
         stat_sums = _stat_sums_from_row(r)
         mods = mods_map.get(r.card_id, {})
         card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods)
@@ -128,6 +130,7 @@ def season_leaderboard(db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
+               COUNT(DISTINCT m.match_id) as match_count,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,
@@ -168,6 +171,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
+               COUNT(DISTINCT m.match_id) as match_count,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,

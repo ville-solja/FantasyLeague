@@ -40,3 +40,4 @@ Implementation details, integrations, and operator tooling.
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab: getting started, Twitch MVP flow, live scoring formula display |
+| [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |

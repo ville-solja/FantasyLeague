@@ -6,12 +6,15 @@ Free tier is ~60 req/min; default OPENDOTA_MAX_RPM=55 leaves headroom.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import random
 import threading
 import time
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 OPEN_DOTA_URL = "https://api.opendota.com/api"
 
@@ -84,23 +87,31 @@ def get_json(
     """
     tag_label = label or url
     for attempt in range(retries):
-        res = get(url, timeout=30)
+        try:
+            res = get(url, timeout=30)
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            wait = base_backoff * (2 ** attempt) + random.uniform(0, 3)
+            logger.warning("get_json %s network error (%s), retry in %.1fs", tag_label, e.__class__.__name__, wait)
+            time.sleep(wait)
+            continue
         if res.status_code == 200:
             try:
                 return res.json()
             except Exception as e:
-                print(f"[WARN] get_json non-JSON {tag_label}: {e}")
+                logger.warning("get_json non-JSON %s: %s", tag_label, e)
                 return None
         if res.status_code == 429 or res.status_code >= 500:
             wait = base_backoff * (2 ** attempt) + random.uniform(0, 3)
-            tag = "[RATE LIMIT]" if res.status_code == 429 else "[ERROR]"
-            print(f"{tag} {tag_label} HTTP {res.status_code}, retry in {wait:.1f}s")
+            if res.status_code == 429:
+                logger.warning("get_json rate limited %s HTTP %d, retry in %.1fs", tag_label, res.status_code, wait)
+            else:
+                logger.error("get_json %s HTTP %d, retry in %.1fs", tag_label, res.status_code, wait)
             time.sleep(wait)
             continue
         # 4xx (except 429) — no point retrying
-        print(f"[WARN] get_json {tag_label} HTTP {res.status_code} — not retrying")
+        logger.warning("get_json %s HTTP %d — not retrying", tag_label, res.status_code)
         return None
-    print(f"[ERROR] get_json {tag_label} gave up after {retries} retries")
+    logger.error("get_json %s gave up after %d retries", tag_label, retries)
     return None
 
 
@@ -108,15 +119,15 @@ def parse_json_object(res: requests.Response, *, context: str = "") -> dict | No
     """Decode JSON object body; log and return None on empty/HTML/error pages (no exception)."""
     raw = (res.text or "").strip()
     if not raw:
-        print(f"[WARN] OpenDota empty body {context} status={res.status_code}")
+        logger.warning("OpenDota empty body %s status=%d", context, res.status_code)
         return None
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
         snippet = raw[:200].replace("\n", " ")
-        print(f"[WARN] OpenDota non-JSON {context} status={res.status_code}: {e!s} snippet={snippet!r}")
+        logger.warning("OpenDota non-JSON %s status=%d: %s snippet=%r", context, res.status_code, e, snippet)
         return None
     if isinstance(data, dict):
         return data
-    print(f"[WARN] OpenDota expected JSON object, got {type(data).__name__} {context} status={res.status_code}")
+    logger.warning("OpenDota expected JSON object, got %s %s status=%d", type(data).__name__, context, res.status_code)
     return None

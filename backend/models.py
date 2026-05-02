@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index
 from database import Base
 from scoring import SCORING_STATS
 
@@ -233,3 +233,11 @@ class ToornamentSyncLog(Base):
     team1_score         = Column(Integer)
     team2_score         = Column(Integer)
     pushed_at           = Column(Integer)  # Unix timestamp
+
+
+Index('ix_pms_player_id',    PlayerMatchStats.player_id)
+Index('ix_pms_match_id',     PlayerMatchStats.match_id)
+Index('ix_cards_owner_id',   Card.owner_id)
+Index('ix_cards_player_id',  Card.player_id)
+Index('ix_wre_user_week',    WeeklyRosterEntry.user_id, WeeklyRosterEntry.week_id)
+Index('ix_presence_channel_seen', TwitchPresence.channel_id, TwitchPresence.seen_at)

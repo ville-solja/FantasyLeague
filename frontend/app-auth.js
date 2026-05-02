@@ -7,9 +7,8 @@ function applyAuthState() {
   document.getElementById("headerLoginBtn").style.display  = loggedIn ? "none" : "";
   document.getElementById("headerLogoutBtn").style.display = loggedIn ? "" : "none";
 
-  document.getElementById("tab-btn-team").style.display    = loggedIn ? "" : "none";
-  document.getElementById("tab-btn-profile").style.display = loggedIn ? "" : "none";
-  document.getElementById("tab-btn-admin").style.display   = (loggedIn && activeIsAdmin) ? "" : "none";
+  document.getElementById("tab-btn-team").style.display  = loggedIn ? "" : "none";
+  document.getElementById("tab-btn-admin").style.display = (loggedIn && activeIsAdmin) ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");
   if (tokenEl) tokenEl.style.display = loggedIn ? "flex" : "none";

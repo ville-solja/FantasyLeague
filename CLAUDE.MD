@@ -140,9 +140,35 @@ Implements a feature from an approved plan file. Given a plan slug, it reads the
 - Fills in `markdown/features/` stubs with actual endpoint signatures and env vars
 - Flags any verification failure and stops rather than marking work as done
 
-**When to run:** After `/product-planner` has created a plan and it has been reviewed. Run `/security-reviewer` and `/qa-engineer` after the developer finishes.
+**When to run:** After `/product-planner` has created a plan and it has been reviewed. Run `/security-reviewer` and `/qa-engineer` after the developer finishes. Or use `/develop` to run the full pipeline automatically.
 
 **Usage:** `/developer <plan-slug>` — e.g. `/developer azure-cloud-hosting`
+
+---
+
+### `/test-planner`
+**Role: Test Planner**
+Reads an approved plan and writes failing pytest stubs to `backend/tests/test_{slug}.py` — one stub per acceptance criterion. Each stub raises `pytest.fail("not yet implemented")` so it fails before the developer writes any code.
+
+**When to run:** After a plan is approved and before implementation begins. Called automatically by `/develop` as Stage 1. Can also be run standalone before `/developer` for a manual workflow.
+
+**Usage:** `/test-planner <plan-slug>` — e.g. `/test-planner twitch-mvp-series-window`
+
+---
+
+### `/develop`
+**Role: Development Orchestrator**
+Runs the full post-approval pipeline in three sequential stages using isolated subagents: test stubs → implementation → QA + docs validation. Stops and reports clearly if any stage fails.
+
+1. **Stage 1 — Test stubs:** spawns test-planner to write failing stubs
+2. **Stage 2 — Implementation:** spawns developer to implement the plan and make stubs pass
+3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel
+
+Produces a consolidated report including `gh issue close N` if the plan was created from a GitHub issue.
+
+**When to run:** After reviewing a plan file and deciding to implement it. Replaces running `/test-planner`, `/developer`, `/qa-engineer`, and `/documentation-steward` individually.
+
+**Usage:** `/develop <plan-slug>` — e.g. `/develop issue-42-twitch-mvp-series-window`
 
 ---
 
@@ -172,38 +198,35 @@ Audits the Fantasy web app for usability and experience problems. Produces a pri
 
 ---
 
-## Development Workflow — Agent-Assisted Release Process
+## Development Workflow
 
-Every feature follows this pipeline. Human checkpoints are marked **[HUMAN GATE]** — these are the only moments where code leaves the local environment.
+### Automated planning (background)
 
-### Stage 1 — Session start
+Plans are created automatically from GitHub issues by the scheduled Issue Crawler (see Scheduled Jobs below). New plan files appear in `markdown/plans/` daily without manual intervention. Ad-hoc planning is still available via `/product-planner <description>`.
+
+### [HUMAN GATE 1] — Review plan and implement
+
+Browse `markdown/plans/` for pending plans. When ready to implement one:
+
 ```
-/agent-steward
+/develop <plan-slug>
 ```
-Run before any planning work. Validates all agent definitions against the current codebase — catches stale file paths and broken endpoint references before they silently mislead other agents.
 
-### Stage 2 — Planning
+This runs three stages automatically: test stubs → implementation → QA + docs validation. The command stops on failure and reports what needs fixing.
+
+For ad-hoc work, bug fixes, or situations where the full pipeline is overkill, the individual agents remain directly invokable: `/test-planner`, `/developer`, `/qa-engineer`, `/documentation-steward`.
+
+### [HUMAN GATE 2] — Review report and close issue
+
+Read the consolidated report from `/develop`. If the implementation is correct:
+
 ```
-/product-planner <feature description>
+gh issue close <N>
 ```
-Turns an issue or idea into a formal plan. Creates:
-- `markdown/plans/plan-{slug}.md` — implementation steps and critical files
-- `markdown/stories/{NN}-{slug}.md` — new section with 2–5 user stories (index updated)
-- `markdown/features/reference/{slug}.md` — documentation stub (features README updated)
 
-**[HUMAN GATE]** Review and correct the generated stories and plan before proceeding. Adjust acceptance criteria, scope, and step order as needed. Nothing is implemented until the plan is approved.
+(The `gh issue close` command appears in the report when the plan slug contains an issue number.)
 
-### Stage 3 — Implementation
-```
-/developer <plan-slug>
-```
-Implements the approved plan step-by-step. Reads all critical files, follows existing conventions, runs pytest and a syntax check, and fills in the feature description stub with actual endpoint signatures.
-
-The developer agent never creates PRs or pushes to remote.
-
-### Stage 4 — Review gates
-
-Run these after implementation completes. All are read-only; they report findings but do not fix.
+### Review gates (run after any implementation)
 
 | Agent | When required | Focus |
 |---|---|---|
@@ -215,32 +238,37 @@ Run these after implementation completes. All are read-only; they report finding
 | `/product-analyst` | After a sprint or milestone | Story coverage percentage, prioritised gaps |
 | `/systems-architect` | Before a refactor or new subsystem | Architecture risks, N+1 queries, background job resilience |
 
-Address any **High** severity findings from `/security-reviewer` or `/systems-architect` before continuing. Medium and Low findings can be deferred to a follow-up plan.
+Address any **High** severity findings from `/security-reviewer` or `/systems-architect` before opening a PR.
 
-### Stage 5 — Pull request
+### PR checklist
 
-**[HUMAN GATE]** The developer creates the PR. No agent pushes code or opens PRs.
-
-Checklist before opening the PR:
 - [ ] `/security-reviewer` — no High findings
 - [ ] `/qa-engineer` — all tests pass
 - [ ] `markdown/features/` stub filled in (no `*(planned)*` for implemented routes)
 - [ ] `.env.example` updated if new env vars were added
 - [ ] `markdown/features/README.md` updated if a new feature file was created
 
-### Stage 6 — Post-merge (optional)
-```
-/agent-steward
-```
-Re-run if the merge renamed files, added backend modules, or removed endpoints — keeps agent definitions valid for the next session.
-
 ---
 
-### Scheduled: Dependency Scout
-A weekly scheduled job (runs Monday 09:23) checks every pinned package in `backend/requirements.txt` against PyPI and flags outdated or security-relevant versions. It is session-scoped — re-register it at the start of a session with:
+## Scheduled Jobs
 
-```
-/schedule weekly dep check on Monday mornings
-```
+These are session-scoped — re-register at the start of a session.
 
-Or run an ad-hoc check any time by asking: *"Check backend/requirements.txt packages for CVEs."*
+### Issue Crawler (re-register with `/schedule daily issue crawl at 8am`)
+
+Fetches open GitHub issues and converts unplanned ones to plan files automatically.
+
+**What it does:**
+1. Read `markdown/plans/.issue-index` to find already-planned issue numbers
+2. Run `gh issue list --state open --json number,title,body` to fetch open issues
+3. For each issue number not in the index:
+   a. Run product-planner logic on `"{title} — {body}"` as the feature description
+   b. Name the plan `plan-issue-{N}-{slug}.md`
+   c. Append `{N} plan-issue-{N}-{slug}` to `markdown/plans/.issue-index`
+4. Report how many plans were created
+
+Plans are created but not implemented — the human reviews them and runs `/develop` when ready.
+
+### Dependency Scout (re-register with `/schedule weekly dep check on Monday mornings`)
+
+Checks every pinned package in `backend/requirements.txt` against PyPI and flags outdated or security-relevant versions. Run an ad-hoc check any time by asking: *"Check backend/requirements.txt packages for CVEs."*
