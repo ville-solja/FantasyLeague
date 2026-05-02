@@ -41,7 +41,7 @@ Authenticates with username and password.
 ```
 
 - Returns 401 if credentials are invalid.
-- Returns `{ "username", "is_admin", "tokens", "must_change_password" }` and sets the session cookie.
+- Returns `{ "username", "is_admin", "tokens" }` and sets the session cookie. (`must_change_password` is only returned by `GET /me`.)
 - Records a `user_login` audit log entry.
 
 ### `POST /logout`

@@ -1,7 +1,7 @@
 import logging
 
 from database import SessionLocal
-from models import Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan
+from models import Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 from scoring import fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -185,8 +185,6 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
             sen_placed=p.get("sen_placed", 0),
             tower_damage=p.get("tower_damage", 0),
             hero_id=p.get("hero_id"),
-<<<<<<< HEAD
-=======
             last_hits=p.get("last_hits", 0),
             denies=p.get("denies", 0),
             towers_killed=p.get("towers_killed", 0),
@@ -196,7 +194,6 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
             rune_pickups=p.get("rune_pickups", 0),
             firstblood_claimed=int(bool(p.get("firstblood_claimed"))),
             stuns=float(p.get("stuns") or 0),
->>>>>>> 25cc59e (Initial commit)
             fantasy_points=fantasy_score(p, weights)
         )
         db.add(stat)
@@ -208,3 +205,26 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
                 db.add(MatchBan(match_id=match_id, hero_id=pb.get("hero_id")))
 
     db.commit()
+
+    mvp = db.query(TwitchMVP).filter_by(match_id=match_id).first()
+    if mvp:
+        pms_row = db.query(PlayerMatchStats).filter_by(
+            player_id=mvp.player_id, match_id=match_id
+        ).first()
+        if pms_row:
+            mvp_weights = {w.key: w.value for w in db.query(Weight).all()}
+            from scoring import fantasy_score as _fantasy_score
+            base_pts = _fantasy_score({
+                "kills": pms_row.kills or 0, "deaths": pms_row.deaths or 0,
+                "gold_per_min": pms_row.gold_per_min or 0, "obs_placed": pms_row.obs_placed or 0,
+                "last_hits": pms_row.last_hits or 0, "denies": pms_row.denies or 0,
+                "towers_killed": pms_row.towers_killed or 0, "roshan_kills": pms_row.roshan_kills or 0,
+                "teamfight_participation": pms_row.teamfight_participation or 0.0,
+                "camps_stacked": pms_row.camps_stacked or 0, "rune_pickups": pms_row.rune_pickups or 0,
+                "firstblood_claimed": pms_row.firstblood_claimed or 0, "stuns": pms_row.stuns or 0.0,
+            }, mvp_weights)
+            bonus_pct = mvp_weights.get("mvp_bonus_pct", 10.0)
+            pms_row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4)
+            pms_row.is_mvp = True
+            db.commit()
+            logger.info("Ingest: applied MVP bonus to player %d match %d", mvp.player_id, match_id)

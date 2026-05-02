@@ -106,11 +106,7 @@
     <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
     <div style="overflow-x:auto;">
       <table>
-<<<<<<< HEAD
-        <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th></tr></thead>
-=======
         <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th></tr></thead>
->>>>>>> 25cc59e (Initial commit)
         <tbody id="playerModalHistory"></tbody>
       </table>
     </div>
@@ -160,6 +156,7 @@
   <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
+  <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin</button>
 </div>
 
@@ -206,7 +203,7 @@
     <div class="panel">
       <h2>Twitch Account</h2>
       <div id="twitchLinked" style="display:none">
-        <p style="color:#9147ff;font-weight:600;margin-bottom:6px">✓ Twitch account linked</p>
+        <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
         <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live Kanaliiga streams.</p>
       </div>
       <div id="twitchUnlinked" style="display:none">
@@ -285,11 +282,7 @@
       <div style="margin-top:10px;">
         <button class="ghost" style="font-size:0.8rem;" onclick="toggleScoringInfo()">How is scoring calculated?</button>
         <div id="scoringInfo" style="display:none;margin-top:10px;font-size:0.82rem;color:#888;line-height:1.6;">
-          Fantasy points are calculated from each player's match stats using configurable weights:<br>
-          <strong style="color:#aaa;">Kills × kill_weight + Assists × assist_weight − Deaths × death_weight
-          + GPM × gpm_weight + Observer wards × obs_weight + Sentry wards × sen_weight
-          + Tower damage × tower_dmg_weight</strong><br>
-          Weights are set via the <code>WEIGHTS_JSON</code> environment variable and applied on restart.
+          Stats, weights, rarity bonuses, and card modifiers are all explained on the <button class="inline-tab-link" onclick="switchTab('howtoplay')">How to Play</button> tab. Values are live — they update whenever an admin adjusts the weights.
         </div>
       </div>
       <div class="status" id="deckStatus"></div>
@@ -396,6 +389,99 @@
   </div>
 </div>
 
+<!-- TAB: HOW TO PLAY -->
+<div id="tab-howtoplay" class="tab-content">
+  <div class="grid">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Getting Started</h2>
+
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kanaliiga Fantasy is a card-collecting game tied to real Dota 2 league matches. Collect cards, build a roster, and score points based on how your players actually perform each week.</p>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Each card represents a real Kanaliiga player. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
+        <li>Draw a card from the shared seasonal deck by spending <strong>1 token</strong>. The system prefers players you do not yet own — duplicates are only possible once you have a card for every available player.</li>
+        <li>Higher rarity cards receive a flat point bonus on top of base stats and may come with <strong>stat modifiers</strong> that amplify specific scoring categories.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Roster &amp; Weekly Lock</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Activate up to <strong>5 cards</strong> as your active roster. Remaining cards sit on the bench and do not score.</li>
+        <li>Every week the roster <strong>locks automatically</strong>. Locked cards earn fantasy points from every Kanaliiga match played during that week.</li>
+        <li>You can swap bench cards in and out freely before the lock, but cannot change the roster once the week is locked.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Earning Tokens</h3>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li><strong>+1 token</strong> at the start of each new week.</li>
+        <li>Watch Kanaliiga streams on Twitch — linked viewers receive token drops when the broadcaster selects a match MVP.</li>
+        <li>Redeem <strong>promo codes</strong> distributed by admins for bonus tokens.</li>
+      </ul>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Twitch &amp; MVP</h2>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Viewers</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Open the Kanaliiga panel on any Kanaliiga stream and link your Fantasy account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
+        <li>Once linked, your token balance is shown in the panel and you are eligible for token drops.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Broadcasters</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Install the <strong>Kanaliiga Fantasy</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
+        <li>After a match, open <strong>Quick Actions</strong> in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
+        <li>Select the series (team vs team) → the specific match (Match 1, Match 2…) → the MVP player, then confirm.</li>
+        <li>Token drops fire automatically on confirmation: up to 20 randomly selected linked viewers receive +1 token each. Drops only fire once per match — re-confirming a different MVP does not re-drop.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">MVP Fantasy Bonus</h3>
+      <p style="color:#ccc;font-size:0.9rem;">The confirmed MVP receives a bonus on their fantasy score for that specific match. The bonus is applied retroactively and is reflected in all leaderboards and roster totals. Current bonus: <strong id="howtoplay-mvp-bonus">—</strong>.</p>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Scoring &amp; Modifiers</h2>
+
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Fantasy points are calculated per match from raw in-game stats. Most stats are multiplied by a weight and summed. Deaths use a <strong>survival bonus pool</strong>: you start with a fixed point reward for surviving, reduced by a set amount per death — never going below zero.</p>
+
+      <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
+
+        <div style="flex:1;min-width:220px;">
+          <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Stat Weights</h3>
+          <table>
+            <thead><tr><th>Stat</th><th>Points per unit</th></tr></thead>
+            <tbody id="howtoplay-stats-tbody"><tr><td colspan="2" style="color:#444;">—</td></tr></tbody>
+          </table>
+        </div>
+
+        <div style="flex:1;min-width:180px;">
+          <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Rarity Bonus</h3>
+          <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">Flat multiplier applied to a card's total score.</p>
+          <table>
+            <thead><tr><th>Rarity</th><th>Bonus</th></tr></thead>
+            <tbody id="howtoplay-rarity-tbody"><tr><td colspan="2" style="color:#444;">—</td></tr></tbody>
+          </table>
+        </div>
+
+        <div style="flex:1;min-width:220px;">
+          <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Card Modifiers</h3>
+          <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">Modifiers are assigned at draw time and each boost one scoring stat's contribution.</p>
+          <table>
+            <thead><tr><th>Rarity</th><th>Modifiers</th></tr></thead>
+            <tbody id="howtoplay-mods-tbody"><tr><td colspan="2" style="color:#444;">—</td></tr></tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <p style="color:#999;font-size:0.8rem;">Weights are configured by administrators and may be adjusted between seasons. The values above are live — they update whenever an admin changes the weights.</p>
+    </div>
+
+  </div>
+</div>
+
 <!-- TAB: ADMIN -->
 <div id="tab-admin" class="tab-content">
   <div class="grid">
@@ -429,7 +515,7 @@
         <h2>Promo Codes</h2>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
           <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
-          <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" />
+          <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
           <button onclick="createCode()">Create</button>
           <button class="secondary" onclick="loadCodes()">Refresh</button>
         </div>
@@ -443,28 +529,28 @@
       <div class="panel">
         <h2>Refresh Schedule Cache</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
-        <button onclick="refreshSchedule()">Refresh</button>
+        <button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button>
         <div class="status" id="scheduleRefreshStatus"></div>
       </div>
 
       <div class="panel">
         <h2>Recalculate Fantasy Points</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
-        <button onclick="recalculate()">Recalculate</button>
+        <button id="recalculateBtn" onclick="recalculate()">Recalculate</button>
         <div class="status" id="recalcStatus"></div>
       </div>
 
       <div class="panel">
         <h2>Re-enrich Player Profiles</h2>
         <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
-        <button onclick="enrichProfiles()">Re-enrich profiles</button>
+        <button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button>
         <div class="status" id="enrichStatus"></div>
       </div>
 
       <div class="panel">
         <h2>Ingest League</h2>
         <input id="leagueId" type="number" placeholder="League ID e.g. 19369" style="width:100%;margin-bottom:8px;" />
-        <button onclick="ingestLeague()" style="width:100%;">Ingest</button>
+        <button id="ingestBtn" onclick="ingestLeague()" style="width:100%;">Ingest</button>
         <div class="status" id="ingestStatus"></div>
       </div>
 
@@ -482,6 +568,14 @@
 </div>
 
 <div id="version-badge" class="version-badge" style="display:none"></div>
-<script src="/app.js"></script>
+<script src="/app-globals.js"></script>
+<script src="/app-auth.js"></script>
+<script src="/app-cards.js"></script>
+<script src="/app-roster.js"></script>
+<script src="/app-players.js"></script>
+<script src="/app-leaderboard.js"></script>
+<script src="/app-admin.js"></script>
+<script src="/app-profile.js"></script>
+<script src="/app-init.js"></script>
 </body>
 </html>

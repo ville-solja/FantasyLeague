@@ -91,15 +91,17 @@ h2 {
   color: var(--fg-muted);
 }
 
-.header-profile-btn {
+.header-profile-btn,
+#headerLoginBtn,
+#headerLogoutBtn {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
   font-size: var(--fs-sm);
   letter-spacing: var(--tr-wider);
   text-transform: uppercase;
   padding: 4px 10px;
-  color: var(--accent);
 }
+.header-profile-btn { color: var(--accent); }
 .header-profile-btn:hover { color: var(--accent-hover); }
 
 /* ============================================================
@@ -199,6 +201,38 @@ button.ghost {
 }
 button.ghost:hover { color: var(--fg-muted); border-color: var(--k-ink-500); background: none; }
 
+button.danger {
+  background: var(--k-err);
+  color: var(--k-ink-white);
+  border: none;
+}
+button.danger:hover { background: #c83838; }
+
+button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Inline text link — resets button chrome for use inside body copy */
+.inline-tab-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  display: inline;
+  white-space: normal;
+}
+.inline-tab-link:hover { color: var(--accent-hover); background: none; }
+
 /* ============================================================
    TABLE
    ============================================================ */
@@ -240,6 +274,18 @@ input.invalid { border-color: var(--k-err); }
   display: block;
   min-height: 16px;
   margin-bottom: 8px;
+}
+
+/* ============================================================
+   INLINE CONFIRM ROWS (e.g. delete code confirmation)
+   ============================================================ */
+.delete-confirm-row td {
+  background: rgba(224, 80, 80, 0.06);
+  border-bottom: var(--bw-hair) solid rgba(224, 80, 80, 0.25);
+}
+.delete-confirm-msg {
+  font-size: var(--fs-sm);
+  color: var(--k-err);
 }
 
 /* ============================================================
@@ -449,7 +495,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   border-bottom: var(--bw-hair) solid var(--k-ink-900);
   font-size: var(--fs-sm);
 }
-.series-row.past { opacity: 0.6; }
+.series-row.past { color: var(--fg-dim, #888); }
 .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .series-team.right { text-align: right; }
 .series-score {

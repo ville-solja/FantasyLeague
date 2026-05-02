@@ -27,6 +27,8 @@ Each player has four cards in the deck with different rarities. In API responses
 
 The deck is shared across all users. Each card can only be owned by one user at a time. Cards are generated per season by an admin ingestion action, seeded from a given OpenDota league ID.
 
+Each seeding batch is assigned a `generation` integer (starting at 1). Mid-season top-ups add a second batch at generation 2, a third at generation 3, and so on. Generation tracking is what makes seeding idempotent — a player is skipped only if a card for that player already exists in the current generation, not across all generations. See `POST /admin/top-up-cards` in `core/admin.md`.
+
 ## Card States
 
 | State | Meaning |
@@ -41,18 +43,6 @@ The deck is shared across all users. Each card can only be owned by one user at 
 Fantasy points for a card are derived from the real-life player's match stats during the locked week:
 
 ```
-<<<<<<< HEAD
-points = kills × kill_weight
-       + assists × assist_weight
-       - deaths × death_weight
-       + gpm × gpm_weight
-       + obs_wards × obs_weight
-       + sen_wards × sen_weight
-       + tower_damage × tower_dmg_weight
-```
-
-Weights are configured by the admin under **Scoring Weights** in the admin panel. Changes apply to future recalculations only.
-=======
 points = kills                   × kill_weight
        + last_hits               × last_hits_weight
        + denies                  × denies_weight
@@ -71,7 +61,6 @@ points = kills                   × kill_weight
 The death contribution awards `death_pool` points (default 3.0) for surviving with 0 deaths, deducting `death_deduction` (default 0.3) per death, floored at 0. A player with 10 or more deaths scores 0 from this component.
 
 All weights are configured by the admin under **Scoring Weights** in the admin panel. Changes apply to future recalculations only.
->>>>>>> 25cc59e (Initial commit)
 
 ## Card Modifiers
 
@@ -79,15 +68,6 @@ Card modifiers are per-stat bonuses assigned to a card at draw time. They boost 
 
 ### How modifiers work
 
-<<<<<<< HEAD
-Each modifier targets one of the scoring stats (kills, assists, deaths, GPM, observer wards, sentry wards, tower damage) and carries a `bonus_pct` percentage value.
-
-The modifier always benefits the card owner:
-- For **positive-weight stats** (kills, assists, GPM, wards, tower damage):  
-  `contribution = stat_value × weight × (1 + bonus_pct / 100)`
-- For **negative-weight stats** (deaths):  
-  `contribution = stat_value × weight × (1 - bonus_pct / 100)` — the penalty is reduced
-=======
 Each modifier targets one of the scoring stats and carries a `bonus_pct` percentage value.
 
 Valid modifier targets: `kills`, `deaths`, `gold_per_min`, `obs_placed`, `last_hits`, `denies`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
@@ -97,20 +77,10 @@ The modifier always benefits the card owner:
   `contribution = stat_value × weight × (1 + bonus_pct / 100)`
 - For **deaths**:  
   `contribution = max(0, death_pool − deaths × death_deduction) × (1 + bonus_pct / 100)` — the survival bonus is amplified. This modifier is most valuable on players who rarely die; it has no effect when the death contribution is already 0.
->>>>>>> 25cc59e (Initial commit)
 
 ### Full scoring formula with modifiers
 
 ```
-<<<<<<< HEAD
-For each stat:
-  base = stat_value × stat_weight
-  if modifier present and weight > 0:  points += base × (1 + modifier_bonus_pct / 100)
-  if modifier present and weight < 0:  points += base × (1 - modifier_bonus_pct / 100)
-  if no modifier:                       points += base
-
-After summing all stats:
-=======
 For each standard stat (kills, last_hits, denies, gpm, obs, towers, roshan,
                         participation, stacks, runes, firstblood, stuns):
   base = stat_value × stat_weight
@@ -123,7 +93,6 @@ For deaths:
   points += base                                      if no modifier
 
 After summing all contributions:
->>>>>>> 25cc59e (Initial commit)
   card_points = stat_total × (1 + rarity_bonus_pct / 100)
 ```
 
@@ -132,11 +101,7 @@ After summing all contributions:
 When a card is drawn from the deck, modifiers are randomly assigned:
 
 1. **How many**: determined by `modifier_count_<rarity>` weight (e.g. `modifier_count_rare = 1` → 1 modifier on a rare card).
-<<<<<<< HEAD
-2. **Which stats**: randomly sampled without replacement from the 7 scoring stats.
-=======
 2. **Which stats**: randomly sampled without replacement from the 13 valid stat keys (12 scoring stats + `deaths`).
->>>>>>> 25cc59e (Initial commit)
 3. **Bonus %**: all modifiers on a card share the same `modifier_bonus_pct` value.
 
 All three settings are configurable in the admin panel under Scoring Weights.

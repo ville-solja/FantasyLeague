@@ -26,7 +26,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
-                    TwitchTokenDrop, User, Week)
+                    TwitchTokenDrop, User, Week, Weight)
+from scoring import fantasy_score
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
 
@@ -128,6 +129,40 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         )
     except Exception:
         logger.exception("Twitch PubSub broadcast failed")
+
+
+def _post_chat_message(channel_id: str, message: str):
+    """Post a message to Twitch chat via the Helix Send Chat Message API.
+
+    Requires TWITCH_BOT_ACCESS_TOKEN (user token with user:write:chat scope)
+    and TWITCH_BOT_USER_ID (Twitch user ID of the sending account).
+    Silently skips if either var is unset.
+    """
+    if os.getenv("TWITCH_LOCAL_DEV") == "true":
+        logger.info("Twitch chat (dev): %s", message)
+        return
+    bot_token   = os.getenv("TWITCH_BOT_ACCESS_TOKEN", "").strip()
+    bot_user_id = os.getenv("TWITCH_BOT_USER_ID", "").strip()
+    client_id   = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
+    if not bot_token or not bot_user_id or not client_id:
+        return
+    try:
+        _requests.post(
+            "https://api.twitch.tv/helix/chat/messages",
+            headers={
+                "Authorization": f"Bearer {bot_token}",
+                "Client-Id": client_id,
+                "Content-Type": "application/json",
+            },
+            json={
+                "broadcaster_id": channel_id,
+                "sender_id": bot_user_id,
+                "message": message,
+            },
+            timeout=5,
+        )
+    except Exception:
+        logger.exception("Twitch chat message failed")
 
 
 # ---------------------------------------------------------------------------
@@ -247,38 +282,23 @@ def current_matches(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return started/completed matches from current week grouped into series by team pair."""
+    """Return the 5 most recent series that have ingested match data, across any week."""
     now = int(time.time())
-    week = (
-        db.query(Week)
-        .filter(Week.start_time <= now, Week.end_time >= now)
-        .first()
-    )
-    if not week:
-        week = (
-            db.query(Week)
-            .filter(Week.is_locked == True)  # noqa: E712
-            .order_by(Week.start_time.desc())
-            .first()
-        )
-    if not week:
-        return {"week": None, "series": []}
+    lookback = now - 30 * 86400
 
-    # Only matches that have already started (streamer can't pick MVP for a future game).
-    # Respect week_override_id so admin-reassigned matches appear correctly.
-    week_end = min(week.end_time, now)
-    from sqlalchemy import or_, and_
+    ingested_match_ids = [
+        r.match_id
+        for r in db.query(PlayerMatchStats.match_id).distinct().all()
+    ]
+    if not ingested_match_ids:
+        return {"series": []}
+
     matches = (
         db.query(Match)
         .filter(
-            or_(
-                Match.week_override_id == week.id,
-                and_(
-                    Match.week_override_id == None,  # noqa: E711
-                    Match.start_time >= week.start_time,
-                    Match.start_time <= week_end,
-                ),
-            )
+            Match.match_id.in_(ingested_match_ids),
+            Match.start_time <= now,
+            Match.start_time >= lookback,
         )
         .order_by(Match.start_time)
         .all()
@@ -309,6 +329,19 @@ def current_matches(
         p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
     } if mvp_player_ids else {}
 
+    # Bulk-fetch all player stats for the window's matches in one query
+    stats_by_match: dict[int, list] = {}
+    if match_ids:
+        all_stats = (
+            db.query(PlayerMatchStats, Player, Team)
+            .join(Player, PlayerMatchStats.player_id == Player.id)
+            .join(Team, PlayerMatchStats.team_id == Team.id)
+            .filter(PlayerMatchStats.match_id.in_(match_ids))
+            .all()
+        )
+        for pms, p, t in all_stats:
+            stats_by_match.setdefault(pms.match_id, []).append((pms, p, t))
+
     result_series = []
     for (tid_lo, tid_hi), series_matches in series_map.items():
         team1 = teams_by_id.get(tid_lo) if tid_lo else None
@@ -316,13 +349,7 @@ def current_matches(
 
         match_list = []
         for i, m in enumerate(series_matches):  # already sorted by start_time
-            stats = (
-                db.query(PlayerMatchStats, Player, Team)
-                .join(Player, PlayerMatchStats.player_id == Player.id)
-                .join(Team, PlayerMatchStats.team_id == Team.id)
-                .filter(PlayerMatchStats.match_id == m.match_id)
-                .all()
-            )
+            stats = stats_by_match.get(m.match_id, [])
             players = [
                 {
                     "player_id": pms.player_id,
@@ -352,7 +379,30 @@ def current_matches(
     # Most-recently-played series first
     result_series.sort(key=lambda s: s["matches"][-1]["start_time"] if s["matches"] else 0, reverse=True)
 
-    return {"week": {"id": week.id, "label": week.label}, "series": result_series}
+    return {"series": result_series[:5]}
+
+
+# ---------------------------------------------------------------------------
+# MVP bonus helpers
+# ---------------------------------------------------------------------------
+
+def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, weights: dict):
+    """Set or clear the MVP flag and adjust fantasy_points on a PlayerMatchStats row."""
+    row = db.query(PlayerMatchStats).filter_by(player_id=player_id, match_id=match_id).first()
+    if not row:
+        return
+    base_pts = fantasy_score({
+        "kills": row.kills or 0, "deaths": row.deaths or 0,
+        "gold_per_min": row.gold_per_min or 0, "obs_placed": row.obs_placed or 0,
+        "last_hits": row.last_hits or 0, "denies": row.denies or 0,
+        "towers_killed": row.towers_killed or 0, "roshan_kills": row.roshan_kills or 0,
+        "teamfight_participation": row.teamfight_participation or 0.0,
+        "camps_stacked": row.camps_stacked or 0, "rune_pickups": row.rune_pickups or 0,
+        "firstblood_claimed": row.firstblood_claimed or 0, "stuns": row.stuns or 0.0,
+    }, weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4) if apply else round(base_pts, 4)
+    row.is_mvp = apply
 
 
 # ---------------------------------------------------------------------------
@@ -377,45 +427,11 @@ def _active_pool(db: Session, channel_id: str) -> list[str]:
 # MVP selection — also triggers a one-time token drop for the match
 # ---------------------------------------------------------------------------
 
-class MVPBody(BaseModel):
-    match_id: int
-    player_id: int
-
-
-@router.post("/mvp")
-def set_mvp(
-    body: MVPBody,
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Set match MVP and trigger a one-time token drop to the presence pool.
-
-    The token drop fires once per match (keyed by match_id). Re-setting the MVP
-    on the same match updates the player record but does not re-drop tokens.
-    """
-    _require_broadcaster(payload)
-    channel_id = payload.get("channel_id", "")
-
-    player = db.query(Player).filter_by(id=body.player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
-
-    # Upsert MVP record
-    existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
-    if existing:
-        existing.player_id = body.player_id
-        existing.channel_id = channel_id
-        existing.selected_at = int(time.time())
-    else:
-        db.add(TwitchMVP(
-            match_id=body.match_id,
-            player_id=body.player_id,
-            channel_id=channel_id,
-            selected_at=int(time.time()),
-        ))
-
-    # Token drop — once per match
-    drop_key = str(body.match_id)
+def _execute_token_drop(
+    db: Session, channel_id: str, match_id: int, weights: dict
+) -> tuple[list[str], int, bool]:
+    """Grant tokens to a random sample of present linked viewers. Returns (winner_names, pool_size, already_dropped)."""
+    drop_key = str(match_id)
     already_dropped = bool(
         db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).first()
     )
@@ -448,8 +464,62 @@ def set_mvp(
                 actor_id=None,
                 actor_username="twitch",
                 action="twitch_token_drop",
-                detail=f"channel={channel_id} match={body.match_id} count={len(winner_names)} winners={','.join(winner_names)}",
+                detail=f"channel={channel_id} match={match_id} count={len(winner_names)} winners={','.join(winner_names)}",
             ))
+
+    return winner_names, pool_size, already_dropped
+
+
+class MVPBody(BaseModel):
+    match_id: int
+    player_id: int
+
+
+@router.post("/mvp")
+def set_mvp(
+    body: MVPBody,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """Set match MVP and trigger a one-time token drop to the presence pool.
+
+    The token drop fires once per match (keyed by match_id). Re-setting the MVP
+    on the same match updates the player record but does not re-drop tokens.
+    """
+    _require_broadcaster(payload)
+    channel_id = payload.get("channel_id", "")
+
+    player = db.query(Player).filter_by(id=body.player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+
+    # Upsert MVP record — save previous player_id before overwriting
+    existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
+    old_player_id = existing.player_id if existing else None
+    if existing:
+        existing.player_id = body.player_id
+        existing.channel_id = channel_id
+        existing.selected_at = int(time.time())
+    else:
+        db.add(TwitchMVP(
+            match_id=body.match_id,
+            player_id=body.player_id,
+            channel_id=channel_id,
+            selected_at=int(time.time()),
+        ))
+
+    # Clear bonus from previous MVP if different player
+    if old_player_id and old_player_id != body.player_id:
+        _apply_mvp_bonus(db, old_player_id, body.match_id, apply=False, weights=weights)
+    # Apply bonus to new MVP
+    _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
+
+    # Token drop — once per match
+    winner_names, pool_size, already_dropped = _execute_token_drop(
+        db, channel_id, body.match_id, weights
+    )
 
     db.add(AuditLog(
         timestamp=int(time.time()),
@@ -465,6 +535,16 @@ def set_mvp(
         "match_id": body.match_id,
         "token_drop_winners": winner_names,
     })
+
+    token_name = os.getenv("TOKEN_NAME", "tokens")
+    chat_msg = f"Match MVP: {player.name}!"
+    if winner_names:
+        winners_str = ", ".join(winner_names)
+        chat_msg += f" Token drop winners (+1 {token_name}): {winners_str}"
+    elif not already_dropped and pool_size == 0:
+        chat_msg += " (No linked viewers in the drop pool.)"
+    _post_chat_message(channel_id, chat_msg)
+
     return {
         "match_id": body.match_id,
         "player_id": body.player_id,

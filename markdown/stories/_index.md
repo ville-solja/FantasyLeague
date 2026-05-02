@@ -8,5 +8,5 @@
 | [data-and-players.md](data-and-players.md) | Dota data ingestion, player profile enrichment, AI bios |
 | [leaderboard.md](leaderboard.md) | Season/weekly leaderboard, player/team browser, weight simulation |
 | [admin.md](admin.md) | User management, promo codes, scoring config, audit logs, version badge |
-| [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup |
-| [ux-and-polish.md](ux-and-polish.md) | Schedule tab, scoring explanation, My Team layout, CI testing |
+| [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling |
+| [ux-and-polish.md](ux-and-polish.md) | Schedule tab, scoring explanation, My Team layout, CI testing, How to Play tab |

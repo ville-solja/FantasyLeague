@@ -49,11 +49,7 @@ As a user, I want each card to have a defined number of stat modifiers.
 As an admin, I want to be able to adjust the weights of modifiers in order to tune balance.
 
 **Acceptance criteria**
-<<<<<<< HEAD
-- Modifiers manageable from environment variables
-=======
 - Modifier tuning is controlled by normal `weights` rows (`modifier_count_*`, `modifier_bonus_pct`) — same mechanism as scoring weights (DB defaults from `backend/seed.py`, optional `WEIGHTS_JSON` overrides on startup)
->>>>>>> 25cc59e (Initial commit)
 - Individual cards are not modified — entire modifier weights are adjusted at once
 - Modifier changes are not applied retroactively without an explicit recalculate action
 
@@ -131,7 +127,7 @@ As a user, I want to click the player name displayed on a viewed card so that I 
 
 ---
 
-### Mid-Season Card Top-Up *(not yet implemented)*
+### Mid-Season Card Top-Up
 **User story**
 As an admin, I want to add a new batch of cards to the deck mid-season so that new users joining late have cards to draw.
 

@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Agent Steward** for this project.
@@ -23,6 +23,7 @@ Verify `.claude/commands/` exists and contains at least one `.md` file. If missi
 ## Files to read
 
 - All `.md` files in `.claude/commands/` — read each one
+- `.claude/commands/README.md` — the agent index that must stay in sync
 - `backend/main.py` — to verify endpoint names cited in agent prompts
 - `CLAUDE.MD` — to verify slash command entries match the files on disk
 
@@ -50,6 +51,14 @@ Flag any agent missing these headers.
 
 ### 5. CLAUDE.MD consistency
 For each slash command listed in `CLAUDE.MD`'s `## Developer Agents` section, verify the corresponding `.md` file exists in `.claude/commands/`. Flag any entry whose file is missing (dead link).
+
+### 6. README.md sync
+Read `.claude/commands/README.md`. Verify that:
+- Every `.md` file in `.claude/commands/` (excluding `README.md` itself) has a row in the agent reference table.
+- No rows reference agent files that no longer exist.
+- The "Recommended session start" section still reflects the correct workflow entry points.
+
+If any agent is missing from the README or a row is stale, propose the updated table rows and ask the user to confirm before writing.
 
 ---
 
