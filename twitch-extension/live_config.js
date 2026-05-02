@@ -34,7 +34,7 @@ function loadSeries() {
         _seriesData = (data && data.series) || [];
         var container = el("series-list");
         if (_seriesData.length === 0) {
-            container.innerHTML = '<p class="muted">No started matches found for the current week.</p>';
+            container.innerHTML = '<p class="muted">No recent matches with stats found. Check back after the next ingest cycle.</p>';
             return;
         }
         container.innerHTML = "";

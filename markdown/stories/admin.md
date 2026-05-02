@@ -45,17 +45,11 @@ As an admin, I want to create promo codes that grant tokens to users who redeem 
 As an admin, I want to configure the scoring weights for match stats.
 
 **Acceptance criteria**
-<<<<<<< HEAD
-- Each stat weight (kills, assists, deaths, GPM, wards, tower damage) is editable from environment variables
-- Rarity modifier percentages are also configurable
-- Weight changes take effect for future calculations; use Recalculate to apply retroactively
-=======
 - Weights are stored in the database (`weights` table) and surfaced read-only in the Admin tab (`GET /weights`)
 - Default values come from `backend/seed.py` (`DEFAULT_WEIGHTS`); optional startup overrides via `WEIGHTS_JSON` merge into DB on restart
-- Tunables include per-stat weights for the scoring stat set (`kills`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`), death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_*`), and modifier tuning (`modifier_count_*`, `modifier_bonus_pct`)
+- Tunables include per-stat weights for the scoring stat set (`kills`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`), death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_*`), modifier tuning (`modifier_count_*`, `modifier_bonus_pct`), and MVP bonus (`mvp_bonus_pct`)
 - Rarity modifier percentages are also configurable (same weight system)
 - Changing DB weights affects scoring going forward; use **Recalculate** to recompute stored `player_match_stats.fantasy_points` (and downstream card/week totals) from the same stored raw stats
->>>>>>> 25cc59e (Initial commit)
 
 ---
 
@@ -109,11 +103,7 @@ As an admin, I want to force a refresh of the season schedule from the Google Sh
 As an admin, I want visibility into actions that have taken place on the app.
 
 **Acceptance criteria**
-<<<<<<< HEAD
-- Tracks: user registrations, logins, token draws, code redemptions, admin token grants, league ingestion, weight changes, recalculations, schedule refreshes, code creation and deletion, tester flag toggles
-=======
-- Tracks (non-exhaustive, current server actions): `user_register`, `user_login`, `password_reset_requested`, `token_draw`, `reroll_modifiers`, `token_redeem`, `admin_ingest`, `admin_recalculate`, `admin_schedule_refresh`, `admin_grant_tokens`, `admin_toggle_tester`, `admin_enrich_profiles`, `admin_set_match_week`, `admin_sync_match_weeks`, `admin_sync_toornament`, `admin_code_create`, `admin_code_delete`
->>>>>>> 25cc59e (Initial commit)
+- Tracks (non-exhaustive, current server actions): `user_register`, `user_login`, `password_reset_requested`, `token_draw`, `reroll_modifiers`, `token_redeem`, `admin_ingest`, `admin_recalculate`, `admin_schedule_refresh`, `admin_grant_tokens`, `admin_toggle_tester`, `admin_enrich_profiles`, `admin_set_match_week`, `admin_sync_match_weeks`, `admin_sync_toornament`, `admin_code_create`, `admin_code_delete`, `twitch_mvp_set`, `twitch_token_drop`
 - Each entry includes timestamp, actor username, action type, and a detail string
 - Visible in the Admin tab with most recent entries first
 - Admin-only access

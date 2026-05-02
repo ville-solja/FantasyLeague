@@ -1,9 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index
 from database import Base
-<<<<<<< HEAD
-=======
 from scoring import SCORING_STATS
->>>>>>> 25cc59e (Initial commit)
 
 
 class Player(Base):
@@ -45,8 +42,6 @@ class PlayerMatchStats(Base):
     tower_damage = Column(Integer, default=0)
     hero_id      = Column(Integer, nullable=True)
 
-<<<<<<< HEAD
-=======
     # Expanded scoring stats
     last_hits               = Column(Integer, default=0)
     denies                  = Column(Integer, default=0)
@@ -57,8 +52,7 @@ class PlayerMatchStats(Base):
     rune_pickups            = Column(Integer, default=0)
     firstblood_claimed      = Column(Integer, default=0)
     stuns                   = Column(Float,   default=0.0)
-
->>>>>>> 25cc59e (Initial commit)
+    is_mvp                  = Column(Boolean, default=False)
 
 class Team(Base):
     __tablename__ = "teams"
@@ -77,14 +71,11 @@ class Card(Base):
     card_type = Column(String)  # "common", "rare", "epic", "legendary"
     league_id = Column(Integer, ForeignKey("leagues.id"))
     is_active = Column(Boolean, default=False)
+    generation = Column(Integer, default=1, nullable=False)
 
 
-<<<<<<< HEAD
-_VALID_STAT_KEYS = "('kills','assists','deaths','gold_per_min','obs_placed','sen_placed','tower_damage')"
-=======
 _VALID_STAT_KEYS_LIST = list(SCORING_STATS) + ["deaths"]
 _VALID_STAT_KEYS = "(" + ",".join(f"'{k}'" for k in _VALID_STAT_KEYS_LIST) + ")"
->>>>>>> 25cc59e (Initial commit)
 
 
 class CardModifier(Base):
@@ -242,3 +233,11 @@ class ToornamentSyncLog(Base):
     team1_score         = Column(Integer)
     team2_score         = Column(Integer)
     pushed_at           = Column(Integer)  # Unix timestamp
+
+
+Index('ix_pms_player_id',    PlayerMatchStats.player_id)
+Index('ix_pms_match_id',     PlayerMatchStats.match_id)
+Index('ix_cards_owner_id',   Card.owner_id)
+Index('ix_cards_player_id',  Card.player_id)
+Index('ix_wre_user_week',    WeeklyRosterEntry.user_id, WeeklyRosterEntry.week_id)
+Index('ix_presence_channel_seen', TwitchPresence.channel_id, TwitchPresence.seen_at)

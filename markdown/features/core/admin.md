@@ -9,7 +9,10 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, and `tokens`.
+Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, and `is_tester`.
+
+### `POST /users/{user_id}/toggle-tester`
+Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.
@@ -74,6 +77,26 @@ Automatically bulk-assigns `week_override_id` for all matches based on the Googl
 
 ---
 
+## Card Top-Up
+
+### `POST /admin/top-up-cards`
+Adds one additional full card batch (1 Legendary, 2 Epic, 4 Rare, 8 Common per player) to the unowned pool for a given league. Each top-up is tracked as a separate generation so the operation is idempotent — running it twice does not double the pool.
+
+```json
+{ "league_id": 19369 }
+```
+
+Returns `{ "league_id": N, "generation_added": N }`. Existing owned cards are unaffected. Logged as `admin_top_up_cards`.
+
+---
+
+## Player Profile Enrichment
+
+### `POST /admin/enrich-profiles`
+Triggers a synchronous enrichment batch for players whose profile facts are missing or stale. Enrichment runs automatically in the background (see `reference/player-profile-enrichment.md`); this endpoint forces an immediate pass. Returns `{ "enriched": N, "skipped": M, "errors": K }`. Logged as `admin_enrich_profiles`.
+
+---
+
 ## Data Ingest
 
 ### `POST /ingest/league/{league_id}`
@@ -133,6 +156,9 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_sync_toornament` | Toornament result push |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
+| `admin_toggle_tester` | Admin toggled tester flag on a user |
+| `admin_top_up_cards` | Admin added a new card generation to the deck |
+| `admin_enrich_profiles` | Admin triggered a manual profile enrichment batch |
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `password_reset_requested` | Forgot-password flow issued a temporary password |
 

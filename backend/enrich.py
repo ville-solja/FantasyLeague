@@ -35,7 +35,7 @@ def enrich_players(batch_size=50):
         db.close()
         return 0
 
-    print(f"[ENRICH] Players -> {len(players)}")
+    logger.info("Enrich: processing %d players", len(players))
 
     for player in players:
         account_id = player.id
@@ -57,12 +57,12 @@ def enrich_players(batch_size=50):
             )
 
             avatar_url = profile.get("avatarfull")
-            print(f"[PLAYER] {account_id} -> {name}")
+            logger.info("Enrich: player %d -> %s", account_id, name)
             player.name = name
             player.avatar_url = avatar_url
 
         except Exception as e:
-            print(f"[ERROR] Player {account_id}: {e}")
+            logger.error("Enrich: player %d error: %s", account_id, e)
             player.name = str(account_id)
 
     db.commit()
@@ -72,14 +72,14 @@ def enrich_players(batch_size=50):
 
 def run_enrichment(max_rounds=20):
     for round in range(max_rounds):
-        print(f"[ENRICH] Round {round + 1}")
+        logger.info("Enrich: round %d", round + 1)
         p = enrich_players()
 
         if p == 0:
-            print("[ENRICH] Done")
+            logger.info("Enrich: done")
             return
 
-    print(f"[ENRICH] Stopped after {max_rounds} rounds — some records may still have null names")
+    logger.warning("Enrich: stopped after %d rounds — some records may still have null names", max_rounds)
 
 
 # -----------------------

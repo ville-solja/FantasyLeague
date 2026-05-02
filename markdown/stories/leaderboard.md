@@ -35,11 +35,7 @@ As a user, I want to browse all league players and their performance stats.
 **Acceptance criteria**
 - Players tab lists all players with match count, average points, and total points
 - Filterable by player name or team name
-<<<<<<< HEAD
-- Clicking a player opens a detail modal with full match history and per-match stats (K/A/D, GPM, wards, tower damage, fantasy points)
-=======
 - Clicking a player opens a detail modal with full match history and per-match stats (fantasy points, K/A/D, GPM, plus the expanded scoring stat fields stored per match)
->>>>>>> 25cc59e (Initial commit)
 
 ---
 

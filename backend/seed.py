@@ -7,10 +7,7 @@ logger = logging.getLogger(__name__)
 from models import User, Card, Weight, PlayerMatchStats, Match
 from auth import hash_password
 from weeks import generate_weeks, auto_lock_weeks
-<<<<<<< HEAD
-=======
 from scoring import SCORING_STATS
->>>>>>> 25cc59e (Initial commit)
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
 
@@ -43,7 +40,7 @@ def seed_users():
     db.close()
 
 
-def seed_cards(league_id: int):
+def seed_cards(league_id: int, generation: int = 1):
     db = SessionLocal()
 
     player_ids = (
@@ -55,14 +52,17 @@ def seed_cards(league_id: int):
     )
     player_ids = [r[0] for r in player_ids]
 
-    seeded_player_ids = {
+    already_seeded = {
         r[0] for r in
-        db.query(Card.player_id).filter(Card.league_id == league_id).distinct().all()
+        db.query(Card.player_id).filter(
+            Card.league_id == league_id,
+            Card.generation == generation,
+        ).distinct().all()
     }
 
     count = 0
     for player_id in player_ids:
-        if player_id in seeded_player_ids:
+        if player_id in already_seeded:
             continue
         for card_type, quantity in CARD_SCHEMA:
             for _ in range(quantity):
@@ -71,25 +71,18 @@ def seed_cards(league_id: int):
                     owner_id=None,
                     card_type=card_type,
                     league_id=league_id,
+                    generation=generation,
                 ))
                 count += 1
 
     db.commit()
     db.close()
-    logger.info("Seeded %d cards for league %d across %d players", count, league_id, len(player_ids))
+    logger.info("Seeded %d cards (gen %d) for league %d across %d players",
+                count, generation, league_id, len(player_ids))
 
 
 DEFAULT_WEIGHTS = [
     # --- Scoring stat weights ---
-<<<<<<< HEAD
-    {"key": "kills",             "label": "Kills",                              "value": 3.0},
-    {"key": "assists",           "label": "Assists",                            "value": 2.0},
-    {"key": "deaths",            "label": "Deaths",                             "value": -1.0},
-    {"key": "gold_per_min",      "label": "Gold per minute",                    "value": 0.02},
-    {"key": "obs_placed",        "label": "Observer wards placed",              "value": 1.0},
-    {"key": "sen_placed",        "label": "Sentry wards placed",                "value": 1.5},
-    {"key": "tower_damage",      "label": "Tower damage",                       "value": 0.002},
-=======
     {"key": "kills",                    "label": "Kills",                          "value": 0.3},
     {"key": "last_hits",                "label": "Last hits",                      "value": 0.003},
     {"key": "denies",                   "label": "Denies",                         "value": 0.0003},
@@ -104,7 +97,6 @@ DEFAULT_WEIGHTS = [
     {"key": "stuns",                    "label": "Stuns (seconds)",                "value": 0.05},
     {"key": "death_pool",               "label": "Deaths — pool (0 deaths)",        "value": 3.0},
     {"key": "death_deduction",          "label": "Deaths — deduction per death",    "value": 0.3},
->>>>>>> 25cc59e (Initial commit)
     # --- Rarity bonuses — flat % multiplier on a card's total score ---
     {"key": "rarity_common",     "label": "Rarity bonus — Common (%)",          "value": 0.0},
     {"key": "rarity_rare",       "label": "Rarity bonus — Rare (%)",            "value": 1.0},
@@ -117,6 +109,7 @@ DEFAULT_WEIGHTS = [
     {"key": "modifier_count_legendary", "label": "Modifiers — Legendary (count)",  "value": 3.0},
     # --- Bonus % applied by each modifier ---
     {"key": "modifier_bonus_pct",       "label": "Modifier bonus (%)",             "value": 10.0},
+    {"key": "mvp_bonus_pct",            "label": "MVP bonus (%)",                  "value": 10.0},
 ]
 
 
@@ -138,8 +131,6 @@ def seed_weights():
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning("Could not parse WEIGHTS_JSON — %s", e)
 
-<<<<<<< HEAD
-=======
     required = set(SCORING_STATS) | {"death_pool", "death_deduction",
                                      "rarity_common", "rarity_rare", "rarity_epic", "rarity_legendary",
                                      "modifier_count_common", "modifier_count_rare", "modifier_count_epic", "modifier_count_legendary",
@@ -149,7 +140,6 @@ def seed_weights():
     if missing:
         raise ValueError(f"DEFAULT_WEIGHTS missing required keys: {missing}")
 
->>>>>>> 25cc59e (Initial commit)
     db = SessionLocal()
     for w in DEFAULT_WEIGHTS:
         existing = db.get(Weight, w["key"])

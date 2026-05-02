@@ -218,6 +218,8 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
+| `TWITCH_BOT_ACCESS_TOKEN` | *(empty)* | OAuth access token for the Twitch bot account (used for chat announcements, if applicable) |
+| `TWITCH_BOT_USER_ID` | *(empty)* | Numeric Twitch user ID for the bot account |
 
 ---
 

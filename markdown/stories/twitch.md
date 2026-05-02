@@ -60,3 +60,56 @@ As the Kanaliiga developer, I want to set the EBS URL once in the Twitch develop
 - Running `bash twitch-extension/set-ebs-url.sh <url>` sets the global Configuration Service segment
 - The extension reads `Twitch.ext.configuration.global.content` at startup — URL change takes effect immediately on next panel load
 - `.env` requires only `TWITCH_EXTENSION_CLIENT_ID`, `TWITCH_EXTENSION_SECRET`, and `TWITCH_DROP_MAX`
+
+---
+
+### MVP Fantasy Score Bonus
+**User story**
+As a fantasy league player, I want the designated MVP of a match to earn an extra percentage on their fantasy score for that match so that the broadcast MVP appointment has real in-game value.
+
+**Acceptance criteria**
+- When a broadcaster confirms an MVP via the Twitch extension, that player's `fantasy_points` for that specific match is multiplied by `(1 + mvp_bonus_pct / 100)`
+- If the broadcaster later changes the MVP to a different player for the same match, the old player's bonus is removed and the new player receives it
+- The bonus is reflected immediately in roster point totals, leaderboard standings, and the player match history
+- An MVP match is visually distinguishable from a regular match in the player detail modal
+
+---
+
+### Configurable MVP Bonus Weight
+**User story**
+As an admin, I want to configure the MVP fantasy bonus percentage from the admin weights panel so I can tune its value without code changes.
+
+**Acceptance criteria**
+- A weight key `mvp_bonus_pct` (label: "MVP bonus (%)") is present in the admin weights panel with a default of `10.0`
+- Changing the value and running `POST /recalculate` re-applies the updated bonus to all MVP-flagged matches
+- `mvp_bonus_pct = 0` effectively disables the bonus without removing the MVP flag from past matches
+
+---
+
+## MVP Series Window and Live Polling
+
+### MVP Panel Shows 5 Most Recent Series with Ingested Data
+**User story**
+As a broadcaster, I want the MVP selection panel to always show the 5 most recent series
+that have completed match data so I can appoint MVP even when no matches have been ingested
+for the current week or the series spans a week boundary.
+
+**Acceptance criteria**
+- `GET /twitch/matches/current` returns the 5 most recent series (by latest match `start_time`) that have at least one match with ingested player stats
+- Series are not limited to the current or any single week
+- Series are sorted most-recently-played first
+- If fewer than 5 qualifying series exist, all available are returned
+- Matches within each series are still limited to those that have already started (`start_time ≤ now`)
+- The extension panel shows correct match and player data regardless of week boundary
+
+---
+
+### Faster Ingest Polling During Active Weeks
+**User story**
+As a broadcaster, I want match data to appear in the MVP panel within a few minutes of a
+match ending so I can appoint MVP promptly after the game concludes.
+
+**Acceptance criteria**
+- A new `INGEST_LIVE_POLL_INTERVAL` env var (default: `120`) controls the polling interval used when an active (unlocked, currently-running) week exists
+- When no active week is in progress, the existing `INGEST_POLL_INTERVAL` (default: 900) is used instead
+- `.env.example` documents `INGEST_LIVE_POLL_INTERVAL` with a description

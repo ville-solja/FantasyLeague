@@ -11,25 +11,20 @@ Source: `GET https://api.opendota.com/api/leagues/{league_id}/matchIds`
 For each match ID not already in the database:
 - Fetches full match data via `GET /api/matches/{match_id}`
 - Stores team IDs, match result (`radiant_win`), and start timestamp
-<<<<<<< HEAD
-- Stores per-player stats: kills, assists, deaths, GPM, observer wards, sentry wards, tower damage
-=======
 - Stores per-player stats: kills, deaths, GPM, observer wards, last hits, denies, towers destroyed, Roshan kills, teamfight participation, camps stacked, rune pickups, first blood, stuns
->>>>>>> 25cc59e (Initial commit)
 - Calculates and stores fantasy points for each player using current scoring weights
 - Seeds the player's display name (`personaname`) into the `players` table if the player is new or had no name yet
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid
 
-<<<<<<< HEAD
-=======
 Note: the `assists`, `sen_placed`, and `tower_damage` columns are retained in the database for historical records but are no longer included in fantasy scoring.
 
->>>>>>> 25cc59e (Initial commit)
 Rate limit handling: 429 responses trigger exponential backoff before retrying. Server errors (5xx) are retried up to 3 times.
 
-### 2. Player Enrichment (OpenDota)
+### 2. Name & Avatar Backfill (OpenDota)
 
-After ingest, player profiles are enriched with display names and avatar images via `GET /api/players/{account_id}`. Players are processed in batches of 50 until all have names. Enrichment runs up to 20 rounds per cycle to avoid blocking indefinitely.
+After ingest, any player who is still missing a display name or avatar is enriched via `GET /api/players/{account_id}`. Players are processed in batches of 50 until all have names. Enrichment runs up to 20 rounds per cycle to avoid blocking indefinitely.
+
+Note: this stage handles only name/avatar fields. Hero stats, ban correlations, and AI bios are populated by the separate **Profile Enrichment** background loop — see `reference/player-profile-enrichment.md`.
 
 ### 3. Card Seeding
 
@@ -85,5 +80,6 @@ Without an API key, requests are rate-limited to ~60 requests/minute. With `OPEN
 | `matches` | Match ID, team IDs, result, start timestamp, league ID |
 | `players` | OpenDota account ID, display name, avatar URL |
 | `teams` | OpenDota team ID, team name |
-| `player_match_stats` | Per-player per-match stats and calculated fantasy points |
+| `player_match_stats` | Per-player per-match stats, calculated fantasy points, and `hero_id` (the hero picked by the player in that match) |
+| `match_bans` | Hero bans extracted from `picks_bans` in the match response — used by profile enrichment ban correlation analysis |
 | `cards` | Generated cards per player per league (initially all unowned) |
