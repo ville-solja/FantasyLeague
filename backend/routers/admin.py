@@ -9,7 +9,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, Weight
+from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, Weight, TokenGrantEvent, TokenGrantClaim
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from seed import seed_cards
@@ -342,6 +342,67 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
            detail=f"code={promo.code} granted={promo.token_amount}")
     db.commit()
     return {"tokens": user.tokens, "granted": promo.token_amount}
+
+
+class TokenGrantEventBody(BaseModel):
+    amount:     int = Field(..., ge=1)
+    start_time: int
+    end_time:   int
+
+
+@router.get("/admin/token-grant-events")
+def list_token_grant_events(db=Depends(get_db), _: dict = Depends(require_admin)):
+    events = db.query(TokenGrantEvent).order_by(TokenGrantEvent.start_time.desc()).all()
+    result = []
+    for ev in events:
+        claim_count = db.query(TokenGrantClaim).filter_by(event_id=ev.id).count()
+        result.append({
+            "id": ev.id, "amount": ev.amount,
+            "start_time": ev.start_time, "end_time": ev.end_time,
+            "created_at": ev.created_at, "claim_count": claim_count,
+        })
+    return result
+
+
+@router.post("/admin/token-grant-events")
+def create_token_grant_event(
+    body: TokenGrantEventBody,
+    db=Depends(get_db),
+    admin: dict = Depends(require_admin),
+):
+    if body.end_time <= body.start_time:
+        raise HTTPException(status_code=422, detail="end_time must be after start_time")
+    ev = TokenGrantEvent(
+        amount=body.amount,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        created_by=admin["user_id"],
+        created_at=int(time.time()),
+    )
+    db.add(ev)
+    db.flush()
+    _audit(db, "admin_token_grant_event_created", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"id={ev.id} amount={ev.amount} start={ev.start_time} end={ev.end_time}")
+    db.commit()
+    return {"id": ev.id, "amount": ev.amount, "start_time": ev.start_time, "end_time": ev.end_time}
+
+
+@router.delete("/admin/token-grant-events/{event_id}")
+def delete_token_grant_event(
+    event_id: int,
+    db=Depends(get_db),
+    admin: dict = Depends(require_admin),
+):
+    ev = db.get(TokenGrantEvent, event_id)
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found")
+    _audit(db, "admin_token_grant_event_deleted", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"id={ev.id} amount={ev.amount}")
+    db.delete(ev)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/audit-logs")

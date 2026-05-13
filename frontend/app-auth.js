@@ -79,6 +79,17 @@ function _regClearErrors() {
   document.getElementById("registerStatus").textContent = "";
 }
 
+async function claimTokenEvents() {
+  try {
+    const res = await fetch(`${API}/claim-events`, { method: "POST" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.granted > 0) {
+      await loadMe();
+    }
+  } catch (_) {}
+}
+
 async function login() {
   const username = document.getElementById("loginUsername").value.trim();
   const password = document.getElementById("loginPassword").value;
@@ -90,6 +101,7 @@ async function login() {
     if (!res.ok) return setStatus("loginStatus", data.detail, false);
 
     await loadMe();
+    await claimTokenEvents();
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
     applyAuthState();
@@ -172,6 +184,7 @@ async function register() {
     }
 
     await loadMe();
+    await claimTokenEvents();
     document.getElementById("registerModal").classList.add("hidden");
     document.getElementById("regUsername").value = "";
     document.getElementById("regEmail").value    = "";
