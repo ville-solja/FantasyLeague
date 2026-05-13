@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from database import get_db
-from deps import _audit
-from models import User
+from deps import _audit, get_current_user
+from models import User, TokenGrantEvent, TokenGrantClaim
 from auth import hash_password, verify_password
 from email_utils import send_email
 
@@ -112,3 +112,25 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
         ),
     )
     return {"status": "ok"}
+
+
+@router.post("/claim-events")
+def claim_events(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    now = int(time.time())
+    active_events = db.query(TokenGrantEvent).filter(
+        TokenGrantEvent.start_time <= now,
+        TokenGrantEvent.end_time >= now,
+    ).all()
+    user = db.get(User, current_user["user_id"])
+    granted = 0
+    for event in active_events:
+        already = db.query(TokenGrantClaim).filter_by(event_id=event.id, user_id=user.id).first()
+        if already:
+            continue
+        user.tokens = (user.tokens or 0) + event.amount
+        db.add(TokenGrantClaim(event_id=event.id, user_id=user.id, claimed_at=now))
+        _audit(db, "token_grant_event_claim", actor_id=user.id, actor_username=user.username,
+               detail=f"event={event.id} amount={event.amount}")
+        granted += event.amount
+    db.commit()
+    return {"granted": granted}

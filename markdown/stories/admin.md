@@ -121,3 +121,49 @@ As a user reporting a bug, I want to see a faint version identifier on every pag
 - Present regardless of login state
 - Setting only `APP_VERSION` (image SHA) displays that value alone; setting both `APP_VERSION` and `APP_RELEASE` displays both (e.g. `v1.2.0 · b06e0c4`)
 - Value is injected by CI as a Docker build argument and served via `/config`
+
+---
+
+## Token Grant Events
+
+### Create a Token Grant Event
+**User story**
+As an admin, I want to configure a one-time token grant event with a fixed amount and
+active time window so that all players are automatically rewarded on their next login
+during that period.
+
+**Acceptance criteria**
+- Admin tab shows a "Token Grant Events" section listing active and upcoming events
+- A form accepts: token amount (integer ≥ 1), start datetime, end datetime
+- Submitting calls `POST /admin/token-grant-events` and the new event appears in the list
+- Validation rejects end time ≤ start time and amount < 1
+- Event is logged to the audit log as `admin_token_grant_event_created`
+
+---
+
+### Claim Tokens on Login During Active Event
+**User story**
+As a player, I want to automatically receive my event tokens on my next page load during
+an active grant window so that I do not need to take any extra action.
+
+**Acceptance criteria**
+- On any authenticated request during an active event, the backend checks whether the
+  player has already claimed this event
+- If not yet claimed, tokens are added and the claim is recorded
+- Tokens are granted at most once per player per event regardless of how many requests
+  are made during the window
+- No tokens are granted for requests after the event's end time
+- The grant is logged to the audit log as `token_grant_event_claim`
+
+---
+
+### Remove a Token Grant Event
+**User story**
+As an admin, I want to remove a configured grant event (including a live one) so that I
+can cancel a mistaken configuration without penalising players who have already claimed.
+
+**Acceptance criteria**
+- Each event row has a "Remove" button that calls `DELETE /admin/token-grant-events/{id}`
+- Removing a live event immediately stops new claims; already-granted tokens are kept
+- The removal is logged to the audit log as `admin_token_grant_event_deleted`
+- Removed events disappear from the admin list

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
 from database import Base
 from scoring import SCORING_STATS
 
@@ -233,6 +233,27 @@ class ToornamentSyncLog(Base):
     team1_score         = Column(Integer)
     team2_score         = Column(Integer)
     pushed_at           = Column(Integer)  # Unix timestamp
+
+
+class TokenGrantEvent(Base):
+    __tablename__ = "token_grant_events"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    amount     = Column(Integer)
+    start_time = Column(Integer)   # Unix timestamp
+    end_time   = Column(Integer)   # Unix timestamp
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(Integer)   # Unix timestamp
+
+
+class TokenGrantClaim(Base):
+    __tablename__ = "token_grant_claims"
+    __table_args__ = (UniqueConstraint("event_id", "user_id", name="uq_claim_event_user"),)
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    event_id   = Column(Integer, ForeignKey("token_grant_events.id"))
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    claimed_at = Column(Integer)   # Unix timestamp
 
 
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)

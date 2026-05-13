@@ -80,6 +80,7 @@ async function init() {
   await loadMe();
   applyAuthState();
   if (activeUserId) {
+    claimTokenEvents();
     loadDeck();
     loadWeeks().then(() => {
       loadRoster(_rosterWeekId);

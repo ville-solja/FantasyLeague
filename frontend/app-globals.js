@@ -84,7 +84,7 @@ function switchTab(name) {
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadAuditLog(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadWeights(); loadUsers(); loadCodes(); loadTokenGrantEvents(); loadAuditLog(); }
 }
 
 function setStatus(id, msg, ok = true) {
