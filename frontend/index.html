@@ -495,6 +495,32 @@
 
     <div class="tab-col">
       <div class="panel">
+        <h2>Week Management</h2>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+          <input id="weekLabel"     type="text"           placeholder="Label e.g. Week 7" style="max-width:140px;" />
+          <input id="weekStart"     type="datetime-local" title="Start time" />
+          <input id="weekEnd"       type="datetime-local" title="End time" />
+          <button onclick="createAdminWeek()">Create</button>
+          <button class="secondary" onclick="loadAdminWeeks()">Refresh</button>
+        </div>
+        <table>
+          <thead><tr><th>Label</th><th>Start</th><th>End</th><th>Locked</th><th>Rosters</th><th></th></tr></thead>
+          <tbody id="adminWeeksBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
+        </table>
+        <div id="weekEditForm" class="hidden" style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:4px;">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input id="editWeekLabel" type="text"           placeholder="Label" style="max-width:140px;" />
+            <input id="editWeekStart" type="datetime-local" />
+            <input id="editWeekEnd"   type="datetime-local" />
+            <button onclick="saveWeekEdit()">Save</button>
+            <button class="ghost" onclick="cancelWeekEdit()">Cancel</button>
+          </div>
+          <input id="editWeekId" type="hidden" />
+        </div>
+        <div class="status" id="weeksAdminStatus"></div>
+      </div>
+
+      <div class="panel">
         <h2>Token Balances</h2>
         <button class="secondary" onclick="loadUsers()" style="margin-bottom:12px;">Refresh</button>
         <table>
