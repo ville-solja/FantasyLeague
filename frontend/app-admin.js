@@ -8,24 +8,38 @@ async function loadAdminWeeks() {
       document.getElementById("adminWeeksBody").innerHTML = "<tr><td colspan='6' style='color:#444'>No weeks</td></tr>";
       return;
     }
-    document.getElementById("adminWeeksBody").innerHTML = rows.map(w => {
-      const start  = new Date(w.start_time * 1000).toLocaleString();
-      const end    = new Date(w.end_time   * 1000).toLocaleString();
-      const locked = w.is_locked ? "<span style='color:#888;font-size:0.75rem;'>LOCKED</span>" : "";
-      const actions = w.is_locked ? "<td>—</td>" :
-        `<td>
-          <button class="secondary" style="padding:2px 7px;margin-right:4px;" onclick="openWeekEdit(${w.id},'${w.label.replace(/'/g,"\\'")}',${w.start_time},${w.end_time})">Edit</button>
-          <button class="danger"    style="padding:2px 7px;" onclick="deleteAdminWeek(${w.id})">Delete</button>
-        </td>`;
-      return `<tr>
-        <td>${w.label}</td>
+    const tbody = document.getElementById("adminWeeksBody");
+    tbody.innerHTML = "";
+    rows.forEach(w => {
+      const tr = document.createElement("tr");
+      const start = new Date(w.start_time * 1000).toLocaleString();
+      const end   = new Date(w.end_time   * 1000).toLocaleString();
+      tr.innerHTML = `
+        <td></td>
         <td style="font-size:0.8rem;">${start}</td>
         <td style="font-size:0.8rem;">${end}</td>
-        <td>${locked}</td>
+        <td>${w.is_locked ? "<span style='color:#888;font-size:0.75rem;'>LOCKED</span>" : ""}</td>
         <td>${w.roster_count}</td>
-        ${actions}
-      </tr>`;
-    }).join("");
+        <td></td>`;
+      tr.cells[0].textContent = w.label;
+      if (!w.is_locked) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "secondary";
+        editBtn.style.cssText = "padding:2px 7px;margin-right:4px;";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => openWeekEdit(w.id, w.label, w.start_time, w.end_time));
+        const delBtn = document.createElement("button");
+        delBtn.className = "danger";
+        delBtn.style.cssText = "padding:2px 7px;";
+        delBtn.textContent = "Delete";
+        delBtn.addEventListener("click", () => deleteAdminWeek(w.id));
+        tr.cells[5].appendChild(editBtn);
+        tr.cells[5].appendChild(delBtn);
+      } else {
+        tr.cells[5].textContent = "—";
+      }
+      tbody.appendChild(tr);
+    });
     setStatus("weeksAdminStatus", "");
   } catch (e) {
     setStatus("weeksAdminStatus", e.message, false);
