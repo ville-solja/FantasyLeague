@@ -42,3 +42,4 @@ Implementation details, integrations, and operator tooling.
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab: getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
+| [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |

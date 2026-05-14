@@ -81,6 +81,7 @@ async function init() {
   applyAuthState();
   if (activeUserId) {
     claimTokenEvents();
+    checkNotifications();
     loadDeck();
     loadWeeks().then(() => {
       loadRoster(_rosterWeekId);
