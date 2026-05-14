@@ -1,3 +1,131 @@
+async function loadAdminWeeks() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/weeks`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", rows.detail, false);
+    if (!rows.length) {
+      document.getElementById("adminWeeksBody").innerHTML = "<tr><td colspan='6' style='color:#444'>No weeks</td></tr>";
+      return;
+    }
+    const tbody = document.getElementById("adminWeeksBody");
+    tbody.innerHTML = "";
+    rows.forEach(w => {
+      const tr = document.createElement("tr");
+      const start = new Date(w.start_time * 1000).toLocaleString();
+      const end   = new Date(w.end_time   * 1000).toLocaleString();
+      tr.innerHTML = `
+        <td></td>
+        <td style="font-size:0.8rem;">${start}</td>
+        <td style="font-size:0.8rem;">${end}</td>
+        <td>${w.is_locked ? "<span style='color:#888;font-size:0.75rem;'>LOCKED</span>" : ""}</td>
+        <td>${w.roster_count}</td>
+        <td></td>`;
+      tr.cells[0].textContent = w.label;
+      if (!w.is_locked) {
+        const editBtn = document.createElement("button");
+        editBtn.className = "secondary";
+        editBtn.style.cssText = "padding:2px 7px;margin-right:4px;";
+        editBtn.textContent = "Edit";
+        editBtn.addEventListener("click", () => openWeekEdit(w.id, w.label, w.start_time, w.end_time));
+        const delBtn = document.createElement("button");
+        delBtn.className = "danger";
+        delBtn.style.cssText = "padding:2px 7px;";
+        delBtn.textContent = "Delete";
+        delBtn.addEventListener("click", () => deleteAdminWeek(w.id));
+        tr.cells[5].appendChild(editBtn);
+        tr.cells[5].appendChild(delBtn);
+      } else {
+        tr.cells[5].textContent = "—";
+      }
+      tbody.appendChild(tr);
+    });
+    setStatus("weeksAdminStatus", "");
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+async function createAdminWeek() {
+  const label    = document.getElementById("weekLabel").value.trim();
+  const startVal = document.getElementById("weekStart").value;
+  const endVal   = document.getElementById("weekEnd").value;
+  if (!label)               return setStatus("weeksAdminStatus", "Enter a label", false);
+  if (!startVal || !endVal) return setStatus("weeksAdminStatus", "Set start and end time", false);
+  const start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (end_time <= start_time) return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/weeks`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({label, start_time, end_time}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
+    setStatus("weeksAdminStatus", `Week "${data.label}" created`);
+    document.getElementById("weekLabel").value = "";
+    document.getElementById("weekStart").value = "";
+    document.getElementById("weekEnd").value   = "";
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+function openWeekEdit(id, label, startTs, endTs) {
+  const toLocal = ts => {
+    const d = new Date(ts * 1000);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  };
+  document.getElementById("editWeekId").value    = id;
+  document.getElementById("editWeekLabel").value = label;
+  document.getElementById("editWeekStart").value = toLocal(startTs);
+  document.getElementById("editWeekEnd").value   = toLocal(endTs);
+  document.getElementById("weekEditForm").classList.remove("hidden");
+}
+
+function cancelWeekEdit() {
+  document.getElementById("weekEditForm").classList.add("hidden");
+}
+
+async function saveWeekEdit() {
+  const id       = parseInt(document.getElementById("editWeekId").value, 10);
+  const label    = document.getElementById("editWeekLabel").value.trim() || undefined;
+  const startVal = document.getElementById("editWeekStart").value;
+  const endVal   = document.getElementById("editWeekEnd").value;
+  const body = {};
+  if (label)    body.label      = label;
+  if (startVal) body.start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  if (endVal)   body.end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (body.start_time && body.end_time && body.end_time <= body.start_time)
+    return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/weeks/${id}`, {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
+    setStatus("weeksAdminStatus", "Week updated");
+    cancelWeekEdit();
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+async function deleteAdminWeek(weekId) {
+  try {
+    const res = await fetch(`${API}/admin/weeks/${weekId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("weeksAdminStatus", d.detail, false); }
+    setStatus("weeksAdminStatus", "Week deleted");
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
 async function loadWeights() {
   try {
     const res = await fetch(`${API}/weights`);
@@ -131,6 +259,136 @@ async function _confirmDeleteCode(codeId) {
     loadCodes();
   } catch (e) {
     setStatus("codesStatus", e.message, false);
+  }
+}
+
+async function loadNotifications() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/notifications`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("notifAdminStatus", rows.detail, false);
+    if (!rows.length) {
+      document.getElementById("notifBody").innerHTML = "<tr><td colspan='5' style='color:#444'>No notifications</td></tr>";
+      return;
+    }
+    document.getElementById("notifBody").innerHTML = rows.map(n => {
+      const start = new Date(n.start_time * 1000).toLocaleString();
+      const end   = new Date(n.end_time   * 1000).toLocaleString();
+      const msg   = n.message.length > 60 ? n.message.slice(0, 57) + "..." : n.message;
+      return `<tr>
+        <td style="font-size:0.8rem;">${msg}</td>
+        <td style="font-size:0.8rem;">${start}</td>
+        <td style="font-size:0.8rem;">${end}</td>
+        <td>${n.dismiss_count}</td>
+        <td><button class="danger" style="padding:2px 8px;" onclick="deleteNotification(${n.id})">Delete</button></td>
+      </tr>`;
+    }).join("");
+    setStatus("notifAdminStatus", "");
+  } catch (e) {
+    setStatus("notifAdminStatus", e.message, false);
+  }
+}
+
+async function createNotification() {
+  const message  = document.getElementById("notifMsgInput").value.trim();
+  const startVal = document.getElementById("notifStart").value;
+  const endVal   = document.getElementById("notifEnd").value;
+  if (!message)              return setStatus("notifAdminStatus", "Enter a message", false);
+  if (message.length > 500)  return setStatus("notifAdminStatus", "Message must be 500 characters or fewer", false);
+  if (!startVal || !endVal)  return setStatus("notifAdminStatus", "Set start and end time", false);
+  const start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (end_time <= start_time) return setStatus("notifAdminStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/notifications`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message, start_time, end_time}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("notifAdminStatus", data.detail, false);
+    setStatus("notifAdminStatus", "Notification created");
+    document.getElementById("notifMsgInput").value = "";
+    document.getElementById("notifStart").value    = "";
+    document.getElementById("notifEnd").value      = "";
+    loadNotifications();
+  } catch (e) {
+    setStatus("notifAdminStatus", e.message, false);
+  }
+}
+
+async function deleteNotification(notifId) {
+  try {
+    const res = await fetch(`${API}/admin/notifications/${notifId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("notifAdminStatus", d.detail, false); }
+    setStatus("notifAdminStatus", "Notification deleted");
+    loadNotifications();
+  } catch (e) {
+    setStatus("notifAdminStatus", e.message, false);
+  }
+}
+
+async function loadTokenGrantEvents() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/token-grant-events`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("tokenGrantStatus", rows.detail, false);
+    if (!rows.length) {
+      document.getElementById("tokenGrantBody").innerHTML = "<tr><td colspan='5' style='color:#444'>No events</td></tr>";
+      return;
+    }
+    document.getElementById("tokenGrantBody").innerHTML = rows.map(ev => {
+      const start = new Date(ev.start_time * 1000).toLocaleString();
+      const end   = new Date(ev.end_time   * 1000).toLocaleString();
+      return `<tr data-grant-id="${ev.id}">
+        <td>${ev.amount}</td>
+        <td style="font-size:0.8rem;">${start}</td>
+        <td style="font-size:0.8rem;">${end}</td>
+        <td>${ev.claim_count}</td>
+        <td><button class="danger" style="padding:2px 8px;" onclick="deleteTokenGrantEvent(${ev.id})">Delete</button></td>
+      </tr>`;
+    }).join("");
+    setStatus("tokenGrantStatus", "");
+  } catch (e) {
+    setStatus("tokenGrantStatus", e.message, false);
+  }
+}
+
+async function createTokenGrantEvent() {
+  const amount = parseInt(document.getElementById("grantAmount").value, 10);
+  const startVal = document.getElementById("grantStart").value;
+  const endVal   = document.getElementById("grantEnd").value;
+  if (!amount || amount < 1) return setStatus("tokenGrantStatus", "Enter a token amount ≥ 1", false);
+  if (!startVal || !endVal)  return setStatus("tokenGrantStatus", "Set start and end time", false);
+  const start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (end_time <= start_time) return setStatus("tokenGrantStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/token-grant-events`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({amount, start_time, end_time}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("tokenGrantStatus", data.detail, false);
+    setStatus("tokenGrantStatus", "Event created");
+    document.getElementById("grantAmount").value = "";
+    document.getElementById("grantStart").value  = "";
+    document.getElementById("grantEnd").value    = "";
+    loadTokenGrantEvents();
+  } catch (e) {
+    setStatus("tokenGrantStatus", e.message, false);
+  }
+}
+
+async function deleteTokenGrantEvent(eventId) {
+  try {
+    const res = await fetch(`${API}/admin/token-grant-events/${eventId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("tokenGrantStatus", d.detail, false); }
+    setStatus("tokenGrantStatus", "Event deleted");
+    loadTokenGrantEvents();
+  } catch (e) {
+    setStatus("tokenGrantStatus", e.message, false);
   }
 }
 

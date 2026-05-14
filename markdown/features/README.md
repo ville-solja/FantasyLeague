@@ -41,3 +41,6 @@ Implementation details, integrations, and operator tooling.
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab: getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
+| [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
+| [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
+| [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/edit/delete unlocked weeks |
