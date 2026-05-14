@@ -79,6 +79,25 @@ function _regClearErrors() {
   document.getElementById("registerStatus").textContent = "";
 }
 
+async function checkNotifications() {
+  try {
+    const res = await fetch(`${API}/notifications`);
+    if (!res.ok) return;
+    const items = await res.json();
+    if (!items.length) return;
+    showNotificationPopup(items[0]);
+  } catch (_) {}
+}
+
+function showNotificationPopup(notif) {
+  document.getElementById("notifMessage").textContent = notif.message;
+  document.getElementById("notifModal").classList.remove("hidden");
+  document.getElementById("notifDismissBtn").onclick = async () => {
+    await fetch(`${API}/notifications/${notif.id}/dismiss`, { method: "POST" });
+    document.getElementById("notifModal").classList.add("hidden");
+  };
+}
+
 async function claimTokenEvents() {
   try {
     const res = await fetch(`${API}/claim-events`, { method: "POST" });
@@ -102,6 +121,7 @@ async function login() {
 
     await loadMe();
     await claimTokenEvents();
+    checkNotifications();
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
     applyAuthState();
@@ -185,6 +205,7 @@ async function register() {
 
     await loadMe();
     await claimTokenEvents();
+    checkNotifications();
     document.getElementById("registerModal").classList.add("hidden");
     document.getElementById("regUsername").value = "";
     document.getElementById("regEmail").value    = "";

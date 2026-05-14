@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from deps import _audit, get_current_user
-from models import User, TokenGrantEvent, TokenGrantClaim
+from models import User, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
 from auth import hash_password, verify_password
 from email_utils import send_email
 
@@ -134,3 +134,32 @@ def claim_events(db=Depends(get_db), current_user: dict = Depends(get_current_us
         granted += event.amount
     db.commit()
     return {"granted": granted}
+
+
+@router.get("/notifications")
+def get_active_notifications(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    now = int(time.time())
+    active = db.query(Notification).filter(
+        Notification.start_time <= now,
+        Notification.end_time   >= now,
+    ).all()
+    seen_ids = {r.notification_id for r in
+                db.query(NotificationDismissal)
+                  .filter(NotificationDismissal.user_id == current_user["user_id"]).all()}
+    return [{"id": n.id, "message": n.message} for n in active if n.id not in seen_ids]
+
+
+@router.post("/notifications/{notification_id}/dismiss")
+def dismiss_notification(notification_id: int, db=Depends(get_db),
+                         current_user: dict = Depends(get_current_user)):
+    n = db.get(Notification, notification_id)
+    if not n:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    existing = db.query(NotificationDismissal).filter_by(
+        notification_id=notification_id, user_id=current_user["user_id"]).first()
+    if not existing:
+        db.add(NotificationDismissal(notification_id=notification_id,
+                                     user_id=current_user["user_id"],
+                                     dismissed_at=int(time.time())))
+        db.commit()
+    return {"ok": True}

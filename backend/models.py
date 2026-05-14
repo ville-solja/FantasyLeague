@@ -256,6 +256,28 @@ class TokenGrantClaim(Base):
     claimed_at = Column(Integer)   # Unix timestamp
 
 
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    message    = Column(String)
+    start_time = Column(Integer)
+    end_time   = Column(Integer)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(Integer)
+
+
+class NotificationDismissal(Base):
+    __tablename__ = "notification_dismissals"
+    __table_args__ = (UniqueConstraint("notification_id", "user_id",
+                                       name="uq_dismissal_notif_user"),)
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    notification_id = Column(Integer, ForeignKey("notifications.id"))
+    user_id         = Column(Integer, ForeignKey("users.id"))
+    dismissed_at    = Column(Integer)
+
+
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)

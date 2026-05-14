@@ -167,3 +167,29 @@ can cancel a mistaken configuration without penalising players who have already 
 - Removing a live event immediately stops new claims; already-granted tokens are kept
 - The removal is logged to the audit log as `admin_token_grant_event_deleted`
 - Removed events disappear from the admin list
+
+## Notification System
+
+### View a Notification on Login
+**User story**
+As a logged-in player, I want to see an admin broadcast message once when I open the
+app during the active window, so that I stay informed about important announcements.
+
+**Acceptance criteria**
+- A popup appears on page load if there is at least one active notification the player has not yet dismissed
+- The popup shows the notification message and a close/dismiss button
+- Dismissing the popup marks the notification as seen; it does not reappear on subsequent page loads or logins during the same window
+- Players who first open the app after the notification window has ended never see it
+- Players who are not logged in do not see the popup
+
+### Create and Manage Notifications (Admin)
+**User story**
+As an admin, I want to create a notification with a message, start time, and end time,
+and be able to remove it before it expires, so that I can control what players see.
+
+**Acceptance criteria**
+- Admin panel shows a list of all notifications with message, window, and dismiss count
+- Admin can create a notification: message (required, ≤ 500 chars), start\_time, end\_time
+- `end_time` must be strictly after `start_time`; invalid input is rejected with a clear error
+- Admin can delete a notification at any time; deletion stops future dismissals but does not undo existing ones
+- Deleting a non-existent notification returns 404

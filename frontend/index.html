@@ -10,6 +10,13 @@
 <body>
 
 <!-- LOGIN MODAL -->
+<div class="modal-overlay hidden" id="notifModal">
+  <div class="modal" style="max-width:480px;">
+    <p id="notifMessage" style="margin-bottom:20px;line-height:1.5;"></p>
+    <button id="notifDismissBtn" style="width:100%;">Dismiss</button>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="loginModal">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
@@ -524,6 +531,25 @@
           <tbody id="codesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
         </table>
         <div class="status" id="codesStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Notifications</h2>
+        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Broadcast a one-time message to all logged-in players during the active window.</p>
+        <div style="margin-bottom:12px;">
+          <textarea id="notifMsgInput" placeholder="Message (max 500 characters)" rows="3" style="width:100%;margin-bottom:8px;resize:vertical;" maxlength="500"></textarea>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <input id="notifStart" type="datetime-local" title="Start time" />
+            <input id="notifEnd"   type="datetime-local" title="End time" />
+            <button onclick="createNotification()">Create</button>
+            <button class="secondary" onclick="loadNotifications()">Refresh</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Message</th><th>Start</th><th>End</th><th>Seen</th><th></th></tr></thead>
+          <tbody id="notifBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+        </table>
+        <div class="status" id="notifAdminStatus"></div>
       </div>
 
       <div class="panel">
