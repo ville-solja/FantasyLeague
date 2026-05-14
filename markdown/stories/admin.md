@@ -121,3 +121,119 @@ As a user reporting a bug, I want to see a faint version identifier on every pag
 - Present regardless of login state
 - Setting only `APP_VERSION` (image SHA) displays that value alone; setting both `APP_VERSION` and `APP_RELEASE` displays both (e.g. `v1.2.0 · b06e0c4`)
 - Value is injected by CI as a Docker build argument and served via `/config`
+
+---
+
+## Token Grant Events
+
+### Create a Token Grant Event
+**User story**
+As an admin, I want to configure a one-time token grant event with a fixed amount and
+active time window so that all players are automatically rewarded on their next login
+during that period.
+
+**Acceptance criteria**
+- Admin tab shows a "Token Grant Events" section listing active and upcoming events
+- A form accepts: token amount (integer ≥ 1), start datetime, end datetime
+- Submitting calls `POST /admin/token-grant-events` and the new event appears in the list
+- Validation rejects end time ≤ start time and amount < 1
+- Event is logged to the audit log as `admin_token_grant_event_created`
+
+---
+
+### Claim Tokens on Login During Active Event
+**User story**
+As a player, I want to automatically receive my event tokens on my next page load during
+an active grant window so that I do not need to take any extra action.
+
+**Acceptance criteria**
+- On any authenticated request during an active event, the backend checks whether the
+  player has already claimed this event
+- If not yet claimed, tokens are added and the claim is recorded
+- Tokens are granted at most once per player per event regardless of how many requests
+  are made during the window
+- No tokens are granted for requests after the event's end time
+- The grant is logged to the audit log as `token_grant_event_claim`
+
+---
+
+### Remove a Token Grant Event
+**User story**
+As an admin, I want to remove a configured grant event (including a live one) so that I
+can cancel a mistaken configuration without penalising players who have already claimed.
+
+**Acceptance criteria**
+- Each event row has a "Remove" button that calls `DELETE /admin/token-grant-events/{id}`
+- Removing a live event immediately stops new claims; already-granted tokens are kept
+- The removal is logged to the audit log as `admin_token_grant_event_deleted`
+- Removed events disappear from the admin list
+
+## Notification System
+
+### View a Notification on Login
+**User story**
+As a logged-in player, I want to see an admin broadcast message once when I open the
+app during the active window, so that I stay informed about important announcements.
+
+**Acceptance criteria**
+- A popup appears on page load if there is at least one active notification the player has not yet dismissed
+- The popup shows the notification message and a close/dismiss button
+- Dismissing the popup marks the notification as seen; it does not reappear on subsequent page loads or logins during the same window
+- Players who first open the app after the notification window has ended never see it
+- Players who are not logged in do not see the popup
+
+### Create and Manage Notifications (Admin)
+**User story**
+As an admin, I want to create a notification with a message, start time, and end time,
+and be able to remove it before it expires, so that I can control what players see.
+
+**Acceptance criteria**
+- Admin panel shows a list of all notifications with message, window, and dismiss count
+- Admin can create a notification: message (required, ≤ 500 chars), start\_time, end\_time
+- `end_time` must be strictly after `start_time`; invalid input is rejected with a clear error
+- Admin can delete a notification at any time; deletion stops future dismissals but does not undo existing ones
+- Deleting a non-existent notification returns 404
+
+## Admin Week Management
+
+### View All Weeks
+**User story**
+As an admin, I want to see all week records in a table so that I can understand the
+current season structure at a glance.
+
+**Acceptance criteria**
+- Admin panel shows all weeks with label, start time, end time, locked status, and roster snapshot count
+- Locked weeks are visually distinguished
+- All weeks are visible including past locked ones
+
+### Create a Custom Week
+**User story**
+As an admin, I want to create a week with a specific label, start time, and end time so
+that tournament rounds with irregular schedules fit into the season.
+
+**Acceptance criteria**
+- Admin can submit label, start\_time, and end\_time
+- `end_time` must be strictly after `start_time`; invalid input is rejected with a clear error
+- The new week appears in the table immediately and is logged to the audit log
+
+### Edit an Unlocked Week
+**User story**
+As an admin, I want to change the end time (and optionally label or start time) of an
+unlocked week so that the lock deadline matches the actual tournament schedule.
+
+**Acceptance criteria**
+- Editing is only allowed when `is_locked = false`
+- Admin can update label, start\_time, and/or end\_time
+- `end_time` must remain strictly after `start_time` after the edit
+- Changes are saved immediately and logged to the audit log
+
+### Delete an Unlocked Week
+**User story**
+As an admin, I want to delete an unlocked week that has no roster entries so that
+auto-generated placeholder weeks can be removed when the schedule changes.
+
+**Acceptance criteria**
+- Delete is only allowed when `is_locked = false` and roster entry count is 0
+- Attempting to delete a locked week returns 409
+- Attempting to delete a week with roster entries returns 409
+- Deletion is logged to the audit log
