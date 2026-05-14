@@ -193,3 +193,47 @@ and be able to remove it before it expires, so that I can control what players s
 - `end_time` must be strictly after `start_time`; invalid input is rejected with a clear error
 - Admin can delete a notification at any time; deletion stops future dismissals but does not undo existing ones
 - Deleting a non-existent notification returns 404
+
+## Admin Week Management
+
+### View All Weeks
+**User story**
+As an admin, I want to see all week records in a table so that I can understand the
+current season structure at a glance.
+
+**Acceptance criteria**
+- Admin panel shows all weeks with label, start time, end time, locked status, and roster snapshot count
+- Locked weeks are visually distinguished
+- All weeks are visible including past locked ones
+
+### Create a Custom Week
+**User story**
+As an admin, I want to create a week with a specific label, start time, and end time so
+that tournament rounds with irregular schedules fit into the season.
+
+**Acceptance criteria**
+- Admin can submit label, start\_time, and end\_time
+- `end_time` must be strictly after `start_time`; invalid input is rejected with a clear error
+- The new week appears in the table immediately and is logged to the audit log
+
+### Edit an Unlocked Week
+**User story**
+As an admin, I want to change the end time (and optionally label or start time) of an
+unlocked week so that the lock deadline matches the actual tournament schedule.
+
+**Acceptance criteria**
+- Editing is only allowed when `is_locked = false`
+- Admin can update label, start\_time, and/or end\_time
+- `end_time` must remain strictly after `start_time` after the edit
+- Changes are saved immediately and logged to the audit log
+
+### Delete an Unlocked Week
+**User story**
+As an admin, I want to delete an unlocked week that has no roster entries so that
+auto-generated placeholder weeks can be removed when the schedule changes.
+
+**Acceptance criteria**
+- Delete is only allowed when `is_locked = false` and roster entry count is 0
+- Attempting to delete a locked week returns 409
+- Attempting to delete a week with roster entries returns 409
+- Deletion is logged to the audit log

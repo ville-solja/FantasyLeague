@@ -9,7 +9,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
+from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from seed import seed_cards
@@ -401,6 +401,92 @@ def delete_token_grant_event(
            actor_username=admin["username"],
            detail=f"id={ev.id} amount={ev.amount}")
     db.delete(ev)
+    db.commit()
+    return {"ok": True}
+
+
+class WeekCreateBody(BaseModel):
+    label:      str = Field(..., min_length=1, max_length=64)
+    start_time: int
+    end_time:   int
+
+
+class WeekEditBody(BaseModel):
+    label:      str | None = Field(None, min_length=1, max_length=64)
+    start_time: int | None = None
+    end_time:   int | None = None
+
+
+@router.get("/admin/weeks")
+def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
+    weeks = db.query(Week).order_by(Week.start_time).all()
+    result = []
+    for w in weeks:
+        roster_count = db.query(WeeklyRosterEntry).filter_by(week_id=w.id).count()
+        result.append({
+            "id": w.id, "label": w.label,
+            "start_time": w.start_time, "end_time": w.end_time,
+            "is_locked": w.is_locked, "roster_count": roster_count,
+        })
+    return result
+
+
+@router.post("/admin/weeks")
+def create_week(body: WeekCreateBody, db=Depends(get_db),
+                admin: dict = Depends(require_admin)):
+    if body.end_time <= body.start_time:
+        raise HTTPException(status_code=422, detail="end_time must be after start_time")
+    w = Week(label=body.label, start_time=body.start_time,
+             end_time=body.end_time, is_locked=False)
+    db.add(w)
+    db.flush()
+    _audit(db, "admin_week_created", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"id={w.id} label={w.label} end_time={w.end_time}")
+    db.commit()
+    return {"id": w.id, "label": w.label,
+            "start_time": w.start_time, "end_time": w.end_time}
+
+
+@router.patch("/admin/weeks/{week_id}")
+def edit_week(week_id: int, body: WeekEditBody, db=Depends(get_db),
+              admin: dict = Depends(require_admin)):
+    w = db.get(Week, week_id)
+    if not w:
+        raise HTTPException(status_code=404, detail="Week not found")
+    if w.is_locked:
+        raise HTTPException(status_code=409, detail="Cannot edit a locked week")
+    if body.label is not None:
+        w.label = body.label
+    if body.start_time is not None:
+        w.start_time = body.start_time
+    if body.end_time is not None:
+        w.end_time = body.end_time
+    if w.end_time <= w.start_time:
+        raise HTTPException(status_code=422, detail="end_time must be after start_time")
+    _audit(db, "admin_week_edited", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"id={w.id} label={w.label} end_time={w.end_time}")
+    db.commit()
+    return {"id": w.id, "label": w.label,
+            "start_time": w.start_time, "end_time": w.end_time}
+
+
+@router.delete("/admin/weeks/{week_id}")
+def delete_week(week_id: int, db=Depends(get_db),
+                admin: dict = Depends(require_admin)):
+    w = db.get(Week, week_id)
+    if not w:
+        raise HTTPException(status_code=404, detail="Week not found")
+    if w.is_locked:
+        raise HTTPException(status_code=409, detail="Cannot delete a locked week")
+    roster_count = db.query(WeeklyRosterEntry).filter_by(week_id=week_id).count()
+    if roster_count > 0:
+        raise HTTPException(status_code=409,
+                            detail="Cannot delete a week that has roster entries")
+    _audit(db, "admin_week_deleted", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"id={w.id} label={w.label}")
+    db.delete(w)
     db.commit()
     return {"ok": True}
 

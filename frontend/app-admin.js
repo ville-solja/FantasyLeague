@@ -1,3 +1,117 @@
+async function loadAdminWeeks() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/weeks`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", rows.detail, false);
+    if (!rows.length) {
+      document.getElementById("adminWeeksBody").innerHTML = "<tr><td colspan='6' style='color:#444'>No weeks</td></tr>";
+      return;
+    }
+    document.getElementById("adminWeeksBody").innerHTML = rows.map(w => {
+      const start  = new Date(w.start_time * 1000).toLocaleString();
+      const end    = new Date(w.end_time   * 1000).toLocaleString();
+      const locked = w.is_locked ? "<span style='color:#888;font-size:0.75rem;'>LOCKED</span>" : "";
+      const actions = w.is_locked ? "<td>—</td>" :
+        `<td>
+          <button class="secondary" style="padding:2px 7px;margin-right:4px;" onclick="openWeekEdit(${w.id},'${w.label.replace(/'/g,"\\'")}',${w.start_time},${w.end_time})">Edit</button>
+          <button class="danger"    style="padding:2px 7px;" onclick="deleteAdminWeek(${w.id})">Delete</button>
+        </td>`;
+      return `<tr>
+        <td>${w.label}</td>
+        <td style="font-size:0.8rem;">${start}</td>
+        <td style="font-size:0.8rem;">${end}</td>
+        <td>${locked}</td>
+        <td>${w.roster_count}</td>
+        ${actions}
+      </tr>`;
+    }).join("");
+    setStatus("weeksAdminStatus", "");
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+async function createAdminWeek() {
+  const label    = document.getElementById("weekLabel").value.trim();
+  const startVal = document.getElementById("weekStart").value;
+  const endVal   = document.getElementById("weekEnd").value;
+  if (!label)               return setStatus("weeksAdminStatus", "Enter a label", false);
+  if (!startVal || !endVal) return setStatus("weeksAdminStatus", "Set start and end time", false);
+  const start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (end_time <= start_time) return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/weeks`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({label, start_time, end_time}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
+    setStatus("weeksAdminStatus", `Week "${data.label}" created`);
+    document.getElementById("weekLabel").value = "";
+    document.getElementById("weekStart").value = "";
+    document.getElementById("weekEnd").value   = "";
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+function openWeekEdit(id, label, startTs, endTs) {
+  const toLocal = ts => {
+    const d = new Date(ts * 1000);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  };
+  document.getElementById("editWeekId").value    = id;
+  document.getElementById("editWeekLabel").value = label;
+  document.getElementById("editWeekStart").value = toLocal(startTs);
+  document.getElementById("editWeekEnd").value   = toLocal(endTs);
+  document.getElementById("weekEditForm").classList.remove("hidden");
+}
+
+function cancelWeekEdit() {
+  document.getElementById("weekEditForm").classList.add("hidden");
+}
+
+async function saveWeekEdit() {
+  const id       = parseInt(document.getElementById("editWeekId").value, 10);
+  const label    = document.getElementById("editWeekLabel").value.trim() || undefined;
+  const startVal = document.getElementById("editWeekStart").value;
+  const endVal   = document.getElementById("editWeekEnd").value;
+  const body = {};
+  if (label)    body.label      = label;
+  if (startVal) body.start_time = Math.floor(new Date(startVal).getTime() / 1000);
+  if (endVal)   body.end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
+  if (body.start_time && body.end_time && body.end_time <= body.start_time)
+    return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  try {
+    const res = await fetch(`${API}/admin/weeks/${id}`, {
+      method: "PATCH", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
+    setStatus("weeksAdminStatus", "Week updated");
+    cancelWeekEdit();
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
+async function deleteAdminWeek(weekId) {
+  try {
+    const res = await fetch(`${API}/admin/weeks/${weekId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("weeksAdminStatus", d.detail, false); }
+    setStatus("weeksAdminStatus", "Week deleted");
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  }
+}
+
 async function loadWeights() {
   try {
     const res = await fetch(`${API}/weights`);
