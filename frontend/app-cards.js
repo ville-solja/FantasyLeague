@@ -56,9 +56,11 @@ function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
   }
 }
 
-/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean }} [opts] */
+/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
+  const actionBtn = document.getElementById("revealActionBtn");
+  if (actionBtn) actionBtn.style.display = opts.showActionBtn ? "" : "none";
   const reduceMotion = _prefersReducedMotion();
 
   const modal = document.getElementById("revealModal");
@@ -156,10 +158,14 @@ function showCard(card, footer, opts = {}) {
 
   const rerollBtn = document.getElementById("rerollBtn");
   if (rerollBtn) {
-    const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
-    rerollBtn.disabled = !hasTokens;
-    rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
-    rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
+    const isCommon = (card.card_type || "").toLowerCase() === "common";
+    rerollBtn.style.display = isCommon ? "none" : "";
+    if (!isCommon) {
+      const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
+      rerollBtn.disabled = !hasTokens;
+      rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
+      rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
+    }
   }
 
   modal.classList.remove("hidden");
@@ -203,6 +209,7 @@ let _revealKeyHandler = null;
 function showReveal(card) {
   showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)", {
     drawAnimation: true,
+    showActionBtn: true,
   });
   _updateRevealActionBtn();
   if (!_revealKeyHandler) {

@@ -313,6 +313,8 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     card = db.get(Card, card_id)
     if not card or card.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Card not found")
+    if card.card_type == "common":
+        raise HTTPException(status_code=400, detail="Common cards cannot be rerolled")
 
     db.execute(text("DELETE FROM card_modifiers WHERE card_id = :cid"), {"cid": card_id})
     db.flush()
