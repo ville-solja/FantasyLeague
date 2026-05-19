@@ -64,7 +64,7 @@ test("draw opens reveal modal and decrements token balance", async ({ page, requ
   await expect(page.locator("#revealRarity")).not.toBeEmpty();
 
   // Close reveal
-  await page.click("#revealModal button:has-text('Continue')");
+  await page.click("#revealActionBtn");
   await expect(page.locator("#revealModal")).toBeHidden();
 
   // Token balance must have decremented by 1
