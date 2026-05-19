@@ -44,3 +44,4 @@ Implementation details, integrations, and operator tooling.
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/edit/delete unlocked weeks |
+| [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
