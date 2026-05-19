@@ -71,9 +71,10 @@
 </div>
 
 <!-- CARD REVEAL MODAL -->
-<div class="reveal-overlay hidden" id="revealModal">
+<div class="reveal-overlay hidden" id="revealModal" onclick="closeReveal()">
   <div class="reveal-draw-burst" id="revealDrawBurst" aria-hidden="true"></div>
-  <div class="reveal-card" id="revealCard">
+  <div class="reveal-card" id="revealCard" onclick="event.stopPropagation()">
+    <button class="ghost" onclick="closeReveal()" style="position:absolute;top:8px;right:8px;padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     <div class="rarity-label" id="revealRarity"></div>
     <div class="reveal-img-wrap" id="revealImgWrap">
       <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
@@ -91,7 +92,7 @@
       </div>
       <div id="rerollStatus" style="margin-top:6px;font-size:0.78rem;color:#e05;"></div>
     </div>
-    <button onclick="closeReveal()">Continue</button>
+    <button id="revealActionBtn" onclick="revealAction()">Continue</button>
   </div>
 </div>
 

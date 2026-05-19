@@ -183,10 +183,36 @@ function showCard(card, footer, opts = {}) {
   }
 }
 
+function _updateRevealActionBtn() {
+  const btn = document.getElementById("revealActionBtn");
+  if (!btn) return;
+  btn.textContent = (_tokenBalance !== null && _tokenBalance > 0) ? "Draw another card" : "Continue";
+}
+
+function revealAction() {
+  if (_tokenBalance !== null && _tokenBalance > 0) {
+    closeReveal();
+    drawCard();
+  } else {
+    closeReveal();
+  }
+}
+
+let _revealKeyHandler = null;
+
 function showReveal(card) {
   showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)", {
     drawAnimation: true,
   });
+  _updateRevealActionBtn();
+  if (!_revealKeyHandler) {
+    _revealKeyHandler = (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      revealAction();
+    };
+    document.addEventListener("keydown", _revealKeyHandler);
+  }
 }
 
 function closeReveal() {
@@ -197,6 +223,10 @@ function closeReveal() {
   _stripRevealDrawFx(modal, imgWrap, placeholder, img);
   modal.classList.add("hidden");
   closeRerollConfirm();
+  if (_revealKeyHandler) {
+    document.removeEventListener("keydown", _revealKeyHandler);
+    _revealKeyHandler = null;
+  }
 }
 
 function openRerollConfirm() {
