@@ -171,3 +171,27 @@ so that I can dismiss it using the standard web pattern instead of hunting for t
 - Clicking the modal backdrop (outside the modal content box) closes the modal
 - Clicking inside the modal content does not close it (click propagation stops at the content box)
 - The modal can still be closed with the existing X button as well
+
+---
+
+## Common Card Reroll Prevention
+
+### Reroll Button Hidden for Common Cards
+**User story**
+As a user, I want the Reroll Modifiers button to be absent when I am viewing a common card
+so that I am not tempted to spend a token on an action that does nothing.
+
+**Acceptance criteria**
+- The Reroll Modifiers button is not visible when the card draw modal shows a common card
+- The Reroll Modifiers button is visible for rare, epic, and legendary cards (unchanged)
+- No change to any other modal behaviour
+
+### Backend Rejects Common Card Reroll
+**User story**
+As a developer, I want the reroll endpoint to reject requests for common cards so that the
+rule is enforced server-side regardless of how the request is made.
+
+**Acceptance criteria**
+- `POST /roster/{card_id}/reroll` returns HTTP 400 with a clear error message when the target card is of type `"common"`
+- The endpoint continues to succeed for rare, epic, and legendary cards
+- The error message is distinct enough to aid debugging (e.g. `"Common cards cannot be rerolled"`)
