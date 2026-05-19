@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 from sqlalchemy import create_engine, text
 
+import models as _models  # noqa: F401 — registers all tables in Base.metadata
 from database import Base
 from migrate import run_migrations
 
@@ -260,3 +261,43 @@ class TestCardModifiersConstraintMigration:
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
             )).scalar() or ""
         assert "ck_card_modifiers_stat_key" in ddl
+
+
+# ---------------------------------------------------------------------------
+# Schema coverage: every model column must exist after migration + create_all
+# ---------------------------------------------------------------------------
+
+class TestSchemaCoverage:
+    """
+    Ensures that run_migrations() + Base.metadata.create_all() brings a legacy
+    DB fully up to date with the current SQLAlchemy models.
+
+    When a new column is added to a model, this test will FAIL unless a
+    corresponding migration is also added to migrate.py.  That is intentional —
+    it is the CI gate that enforces the rule: model change → migration required.
+    """
+
+    def test_all_model_columns_present_after_migration(self, legacy_engine):
+        import models as _models  # ensure all models are registered
+        from sqlalchemy import inspect as sa_inspect
+
+        run_migrations(legacy_engine)
+        Base.metadata.create_all(legacy_engine)  # creates any new tables
+
+        inspector = sa_inspect(legacy_engine)
+        existing_tables = set(inspector.get_table_names())
+
+        missing = []
+        for table_name, table in Base.metadata.tables.items():
+            if table_name not in existing_tables:
+                missing.append(f"  table '{table_name}' is absent")
+                continue
+            db_cols = {c["name"] for c in inspector.get_columns(table_name)}
+            for col in table.columns:
+                if col.name not in db_cols:
+                    missing.append(f"  {table_name}.{col.name} is absent")
+
+        assert not missing, (
+            "Schema drift detected — add a migration to migrate.py:\n"
+            + "\n".join(missing)
+        )

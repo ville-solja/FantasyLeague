@@ -38,6 +38,18 @@ Source directories are mounted for live reload.
 rm data/fantasy.db && docker compose restart
 ```
 
+## Deployment
+
+Before every deploy, back up the database:
+
+```bash
+bash scripts/backup-db.sh          # creates data/fantasy.db.backup-YYYYMMDD-HHmmss
+docker compose up --build -d
+```
+
+Schema migrations run automatically on startup via `run_migrations()` in `backend/migrate.py`.
+See [DB Sustainability](markdown/features/reference/db-sustainability.md) for the migration registry rules.
+
 ## Documentation
 
 - [Feature documentation](markdown/features/README.md) — Core features and reference details, split into two tiers
