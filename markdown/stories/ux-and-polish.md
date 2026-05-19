@@ -97,3 +97,29 @@ As a Kanaliiga streamer, I want the How to Play tab to explain the Twitch extens
 - Explains that token drops fire automatically on MVP confirmation (once per match)
 - Explains that the MVP selection also grants a fantasy score bonus to that player's match
 - The section is visible to all users (not restricted to admins or streamers)
+
+---
+
+## Table Sortability
+
+### Sort Players Table by Column Header
+**User story**
+As a user, I want to click a column header in the Players tab to sort the table by that
+column so that I can quickly find top-performers or compare players on a stat I care about.
+
+**Acceptance criteria**
+- Clicking any column header sorts all visible rows by that column
+- Numeric columns (fantasy points, K/D/A, GPM) default to descending on first click so the highest values appear at the top
+- Text columns (player name, team) default to ascending on first click (A → Z)
+- The active sort column is visually indicated with an arrow icon (↑ or ↓) next to the header label
+- All rows in the current filtered/search result set are sorted — not just the visible page
+
+### Toggle Sort Direction
+**User story**
+As a user, I want to click the already-active sort column again to reverse the sort order
+so that I can view the bottom of the ranking without scrolling.
+
+**Acceptance criteria**
+- Clicking the active sort header reverses the current direction (ascending ↔ descending)
+- The arrow icon flips to reflect the new direction
+- Sort state is reset to default when the tab is first loaded or reloaded

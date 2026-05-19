@@ -336,7 +336,13 @@
         <button class="secondary" onclick="loadPlayers()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>Player</th><th>Team</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
+        <thead><tr id="playersTableHead">
+          <th data-col="name"         data-default-dir="asc">Player</th>
+          <th data-col="team_name"    data-default-dir="asc">Team</th>
+          <th data-col="matches"      data-default-dir="desc">Matches</th>
+          <th data-col="avg_points"   data-default-dir="desc">Avg pts</th>
+          <th data-col="total_points" data-default-dir="desc">Total pts</th>
+        </tr></thead>
         <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="playersStatus"></div>
