@@ -71,9 +71,10 @@
 </div>
 
 <!-- CARD REVEAL MODAL -->
-<div class="reveal-overlay hidden" id="revealModal">
+<div class="reveal-overlay hidden" id="revealModal" onclick="closeReveal()">
   <div class="reveal-draw-burst" id="revealDrawBurst" aria-hidden="true"></div>
-  <div class="reveal-card" id="revealCard">
+  <div class="reveal-card" id="revealCard" onclick="event.stopPropagation()">
+    <button class="ghost" onclick="closeReveal()" style="position:absolute;top:8px;right:8px;padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     <div class="rarity-label" id="revealRarity"></div>
     <div class="reveal-img-wrap" id="revealImgWrap">
       <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
@@ -91,7 +92,7 @@
       </div>
       <div id="rerollStatus" style="margin-top:6px;font-size:0.78rem;color:#e05;"></div>
     </div>
-    <button onclick="closeReveal()">Continue</button>
+    <button id="revealActionBtn" onclick="revealAction()">Continue</button>
   </div>
 </div>
 
@@ -336,7 +337,13 @@
         <button class="secondary" onclick="loadPlayers()">Refresh</button>
       </div>
       <table>
-        <thead><tr><th>Player</th><th>Team</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
+        <thead><tr id="playersTableHead">
+          <th data-col="name"         data-default-dir="asc">Player</th>
+          <th data-col="team_name"    data-default-dir="asc">Team</th>
+          <th data-col="matches"      data-default-dir="desc">Matches</th>
+          <th data-col="avg_points"   data-default-dir="desc">Avg pts</th>
+          <th data-col="total_points" data-default-dir="desc">Total pts</th>
+        </tr></thead>
         <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="playersStatus"></div>
