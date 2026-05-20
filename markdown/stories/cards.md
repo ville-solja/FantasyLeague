@@ -136,3 +136,62 @@ As an admin, I want to add a new batch of cards to the deck mid-season so that n
 - Top-up is idempotent per generation — running it twice does not double the pool
 - Existing owned cards are unaffected
 - Audit log records the top-up event
+
+---
+
+## Card Draw Modal UX
+
+### Enter Key Draws or Closes the Card Modal
+**User story**
+As a user, I want to press Enter after drawing a card so that I can immediately draw
+another card (or close the modal if I have no tokens left) without reaching for the mouse.
+
+**Acceptance criteria**
+- Pressing Enter while the card draw result modal is open triggers the same action as clicking the primary button
+- If the user has tokens remaining, Enter draws another card
+- If the user has zero tokens, Enter closes/dismisses the modal
+- Enter key handling is removed when the modal is closed (no ghost listener)
+
+### Dynamic Button Label Reflects Available Action
+**User story**
+As a user, I want the primary button in the draw modal to tell me what will happen next so
+that I understand whether clicking it costs a token or just dismisses the screen.
+
+**Acceptance criteria**
+- When the user has 1 or more tokens after drawing, the primary button reads "Draw another card"
+- When the user has 0 tokens after drawing, the primary button reads "Continue"
+- The button label updates immediately after each draw without a page reload
+
+### Dismiss Modal by Clicking Outside
+**User story**
+As a user, I want to close the card draw modal by clicking outside it (on the dark overlay)
+so that I can dismiss it using the standard web pattern instead of hunting for the X button.
+
+**Acceptance criteria**
+- Clicking the modal backdrop (outside the modal content box) closes the modal
+- Clicking inside the modal content does not close it (click propagation stops at the content box)
+- The modal can still be closed with the existing X button as well
+
+---
+
+## Common Card Reroll Prevention
+
+### Reroll Button Hidden for Common Cards
+**User story**
+As a user, I want the Reroll Modifiers button to be absent when I am viewing a common card
+so that I am not tempted to spend a token on an action that does nothing.
+
+**Acceptance criteria**
+- The Reroll Modifiers button is not visible when the card draw modal shows a common card
+- The Reroll Modifiers button is visible for rare, epic, and legendary cards (unchanged)
+- No change to any other modal behaviour
+
+### Backend Rejects Common Card Reroll
+**User story**
+As a developer, I want the reroll endpoint to reject requests for common cards so that the
+rule is enforced server-side regardless of how the request is made.
+
+**Acceptance criteria**
+- `POST /roster/{card_id}/reroll` returns HTTP 400 with a clear error message when the target card is of type `"common"`
+- The endpoint continues to succeed for rare, epic, and legendary cards
+- The error message is distinct enough to aid debugging (e.g. `"Common cards cannot be rerolled"`)

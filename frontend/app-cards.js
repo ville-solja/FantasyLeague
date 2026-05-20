@@ -56,9 +56,11 @@ function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
   }
 }
 
-/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean }} [opts] */
+/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
+  const actionBtn = document.getElementById("revealActionBtn");
+  if (actionBtn) actionBtn.style.display = opts.showActionBtn ? "" : "none";
   const reduceMotion = _prefersReducedMotion();
 
   const modal = document.getElementById("revealModal");
@@ -156,10 +158,14 @@ function showCard(card, footer, opts = {}) {
 
   const rerollBtn = document.getElementById("rerollBtn");
   if (rerollBtn) {
-    const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
-    rerollBtn.disabled = !hasTokens;
-    rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
-    rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
+    const isCommon = (card.card_type || "").toLowerCase() === "common";
+    rerollBtn.style.display = isCommon ? "none" : "";
+    if (!isCommon) {
+      const hasTokens = _tokenBalance !== null && _tokenBalance >= 1;
+      rerollBtn.disabled = !hasTokens;
+      rerollBtn.style.opacity = hasTokens ? "1" : "0.4";
+      rerollBtn.style.cursor = hasTokens ? "pointer" : "not-allowed";
+    }
   }
 
   modal.classList.remove("hidden");
@@ -183,10 +189,37 @@ function showCard(card, footer, opts = {}) {
   }
 }
 
+function _updateRevealActionBtn() {
+  const btn = document.getElementById("revealActionBtn");
+  if (!btn) return;
+  btn.textContent = (_tokenBalance !== null && _tokenBalance > 0) ? "Draw another card" : "Continue";
+}
+
+function revealAction() {
+  if (_tokenBalance !== null && _tokenBalance > 0) {
+    closeReveal();
+    drawCard();
+  } else {
+    closeReveal();
+  }
+}
+
+let _revealKeyHandler = null;
+
 function showReveal(card) {
   showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)", {
     drawAnimation: true,
+    showActionBtn: true,
   });
+  _updateRevealActionBtn();
+  if (!_revealKeyHandler) {
+    _revealKeyHandler = (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      revealAction();
+    };
+    document.addEventListener("keydown", _revealKeyHandler);
+  }
 }
 
 function closeReveal() {
@@ -197,6 +230,10 @@ function closeReveal() {
   _stripRevealDrawFx(modal, imgWrap, placeholder, img);
   modal.classList.add("hidden");
   closeRerollConfirm();
+  if (_revealKeyHandler) {
+    document.removeEventListener("keydown", _revealKeyHandler);
+    _revealKeyHandler = null;
+  }
 }
 
 function openRerollConfirm() {

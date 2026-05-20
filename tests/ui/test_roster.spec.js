@@ -13,7 +13,7 @@ async function drawOneCard(page) {
   await expect(page.locator("#drawBtn")).toBeVisible({ timeout: 5_000 });
   await page.click("#drawBtn");
   await expect(page.locator("#revealModal")).toBeVisible({ timeout: 10_000 });
-  await page.click("#revealModal button:has-text('Continue')");
+  await page.click("#revealActionBtn");
   await expect(page.locator("#revealModal")).toBeHidden();
 }
 

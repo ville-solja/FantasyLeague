@@ -249,6 +249,10 @@ th {
   border-bottom: var(--bw-hair) solid var(--border-soft);
 }
 td { padding: 6px 8px; border-bottom: var(--bw-hair) solid var(--k-ink-900); color: var(--fg); }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--fg); }
+th.sort-asc::after  { content: " \2191"; color: var(--k-orange-500); }
+th.sort-desc::after { content: " \2193"; color: var(--k-orange-500); }
 
 /* ============================================================
    BADGES / STATUS

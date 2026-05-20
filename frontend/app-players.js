@@ -1,32 +1,76 @@
 let _playersData = [];
+let _playerSort = { col: null, dir: "desc" };
 
 async function loadPlayers() {
   try {
     const res = await fetch(`${API}/players`);
     const rows = await res.json();
     _playersData = rows;
-    renderPlayers(rows);
+    _playerSort = { col: null, dir: "desc" };
+    _initPlayerSortHeaders();
+    renderPlayers(_getFilteredPlayers());
     setStatus("playersStatus", `${rows.length} players`);
   } catch (e) {
     setStatus("playersStatus", e.message, false);
   }
 }
 
-function filterPlayers() {
+function _getFilteredPlayers() {
   const q = document.getElementById("playersSearch").value.toLowerCase();
-  const filtered = _playersData.filter(p =>
+  return _playersData.filter(p =>
     p.name.toLowerCase().includes(q) || (p.team_name || "").toLowerCase().includes(q)
   );
-  renderPlayers(filtered);
+}
+
+function filterPlayers() {
+  renderPlayers(_getFilteredPlayers());
+}
+
+function _sortPlayers(rows) {
+  if (!_playerSort.col) return rows;
+  const col = _playerSort.col;
+  const asc = _playerSort.dir === "asc";
+  return [...rows].sort((a, b) => {
+    const av = a[col], bv = b[col];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = typeof av === "string"
+      ? av.localeCompare(bv)
+      : av - bv;
+    return asc ? cmp : -cmp;
+  });
+}
+
+function _initPlayerSortHeaders() {
+  const head = document.getElementById("playersTableHead");
+  if (!head) return;
+  head.querySelectorAll("th[data-col]").forEach(th => {
+    th.classList.add("sortable");
+    th.classList.remove("sort-asc", "sort-desc");
+    th.onclick = () => {
+      const col = th.getAttribute("data-col");
+      if (_playerSort.col === col) {
+        _playerSort.dir = _playerSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        _playerSort.col = col;
+        _playerSort.dir = th.getAttribute("data-default-dir") || "desc";
+      }
+      head.querySelectorAll("th").forEach(h => h.classList.remove("sort-asc", "sort-desc"));
+      th.classList.add(_playerSort.dir === "asc" ? "sort-asc" : "sort-desc");
+      renderPlayers(_getFilteredPlayers());
+    };
+  });
 }
 
 function renderPlayers(rows) {
+  const sorted = _sortPlayers(rows);
   const tbody = document.getElementById("playersBody");
-  if (!rows.length) {
+  if (!sorted.length) {
     tbody.innerHTML = "<tr><td colspan='5' style='color:#444'>No players found</td></tr>";
     return;
   }
-  tbody.innerHTML = rows.map(p => `
+  tbody.innerHTML = sorted.map(p => `
     <tr>
       <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (p.team_name || "—")}</td>
