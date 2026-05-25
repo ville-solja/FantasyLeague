@@ -232,6 +232,35 @@ def _m012_twitch_token_drops_columns(conn):
         logger.info("Migration: twitch_token_drops — added count column")
 
 
+def _m013_user_tag_system(conn):
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )).fetchall()}
+    if "tag_definitions" not in tables:
+        conn.execute(text("""
+            CREATE TABLE tag_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                created_at INTEGER
+            )
+        """))
+        logger.info("Migration: created tag_definitions table")
+    if "user_tags" not in tables:
+        conn.execute(text("""
+            CREATE TABLE user_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                tag_id INTEGER NOT NULL REFERENCES tag_definitions(id),
+                granted_by INTEGER REFERENCES users(id),
+                granted_at INTEGER,
+                UNIQUE(user_id, tag_id)
+            )
+        """))
+        logger.info("Migration: created user_tags table")
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -249,6 +278,7 @@ MIGRATIONS = [
     ("010_weeks_epoch0_reset",       _m010_weeks_epoch0_reset),
     ("011_twitch_mvp_selected_at",   _m011_twitch_mvp_selected_at),
     ("012_twitch_token_drops_columns", _m012_twitch_token_drops_columns),
+    ("013_user_tag_system",          _m013_user_tag_system),
 ]
 
 

@@ -1,10 +1,11 @@
 import json
 import logging
 import os
+import time
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
-from models import User, Card, Weight, PlayerMatchStats, Match
+from models import User, Card, Weight, PlayerMatchStats, Match, TagDefinition
 from auth import hash_password
 from weeks import generate_weeks, auto_lock_weeks
 from scoring import SCORING_STATS
@@ -185,6 +186,25 @@ def seed_weights():
             existing.value = target_value
     db.commit()
     db.close()
+
+
+_INITIAL_TAGS = [
+    {"key": "caster",        "label": "Caster"},
+    {"key": "season_winner", "label": "Season Winner"},
+]
+
+
+def seed_tags():
+    """Seed initial tag definitions if they do not already exist."""
+    db = SessionLocal()
+    try:
+        for t in _INITIAL_TAGS:
+            if not db.query(TagDefinition).filter_by(key=t["key"]).first():
+                db.add(TagDefinition(key=t["key"], label=t["label"],
+                                     created_at=int(time.time())))
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed_weeks():

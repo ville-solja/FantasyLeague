@@ -7,7 +7,7 @@ from card_utils import (
     _compute_card_points,
 )
 from database import get_db
-from models import Match, Weight
+from models import Match, Weight, UserTag, TagDefinition
 from scoring import fantasy_score, SCORING_STATS
 
 router = APIRouter()
@@ -28,6 +28,22 @@ class SimulateBody(BaseModel):
     stuns: float | None = None
     death_pool: float | None = None
     death_deduction: float | None = None
+
+
+def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
+    """Return {user_id: [{"key": ..., "label": ...}, ...]} for the given user IDs."""
+    if not user_ids:
+        return {}
+    rows = (
+        db.query(UserTag, TagDefinition)
+        .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+        .filter(UserTag.user_id.in_(user_ids))
+        .all()
+    )
+    result: dict = {}
+    for ut, td in rows:
+        result.setdefault(ut.user_id, []).append({"key": td.key, "label": td.label})
+    return result
 
 
 def _leaderboard_rows(db, rows) -> list[dict]:
@@ -67,8 +83,10 @@ def _leaderboard_rows(db, rows) -> list[dict]:
             "points": round(card_pts, 2),
         })
 
+    tags_by_user = _fetch_tags_for_users(db, list(totals.keys()))
     return sorted(
         [{"id": uid, "username": usernames[uid], "points": round(totals[uid], 2),
+          "tags": tags_by_user.get(uid, []),
           "cards": sorted(cards_by_user.get(uid, []), key=lambda c: c["points"], reverse=True)}
          for uid in totals],
         key=lambda x: x["points"], reverse=True,
@@ -158,7 +176,7 @@ def season_leaderboard(db=Depends(get_db)):
     """)).fetchall()
     result = _leaderboard_rows(db, rows)
     return [{"id": r["id"], "username": r["username"], "season_points": r["points"],
-             "cards": r["cards"]} for r in result]
+             "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 @router.get("/leaderboard/weekly")
@@ -198,7 +216,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)
     return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
-             "cards": r["cards"]} for r in result]
+             "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 @router.get("/weights")

@@ -19,9 +19,12 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const cursorStyle = hasCards ? "cursor:pointer;" : "";
   const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
   const pts = Number(r[ptsKey] || 0).toFixed(1);
+  const tagChips = (r.tags || []).map(t =>
+    `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.6rem;padding:1px 5px;border-radius:2px;margin-left:4px;vertical-align:middle;">${t.label}</span>`
+  ).join("");
   const mainRow = `<tr style="${baseStyle}${cursorStyle}" ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
     <td>${i + 1}</td>
-    <td>${_escHtml(r.username)}${youLabel}${chevron}</td>
+    <td>${_escHtml(r.username)}${tagChips}${youLabel}${chevron}</td>
     <td>${pts}</td>
   </tr>`;
   if (!hasCards) return mainRow;
