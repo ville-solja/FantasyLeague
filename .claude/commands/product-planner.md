@@ -1,4 +1,4 @@
-<!-- version: 6 -->
+<!-- version: 7 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -80,7 +80,7 @@ As a [role], I want to [action] so that [goal].
 
 ### 2c. Draft the plan
 
-Write a complete plan following the style of `markdown/plans/plan-mid-season-card-topup.md`:
+Write a complete plan following the style of `markdown/plans/plan-notification-system.md`:
 
 ```
 # Plan: [Feature Name]

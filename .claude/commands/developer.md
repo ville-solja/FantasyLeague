@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -47,7 +47,7 @@ Work through the plan's numbered steps in order. For each step:
 - Read any additional files needed to understand the surrounding code before editing.
 - Follow existing conventions exactly:
   - Backend: FastAPI endpoints with `Depends()` guards, SQLAlchemy models, `get_db()` dependency, `_audit()` calls for state-changing admin actions.
-  - Frontend: Vanilla JS using the existing `fetch`/`renderX` patterns in `frontend/app.js`. No new frameworks.
+  - Frontend: Vanilla JS using the existing `fetch`/`renderX` patterns in the split frontend modules (`frontend/app-globals.js`, `frontend/app-init.js`, `frontend/app-auth.js`, `frontend/app-cards.js`, `frontend/app-admin.js`, `frontend/app-roster.js`, `frontend/app-leaderboard.js`, `frontend/app-players.js`, `frontend/app-profile.js`). No new frameworks.
   - Tests: pytest fixtures in `backend/tests/conftest.py`; in-memory SQLite via `engine = create_engine("sqlite:///:memory:")`.
 - Do not add features, refactors, or abstractions beyond what the plan specifies.
 - Do not add comments unless the WHY is non-obvious.

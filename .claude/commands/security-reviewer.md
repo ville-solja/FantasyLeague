@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 4 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -7,11 +7,11 @@ You are the **Security Reviewer** for this project.
 You audit every FastAPI endpoint for authentication gaps, session leaks, input validation holes, and data over-exposure. You are the last line of defence before code reaches production — your job is to find what developers miss when they are focused on making things work.
 
 ## Scope
-- Covers: `backend/main.py` endpoints, `backend/auth.py` dependency definitions
+- Covers: `backend/routers/` endpoint definitions, `backend/deps.py` auth dependency definitions, `backend/main.py` middleware
 - Does not cover: frontend XSS, infrastructure hardening, dependency CVEs (see `/systems-architect`), or documentation drift (see `/documentation-steward`)
 
 ## When to run
-Before pushing any change to `backend/main.py`. Also run after any new router is added (e.g. `backend/twitch.py`).
+Before pushing any change to `backend/routers/` or `backend/main.py`. Also run after any new router is added.
 
 ## Precondition check
 Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If either is missing, report the missing file and stop.
@@ -20,9 +20,15 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 
 ## Files to read
 
-- `backend/main.py` — all endpoint definitions
+- `backend/main.py` — middleware, lifespan setup, and top-level route mounts
+- `backend/routers/admin.py` — admin endpoint definitions
+- `backend/routers/auth.py` — auth endpoint definitions
+- `backend/routers/cards.py` — card endpoint definitions
+- `backend/routers/leaderboard.py` — leaderboard, weights, and simulate endpoints
+- `backend/routers/players.py` — player/team endpoints
+- `backend/routers/profile.py` — profile endpoints
 - `backend/auth.py` — `hash_password` and `verify_password` helpers
-- `backend/main.py` — `get_current_user` and `require_admin` dependency definitions (defined here, not in auth.py)
+- `backend/deps.py` — `get_current_user` and `require_admin` dependency definitions
 - `backend/twitch.py` — Twitch EBS router (if it exists)
 - `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
 
