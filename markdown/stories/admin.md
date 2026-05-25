@@ -237,3 +237,29 @@ auto-generated placeholder weeks can be removed when the schedule changes.
 - Attempting to delete a locked week returns 409
 - Attempting to delete a week with roster entries returns 409
 - Deletion is logged to the audit log
+
+## Env-Based Admin Seeding
+
+### Configure the Admin Account via Environment Variables
+**User story**
+As an operator deploying the app, I want to set admin credentials through environment
+variables so that no real password is ever committed to the repository.
+
+**Acceptance criteria**
+- If `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` are all set,
+  a user with `is_admin=true` is created at startup if no user with that email already exists
+- If the env vars are absent or empty, no admin account is auto-created (no crash, no warning)
+- The `backend/seed/users.json` file is replaced with a safe, empty-array stub (`[]`) so
+  the seeding code path remains exercisable in tests without committing real passwords
+- The old `seed_users()` function still works for local dev if a non-empty `users.json` is
+  placed on disk (the file is `.gitignore`d except for the stub)
+- `.env.example` documents all three new variables
+
+### Prevent Accidental Credential Leakage in CI
+**User story**
+As a developer, I want the CI test suite to work without real admin credentials in the
+environment so that test runs do not depend on secrets.
+
+**Acceptance criteria**
+- `pytest` passes with `users.json` set to `[]` and no `SEED_ADMIN_*` env vars set
+- No test hard-codes the admin username or password from the old `users.json`

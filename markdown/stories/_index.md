@@ -7,7 +7,7 @@
 | [team-tokens-scoring.md](team-tokens-scoring.md) | Active lineup, weekly lock, week history, tokens, scoring |
 | [data-and-players.md](data-and-players.md) | Dota data ingestion, player profile enrichment, AI bios |
 | [leaderboard.md](leaderboard.md) | Season/weekly leaderboard, player/team browser, weight simulation |
-| [admin.md](admin.md) | User management, promo codes, scoring config, audit logs, version badge |
+| [admin.md](admin.md) | User management, promo codes, scoring config, audit logs, version badge, env-based admin seeding |
 | [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling |
 | [ux-and-polish.md](ux-and-polish.md) | Schedule tab, scoring explanation, My Team layout, CI testing, How to Play tab |
 | [deployment.md](deployment.md) | DB sustainability, versioned migrations, pre-deploy backup |
