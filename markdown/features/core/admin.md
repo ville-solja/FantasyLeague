@@ -77,19 +77,6 @@ Automatically bulk-assigns `week_override_id` for all matches based on the Googl
 
 ---
 
-## Card Top-Up
-
-### `POST /admin/top-up-cards`
-Adds one additional full card batch (1 Legendary, 2 Epic, 4 Rare, 8 Common per player) to the unowned pool for a given league. Each top-up is tracked as a separate generation so the operation is idempotent — running it twice does not double the pool.
-
-```json
-{ "league_id": 19369 }
-```
-
-Returns `{ "league_id": N, "generation_added": N }`. Existing owned cards are unaffected. Logged as `admin_top_up_cards`.
-
----
-
 ## Player Profile Enrichment
 
 ### `POST /admin/enrich-profiles`
@@ -104,8 +91,9 @@ Triggers a full ingest cycle for the specified OpenDota league ID:
 1. Fetches all match IDs from OpenDota
 2. Ingests new matches and player stats
 3. Runs player profile enrichment
-4. Seeds new player cards
-5. Refreshes Dotabuff team logos
+4. Refreshes Dotabuff team logos
+
+Note: card generation was removed from the ingest pipeline. Cards are now created dynamically at draw time.
 
 Ingest also runs automatically every 15 minutes in the background. The manual endpoint is useful immediately after new matches are played.
 
@@ -157,7 +145,6 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
-| `admin_top_up_cards` | Admin added a new card generation to the deck |
 | `admin_enrich_profiles` | Admin triggered a manual profile enrichment batch |
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `password_reset_requested` | Forgot-password flow issued a temporary password |

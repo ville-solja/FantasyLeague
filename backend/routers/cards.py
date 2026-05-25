@@ -3,22 +3,24 @@ import os
 import random
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy import text
 
+from card_draw import _roll_rarity, _pick_player
 from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _compute_card_points,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
 )
 from database import get_db
 from deps import get_current_user, _audit
-from models import Card, User, Week, Weight
+from models import Card, Player, User, Week, Weight
 from weeks import get_next_editable_week
 
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
 
 _LATEST_TEAM_SUBQUERY = """
     LEFT JOIN (
@@ -159,14 +161,22 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
 
 @router.get("/deck")
-def get_deck(db=Depends(get_db)):
-    results = db.execute(text("""
-        SELECT c.card_type, COUNT(*) as count
-        FROM cards c
-        WHERE c.owner_id IS NULL
-        GROUP BY c.card_type
-    """)).fetchall()
-    return {r.card_type: r.count for r in results}
+def get_deck(request: Request, db=Depends(get_db)):
+    rarities = ["common", "rare", "epic", "legendary"]
+    all_players = db.query(Player).all()
+    all_combos = {(p.id, r) for p in all_players for r in rarities}
+
+    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    if user_id:
+        owned_combos = {
+            (c.player_id, c.card_type)
+            for c in db.query(Card).filter_by(owner_id=user_id).all()
+        }
+        available = all_combos - owned_combos
+    else:
+        available = all_combos
+
+    return {r: sum(1 for _, rr in available if rr == r) for r in rarities}
 
 
 @router.post("/draw")
@@ -178,29 +188,21 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     if (user.tokens or 0) <= 0:
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
-    unclaimed = db.execute(text("""
-        SELECT c.id, c.card_type, c.player_id, p.name as player_name, p.avatar_url,
-               t.name as team_name, t.id as team_id, t.logo_url as team_logo_url
-        FROM cards c
-        JOIN players p ON p.id = c.player_id
-""" + _LATEST_TEAM_SUBQUERY + """
-        WHERE c.owner_id IS NULL
-    """)).fetchall()
+    rarity = _roll_rarity(db)
+    player = _pick_player(db, user_id, rarity)
+    if player is None:
+        raise HTTPException(status_code=409, detail="No players available to draw")
 
-    if not unclaimed:
-        raise HTTPException(status_code=404, detail="No cards left in deck")
-
-    owned_player_ids = {r[0] for r in db.execute(
-        text("SELECT c.player_id FROM cards c WHERE c.owner_id = :uid"), {"uid": user_id}
-    ).fetchall()}
-    available = [c for c in unclaimed if c.player_id not in owned_player_ids]
-    if not available:
-        available = list(unclaimed)
-
-    chosen = random.choice(available)
-    card = db.get(Card, chosen.id)
-    card.owner_id = user_id
-    user.tokens = (user.tokens or 0) - 1
+    card = Card(
+        card_type=rarity,
+        player_id=player.id,
+        owner_id=user_id,
+        league_id=None,
+        is_active=False,
+        generation=1,
+    )
+    db.add(card)
+    db.flush()
 
     active_count = db.query(Card).filter(
         Card.owner_id == user_id, Card.is_active == True
@@ -211,20 +213,29 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     weights = {w.key: w.value for w in db.query(Weight).all()}
     _assign_modifiers(db, card, weights)
 
+    team_row = db.execute(text("""
+        SELECT t.name, t.logo_url
+        FROM player_match_stats s
+        JOIN teams t ON t.id = s.team_id
+        WHERE s.player_id = :pid
+        ORDER BY s.match_id DESC LIMIT 1
+    """), {"pid": player.id}).first()
+
+    user.tokens = (user.tokens or 0) - 1
     _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
-           detail=f"card_id={chosen.id} player={chosen.player_name} rarity={chosen.card_type}")
+           detail=f"card_id={card.id} player={player.name} rarity={rarity}")
     db.commit()
     tokens_remaining = user.tokens
 
     mods = _card_modifiers_map(db, [card.id]).get(card.id, {})
     return {
-        "id": chosen.id,
-        "card_type": chosen.card_type,
-        "player_id": chosen.player_id,
-        "player_name": chosen.player_name,
-        "avatar_url": chosen.avatar_url,
-        "team_name": chosen.team_name,
-        "team_logo_url": chosen.team_logo_url,
+        "id": card.id,
+        "card_type": card.card_type,
+        "player_id": player.id,
+        "player_name": player.name,
+        "avatar_url": player.avatar_url,
+        "team_name": team_row.name if team_row else None,
+        "team_logo_url": team_row.logo_url if team_row else None,
         "is_active": is_active,
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
@@ -268,10 +279,12 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
 @router.get("/cards/{card_id}/image")
 def get_card_image(card_id: int, db=Depends(get_db)):
     from image import generate_card_image, PIL_AVAILABLE
+    from models import UserTag, TagDefinition
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
     result = db.execute(text("""
         SELECT c.card_type, p.name as player_name, p.avatar_url,
+               p.id as player_id,
                t.name as team_name, t.logo_url as team_logo_url
         FROM cards c
         JOIN players p ON p.id = c.player_id
@@ -281,6 +294,19 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
+    # Resolve tag keys for the player's linked user (if any)
+    tag_keys: list = []
+    linked_user = db.execute(text(
+        "SELECT id FROM users WHERE player_id = :pid LIMIT 1"
+    ), {"pid": result.player_id}).first()
+    if linked_user:
+        ut_rows = (
+            db.query(UserTag, TagDefinition)
+            .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+            .filter(UserTag.user_id == linked_user.id)
+            .all()
+        )
+        tag_keys = [td.key for _, td in ut_rows]
     img = generate_card_image(
         card_type=result.card_type,
         player_name=result.player_name,
@@ -288,6 +314,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
         team_name=result.team_name,
         team_logo_url=result.team_logo_url,
         card_modifiers=mods,
+        tag_keys=tag_keys,
     )
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=False, compress_level=5)

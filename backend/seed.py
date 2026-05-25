@@ -1,10 +1,11 @@
 import json
 import logging
 import os
+import time
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
-from models import User, Card, Weight, PlayerMatchStats, Match
+from models import User, Card, Weight, PlayerMatchStats, Match, TagDefinition
 from auth import hash_password
 from weeks import generate_weeks, auto_lock_weeks
 from scoring import SCORING_STATS
@@ -38,6 +39,39 @@ def seed_users():
 
     db.commit()
     db.close()
+
+
+def seed_admin_from_env():
+    """Create an admin user from env vars at startup if not already present.
+
+    Reads SEED_ADMIN_USERNAME, SEED_ADMIN_EMAIL, and SEED_ADMIN_PASSWORD.
+    If all three are set and non-empty, creates an admin user unless a user
+    with that email already exists. Safe to call multiple times (idempotent).
+    """
+    username = os.environ.get("SEED_ADMIN_USERNAME", "").strip()
+    email    = os.environ.get("SEED_ADMIN_EMAIL",    "").strip()
+    password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
+
+    if not (username and email and password):
+        return  # env vars absent — skip silently
+
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter_by(email=email).first()
+        if not existing:
+            db.add(User(
+                username=username,
+                email=email,
+                password_hash=hash_password(password),
+                is_admin=True,
+                is_tester=False,
+            ))
+            db.commit()
+            logger.info("Seeded admin account from env: %s", username)
+        else:
+            logger.debug("Admin account already exists, skipping env seed")
+    finally:
+        db.close()
 
 
 def seed_cards(league_id: int, generation: int = 1):
@@ -110,6 +144,11 @@ DEFAULT_WEIGHTS = [
     # --- Bonus % applied by each modifier ---
     {"key": "modifier_bonus_pct",       "label": "Modifier bonus (%)",             "value": 10.0},
     {"key": "mvp_bonus_pct",            "label": "MVP bonus (%)",                  "value": 10.0},
+    # --- Draw rate weights — relative probability of each rarity on draw ---
+    {"key": "draw_rate_common",     "label": "Draw rate: Common (%)",     "value": 60.0},
+    {"key": "draw_rate_rare",       "label": "Draw rate: Rare (%)",       "value": 25.0},
+    {"key": "draw_rate_epic",       "label": "Draw rate: Epic (%)",       "value": 10.0},
+    {"key": "draw_rate_legendary",  "label": "Draw rate: Legendary (%)",  "value": 5.0},
 ]
 
 
@@ -152,6 +191,25 @@ def seed_weights():
             existing.value = target_value
     db.commit()
     db.close()
+
+
+_INITIAL_TAGS = [
+    {"key": "caster",        "label": "Caster"},
+    {"key": "season_winner", "label": "Season Winner"},
+]
+
+
+def seed_tags():
+    """Seed initial tag definitions if they do not already exist."""
+    db = SessionLocal()
+    try:
+        for t in _INITIAL_TAGS:
+            if not db.query(TagDefinition).filter_by(key=t["key"]).first():
+                db.add(TagDefinition(key=t["key"], label=t["label"],
+                                     created_at=int(time.time())))
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed_weeks():

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from deps import get_current_user
-from models import Player, User
+from models import Player, User, UserTag, TagDefinition
 from auth import hash_password, verify_password
 
 router = APIRouter()
@@ -48,6 +48,13 @@ def get_profile(user_id: int, db=Depends(get_db)):
         if player:
             result["player_name"] = player.name
             result["player_avatar_url"] = player.avatar_url
+    tag_rows = (
+        db.query(UserTag, TagDefinition)
+        .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+        .filter(UserTag.user_id == user.id)
+        .all()
+    )
+    result["tags"] = [{"key": td.key, "label": td.label} for _, td in tag_rows]
     return result
 
 

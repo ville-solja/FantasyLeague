@@ -80,6 +80,33 @@ _STAT_LABELS_CARD = {
     "stuns": "Stuns",
 }
 
+STICKER_DIR = os.path.join(_ASSETS_DIR, "stickers")
+STICKER_SIZE = (60, 60)
+STICKER_START_X = 10   # left edge, stack horizontally
+STICKER_Y = 10
+
+
+def _apply_stickers(img, tag_keys: list):
+    """Composite sticker PNGs for each tag key onto img (in-place alpha composite).
+
+    Missing sticker files are silently skipped.
+    Returns the modified image.
+    """
+    if not PIL_AVAILABLE or not tag_keys:
+        return img
+    for i, key in enumerate(tag_keys):
+        path = os.path.join(STICKER_DIR, f"{key}.png")
+        if not os.path.exists(path):
+            continue
+        try:
+            sticker = Image.open(path).convert("RGBA").resize(STICKER_SIZE, Image.LANCZOS)
+            x = STICKER_START_X + i * (STICKER_SIZE[0] + 4)
+            img.alpha_composite(sticker, (x, STICKER_Y))
+        except Exception:
+            pass
+    return img
+
+
 _FONT_PATHS = [
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
@@ -216,6 +243,7 @@ def generate_card_image(
     team_name: str | None,
     team_logo_url: str | None,
     card_modifiers: dict | None = None,
+    tag_keys: list | None = None,
 ):
     """Composite a player card PNG and return a PIL Image."""
     ct = (card_type or "common").lower()
@@ -264,5 +292,9 @@ def generate_card_image(
                             team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
 
     _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
+
+    # ── Sticker badges ──────────────────────────────────────────────────────
+    if tag_keys:
+        _apply_stickers(base, tag_keys)
 
     return base

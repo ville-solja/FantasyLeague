@@ -10,7 +10,20 @@
       "Bash(grep -rn *)",
       "Bash(python -c \"import main; print\\('ok'\\)\")",
       "Bash(python /home/mint/Programming/dota-kanaliiga-fantasy/backend/main.py)",
-      "Bash(python -m pytest tests/ -q)"
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(python -c \"import seed; import main\")",
+      "Bash(xargs -I{} basename {})",
+      "Bash(python -m pytest tests/test_agent_lessons_log.py --collect-only -q)",
+      "Bash(python -m pytest tests/test_agent_lessons_log.py -q)",
+      "Bash(python3 -c \"import fastapi\")",
+      "Bash(python3 -m pytest tests/test_auth.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/test_notification_system.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/test_user_tag_system.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/ -v --tb=short)",
+      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\('PIL available'\\)\")",
+      "Bash(gh issue *)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(python3 -m pytest backend/tests/test_dynamic_card_creation.py -v --tb=short)"
     ]
   }
 }
