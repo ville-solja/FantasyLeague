@@ -232,6 +232,66 @@ def _m012_twitch_token_drops_columns(conn):
         logger.info("Migration: twitch_token_drops — added count column")
 
 
+def _m013_user_tag_system(conn):
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )).fetchall()}
+    if "tag_definitions" not in tables:
+        conn.execute(text("""
+            CREATE TABLE tag_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                created_at INTEGER
+            )
+        """))
+        logger.info("Migration: created tag_definitions table")
+    if "user_tags" not in tables:
+        conn.execute(text("""
+            CREATE TABLE user_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                tag_id INTEGER NOT NULL REFERENCES tag_definitions(id),
+                granted_by INTEGER REFERENCES users(id),
+                granted_at INTEGER,
+                UNIQUE(user_id, tag_id)
+            )
+        """))
+        logger.info("Migration: created user_tags table")
+    conn.commit()
+
+
+def _m014_cards_league_id_nullable(conn):
+    col_info = conn.execute(text("PRAGMA table_info(cards)")).fetchall()
+    league_col = next((r for r in col_info if r[1] == "league_id"), None)
+    if league_col is None or league_col[3] == 0:
+        return  # already nullable or absent — nothing to do
+    conn.execute(text("PRAGMA foreign_keys = OFF"))
+    conn.execute(text("""
+        CREATE TABLE cards_new (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER NOT NULL,
+            card_type TEXT    NOT NULL,
+            league_id INTEGER,
+            owner_id  INTEGER,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            generation INTEGER NOT NULL DEFAULT 1
+        )
+    """))
+    conn.execute(text("""
+        INSERT INTO cards_new (id, player_id, card_type, league_id, owner_id, is_active, generation)
+        SELECT id, player_id, card_type, league_id, owner_id, is_active, COALESCE(generation, 1)
+        FROM cards
+    """))
+    conn.execute(text("DROP TABLE cards"))
+    conn.execute(text("ALTER TABLE cards_new RENAME TO cards"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cards_owner_id  ON cards(owner_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cards_player_id ON cards(player_id)"))
+    conn.execute(text("PRAGMA foreign_keys = ON"))
+    conn.commit()
+    logger.info("Migration: cards — made league_id nullable for dynamic card creation")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -249,6 +309,8 @@ MIGRATIONS = [
     ("010_weeks_epoch0_reset",       _m010_weeks_epoch0_reset),
     ("011_twitch_mvp_selected_at",   _m011_twitch_mvp_selected_at),
     ("012_twitch_token_drops_columns", _m012_twitch_token_drops_columns),
+    ("013_user_tag_system",          _m013_user_tag_system),
+    ("014_cards_league_id_nullable", _m014_cards_league_id_nullable),
 ]
 
 

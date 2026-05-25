@@ -79,13 +79,16 @@ Returns basic public information for any user by ID. No authentication required.
   "player_id": 123456789,
   "player_name": "SomePlayer",
   "player_avatar_url": "https://...",
-  "twitch_linked": true
+  "twitch_linked": true,
+  "tags": [{"key": "caster", "label": "Caster"}]
 }
 ```
 
 `twitch_linked` is `true` if the user has completed the Twitch account linking flow. See `core/twitch-extension.md`.
 
 `player_name` and `player_avatar_url` are `null` if the user has not linked a Dota 2 account, or if the linked `player_id` does not exist in the local database.
+
+`tags` is an array of admin-granted tag objects (`key` + `label`); empty array when the user holds no tags.
 
 ---
 

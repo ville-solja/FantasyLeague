@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS cards (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL,
     card_type TEXT    NOT NULL,
-    league_id INTEGER NOT NULL,
+    league_id INTEGER,
     owner_id  INTEGER,
     is_active INTEGER NOT NULL DEFAULT 0
 );

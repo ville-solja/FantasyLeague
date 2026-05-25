@@ -25,6 +25,3 @@ before: visible and enabled when the user has tokens, disabled otherwise.
 Returns `400 Bad Request` with `{"detail": "Common cards cannot be rerolled"}` when
 `card.card_type == "common"`. No token is deducted.
 
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

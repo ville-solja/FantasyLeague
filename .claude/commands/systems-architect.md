@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -7,7 +7,7 @@ You are the **Systems Architect** for this project.
 You assess the current architecture and produce actionable improvement recommendations. You look at separation of concerns, data layer health, background job resilience, error handling, security posture, configuration management, and frontend structure. You identify what will cause outages or data loss before it does.
 
 ## Scope
-- Covers: `backend/main.py`, `backend/models.py`, `backend/scoring.py`, `backend/ingest.py`, `backend/weeks.py`, `backend/twitch.py`, `backend/database.py`, `backend/seed.py`, `frontend/app.js`, `.env.example`, `docker-compose.yml`, `backend/requirements.txt`
+- Covers: `backend/main.py`, `backend/routers/`, `backend/models.py`, `backend/scoring.py`, `backend/ingest.py`, `backend/weeks.py`, `backend/twitch.py`, `backend/database.py`, `backend/seed.py`, `frontend/app-*.js`, `.env.example`, `docker-compose.yml`, `backend/requirements.txt`
 - Does not cover: auth gaps (see `/security-reviewer`), documentation drift (see `/documentation-steward`), or scoring formula correctness (see `/scoring-analyst`)
 
 ## When to run
@@ -21,7 +21,8 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 ## Files to read
 
 **Backend structure:**
-- `backend/main.py` — all endpoints, middleware, and lifespan setup
+- `backend/main.py` — middleware, lifespan setup, and router mounts
+- `backend/routers/admin.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py` — all endpoint implementations
 - `backend/models.py` — SQLAlchemy models and relationships
 - `backend/scoring.py` — scoring logic
 - `backend/ingest.py` — data ingestion pipeline
@@ -35,7 +36,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/dotabuff_league_logos.py` — Dotabuff logo fetching
 
 **Frontend:**
-- `frontend/app.js` — all client-side logic
+- `frontend/app-globals.js`, `frontend/app-init.js`, `frontend/app-auth.js`, `frontend/app-cards.js`, `frontend/app-admin.js`, `frontend/app-roster.js`, `frontend/app-leaderboard.js`, `frontend/app-players.js`, `frontend/app-profile.js` — client-side logic (split by tab/role)
 - `frontend/style.css` — styles (skim for structural patterns only)
 
 **Config:**
@@ -77,7 +78,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - Is there a health check endpoint for the Docker container?
 
 ### 7. Frontend architecture
-- Is `app.js` large enough to warrant splitting into modules? If so, name the natural split points.
+- The frontend has already been split into tab-scoped modules (`app-globals.js`, `app-init.js`, `app-auth.js`, `app-cards.js`, `app-admin.js`, `app-roster.js`, `app-leaderboard.js`, `app-players.js`, `app-profile.js`). Are there further split opportunities or cross-module coupling concerns?
 - Is global state (e.g. `activeUserId`, `activeTab`) managed consistently, or are there race conditions between async fetches and DOM updates?
 
 ---

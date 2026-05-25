@@ -209,6 +209,14 @@
     </div>
 
     <div class="panel">
+      <h3 style="margin-bottom:8px;">Your Tags</h3>
+      <div id="profileTagsContainer" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <p id="profileTagGapHint" style="display:none;font-size:0.8rem;color:#888;margin-top:8px;">
+        Link your Dota player ID above so your tag badges appear as stickers on your cards.
+      </p>
+    </div>
+
+    <div class="panel">
       <h2>Twitch Account</h2>
       <div id="twitchLinked" style="display:none">
         <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
@@ -529,12 +537,31 @@
 
       <div class="panel">
         <h2>Token Balances</h2>
-        <button class="secondary" onclick="loadUsers()" style="margin-bottom:12px;">Refresh</button>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+          <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
+          <button class="secondary" onclick="loadUsers()">Refresh</button>
+        </div>
         <table>
-          <thead><tr><th>User</th><th>Tokens</th><th>Grant tokens</th></tr></thead>
-          <tbody id="usersBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>User</th><th>Tags</th><th>Tokens</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
         </table>
         <div class="status" id="usersStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Tag Definitions</h2>
+        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Define tag types. Grant them to users via the Token Balances table above.</p>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+          <input id="tagKeyInput" type="text" placeholder="Key (slug, e.g. caster)" style="max-width:160px;" />
+          <input id="tagLabelInput" type="text" placeholder="Display label" style="max-width:160px;" />
+          <button onclick="createTag()">Create</button>
+          <button class="secondary" onclick="loadTags()">Refresh</button>
+        </div>
+        <table>
+          <thead><tr><th>Key</th><th>Label</th><th></th></tr></thead>
+          <tbody id="tagsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+        </table>
+        <div class="status" id="tagsStatus"></div>
       </div>
 
       <div class="panel">
