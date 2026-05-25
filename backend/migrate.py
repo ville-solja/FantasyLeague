@@ -292,6 +292,15 @@ def _m014_cards_league_id_nullable(conn):
     logger.info("Migration: cards — made league_id nullable for dynamic card creation")
 
 
+def _m015_missing_indexes(conn):
+    for stmt in [
+        "CREATE INDEX IF NOT EXISTS ix_matches_week_override_id ON matches(week_override_id)",
+        "CREATE INDEX IF NOT EXISTS ix_match_bans_match_id ON match_bans(match_id)",
+    ]:
+        conn.execute(text(stmt))
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -311,6 +320,7 @@ MIGRATIONS = [
     ("012_twitch_token_drops_columns", _m012_twitch_token_drops_columns),
     ("013_user_tag_system",          _m013_user_tag_system),
     ("014_cards_league_id_nullable", _m014_cards_league_id_nullable),
+    ("015_missing_indexes",          _m015_missing_indexes),
 ]
 
 

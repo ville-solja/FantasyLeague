@@ -540,6 +540,31 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .entity-link { cursor: pointer; transition: color var(--t-fast); }
 .entity-link:hover { text-decoration: underline; color: var(--accent); }
 
+/* ── Booster team tiles ── */
+.booster-team-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px 8px;
+  background: var(--k-ink-950);
+  border: 1px solid #222;
+  border-radius: 6px;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.booster-team-tile:not(.booster-team-tile--exhausted):hover {
+  border-color: var(--accent);
+  background: #1a1a1a;
+}
+.booster-team-tile--selected {
+  border-color: var(--accent) !important;
+  background: #1a1500 !important;
+}
+.booster-team-tile--exhausted {
+  opacity: 0.35;
+}
+
 /* ============================================================
    PLAYER / TEAM DETAIL MODALS
    ============================================================ */

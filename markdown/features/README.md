@@ -53,3 +53,4 @@ Implementation details, integrations, and operator tooling.
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |
+| [Team Booster Draws](reference/team-booster-draws.md) | Team-specific booster packs: 3-Token draw restricted to a chosen team's player roster; configurable cost |

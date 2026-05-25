@@ -266,3 +266,50 @@ system is simpler to operate.
   requesting user can still draw (i.e. combinations they do not yet own), replacing the
   old unowned pool count
 - Existing owned cards in users' collections are unaffected by the migration
+
+## Team Booster Draws
+
+### Team Booster Draw
+**User story**
+As a user, I want to open a team selector in the Deck tab and draw a card from a chosen
+team for 3 Tokens so that I can target the players I care about rather than relying on
+random selection from the full pool.
+
+**Acceptance criteria**
+- A "Draw Booster from Team" button is visible in the Deck tab
+- Clicking the button opens a team selection modal listing all teams with at least one
+  player with match data, each showing how many drawable (player, rarity) combinations
+  remain for the current user
+- Teams where the user has collected every combination are shown greyed out and unselectable
+- Selecting a team and confirming spends `team_booster_cost` Tokens and draws a card whose
+  player is from that team; rarity is still determined by the standard `draw_rate_*` weights
+- The drawn card is revealed in the same reveal modal as a standard draw
+- The "Draw Booster" button is disabled with "Not enough Tokens" if the user's balance is
+  below the configured cost
+- After a successful draw, the team selector modal updates its remaining counts and the
+  token balance refreshes
+
+### Booster Duplicate Prevention
+**User story**
+As a user, I want the booster draw to avoid giving me a card I already own so that each
+booster adds something new, with a fallback when I have collected the whole team.
+
+**Acceptance criteria**
+- The booster draw excludes (player, rarity) combinations the user already owns within
+  the selected team
+- If all combinations at the rolled rarity are owned, the draw picks any unowned rarity
+  for that team's players
+- If the user owns every (player, rarity) combination for the team, the draw proceeds from
+  the full team player list (no hard failure on collection completion)
+- `POST /draw/booster/{team_id}` returns 409 only when the team has no players in the DB
+
+### Configurable Booster Cost (Admin)
+**User story**
+As an admin, I want to control the token cost of a team booster draw via the scoring
+weights panel so that I can adjust the economy without a code change.
+
+**Acceptance criteria**
+- A weight key `team_booster_cost` exists with a default value of `3`
+- The weight is editable in the admin Scoring Weights panel alongside other economy weights
+- The booster draw endpoint reads this weight at request time (not cached)
+- Setting the weight to `1` makes booster draws cost the same as standard draws

@@ -4,17 +4,17 @@ import threading
 import time
 import warnings
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from twitch import router as twitch_router
-from database import SessionLocal, engine, Base, DATABASE_URL
-from models import Week
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db
+from models import Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
-from seed import seed_users, seed_admin_from_env, seed_cards, seed_weights, seed_tags
+from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import generate_weeks, auto_lock_weeks
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
@@ -72,7 +72,6 @@ def _auto_ingest(league_ids: list[int]):
             logger.info("Auto-ingest: league %d starting", league_id)
             ingest_league(league_id)
             run_enrichment()
-            seed_cards(league_id)
             logger.info("Auto-ingest: league %d done", league_id)
         except Exception:
             logger.exception("Auto-ingest: league %d failed", league_id)
@@ -96,17 +95,18 @@ def _ingest_poll_loop(league_ids: list[int]):
         try:
             _auto_ingest(league_ids)
             _run_toornament_sync()
+            db = SessionLocal()
+            try:
+                now = int(time.time())
+                active = db.query(Week).filter(
+                    Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
+                ).first()
+            finally:
+                db.close()
+            interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
-        db = SessionLocal()
-        try:
-            now = int(time.time())
-            active = db.query(Week).filter(
-                Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
-            ).first()
-        finally:
-            db.close()
-        interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
+            interval = _INGEST_POLL_INTERVAL
         time.sleep(interval)
 
 
@@ -177,8 +177,16 @@ app.include_router(admin_router.router)
 
 
 @app.get("/config")
-def get_config():
-    return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS, "app_version": _APP_VERSION, "app_release": _APP_RELEASE}
+def get_config(db=Depends(get_db)):
+    booster_row = db.query(Weight).filter_by(key="team_booster_cost").first()
+    booster_cost = int(booster_row.value) if booster_row else 3
+    return {
+        "token_name": TOKEN_NAME,
+        "initial_tokens": INITIAL_TOKENS,
+        "app_version": _APP_VERSION,
+        "app_release": _APP_RELEASE,
+        "team_booster_cost": booster_cost,
+    }
 
 
 @app.get("/health")
