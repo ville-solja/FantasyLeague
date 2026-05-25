@@ -32,7 +32,7 @@ curl -X POST http://localhost:8000/ingest/league/19369
 
 Each ingest also:
 - Runs player profile enrichment (names, avatars from OpenDota)
-- Seeds new player cards into the unowned pool
+- Creates player and match records (no card generation — cards are created dynamically at draw time)
 - Refreshes **Dotabuff league team logos** (new PNGs downloaded only when missing under `assets/.../dotabuff_league_logos/`)
 
 Configure which leagues are auto-ingested via `AUTO_INGEST_LEAGUES` (comma-separated OpenDota league IDs, default: `19368,19369`).

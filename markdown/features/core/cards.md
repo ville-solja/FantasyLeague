@@ -21,8 +21,8 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 
 - Costs **1 token** per draw.
 - Rarity is rolled from the configured draw-rate weights at draw time.
-- A player is chosen with a proportionality bias: players for whom the user does not yet own that rarity are preferred. Among those, players with fewer total cards in the user's collection are weighted higher.
-- If the user already owns that rarity for every active player, the uniqueness constraint is relaxed and any player may be selected.
+- A player is chosen with a proportionality bias: players the user does not yet own any card of (at any rarity) are preferred. Among those, players with fewer total cards in the user's collection are weighted higher.
+- If the user already owns at least one card of every active player, the uniqueness constraint is relaxed and any player may be selected.
 - If no players exist in the database at all, the draw returns 409.
 - Each draw **creates a new Card row** — there is no shared pre-generated pool to exhaust.
 - If the user has fewer than 5 active roster slots filled, the card is placed into the **active roster** automatically. Otherwise it goes to the **bench**.
