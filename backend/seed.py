@@ -40,6 +40,39 @@ def seed_users():
     db.close()
 
 
+def seed_admin_from_env():
+    """Create an admin user from env vars at startup if not already present.
+
+    Reads SEED_ADMIN_USERNAME, SEED_ADMIN_EMAIL, and SEED_ADMIN_PASSWORD.
+    If all three are set and non-empty, creates an admin user unless a user
+    with that email already exists. Safe to call multiple times (idempotent).
+    """
+    username = os.environ.get("SEED_ADMIN_USERNAME", "").strip()
+    email    = os.environ.get("SEED_ADMIN_EMAIL",    "").strip()
+    password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
+
+    if not (username and email and password):
+        return  # env vars absent — skip silently
+
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter_by(email=email).first()
+        if not existing:
+            db.add(User(
+                username=username,
+                email=email,
+                password_hash=hash_password(password),
+                is_admin=True,
+                is_tester=False,
+            ))
+            db.commit()
+            logger.info("Seeded admin account from env: %s", username)
+        else:
+            logger.debug("Admin account already exists, skipping env seed")
+    finally:
+        db.close()
+
+
 def seed_cards(league_id: int, generation: int = 1):
     db = SessionLocal()
 
