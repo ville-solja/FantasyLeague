@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 4 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -37,6 +37,7 @@ After a plan file exists in `markdown/plans/` and has been reviewed. Run `/secur
 3. Read each critical file before writing any code.
 4. Glob `backend/` and `frontend/` to understand the overall structure if the plan references files that do not yet exist.
 5. Read `backend/models.py` and `backend/main.py` if the plan touches the backend — understand existing patterns for models, endpoints, and dependencies before writing new ones.
+6. `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
 
 ---
 
@@ -119,3 +120,17 @@ If any verification step failed, list it as `✗` with a short explanation and s
 - Never skip `Depends(require_admin)` on admin endpoints or `Depends(get_current_user)` on authenticated endpoints.
 - Never use raw `SessionLocal()` in endpoints — always use `db = Depends(get_db)`.
 - Frontend changes must be tested visually if a dev server is available; otherwise note explicitly that UI was not tested.
+
+---
+
+## Lessons log
+
+Before starting work, read `markdown/lessons-learned.md` in full.
+
+If your run surfaces a novel pitfall (a stale file path, an unexpected test pattern, a model field that moved, a behaviour that surprised you), append a new entry at the top of the entries list using this format:
+
+### YYYY-MM-DD — [your agent name] — [category: file-paths | endpoints | testing | models | frontend | agent-config]
+**Problem:** One sentence.
+**Solution:** What works instead.
+
+Entries are append-only. Do not rewrite or delete existing entries.

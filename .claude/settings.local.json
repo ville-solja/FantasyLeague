@@ -11,7 +11,10 @@
       "Bash(python -c \"import main; print\\('ok'\\)\")",
       "Bash(python /home/mint/Programming/dota-kanaliiga-fantasy/backend/main.py)",
       "Bash(python -m pytest tests/ -q)",
-      "Bash(python -c \"import seed; import main\")"
+      "Bash(python -c \"import seed; import main\")",
+      "Bash(xargs -I{} basename {})",
+      "Bash(python -m pytest tests/test_agent_lessons_log.py --collect-only -q)",
+      "Bash(python -m pytest tests/test_agent_lessons_log.py -q)"
     ]
   }
 }
