@@ -20,7 +20,10 @@
       "Bash(python3 -m pytest tests/test_notification_system.py -v --tb=short)",
       "Bash(python3 -m pytest tests/test_user_tag_system.py -v --tb=short)",
       "Bash(python3 -m pytest tests/ -v --tb=short)",
-      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\('PIL available'\\)\")"
+      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\('PIL available'\\)\")",
+      "Bash(gh issue *)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(python3 -m pytest backend/tests/test_dynamic_card_creation.py -v --tb=short)"
     ]
   }
 }

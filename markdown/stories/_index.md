@@ -3,8 +3,8 @@
 | File | Covers |
 |---|---|
 | [users-and-access.md](users-and-access.md) | Registration, login, password reset, profile, header link |
-| [cards.md](cards.md) | Deck generation, draw, rarity, modifiers, card art, player popup, mid-season top-up |
-| [user-tags.md](user-tags.md) | User tag system: card stickers, leaderboard badges, admin tag management, user search |
+| [cards.md](cards.md) | Deck generation, draw, rarity, modifiers, card art, player popup, mid-season top-up, dynamic card creation |
+| [user-tags.md](user-tags.md) | User tag system: card stickers, leaderboard badges, admin tag management, user search, profile tag visibility |
 | [team-tokens-scoring.md](team-tokens-scoring.md) | Active lineup, weekly lock, week history, tokens, scoring |
 | [data-and-players.md](data-and-players.md) | Dota data ingestion, player profile enrichment, AI bios |
 | [leaderboard.md](leaderboard.md) | Season/weekly leaderboard, player/team browser, weight simulation |

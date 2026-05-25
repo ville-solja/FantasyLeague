@@ -200,3 +200,69 @@ rule is enforced server-side regardless of how the request is made.
 
 Card sticker stories are in [user-tags.md](user-tags.md) — the tag system is generic
 and covers cards, leaderboard display, and admin management together.
+
+---
+
+## Dynamic Card Creation
+
+### Draw a Card with Weighted Rarity
+**User story**
+As a user, I want the rarity of each drawn card to be determined by configured drop rates so
+that I have a realistic chance of high-rarity cards on every draw.
+
+**Acceptance criteria**
+- Each draw rolls a rarity from configurable percentage weights (`draw_rate_common`,
+  `draw_rate_rare`, `draw_rate_epic`, `draw_rate_legendary`; defaults approximate the old
+  pool ratios)
+- The rolled rarity is reflected in the card shown in the reveal modal
+- A card is always created — draws never fail due to pool exhaustion
+
+### Player Proportionality on Draw
+**User story**
+As a user, I want the draw system to prefer players I have fewer cards of so that my collection
+stays diverse and mid-season additions are accessible.
+
+**Acceptance criteria**
+- Players for whom the user already holds the rolled rarity are excluded from selection
+- Among remaining eligible players, those with fewer total cards in the user's collection
+  are assigned a higher selection weight
+- If every active player already owns the drawn rarity, the draw proceeds with full player
+  selection (no hard failure)
+
+### No Duplicate Rarity–Player Combinations
+**User story**
+As a user, I want the system to prevent me from drawing an identical card (same player and
+rarity) twice so that each draw adds something new to my collection.
+
+**Acceptance criteria**
+- `POST /draw` never returns a card whose `(owner_id, player_id, card_type)` combination
+  already exists in the `cards` table
+- If a user owns the drawn rarity for every eligible player, the uniqueness constraint is
+  relaxed for that draw (fallback to allow any player, then any rarity)
+- The constraint is per user — other users owning the same player/rarity does not affect
+  availability
+
+### Configurable Drop Rates
+**User story**
+As an admin, I want to configure the rarity drop rates via the scoring weights so that I
+can tune the economy without a code deploy.
+
+**Acceptance criteria**
+- Four new weight keys exist: `draw_rate_common`, `draw_rate_rare`, `draw_rate_epic`,
+  `draw_rate_legendary`
+- These are seeded with sensible defaults and editable in the Scoring Weights admin panel
+- The draw logic reads these values at draw time (not cached between requests)
+- Weights do not need to sum to exactly 100; relative proportions are used
+
+### Deprecate Pool Management
+**User story**
+As an admin, I want pre-generation and pool top-up actions to be removed so that the
+system is simpler to operate.
+
+**Acceptance criteria**
+- `POST /admin/top-up-cards` is removed (returns 410 Gone or is deleted)
+- Card generation is removed from the ingest pipeline — ingest creates only player records
+- `GET /deck` returns a count of how many distinct (player, rarity) combinations the
+  requesting user can still draw (i.e. combinations they do not yet own), replacing the
+  old unowned pool count
+- Existing owned cards in users' collections are unaffected by the migration

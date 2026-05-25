@@ -1,39 +1,42 @@
 # Cards
 
-Cards are the core collectible unit of the fantasy league. Each card represents a real Dota 2 league player and is drawn from a shared seasonal deck.
+Cards are the core collectible unit of the fantasy league. Each card represents a real Dota 2 league player and is generated on demand at draw time.
 
 ## Card Rarities
 
-Each player has four cards in the deck with different rarities. In API responses the rarity is returned as the `card_type` field with values `"common"`, `"rare"`, `"epic"`, or `"legendary"`.
+Each draw creates one card with a rarity rolled from configurable percentage weights. In API responses the rarity is returned as the `card_type` field with values `"common"`, `"rare"`, `"epic"`, or `"legendary"`.
 
-| Rarity | Count per player | Default rarity bonus | Default modifiers granted |
-|--------|-----------------|---------------------|--------------------------|
-| Common | 8 | +0% | 0 |
-| Rare | 4 | +1% | 1 |
-| Epic | 2 | +2% | 2 |
-| Legendary | 1 | +3% | 3 |
+| Rarity | Default draw rate | Default rarity bonus | Default modifiers granted |
+|--------|------------------|---------------------|--------------------------|
+| Common | 60% | +0% | 0 |
+| Rare | 25% | +1% | 1 |
+| Epic | 10% | +2% | 2 |
+| Legendary | 5% | +3% | 3 |
 
-**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations (e.g. +1% means the total is multiplied by 1.01). It is configurable in the admin panel under Scoring Weights (`rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`).
+**Draw rates** are relative weights (`draw_rate_common`, `draw_rate_rare`, `draw_rate_epic`, `draw_rate_legendary`) configurable in the admin panel under Scoring Weights. They do not need to sum to 100 — proportions are used. Defaults approximate 8:4:2:1 ratios from the old pool model.
+
+**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations. It is configurable via `rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`.
 
 ## Drawing Cards
 
 - Costs **1 token** per draw.
-- A card is chosen randomly from the shared unowned pool.
-- The system prefers players the user does not yet own a card for. If the user owns a card for every player in the pool, duplicates are allowed.
-- The drawn card is immediately assigned to the user.
+- Rarity is rolled from the configured draw-rate weights at draw time.
+- A player is chosen with a proportionality bias: players for whom the user does not yet own that rarity are preferred. Among those, players with fewer total cards in the user's collection are weighted higher.
+- If the user already owns that rarity for every active player, the uniqueness constraint is relaxed and any player may be selected.
+- If no players exist in the database at all, the draw returns 409.
+- Each draw **creates a new Card row** — there is no shared pre-generated pool to exhaust.
 - If the user has fewer than 5 active roster slots filled, the card is placed into the **active roster** automatically. Otherwise it goes to the **bench**.
 
 ## Deck Structure
 
-The deck is shared across all users. Each card can only be owned by one user at a time. Cards are generated per season by an admin ingestion action, seeded from a given OpenDota league ID.
+Cards are generated dynamically at draw time rather than from a pre-seeded shared pool. `GET /deck` returns the number of distinct `(player, rarity)` combinations the requesting user has not yet drawn. This count decreases by one each time the user draws a new unique combination.
 
-Each seeding batch is assigned a `generation` integer (starting at 1). Mid-season top-ups add a second batch at generation 2, a third at generation 3, and so on. Generation tracking is what makes seeding idempotent — a player is skipped only if a card for that player already exists in the current generation, not across all generations. See `POST /admin/top-up-cards` in `core/admin.md`.
+Each Card row carries `generation=1` by default. The `league_id` field is nullable for dynamically created cards. Existing pre-seeded cards (from before the migration) are unaffected.
 
 ## Card States
 
 | State | Meaning |
 |-------|---------|
-| Unowned | In the shared pool, available to draw |
 | Benched | Owned by a user, not in any active roster slot |
 | Active | In the user's active 5-card roster for the upcoming week |
 | Locked | Active roster was snapshot at week lock — card scores for that week |
@@ -211,13 +214,16 @@ Returns `{ "status": "ok", "card_id": N }`.
 
 ### `GET /deck`
 
-Returns a count of unowned cards remaining in the shared pool, grouped by rarity.
+Returns the number of distinct `(player, rarity)` combinations the requesting user has not yet drawn, grouped by rarity.
+
+- **Authenticated:** returns the per-rarity count of combinations the user can still draw uniquely.
+- **Unauthenticated:** returns the total combinations across all players (4 rarities × number of players).
 
 ```json
-{ "common": 34, "rare": 12, "epic": 4, "legendary": 1 }
+{ "common": 12, "rare": 12, "epic": 12, "legendary": 12 }
 ```
 
-No authentication required. Used by the frontend to show pool depth before drawing.
+The frontend displays this as "X draws available". The count decreases by 1 each time the user draws a new unique `(player, rarity)` combination. No authentication required.
 
 ---
 
@@ -243,9 +249,9 @@ Returns full detail for a single card owned by the authenticated user. Returns 4
 
 ### `POST /draw`
 
-Draws one card from the shared pool. Requires authentication.
+Draws one card. A new Card row is created on demand — no pre-generated pool is required. Requires authentication.
 
-**Cost:** 1 token, deducted on success. Returns 409 if the user has no tokens, and 409 if the pool is empty.
+**Cost:** 1 token, deducted on success. Returns 409 if the user has no tokens, and 409 if no Player records exist.
 
 **Response:**
 ```json

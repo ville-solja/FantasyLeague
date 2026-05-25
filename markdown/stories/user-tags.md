@@ -49,3 +49,30 @@ find a specific user in a large list.
 - The filter is case-insensitive and matches any substring of the username
 - Clearing the search restores all rows
 - The filter state does not persist across page reloads
+
+---
+
+## Profile Tag Visibility
+
+### See Your Tags on the Profile Page
+**User story**
+As a user, I want to see which tags have been granted to me on my Profile page so that I
+know what badges will appear on my cards and leaderboard entry.
+
+**Acceptance criteria**
+- The Profile tab shows the user's current tags as labelled chips (e.g. "Caster", "Season Winner")
+- If the user has no tags, a neutral "No tags" message is shown instead
+- Tags are loaded from `GET /profile/{user_id}` alongside the existing profile data
+- The tag display updates immediately when the profile is loaded; no extra button press required
+
+### Understand the Link Between Dota ID and Tag Stickers
+**User story**
+As a user, I want to understand that linking my Dota ID is what connects my tags to my card
+images so that I know what action to take to make my stickers appear.
+
+**Acceptance criteria**
+- The Dota ID linking section on the Profile tab includes a short note explaining that tags
+  granted by an admin will appear as stickers on cards belonging to the linked player
+- The note is only visible when the user has at least one tag but no Dota ID linked (the
+  actionable gap state); it is hidden otherwise
+- No changes to any other page or workflow
