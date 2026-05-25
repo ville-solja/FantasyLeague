@@ -12,7 +12,6 @@ from ingest import ingest_league
 from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
-from seed import seed_cards
 from toornament import sync_toornament_results
 
 router = APIRouter()
@@ -36,15 +35,10 @@ class MatchWeekBody(BaseModel):
     week_id: int | None = None
 
 
-class TopUpCardsBody(BaseModel):
-    league_id: int
-
-
 @router.post("/ingest/league/{league_id}")
 def ingest_league_endpoint(league_id: int, db=Depends(get_db), admin: dict = Depends(require_admin)):
     ingest_league(league_id)
     run_enrichment()
-    seed_cards(league_id)
     _audit(db, "admin_ingest", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"league_id={league_id}")
     db.commit()
@@ -281,21 +275,6 @@ def admin_enrich_profiles(db=Depends(get_db), admin: dict = Depends(require_admi
     db.commit()
     return result
 
-
-@router.post("/admin/top-up-cards")
-def top_up_cards(body: TopUpCardsBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
-    """Add one full card batch (1L/2E/4R/8C per player) as a new generation to the unowned pool."""
-    from sqlalchemy import func
-    from models import Card
-    max_gen = db.query(func.max(Card.generation)).filter(
-        Card.league_id == body.league_id
-    ).scalar() or 1
-    next_gen = max_gen + 1
-    seed_cards(body.league_id, generation=next_gen)
-    _audit(db, "admin_top_up_cards", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"league_id={body.league_id} generation={next_gen}")
-    db.commit()
-    return {"league_id": body.league_id, "generation_added": next_gen}
 
 
 @router.post("/codes")

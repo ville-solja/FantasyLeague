@@ -144,6 +144,11 @@ DEFAULT_WEIGHTS = [
     # --- Bonus % applied by each modifier ---
     {"key": "modifier_bonus_pct",       "label": "Modifier bonus (%)",             "value": 10.0},
     {"key": "mvp_bonus_pct",            "label": "MVP bonus (%)",                  "value": 10.0},
+    # --- Draw rate weights — relative probability of each rarity on draw ---
+    {"key": "draw_rate_common",     "label": "Draw rate: Common (%)",     "value": 60.0},
+    {"key": "draw_rate_rare",       "label": "Draw rate: Rare (%)",       "value": 25.0},
+    {"key": "draw_rate_epic",       "label": "Draw rate: Epic (%)",       "value": 10.0},
+    {"key": "draw_rate_legendary",  "label": "Draw rate: Legendary (%)",  "value": 5.0},
 ]
 
 

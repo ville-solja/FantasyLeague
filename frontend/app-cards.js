@@ -344,7 +344,7 @@ async function loadDeck() {
       document.getElementById(`deck-${r}`).textContent = n;
       total += n;
     }
-    setStatus("deckStatus", total > 0 ? `${total} cards available` : "Deck is empty");
+    setStatus("deckStatus", total > 0 ? `${total} draws available` : "No draws available");
   } catch (e) {
     setStatus("deckStatus", e.message, false);
   }

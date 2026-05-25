@@ -13,6 +13,17 @@ async function loadProfile() {
       document.getElementById("profilePlayerId").value = "";
     }
     _renderTwitchLinkStatus(data.twitch_linked);
+    const tags = data.tags || [];
+    const container = document.getElementById("profileTagsContainer");
+    if (container) {
+      container.innerHTML = tags.length
+        ? tags.map(t => `<span class="tag-chip">${t.label}</span>`).join("")
+        : `<span style="color:#555;font-size:0.85rem;">No tags</span>`;
+    }
+    const gapHint = document.getElementById("profileTagGapHint");
+    if (gapHint) {
+      gapHint.style.display = (tags.length > 0 && !data.player_id) ? "block" : "none";
+    }
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
   }
