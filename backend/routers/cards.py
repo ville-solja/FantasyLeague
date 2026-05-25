@@ -268,10 +268,12 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
 @router.get("/cards/{card_id}/image")
 def get_card_image(card_id: int, db=Depends(get_db)):
     from image import generate_card_image, PIL_AVAILABLE
+    from models import UserTag, TagDefinition
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
     result = db.execute(text("""
         SELECT c.card_type, p.name as player_name, p.avatar_url,
+               p.id as player_id,
                t.name as team_name, t.logo_url as team_logo_url
         FROM cards c
         JOIN players p ON p.id = c.player_id
@@ -281,6 +283,19 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
+    # Resolve tag keys for the player's linked user (if any)
+    tag_keys: list = []
+    linked_user = db.execute(text(
+        "SELECT id FROM users WHERE player_id = :pid LIMIT 1"
+    ), {"pid": result.player_id}).first()
+    if linked_user:
+        ut_rows = (
+            db.query(UserTag, TagDefinition)
+            .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+            .filter(UserTag.user_id == linked_user.id)
+            .all()
+        )
+        tag_keys = [td.key for _, td in ut_rows]
     img = generate_card_image(
         card_type=result.card_type,
         player_name=result.player_name,
@@ -288,6 +303,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
         team_name=result.team_name,
         team_logo_url=result.team_logo_url,
         card_modifiers=mods,
+        tag_keys=tag_keys,
     )
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=False, compress_level=5)

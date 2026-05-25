@@ -278,6 +278,26 @@ class NotificationDismissal(Base):
     dismissed_at    = Column(Integer)
 
 
+class TagDefinition(Base):
+    __tablename__ = "tag_definitions"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    key        = Column(String, unique=True, nullable=False)   # e.g. "caster"
+    label      = Column(String, nullable=False)                # e.g. "Caster"
+    created_at = Column(Integer)                               # Unix timestamp
+
+
+class UserTag(Base):
+    __tablename__ = "user_tags"
+    __table_args__ = (UniqueConstraint("user_id", "tag_id", name="uq_user_tag"),)
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    tag_id     = Column(Integer, ForeignKey("tag_definitions.id"), nullable=False)
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    granted_at = Column(Integer)
+
+
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)

@@ -9,7 +9,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
+from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from seed import seed_cards
@@ -54,9 +54,29 @@ def ingest_league_endpoint(league_id: int, db=Depends(get_db), admin: dict = Dep
 @router.get("/users")
 def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
     users = db.query(User).order_by(User.username).all()
-    return [{"id": u.id, "username": u.username, "tokens": u.tokens if u.tokens is not None else 0,
-             "is_tester": bool(u.is_tester)}
-            for u in users]
+    user_ids = [u.id for u in users]
+    # Fetch all UserTag rows for these users in one query (avoid N+1)
+    user_tags_rows = (
+        db.query(UserTag, TagDefinition)
+        .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+        .filter(UserTag.user_id.in_(user_ids))
+        .all()
+    ) if user_ids else []
+    tags_by_user: dict = {}
+    for ut, td in user_tags_rows:
+        tags_by_user.setdefault(ut.user_id, []).append(
+            {"id": td.id, "key": td.key, "label": td.label}
+        )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "tokens": u.tokens if u.tokens is not None else 0,
+            "is_tester": bool(u.is_tester),
+            "tags": tags_by_user.get(u.id, []),
+        }
+        for u in users
+    ]
 
 
 @router.post("/users/{user_id}/toggle-tester")
@@ -534,6 +554,83 @@ def delete_notification(notification_id: int, db=Depends(get_db),
     _audit(db, "admin_notification_deleted", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"id={n.id}")
     db.delete(n)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Tag definitions CRUD
+# ---------------------------------------------------------------------------
+
+class TagBody(BaseModel):
+    key:   str = Field(..., min_length=1, max_length=50)
+    label: str = Field(..., min_length=1, max_length=100)
+
+
+@router.get("/admin/tags")
+def list_tags(db=Depends(get_db), _=Depends(require_admin)):
+    return [{"id": t.id, "key": t.key, "label": t.label}
+            for t in db.query(TagDefinition).order_by(TagDefinition.key).all()]
+
+
+@router.post("/admin/tags")
+def create_tag(body: TagBody, db=Depends(get_db), admin=Depends(require_admin)):
+    if db.query(TagDefinition).filter_by(key=body.key).first():
+        raise HTTPException(status_code=409, detail="Tag key already exists")
+    tag = TagDefinition(key=body.key, label=body.label, created_at=int(time.time()))
+    db.add(tag)
+    db.flush()
+    _audit(db, "admin_tag_definition_created", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"key={body.key}")
+    db.commit()
+    return {"id": tag.id}
+
+
+@router.delete("/admin/tags/{tag_id}")
+def delete_tag(tag_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    tag = db.get(TagDefinition, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    db.query(UserTag).filter_by(tag_id=tag_id).delete()
+    _audit(db, "admin_tag_definition_deleted", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"key={tag.key}")
+    db.delete(tag)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# User tag grant / revoke
+# ---------------------------------------------------------------------------
+
+@router.post("/admin/users/{user_id}/tags/{tag_id}")
+def grant_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    if not db.get(User, user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    tag = db.get(TagDefinition, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    existing = db.query(UserTag).filter_by(user_id=user_id, tag_id=tag_id).first()
+    if not existing:
+        db.add(UserTag(user_id=user_id, tag_id=tag_id,
+                       granted_by=admin["user_id"], granted_at=int(time.time())))
+        _audit(db, "admin_tag_grant", actor_id=admin["user_id"],
+               actor_username=admin["username"],
+               detail=f"user_id={user_id} tag={tag.key}")
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/admin/users/{user_id}/tags/{tag_id}")
+def revoke_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    row = db.query(UserTag).filter_by(user_id=user_id, tag_id=tag_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="User does not have this tag")
+    tag = db.get(TagDefinition, tag_id)
+    _audit(db, "admin_tag_revoke", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"user_id={user_id} tag={tag.key}")
+    db.delete(row)
     db.commit()
     return {"ok": True}
 

@@ -141,24 +141,153 @@ async function loadWeights() {
   }
 }
 
+let _allTags = [];
+let _cachedUsers = [];
+
 async function loadUsers() {
   try {
     const res = await fetch(`${API}/users`);
     const rows = await res.json();
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
-    document.getElementById("usersBody").innerHTML = rows.map(u => `
-      <tr>
-        <td>${u.username}${u.is_tester ? ' <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>' : ""}</td>
-        <td>${u.tokens}</td>
-        <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-          <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
-          <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
-          <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
-        </td>
-      </tr>`).join("");
+    _cachedUsers = rows;
+    _renderUsers(rows);
     setStatus("usersStatus", "");
   } catch (e) {
     setStatus("usersStatus", e.message, false);
+  }
+}
+
+function _renderUsers(rows) {
+  const search = (document.getElementById("userSearch")?.value || "").toLowerCase();
+  const visible = search ? rows.filter(u => u.username.toLowerCase().includes(search)) : rows;
+  document.getElementById("usersBody").innerHTML = visible.map(u => {
+    const testerBadge = u.is_tester
+      ? ` <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>`
+      : "";
+    const tagChips = (u.tags || []).map(t =>
+      `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.65rem;padding:1px 6px;border-radius:2px;margin-right:3px;">${t.label}</span>`
+    ).join("");
+    return `<tr data-user-id="${u.id}">
+      <td>${u.username}${testerBadge}</td>
+      <td>${tagChips || '<span style="color:#555;font-size:0.8rem;">—</span>'}</td>
+      <td>${u.tokens}</td>
+      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
+        <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
+        <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
+        <button class="ghost" style="font-size:0.8rem;" onclick="openTagManager(${u.id})">Manage tags</button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function filterUsers() {
+  _renderUsers(_cachedUsers);
+}
+
+function openTagManager(userId) {
+  const existing = document.getElementById(`tagManager_${userId}`);
+  if (existing) { existing.remove(); return; }
+  const row = document.querySelector(`[data-user-id="${userId}"]`);
+  if (!row) return;
+  const user = _cachedUsers.find(u => u.id === userId);
+  if (!user) return;
+  const userTagKeys = new Set((user.tags || []).map(t => t.key));
+  const tagControls = _allTags.length
+    ? _allTags.map(t => {
+        const has = userTagKeys.has(t.key);
+        const btn = has
+          ? `<button class="danger" style="padding:2px 8px;font-size:0.75rem;" onclick="revokeUserTag(${userId},${t.id})">Revoke</button>`
+          : `<button class="secondary" style="padding:2px 8px;font-size:0.75rem;" onclick="grantUserTag(${userId},${t.id})">Grant</button>`;
+        return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;">
+          <span style="font-size:0.8rem;">${t.label}</span>${btn}
+        </span>`;
+      }).join("")
+    : `<span style="color:#555;font-size:0.8rem;">No tag definitions yet.</span>`;
+  const managerRow = document.createElement("tr");
+  managerRow.id = `tagManager_${userId}`;
+  managerRow.innerHTML = `<td colspan="4" style="padding:8px 12px;background:var(--k-ink-900,#111);">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:2px;">
+      ${tagControls}
+      <button class="ghost" style="padding:2px 8px;font-size:0.75rem;margin-left:8px;" onclick="document.getElementById('tagManager_${userId}')?.remove()">Close</button>
+    </div>
+  </td>`;
+  row.after(managerRow);
+}
+
+async function grantUserTag(userId, tagId) {
+  try {
+    const res = await fetch(`${API}/admin/users/${userId}/tags/${tagId}`, { method: "POST" });
+    if (!res.ok) { const d = await res.json(); return setStatus("usersStatus", d.detail, false); }
+    setStatus("usersStatus", "Tag granted");
+    document.getElementById(`tagManager_${userId}`)?.remove();
+    await loadUsers();
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function revokeUserTag(userId, tagId) {
+  try {
+    const res = await fetch(`${API}/admin/users/${userId}/tags/${tagId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("usersStatus", d.detail, false); }
+    setStatus("usersStatus", "Tag revoked");
+    document.getElementById(`tagManager_${userId}`)?.remove();
+    await loadUsers();
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function loadTags() {
+  try {
+    const res = await fetch(`${API}/admin/tags`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("tagsStatus", rows.detail, false);
+    _allTags = rows;
+    document.getElementById("tagsBody").innerHTML = rows.length
+      ? rows.map(t => `<tr data-tag-id="${t.id}">
+          <td><code style="font-size:0.8rem;">${t.key}</code></td>
+          <td>${t.label}</td>
+          <td><button class="danger" style="padding:2px 8px;" onclick="deleteTag(${t.id})">Delete</button></td>
+        </tr>`).join("")
+      : `<tr><td colspan="3" style="color:#444">No tags defined</td></tr>`;
+    setStatus("tagsStatus", "");
+  } catch (e) {
+    setStatus("tagsStatus", e.message, false);
+  }
+}
+
+async function createTag() {
+  const key   = document.getElementById("tagKeyInput").value.trim().toLowerCase().replace(/\s+/g, "_");
+  const label = document.getElementById("tagLabelInput").value.trim();
+  if (!key)   return setStatus("tagsStatus", "Enter a key", false);
+  if (!label) return setStatus("tagsStatus", "Enter a label", false);
+  try {
+    const res = await fetch(`${API}/admin/tags`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({key, label}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("tagsStatus", data.detail, false);
+    document.getElementById("tagKeyInput").value   = "";
+    document.getElementById("tagLabelInput").value = "";
+    setStatus("tagsStatus", `Tag "${data.label}" created`);
+    loadTags();
+  } catch (e) {
+    setStatus("tagsStatus", e.message, false);
+  }
+}
+
+async function deleteTag(tagId) {
+  try {
+    const res = await fetch(`${API}/admin/tags/${tagId}`, { method: "DELETE" });
+    if (!res.ok) { const d = await res.json(); return setStatus("tagsStatus", d.detail, false); }
+    setStatus("tagsStatus", "Tag deleted");
+    loadTags();
+    loadUsers();
+  } catch (e) {
+    setStatus("tagsStatus", e.message, false);
   }
 }
 

@@ -14,7 +14,7 @@ from models import Week
 from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
-from seed import seed_users, seed_admin_from_env, seed_cards, seed_weights
+from seed import seed_users, seed_admin_from_env, seed_cards, seed_weights, seed_tags
 from weeks import generate_weeks, auto_lock_weeks
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
@@ -122,6 +122,7 @@ async def lifespan(app: FastAPI):
     seed_users()
     seed_admin_from_env()
     seed_weights()
+    seed_tags()
     _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:

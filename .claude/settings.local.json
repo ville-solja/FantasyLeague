@@ -14,7 +14,13 @@
       "Bash(python -c \"import seed; import main\")",
       "Bash(xargs -I{} basename {})",
       "Bash(python -m pytest tests/test_agent_lessons_log.py --collect-only -q)",
-      "Bash(python -m pytest tests/test_agent_lessons_log.py -q)"
+      "Bash(python -m pytest tests/test_agent_lessons_log.py -q)",
+      "Bash(python3 -c \"import fastapi\")",
+      "Bash(python3 -m pytest tests/test_auth.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/test_notification_system.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/test_user_tag_system.py -v --tb=short)",
+      "Bash(python3 -m pytest tests/ -v --tb=short)",
+      "Bash(python3 -c \"from PIL import Image, ImageDraw, ImageFont; print\\('PIL available'\\)\")"
     ]
   }
 }

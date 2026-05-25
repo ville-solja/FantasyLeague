@@ -195,3 +195,8 @@ rule is enforced server-side regardless of how the request is made.
 - `POST /roster/{card_id}/reroll` returns HTTP 400 with a clear error message when the target card is of type `"common"`
 - The endpoint continues to succeed for rare, epic, and legendary cards
 - The error message is distinct enough to aid debugging (e.g. `"Common cards cannot be rerolled"`)
+
+## Card Stickers (User Tags)
+
+Card sticker stories are in [user-tags.md](user-tags.md) — the tag system is generic
+and covers cards, leaderboard display, and admin management together.
