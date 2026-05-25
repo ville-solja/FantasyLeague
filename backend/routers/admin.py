@@ -3,7 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from database import get_db
 from deps import get_current_user, require_admin, _audit
@@ -352,15 +352,19 @@ class TokenGrantEventBody(BaseModel):
 @router.get("/admin/token-grant-events")
 def list_token_grant_events(db=Depends(get_db), _: dict = Depends(require_admin)):
     events = db.query(TokenGrantEvent).order_by(TokenGrantEvent.start_time.desc()).all()
-    result = []
-    for ev in events:
-        claim_count = db.query(TokenGrantClaim).filter_by(event_id=ev.id).count()
-        result.append({
+    claim_counts = {
+        row[0]: row[1]
+        for row in db.query(TokenGrantClaim.event_id, func.count(TokenGrantClaim.id))
+                     .group_by(TokenGrantClaim.event_id).all()
+    }
+    return [
+        {
             "id": ev.id, "amount": ev.amount,
             "start_time": ev.start_time, "end_time": ev.end_time,
-            "created_at": ev.created_at, "claim_count": claim_count,
-        })
-    return result
+            "created_at": ev.created_at, "claim_count": claim_counts.get(ev.id, 0),
+        }
+        for ev in events
+    ]
 
 
 @router.post("/admin/token-grant-events")
@@ -419,15 +423,19 @@ class WeekEditBody(BaseModel):
 @router.get("/admin/weeks")
 def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
     weeks = db.query(Week).order_by(Week.start_time).all()
-    result = []
-    for w in weeks:
-        roster_count = db.query(WeeklyRosterEntry).filter_by(week_id=w.id).count()
-        result.append({
+    roster_counts = {
+        row[0]: row[1]
+        for row in db.query(WeeklyRosterEntry.week_id, func.count(WeeklyRosterEntry.id))
+                     .group_by(WeeklyRosterEntry.week_id).all()
+    }
+    return [
+        {
             "id": w.id, "label": w.label,
             "start_time": w.start_time, "end_time": w.end_time,
-            "is_locked": w.is_locked, "roster_count": roster_count,
-        })
-    return result
+            "is_locked": w.is_locked, "roster_count": roster_counts.get(w.id, 0),
+        }
+        for w in weeks
+    ]
 
 
 @router.post("/admin/weeks")
@@ -499,13 +507,17 @@ class NotificationBody(BaseModel):
 @router.get("/admin/notifications")
 def list_notifications(db=Depends(get_db), _: dict = Depends(require_admin)):
     rows = db.query(Notification).order_by(Notification.start_time.desc()).all()
-    result = []
-    for n in rows:
-        count = db.query(NotificationDismissal).filter_by(notification_id=n.id).count()
-        result.append({"id": n.id, "message": n.message,
-                       "start_time": n.start_time, "end_time": n.end_time,
-                       "dismiss_count": count})
-    return result
+    dismiss_counts = {
+        row[0]: row[1]
+        for row in db.query(NotificationDismissal.notification_id, func.count(NotificationDismissal.id))
+                     .group_by(NotificationDismissal.notification_id).all()
+    }
+    return [
+        {"id": n.id, "message": n.message,
+         "start_time": n.start_time, "end_time": n.end_time,
+         "dismiss_count": dismiss_counts.get(n.id, 0)}
+        for n in rows
+    ]
 
 
 @router.post("/admin/notifications")

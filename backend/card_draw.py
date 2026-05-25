@@ -6,7 +6,9 @@ without requiring FastAPI to be installed.
 """
 import random
 
-from models import Card, Player, Weight
+from sqlalchemy import func
+
+from models import Card, Player, PlayerMatchStats, Weight
 
 
 def _roll_rarity(db) -> str:
@@ -20,18 +22,74 @@ def _roll_rarity(db) -> str:
 
 
 def _pick_player(db, owner_id: int, rarity: str):
+    """Pick a player for a standard draw.
+
+    Duplicate prevention is player-level: the user will not receive a player they already
+    own (at any rarity) until they own every active player, at which point any player
+    becomes eligible again.
+    """
     all_players = db.query(Player).all()
     if not all_players:
         return None
-    owned = db.query(Card).filter_by(owner_id=owner_id).all()
-    owned_by_player = {}
-    for c in owned:
-        owned_by_player.setdefault(c.player_id, []).append(c.card_type)
 
-    eligible = [p for p in all_players
-                if rarity not in owned_by_player.get(p.id, [])]
+    owned_player_ids = {
+        r[0] for r in
+        db.query(Card.player_id).filter_by(owner_id=owner_id).all()
+    }
+
+    eligible = [p for p in all_players if p.id not in owned_player_ids]
     if not eligible:
-        eligible = all_players  # relax uniqueness when all players already own this rarity
+        eligible = all_players
 
-    weights = [1.0 / (1 + len(owned_by_player.get(p.id, []))) for p in eligible]
+    owned_counts = {
+        r[0]: r[1] for r in
+        db.query(Card.player_id, func.count(Card.id))
+          .filter_by(owner_id=owner_id)
+          .group_by(Card.player_id).all()
+    }
+    max_count = max(owned_counts.values(), default=0)
+    weights = [max_count - owned_counts.get(p.id, 0) + 1 for p in eligible]
     return random.choices(eligible, weights=weights, k=1)[0]
+
+
+def _pick_player_from_team(db, owner_id: int, rarity: str, team_id: int):
+    """Pick a player from a specific team for a booster draw.
+
+    Duplicate prevention is player-level only (rarity is ignored): the user will not
+    receive a player they already own from this team until they own every player on the
+    team, at which point any player becomes eligible again.
+
+    Returns the chosen Player, or None if the team has no players at all.
+    """
+    team_player_ids = [
+        r[0] for r in
+        db.query(PlayerMatchStats.player_id)
+          .filter(PlayerMatchStats.team_id == team_id)
+          .distinct().all()
+    ]
+    if not team_player_ids:
+        return None
+
+    owned_player_ids = {
+        r[0] for r in
+        db.query(Card.player_id).filter(
+            Card.owner_id == owner_id,
+            Card.player_id.in_(team_player_ids),
+        ).all()
+    }
+
+    eligible = [pid for pid in team_player_ids if pid not in owned_player_ids]
+    if not eligible:
+        # All team players owned — allow any player
+        eligible = team_player_ids
+
+    owned_counts = {
+        r[0]: r[1] for r in
+        db.query(Card.player_id, func.count(Card.id))
+          .filter(Card.owner_id == owner_id, Card.player_id.in_(eligible))
+          .group_by(Card.player_id).all()
+    }
+    max_count = max(owned_counts.values(), default=0)
+    weights = [max_count - owned_counts.get(pid, 0) + 1 for pid in eligible]
+    chosen_id = random.choices(eligible, weights=weights, k=1)[0]
+    return db.get(Player, chosen_id)

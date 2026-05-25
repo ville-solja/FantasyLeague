@@ -141,6 +141,23 @@
   </div>
 </div>
 
+<!-- Team Booster Modal -->
+<div class="modal-overlay hidden" id="boosterModal" onclick="closeBoosterModal()">
+  <div class="modal modal-wide" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">CHOOSE A TEAM</h2>
+      <button class="ghost" onclick="closeBoosterModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="boosterCostLabel" style="font-size:0.8rem;color:#888;margin-bottom:14px;"></div>
+    <div id="boosterTeamGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:400px;overflow-y:auto;margin-bottom:16px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="secondary" onclick="closeBoosterModal()">Cancel</button>
+      <button id="boosterDrawBtn" disabled onclick="drawBooster()">Draw Booster</button>
+    </div>
+    <div class="status" id="boosterStatus"></div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <header class="header">
   <div class="header-left">
@@ -288,6 +305,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button id="drawBtn" onclick="drawCard()">Draw a card</button>
+        <button id="boosterBtn" class="secondary" onclick="openBoosterModal()">Draw Booster from Team</button>
         <span id="drawCounter" style="font-size:0.8rem;color:#555;"></span>
       </div>
       <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">

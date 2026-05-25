@@ -1,4 +1,4 @@
-<!-- version: 7 -->
+<!-- version: 8 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -30,12 +30,12 @@ If no arguments were provided, stop and ask the user to re-invoke with a descrip
 
 1. Run `git remote get-url origin` via Bash to get the repo URL.
 2. Extract `{owner}/{repo}` from the URL (strip `.git` suffix, handle both SSH and HTTPS forms).
-3. Fetch `https://api.github.com/repos/{owner}/{repo}/issues/{N}` using WebFetch.
-4. Extract `title` and `body` from the JSON response.
-5. Use `"{title} — {body}"` as the feature description for all subsequent phases.
+3. Fetch `https://api.github.com/repos/{owner}/{repo}/issues/{N}` using WebFetch. Extract `title` and `body`.
+4. Fetch `https://api.github.com/repos/{owner}/{repo}/issues/{N}/comments` using WebFetch. Extract the body of every comment.
+5. Use `"{title} — {body}"` plus the full text of all comments as the feature description for all subsequent phases. Comments often contain refinements that override or extend the original issue body — treat them as higher-priority context.
 6. Note the issue number in the plan's Context section: *"Resolves GitHub issue #{N}."*
 
-If the fetch fails or returns an error, fall back to treating `$ARGUMENTS` as a plain description.
+If either fetch fails or returns an error, proceed with whatever was successfully retrieved and fall back to treating `$ARGUMENTS` as a plain description for anything missing.
 
 ---
 
