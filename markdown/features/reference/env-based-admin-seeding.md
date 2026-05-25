@@ -30,6 +30,12 @@ No new API endpoints — this is a startup-only concern.
 All three variables must be set for the account to be created. If any are absent the step
 is silently skipped — no error is raised.
 
----
+## Call site
 
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*
+`seed_admin_from_env()` is called in the `lifespan` startup handler in `backend/main.py`,
+after `seed_users()` and before `seed_weights()`. Both `seed_users()` and
+`seed_admin_from_env()` are called on every startup; `seed_users()` is harmless with the
+empty `users.json` stub.
+
+On successful account creation the event is logged at `INFO` level. If the account already
+exists it is logged at `DEBUG` level and silently skipped.
