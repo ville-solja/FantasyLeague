@@ -7,6 +7,8 @@ Configuration via environment variables:
   SMTP_PASSWORD  — optional SMTP login password
   SMTP_FROM      — sender address; defaults to SMTP_USER if set, else "noreply@fantasy"
   SMTP_TLS       — "true" (default) uses STARTTLS; "false" uses plain SMTP (not SSL)
+  SMTP_SSL       — "true" uses smtplib.SMTP_SSL (direct SSL, typically port 465);
+                   takes priority over SMTP_TLS when set
 """
 import os
 import smtplib
@@ -20,11 +22,12 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
         print(f"[EMAIL] SMTP_HOST not set — would have sent to {to_address}: {subject}")
         return False
 
-    port     = int(os.getenv("SMTP_PORT", "587"))
-    user     = os.getenv("SMTP_USER", "")
-    password = os.getenv("SMTP_PASSWORD", "")
+    port      = int(os.getenv("SMTP_PORT", "587"))
+    user      = os.getenv("SMTP_USER", "")
+    password  = os.getenv("SMTP_PASSWORD", "")
     from_addr = os.getenv("SMTP_FROM", user or "noreply@fantasy")
-    use_tls  = os.getenv("SMTP_TLS", "true").lower() != "false"
+    use_ssl   = os.getenv("SMTP_SSL", "false").lower() == "true"
+    use_tls   = os.getenv("SMTP_TLS", "true").lower() != "false"
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
@@ -32,7 +35,12 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
     msg["To"]      = to_address
 
     try:
-        if use_tls:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port) as smtp:
+                if user:
+                    smtp.login(user, password)
+                smtp.sendmail(from_addr, [to_address], msg.as_string())
+        elif use_tls:
             with smtplib.SMTP(host, port) as smtp:
                 smtp.ehlo()
                 smtp.starttls()

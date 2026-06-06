@@ -126,6 +126,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SMTP_PASSWORD` | *(empty)* | SMTP password |
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
+| `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, typically port 465); takes priority over `SMTP_TLS` |
 | `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |

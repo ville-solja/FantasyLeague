@@ -187,4 +187,5 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | `SMTP_PASSWORD` | *(empty)* | SMTP login password |
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
+| `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, port 465); takes priority over `SMTP_TLS` |
 | `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |

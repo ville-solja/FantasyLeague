@@ -7,7 +7,9 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
 from models import Week, Weight
@@ -150,12 +152,30 @@ if not _secret_key:
     )
     _secret_key = "dev-secret-change-me"
 _https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv"
+        )
+        if _https_only:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=_secret_key,
     same_site="lax",
     https_only=_https_only,
 )
+app.add_middleware(SecurityHeadersMiddleware)
 # Twitch extension iframes are served from *.ext-twitch.tv — a different origin.
 # All /twitch/* endpoints authenticate via JWT (not cookies), so allow_origins="*"
 # is safe: cross-origin requests cannot carry session cookies, so regular
