@@ -12,4 +12,4 @@
 | [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling |
 | [ux-and-polish.md](ux-and-polish.md) | Schedule tab, scoring explanation, My Team layout, CI testing, How to Play tab |
 | [deployment.md](deployment.md) | DB sustainability, versioned migrations, pre-deploy backup |
-| [tooling.md](tooling.md) | Agent lessons log, development tooling |
+| [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams |
