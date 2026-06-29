@@ -51,17 +51,19 @@ def test_content_security_policy_frame_ancestors_present(client):
     frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv."""
     response = client.get("/health")
     csp = response.headers.get("content-security-policy", "")
-    # Parse CSP into directives; frame-ancestors is space-delimited, so split
-    # into exact tokens to avoid substring false-matches.
+    # Parse the frame-ancestors directive into an exact token set, then use
+    # set equality (not `in`) so CodeQL does not mistake this for URL
+    # sanitization (py/incomplete-url-substring-sanitization).
     directives = {
-        parts[0]: parts[1:]
+        parts[0]: set(parts[1:])
         for d in csp.split(";")
         if (parts := d.strip().split())
     }
-    fa_sources = directives.get("frame-ancestors", [])
-    assert fa_sources, "frame-ancestors directive missing from CSP"
-    assert "https://www.twitch.tv" in fa_sources
-    assert "https://*.ext-twitch.tv" in fa_sources
+    fa_sources = directives.get("frame-ancestors", set())
+    expected = {"'self'", "https://www.twitch.tv", "https://*.ext-twitch.tv"}
+    assert expected == fa_sources, (
+        f"frame-ancestors sources mismatch: expected {expected}, got {fa_sources}"
+    )
 
 
 def test_hsts_present_when_https_only_true(monkeypatch):
