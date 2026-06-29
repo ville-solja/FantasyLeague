@@ -3,6 +3,7 @@ import os
 import threading
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +30,8 @@ from routers import admin as admin_router
 
 logger = logging.getLogger(__name__)
 
+_stop_event = threading.Event()
+
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 _APP_VERSION   = os.getenv("APP_VERSION", "APP_VERSION")
@@ -43,7 +46,7 @@ _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 def _week_maintenance_loop():
     """Background thread: periodically generate new weeks and lock past ones."""
-    while True:
+    while not _stop_event.is_set():
         try:
             db = SessionLocal()
             try:
@@ -53,19 +56,26 @@ def _week_maintenance_loop():
                 db.close()
         except Exception:
             logger.exception("Week maintenance error")
-        time.sleep(_WEEK_CHECK_INTERVAL)
+        _stop_event.wait(timeout=_WEEK_CHECK_INTERVAL)
 
 
 def _profile_enrichment_loop():
     """Background thread: periodically enrich player profiles with hero stats and AI bios."""
-    while True:
+    while not _stop_event.is_set():
         try:
-            result = run_profile_enrichment(batch_size=_ENRICHMENT_BATCH_SIZE)
-            if result["enriched"] or result["errors"]:
-                logger.info("Profile enrichment: %s", result)
+            with ThreadPoolExecutor(max_workers=1) as _executor:
+                _future = _executor.submit(run_profile_enrichment, batch_size=_ENRICHMENT_BATCH_SIZE)
+                try:
+                    result = _future.result(timeout=300)  # 5-minute timeout
+                    if result["enriched"] or result["errors"]:
+                        logger.info("Profile enrichment: %s", result)
+                except FuturesTimeoutError:
+                    logging.warning("Profile enrichment timed out after 300s")
+                except Exception as _e:
+                    logging.error("Profile enrichment error: %s", _e)
         except Exception:
             logger.exception("Profile enrichment loop error")
-        time.sleep(_ENRICHMENT_INTERVAL)
+        _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
 
 
 def _seed_monitored_leagues(league_ids: list[int]):
@@ -108,7 +118,7 @@ def _run_toornament_sync():
 
 def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
-    while True:
+    while not _stop_event.is_set():
         try:
             db = SessionLocal()
             try:
@@ -130,7 +140,7 @@ def _ingest_poll_loop():
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL
-        time.sleep(interval)
+        _stop_event.wait(timeout=interval)
 
 
 @asynccontextmanager
@@ -146,7 +156,13 @@ async def lifespan(app: FastAPI):
     seed_admin_from_env()
     seed_weights()
     seed_tags()
-    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
+    if os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
+        if os.getenv("SECRET_KEY"):
+            raise RuntimeError(
+                "TWITCH_LOCAL_DEV=true must not be set when SECRET_KEY is configured — "
+                "this bypass must never run in production"
+            )
+    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
         _seed_monitored_leagues(_league_ids)
@@ -157,6 +173,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
     yield
+    _stop_event.set()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -196,6 +213,7 @@ app.add_middleware(
     secret_key=_secret_key,
     same_site="lax",
     https_only=_https_only,
+    max_age=86400,
 )
 app.add_middleware(SecurityHeadersMiddleware)
 # Twitch extension iframes are served from *.ext-twitch.tv — a different origin.

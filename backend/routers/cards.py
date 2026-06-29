@@ -248,27 +248,41 @@ def get_booster_deck(request: Request, db=Depends(get_db)):
     user_id = request.session.get("user_id") if hasattr(request, "session") else None
 
     teams = db.query(Team).all()
+
+    # Pre-fetch all (team_id, player_id) pairs in a single query
+    pms_rows = (
+        db.query(PlayerMatchStats.team_id, PlayerMatchStats.player_id)
+          .distinct()
+          .all()
+    )
+    # Build a dict: team_id -> set of player_ids
+    team_players: dict[int, set[int]] = {}
+    for team_id, player_id in pms_rows:
+        team_players.setdefault(team_id, set()).add(player_id)
+
+    # Pre-fetch all player_ids that have players in any team with stats
+    all_player_ids = {pid for pids in team_players.values() for pid in pids}
+
+    # Pre-fetch owned player IDs for the authenticated user in a single query
+    owned_player_ids: set[int] = set()
+    if user_id and all_player_ids:
+        owned_player_ids = {
+            r[0] for r in
+            db.query(Card.player_id).filter(
+                Card.owner_id == user_id,
+                Card.player_id.in_(all_player_ids),
+            ).all()
+        }
+
     result = []
     for team in teams:
-        team_player_ids = [
-            r[0] for r in
-            db.query(PlayerMatchStats.player_id)
-              .filter(PlayerMatchStats.team_id == team.id)
-              .distinct().all()
-        ]
-        if not team_player_ids:
+        player_ids = team_players.get(team.id)
+        if not player_ids:
             continue
         if user_id:
-            owned_player_ids = {
-                r[0] for r in
-                db.query(Card.player_id).filter(
-                    Card.owner_id == user_id,
-                    Card.player_id.in_(team_player_ids),
-                ).all()
-            }
-            remaining = len(set(team_player_ids) - owned_player_ids)
+            remaining = len(player_ids - owned_player_ids)
         else:
-            remaining = len(team_player_ids)
+            remaining = len(player_ids)
         result.append({
             "team_id": team.id,
             "team_name": team.name,

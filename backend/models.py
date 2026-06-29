@@ -239,6 +239,9 @@ class ToornamentSyncLog(Base):
 
 class TokenGrantEvent(Base):
     __tablename__ = "token_grant_events"
+    __table_args__ = (
+        Index('ix_token_grant_events_time', 'start_time', 'end_time'),
+    )
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     amount     = Column(Integer)
@@ -260,6 +263,9 @@ class TokenGrantClaim(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index('ix_notifications_time', 'start_time', 'end_time'),
+    )
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     message    = Column(String)
@@ -308,3 +314,4 @@ Index('ix_wre_user_week',    WeeklyRosterEntry.user_id, WeeklyRosterEntry.week_i
 Index('ix_presence_channel_seen', TwitchPresence.channel_id, TwitchPresence.seen_at)
 Index('ix_matches_week_override_id', Match.week_override_id)
 Index('ix_match_bans_match_id',      MatchBan.match_id)
+Index('ix_matches_league_id',        Match.league_id)

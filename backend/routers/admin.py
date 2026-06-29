@@ -648,16 +648,20 @@ class RemovePlayersBody(BaseModel):
 @router.get("/admin/players")
 def list_players(db=Depends(get_db), _=Depends(require_admin)):
     rows = db.query(Player).order_by(Player.name).all()
-    result = []
-    for p in rows:
-        card_count = db.query(Card).filter(
-            Card.player_id == p.id, Card.is_active == True
-        ).count()
-        result.append({
+    card_counts = {
+        r[0]: r[1] for r in
+        db.query(Card.player_id, func.count(Card.id))
+          .filter(Card.is_active == True)
+          .group_by(Card.player_id).all()
+    }
+    return [
+        {
             "id": p.id, "name": p.name,
-            "is_active": p.is_active, "active_card_count": card_count
-        })
-    return result
+            "is_active": p.is_active,
+            "active_card_count": card_counts.get(p.id, 0),
+        }
+        for p in rows
+    ]
 
 
 @router.post("/admin/players")
@@ -754,16 +758,20 @@ def remove_players(body: RemovePlayersBody, db=Depends(get_db),
 @router.get("/admin/leagues")
 def list_leagues(db=Depends(get_db), admin=Depends(require_admin)):
     leagues = db.query(League).all()
-    result = []
-    for l in leagues:
-        match_count = db.query(Match).filter(Match.league_id == l.id).count()
-        result.append({
+    match_counts = {
+        r[0]: r[1] for r in
+        db.query(Match.league_id, func.count(Match.match_id))
+          .group_by(Match.league_id).all()
+    }
+    return [
+        {
             "id": l.id,
             "name": l.name or "(unknown)",
             "is_monitored": l.is_monitored,
-            "match_count": match_count,
-        })
-    return result
+            "match_count": match_counts.get(l.id, 0),
+        }
+        for l in leagues
+    ]
 
 
 @router.post("/admin/leagues/{league_id}/monitor")
@@ -802,16 +810,21 @@ def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_
     deleted_stats = 0
     deleted_bans = 0
     if match_ids:
-        placeholders = ",".join(str(m) for m in match_ids)
-        deleted_stats = db.execute(
-            text(f"DELETE FROM player_match_stats WHERE match_id IN ({placeholders})")
-        ).rowcount
-        deleted_bans = db.execute(
-            text(f"DELETE FROM match_bans WHERE match_id IN ({placeholders})")
-        ).rowcount
-    deleted_matches = db.execute(
-        text("DELETE FROM matches WHERE league_id = :lid"), {"lid": league_id}
-    ).rowcount
+        deleted_stats = (
+            db.query(PlayerMatchStats)
+            .filter(PlayerMatchStats.match_id.in_(match_ids))
+            .delete(synchronize_session=False)
+        )
+        deleted_bans = (
+            db.query(MatchBan)
+            .filter(MatchBan.match_id.in_(match_ids))
+            .delete(synchronize_session=False)
+        )
+    deleted_matches = (
+        db.query(Match)
+        .filter(Match.league_id == league_id)
+        .delete(synchronize_session=False)
+    )
     league = db.get(League, league_id)
     if league:
         league.is_monitored = False
