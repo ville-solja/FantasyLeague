@@ -146,6 +146,10 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_enrich_profiles` | Admin triggered a manual profile enrichment batch |
+| `admin_player_added` | Admin added a player to the pool by OpenDota ID |
+| `admin_player_bulk_added` | Admin bulk-added players via CSV |
+| `admin_player_removed` | Admin soft-deleted a player from the pool |
+| `admin_player_refund_issued` | Tokens granted to a card holder after player removal |
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `password_reset_requested` | Forgot-password flow issued a temporary password |
 

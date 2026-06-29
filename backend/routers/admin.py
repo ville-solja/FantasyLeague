@@ -1,5 +1,8 @@
 import os
 import time
+from typing import List
+
+import requests
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -9,7 +12,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from models import Card, Match, Player, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from toornament import sync_toornament_results
@@ -622,6 +625,124 @@ def revoke_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(requ
            actor_username=admin["username"],
            detail=f"user_id={user_id} tag={tag.key}")
     db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Player Pool Management
+# ---------------------------------------------------------------------------
+
+class AddPlayerBody(BaseModel):
+    player_id: int
+
+
+class BulkAddPlayersBody(BaseModel):
+    player_ids: str = Field(..., min_length=1, max_length=2000)  # CSV string
+
+
+class RemovePlayersBody(BaseModel):
+    player_ids: List[int]
+
+
+@router.get("/admin/players")
+def list_players(db=Depends(get_db), _=Depends(require_admin)):
+    rows = db.query(Player).order_by(Player.name).all()
+    result = []
+    for p in rows:
+        card_count = db.query(Card).filter(
+            Card.player_id == p.id, Card.is_active == True
+        ).count()
+        result.append({
+            "id": p.id, "name": p.name,
+            "is_active": p.is_active, "active_card_count": card_count
+        })
+    return result
+
+
+@router.post("/admin/players")
+def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_admin)):
+    existing = db.get(Player, body.player_id)
+    if existing and existing.is_active:
+        raise HTTPException(status_code=409, detail="Player already exists in pool")
+    resp = requests.get(f"https://api.opendota.com/api/players/{body.player_id}", timeout=10)
+    if resp.status_code != 200 or not resp.json().get("profile"):
+        raise HTTPException(status_code=422, detail="Player not found on OpenDota")
+    data = resp.json()["profile"]
+    if existing:
+        existing.is_active = True
+        existing.name = data.get("personaname", str(body.player_id))
+        existing.avatar_url = data.get("avatarfull", "")
+        p = existing
+    else:
+        p = Player(
+            id=body.player_id,
+            name=data.get("personaname", str(body.player_id)),
+            avatar_url=data.get("avatarfull", ""),
+            is_active=True,
+        )
+        db.add(p)
+    _audit(db, "admin_player_added", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"player_id={body.player_id}")
+    db.commit()
+    return {"id": p.id, "name": p.name}
+
+
+@router.post("/admin/players/bulk")
+def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
+                     admin=Depends(require_admin)):
+    raw_ids = [s.strip() for s in body.player_ids.split(",") if s.strip()]
+    added, skipped = [], []
+    for raw in raw_ids:
+        try:
+            pid = int(raw)
+        except ValueError:
+            skipped.append({"id": raw, "reason": "not an integer"})
+            continue
+        if db.get(Player, pid):
+            skipped.append({"id": pid, "reason": "already exists"})
+            continue
+        resp = requests.get(f"https://api.opendota.com/api/players/{pid}", timeout=10)
+        if resp.status_code != 200 or not resp.json().get("profile"):
+            skipped.append({"id": pid, "reason": "not found on OpenDota"})
+            continue
+        data = resp.json()["profile"]
+        db.add(Player(
+            id=pid,
+            name=data.get("personaname", str(pid)),
+            avatar_url=data.get("avatarfull", ""),
+            is_active=True,
+        ))
+        added.append(pid)
+    if added:
+        _audit(db, "admin_player_bulk_added", actor_id=admin["user_id"],
+               actor_username=admin["username"], detail=f"added={len(added)}")
+    db.commit()
+    return {"added": len(added), "skipped": skipped}
+
+
+@router.post("/admin/players/remove")
+def remove_players(body: RemovePlayersBody, db=Depends(get_db),
+                   admin=Depends(require_admin)):
+    for pid in body.player_ids:
+        player = db.get(Player, pid)
+        if not player or not player.is_active:
+            continue
+        player.is_active = False
+        cards = db.query(Card).filter(Card.player_id == pid).all()
+        refund_totals: dict = {}
+        for card in cards:
+            card.is_active = False
+            refund_totals[card.owner_id] = refund_totals.get(card.owner_id, 0) + 1
+        for user_id, token_count in refund_totals.items():
+            user = db.get(User, user_id)
+            if user:
+                user.tokens = (user.tokens or 0) + token_count
+                _audit(db, "admin_player_refund_issued", actor_id=admin["user_id"],
+                       actor_username=admin["username"],
+                       detail=f"player_id={pid} user_id={user_id} tokens={token_count}")
+        _audit(db, "admin_player_removed", actor_id=admin["user_id"],
+               actor_username=admin["username"], detail=f"player_id={pid}")
     db.commit()
     return {"ok": True}
 

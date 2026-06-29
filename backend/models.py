@@ -9,6 +9,7 @@ class Player(Base):
     id = Column(Integer, primary_key=True)  # OpenDota account_id
     name = Column(String)
     avatar_url = Column(String)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 
 class Match(Base):

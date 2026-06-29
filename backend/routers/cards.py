@@ -88,7 +88,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
-            WHERE c.owner_id = :user_id
+            WHERE c.owner_id = :user_id AND p.is_active = 1
             GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()

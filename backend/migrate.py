@@ -301,6 +301,14 @@ def _m015_missing_indexes(conn):
     conn.commit()
 
 
+def _m016_players_is_active(conn):
+    cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
+    if "is_active" not in cols:
+        conn.execute(text("ALTER TABLE players ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
+        conn.commit()
+        logger.info("Migration: players — added is_active column")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -321,6 +329,7 @@ MIGRATIONS = [
     ("013_user_tag_system",          _m013_user_tag_system),
     ("014_cards_league_id_nullable", _m014_cards_league_id_nullable),
     ("015_missing_indexes",          _m015_missing_indexes),
+    ("016_players_is_active",        _m016_players_is_active),
 ]
 
 
