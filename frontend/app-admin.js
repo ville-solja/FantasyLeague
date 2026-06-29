@@ -538,22 +538,6 @@ async function refreshSchedule() {
   }
 }
 
-async function ingestLeague() {
-  const id = document.getElementById("leagueId").value;
-  if (!id) return setStatus("ingestStatus", "Enter a league ID", false);
-  const btn = document.getElementById("ingestBtn");
-  if (btn) btn.disabled = true;
-  setStatus("ingestStatus", "Ingesting... this may take a while");
-  try {
-    const res = await fetch(`${API}/ingest/league/${id}`, { method: "POST" });
-    const data = await res.json();
-    setStatus("ingestStatus", res.ok ? `Done. League ${data.league_id} ingested.` : data.detail, res.ok);
-  } catch (e) {
-    setStatus("ingestStatus", e.message, false);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
 
 async function loadAuditLog() {
   if (!activeIsAdmin) return;
@@ -761,4 +745,92 @@ async function removeSelectedPlayers() {
   } catch (e) {
     setStatus("removePlayersStatus", e.message, false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// League Management
+// ---------------------------------------------------------------------------
+
+let _leaguesCached = [];
+let _purgeTargetLeagueId = null;
+
+async function loadLeagues() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/leagues`);
+    const data = await res.json();
+    if (!res.ok) return;
+    _leaguesCached = data;
+    _renderLeagues();
+  } catch (e) { /* silently ignore network errors */ }
+}
+
+function _renderLeagues() {
+  const tbody = document.getElementById('leagueTableBody');
+  if (!_leaguesCached.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="color:#444">No leagues</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = _leaguesCached.map(l => `
+    <tr>
+      <td>${l.id}</td>
+      <td>${_escHtml(l.name)}</td>
+      <td>${l.match_count}</td>
+      <td>${l.is_monitored ? 'Yes' : 'No'}</td>
+      <td>
+        ${l.is_monitored
+          ? `<button onclick="unmonitorLeague(${l.id})">Unmonitor</button>`
+          : `<button onclick="monitorLeague(${l.id})">Monitor</button>`
+        }
+        ${l.match_count > 0
+          ? `<button onclick="openPurgeLeagueModal(${l.id}, '${_escHtml(l.name)}')">Purge data</button>`
+          : ''
+        }
+      </td>
+    </tr>`).join('');
+}
+
+function openAddLeagueModal() { document.getElementById('addLeagueModal').style.display = 'flex'; }
+function closeAddLeagueModal() { document.getElementById('addLeagueModal').style.display = 'none'; }
+
+async function submitAddLeague() {
+  const id = parseInt(document.getElementById('addLeagueIdInput').value);
+  if (!id) return alert('Enter a valid league ID');
+  const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.detail); return; }
+  closeAddLeagueModal();
+  loadLeagues();
+}
+
+async function monitorLeague(id) {
+  const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) alert(data.detail);
+  loadLeagues();
+}
+
+async function unmonitorLeague(id) {
+  const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) alert(data.detail);
+  loadLeagues();
+}
+
+function openPurgeLeagueModal(id, name) {
+  _purgeTargetLeagueId = id;
+  document.getElementById('purgeLeagueDescription').textContent = `League: ${name} (ID ${id})`;
+  document.getElementById('purgeLeagueModal').style.display = 'flex';
+}
+function closePurgeLeagueModal() {
+  document.getElementById('purgeLeagueModal').style.display = 'none';
+  _purgeTargetLeagueId = null;
+}
+async function confirmPurgeLeague() {
+  if (!_purgeTargetLeagueId) return;
+  const res = await fetch(`${API}/admin/leagues/${_purgeTargetLeagueId}/data`, { method: 'DELETE' });
+  const data = await res.json();
+  alert(`Purged: ${data.deleted_matches} matches, ${data.deleted_stats} stats. ${data.note}`);
+  closePurgeLeagueModal();
+  loadLeagues();
 }
