@@ -1,3 +1,4 @@
+import logging
 import os
 import re as _re
 import secrets
@@ -116,8 +117,7 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
             ),
         )
     except Exception:
-        import logging as _logging
-        _logging.getLogger(__name__).exception(
+        logging.getLogger(__name__).exception(
             "forgot_password: email send failed for user %s — aborting password change", user_username
         )
         db.rollback()

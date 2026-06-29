@@ -8,6 +8,7 @@ from models import AuditLog, Card, User, Week, WeeklyRosterEntry
 logger = logging.getLogger(__name__)
 
 _SECS_PER_WEEK = 7 * 24 * 3600
+_DEFAULT_SEASON_LOCK = "2026-03-08"
 
 
 def _parse_season_lock_anchor() -> int:
@@ -16,7 +17,14 @@ def _parse_season_lock_anchor() -> int:
     This is the first Sunday lock. Week 1's match window opens immediately
     after (Monday 00:00:00 UTC) and runs through the following Sunday 23:59:59.
     """
-    start_str = os.getenv("SEASON_LOCK_START", "2026-03-08")
+    season_lock_str = os.getenv("SEASON_LOCK_START", "")
+    if not season_lock_str:
+        logger.warning(
+            "SEASON_LOCK_START is not set — using hardcoded default %s. "
+            "Set this env var for a new season.", _DEFAULT_SEASON_LOCK
+        )
+        season_lock_str = _DEFAULT_SEASON_LOCK
+    start_str = season_lock_str
     d = datetime.datetime.strptime(start_str, "%Y-%m-%d")
     anchor = datetime.datetime(d.year, d.month, d.day, 23, 59, 59,
                                tzinfo=datetime.timezone.utc)

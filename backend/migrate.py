@@ -317,6 +317,26 @@ def _m017_leagues_is_monitored(conn):
         logger.info("Migration: leagues — added is_monitored column")
 
 
+def _m018_new_indexes(conn):
+    stmts = [
+        "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
+    ]
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )).fetchall()}
+    if "notifications" in tables:
+        stmts.append(
+            "CREATE INDEX IF NOT EXISTS ix_notifications_time ON notifications (start_time, end_time)"
+        )
+    if "token_grant_events" in tables:
+        stmts.append(
+            "CREATE INDEX IF NOT EXISTS ix_token_grant_events_time ON token_grant_events (start_time, end_time)"
+        )
+    for stmt in stmts:
+        conn.execute(text(stmt))
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -339,6 +359,7 @@ MIGRATIONS = [
     ("015_missing_indexes",          _m015_missing_indexes),
     ("016_players_is_active",        _m016_players_is_active),
     ("017_leagues_is_monitored",     _m017_leagues_is_monitored),
+    ("018_new_indexes",              _m018_new_indexes),
 ]
 
 
