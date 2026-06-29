@@ -17,6 +17,7 @@ Story 2 — Support Gmail SSL Connection (Port 465):
 """
 
 import os
+import re
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -56,8 +57,12 @@ class TestConfigureGmailStarttls:
         )
         with open(os.path.abspath(env_example)) as f:
             content = f.read()
-        assert "smtp.gmail.com" in content
-        assert "SMTP_PASSWORD=xxxx xxxx xxxx xxxx" in content
+        # Use anchored regex so the check is for the specific config line,
+        # not an arbitrary substring match (avoids CodeQL url-sanitization FP).
+        assert re.search(r"^#?\s*SMTP_HOST=smtp\.gmail\.com\s*$", content, re.MULTILINE), \
+            "smtp.gmail.com SMTP_HOST example not found in .env.example"
+        assert re.search(r"^#?\s*SMTP_PASSWORD=xxxx xxxx xxxx xxxx\s*$", content, re.MULTILINE), \
+            "App Password example not found in .env.example"
 
     def test_feature_doc_exists(self):
         """markdown/features/reference/gmail-smtp-integration.md exists."""
