@@ -141,6 +141,56 @@
   </div>
 </div>
 
+<!-- Player Pool: Add Player Modal -->
+<div class="modal-overlay hidden" id="addPlayerModal" onclick="closeAddPlayerPopup()">
+  <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">ADD PLAYER</h2>
+      <button class="ghost" onclick="closeAddPlayerPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <input id="addPlayerIdInput" type="number" placeholder="OpenDota account ID" style="width:100%;margin-bottom:12px;" />
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="addPlayer()">Confirm</button>
+      <button class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
+    </div>
+    <div class="status" id="addPlayerStatus"></div>
+  </div>
+</div>
+
+<!-- Player Pool: Bulk Add Modal -->
+<div class="modal-overlay hidden" id="bulkAddPlayersModal" onclick="closeBulkAddPlayersPopup()">
+  <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;">BULK ADD PLAYERS</h2>
+      <button class="ghost" onclick="closeBulkAddPlayersPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.8rem;color:#888;margin-bottom:10px;">Paste a comma-separated list of OpenDota account IDs.</p>
+    <input id="bulkAddIdsInput" type="text" placeholder="12345,67890,..." style="width:100%;margin-bottom:12px;" />
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="bulkAddPlayers()">Confirm</button>
+      <button class="secondary" onclick="closeBulkAddPlayersPopup()">Cancel</button>
+    </div>
+    <div class="status" id="bulkAddPlayersStatus"></div>
+  </div>
+</div>
+
+<!-- Player Pool: Remove Confirm Modal -->
+<div class="modal-overlay hidden" id="removePlayersModal" onclick="closeRemovePlayersConfirm()">
+  <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;">REMOVE PLAYERS</h2>
+      <button class="ghost" onclick="closeRemovePlayersConfirm()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.85rem;margin-bottom:8px;">Remove these players? Their active cards will be deactivated and card holders will each receive 1 refund token per card.</p>
+    <p id="removePlayersNames" style="font-size:0.8rem;color:#e05;margin-bottom:14px;"></p>
+    <div style="display:flex;gap:8px;">
+      <button class="danger" style="flex:1;" onclick="removeSelectedPlayers()">Confirm Remove</button>
+      <button class="secondary" onclick="closeRemovePlayersConfirm()">Cancel</button>
+    </div>
+    <div class="status" id="removePlayersStatus"></div>
+  </div>
+</div>
+
 <!-- Team Booster Modal -->
 <div class="modal-overlay hidden" id="boosterModal" onclick="closeBoosterModal()">
   <div class="modal modal-wide" onclick="event.stopPropagation()">
@@ -551,6 +601,26 @@
           <input id="editWeekId" type="hidden" />
         </div>
         <div class="status" id="weeksAdminStatus"></div>
+      </div>
+
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2 style="margin:0;">Player Pool</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="openAddPlayerPopup()">Add</button>
+            <button class="secondary" onclick="openBulkAddPlayersPopup()">Bulk Add</button>
+            <button id="removePlayersBtn" class="danger" disabled onclick="openRemovePlayersConfirm()">Remove</button>
+            <button class="secondary" onclick="loadPlayerPool()">Refresh</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input id="playerPoolSearch" type="text" placeholder="Search players…" oninput="filterPlayerPool()" style="flex:1;min-width:160px;" />
+        </div>
+        <table id="playerPoolTable">
+          <thead><tr><th></th><th>Name</th><th>OpenDota ID</th><th>Active Cards</th><th>Status</th></tr></thead>
+          <tbody id="playerPoolBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+        </table>
+        <div class="status" id="playerPoolStatus"></div>
       </div>
 
       <div class="panel">

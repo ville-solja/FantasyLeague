@@ -263,3 +263,82 @@ environment so that test runs do not depend on secrets.
 **Acceptance criteria**
 - `pytest` passes with `users.json` set to `[]` and no `SEED_ADMIN_*` env vars set
 - No test hard-codes the admin username or password from the old `users.json`
+
+## Player Pool Management
+
+### Manage the Player Pool
+**User story**
+As an admin, I want to view and manage the known player pool so that I can control which
+players are available for card draws.
+
+**Acceptance criteria**
+- Admin tab shows a "Player Pool" section listing all players with name, OpenDota ID, and
+  the number of active cards held by users
+- Rows are selectable via checkboxes
+- A "Remove Selected" button is inactive until at least one row is checked
+
+---
+
+### Add a Player by OpenDota ID
+**User story**
+As an admin, I want to add a player to the pool by entering their OpenDota account ID, so
+that new players can be included in card draws without a full data ingest.
+
+**Acceptance criteria**
+- An "Add Player" button opens a popup with an ID input, a Close button, and a Confirm button
+- On Confirm, the backend validates the ID against OpenDota and fetches the player's name
+  and avatar URL
+- If the ID does not resolve on OpenDota, a clear error is shown and the player is not added
+- If the player already exists in the pool (active or inactive), the endpoint returns a
+  clear error and does not create a duplicate
+- On success, the player is marked active and appears in the table immediately
+- The action is logged to the audit log as `admin_player_added`
+
+---
+
+### Bulk Add Players via CSV
+**User story**
+As an admin, I want to paste a comma-separated list of OpenDota account IDs to add multiple
+players at once, so that I can populate the pool at season start without repeated single-add
+operations.
+
+**Acceptance criteria**
+- A "Bulk Add" button opens a popup with a single-line CSV text input and a Confirm button
+- On Confirm, the backend processes each ID: valid new IDs are added; invalid or already-present
+  IDs are skipped
+- The response reports how many were added and lists skipped IDs with reasons
+- The bulk add action is logged to the audit log as `admin_player_bulk_added`
+
+---
+
+### Remove Players with Token Refund
+**User story**
+As an admin, I want to remove selected players from the pool (with a confirmation step) so
+that players who leave the league are excluded from future draws and card holders are
+automatically compensated.
+
+**Acceptance criteria**
+- Clicking "Remove Selected" opens a confirmation popup listing the selected player names
+- On Confirm, the backend sets `is_active = false` on each selected `Player` row (soft delete)
+- All `Card` rows belonging to any user that reference a removed player are set to
+  `is_active = false`
+- Each user who loses one or more cards receives 1 token per deactivated card as a refund,
+  applied immediately
+- Historical `player_match_stats` rows are left unchanged
+- Each removal is logged as `admin_player_removed`; each refund batch as
+  `admin_player_refund_issued`
+- Removing a player who has no active card holders completes silently
+
+---
+
+### Receive a Refund Token
+**User story**
+As a player, I want to automatically receive a token when an admin removes a player whose
+card I hold, so that I can draw a replacement without losing my token investment.
+
+**Acceptance criteria**
+- Token balance increases by 1 for each card held that belongs to a removed player
+- The refund is applied at the moment the admin confirms the removal
+- Deactivated cards are no longer shown as drawable or activatable, but may still appear
+  in historical views
+- No notification popup is triggered; the token balance update alone is sufficient
