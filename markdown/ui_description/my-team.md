@@ -4,11 +4,11 @@ Visible only to logged-in users.
 
 ## Layout
 
-On desktop (≥ 768 px) the tab uses a two-column grid: **My Roster** occupies the main column (`1fr`) on the left and **Deck** occupies a fixed 300 px sidebar on the right. On narrow viewports (< 768 px) the columns collapse to a single stack — Roster first, Deck sidebar below.
+On desktop (≥ 768 px) the tab uses a two-column grid: **My Roster** occupies the main column (`1fr`) on the left and **Draw** occupies a fixed 300 px sidebar on the right. On narrow viewports (< 768 px) the columns collapse to a single stack — Roster first, Draw sidebar below.
 
-## Deck panel
+## Draw panel
 
-Shows the current pool of unowned cards available to draw, broken down by rarity (Common, Rare, Epic, Legendary) with a count for each. Below the rarity grid:
+Shows the rarity drop percentages for the current draw pool, broken down by rarity (Common, Rare, Epic, Legendary) with a normalised percentage for each (e.g. 60%, 25%, 10%, 5%). Percentages come from the live `draw_rate_*` scoring weights and always sum to 100%. Below the rarity grid:
 
 - **Draw a card** button — spends 1 token and draws a random card from the shared deck. On success the client **prefetches** the card PNG while opening the modal. Reveal: a **full-viewport light burst + sparkles** (~2.1–2.35s, rarity-colored) and a **slower slot entrance** (~1.45s) with matching rim glow. The card-back stays up until **`img.decode()`** and a **short minimum (~850ms)** from open (whichever is later); the burst layer is cleared **after** the art is visible (~320ms later). Slow PNGs still wait on the network; fast ones are not held for the full burst duration. Server PNG encoding favors **lower latency** over smallest file. **`prefers-reduced-motion`**: no burst/sparkles, static card-back, soft slot fade, ~320ms floor. **Rolled stat modifiers** are painted on the card image (lower band). Reroll: decode handoff + brief brightness flash on the image only.
 - **Draw reveal copy** — player and team names are **only on the card PNG** (not duplicated under the image), so layout tweaks in the generator (`_PLAYER_NAME_Y`, `_TEAM_NAME_Y`) match what you see. Opening a card from the roster without draw animation still shows name and team under the art.

@@ -313,3 +313,27 @@ weights panel so that I can adjust the economy without a code change.
 - The weight is editable in the admin Scoring Weights panel alongside other economy weights
 - The booster draw endpoint reads this weight at request time (not cached)
 - Setting the weight to `1` makes booster draws cost the same as standard draws
+
+---
+
+## Draw Panel Redesign
+
+### View Drop Percentages in the Draw Panel
+**User story**
+As a player, I want to see the drop chance for each rarity in the Draw panel so that I know what I am likely to get when I spend a token.
+
+**Acceptance criteria**
+- The panel heading reads "Draw" instead of "Deck"
+- Each rarity card template displays its drop percentage (e.g. "60%") instead of a card count
+- Percentages are normalised from the live `draw_rate_*` weights so they always sum to 100%
+- Percentages update if an admin changes the draw rate weights (on next page load)
+- The "X draws available" status line and the draw/booster buttons are unchanged
+
+### Expose Draw Rates via the Config Endpoint
+**User story**
+As a frontend client, I want the `/config` endpoint to include the current draw rate percentages so that I do not have to parse the full weights list client-side.
+
+**Acceptance criteria**
+- `GET /config` returns a `draw_rates` object with keys `common`, `rare`, `epic`, `legendary`
+- Each value is a float representing the normalised percentage (rounds to 1 decimal place)
+- If all four `draw_rate_*` weights are missing from the database the endpoint falls back to the seeded defaults (60/25/10/5)
