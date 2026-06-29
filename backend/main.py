@@ -222,12 +222,29 @@ app.include_router(admin_router.router)
 def get_config(db=Depends(get_db)):
     booster_row = db.query(Weight).filter_by(key="team_booster_cost").first()
     booster_cost = int(booster_row.value) if booster_row else 3
+
+    rate_keys = ["draw_rate_common", "draw_rate_rare", "draw_rate_epic", "draw_rate_legendary"]
+    defaults  = {"draw_rate_common": 60.0, "draw_rate_rare": 25.0,
+                 "draw_rate_epic": 10.0, "draw_rate_legendary": 5.0}
+    raw = {}
+    for key in rate_keys:
+        row = db.query(Weight).filter_by(key=key).first()
+        raw[key] = float(row.value) if row else defaults[key]
+    total = sum(raw.values()) or 1.0
+    draw_rates = {
+        "common":    round(raw["draw_rate_common"]    / total * 100, 1),
+        "rare":      round(raw["draw_rate_rare"]      / total * 100, 1),
+        "epic":      round(raw["draw_rate_epic"]      / total * 100, 1),
+        "legendary": round(raw["draw_rate_legendary"] / total * 100, 1),
+    }
+
     return {
         "token_name": TOKEN_NAME,
         "initial_tokens": INITIAL_TOKENS,
         "app_version": _APP_VERSION,
         "app_release": _APP_RELEASE,
         "team_booster_cost": booster_cost,
+        "draw_rates": draw_rates,
     }
 
 

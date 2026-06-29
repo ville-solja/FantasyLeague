@@ -58,4 +58,5 @@ Implementation details, integrations, and operator tooling.
 | [Gmail SMTP Integration](reference/gmail-smtp-integration.md) | Operator guide for using Gmail or Google Workspace as the SMTP relay; adds SSL mode (port 465) alongside existing STARTTLS |
 | [Security Headers](reference/security-headers.md) | Starlette middleware that adds X-Content-Type-Options, Referrer-Policy, CSP frame-ancestors, and conditional HSTS to every response |
 | [Admin Player Pool](reference/admin-player-pool.md) | Admin CRUD for the known player pool; soft-delete with automatic token refunds to card holders |
+| [Draw Panel Redesign](reference/draw-panel-redesign.md) | Renames "Deck" to "Draw" and replaces card counts with normalised drop percentages from live weights |
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |

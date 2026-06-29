@@ -349,15 +349,19 @@ async function confirmReroll() {
 
 async function loadDeck() {
   try {
-    const res = await fetch(`${API}/deck`);
-    const counts = await res.json();
-    const rarities = ["common", "rare", "epic", "legendary"];
-    let total = 0;
-    for (const r of rarities) {
-      const n = counts[r] ?? 0;
-      document.getElementById(`deck-${r}`).textContent = n;
-      total += n;
+    const [deckRes, cfgRes] = await Promise.all([
+      fetch(`${API}/deck`),
+      fetch(`${API}/config`),
+    ]);
+    const deck = await deckRes.json();
+    const cfg  = await cfgRes.json();
+
+    const rates = cfg.draw_rates || { common: 60, rare: 25, epic: 10, legendary: 5 };
+    for (const r of DRAW_RARITY_KEYS) {
+      document.getElementById(`deck-${r}`).textContent = `${rates[r]}%`;
     }
+
+    const total = Object.values(deck).reduce((s, n) => s + n, 0);
     setStatus("deckStatus", total > 0 ? `${total} draws available` : "No draws available");
   } catch (e) {
     setStatus("deckStatus", e.message, false);
