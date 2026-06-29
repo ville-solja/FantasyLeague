@@ -12,7 +12,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Card, Match, Player, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from models import Card, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from toornament import sync_toornament_results
@@ -745,6 +745,88 @@ def remove_players(body: RemovePlayersBody, db=Depends(get_db),
                actor_username=admin["username"], detail=f"player_id={pid}")
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# League Management
+# ---------------------------------------------------------------------------
+
+@router.get("/admin/leagues")
+def list_leagues(db=Depends(get_db), admin=Depends(require_admin)):
+    leagues = db.query(League).all()
+    result = []
+    for l in leagues:
+        match_count = db.query(Match).filter(Match.league_id == l.id).count()
+        result.append({
+            "id": l.id,
+            "name": l.name or "(unknown)",
+            "is_monitored": l.is_monitored,
+            "match_count": match_count,
+        })
+    return result
+
+
+@router.post("/admin/leagues/{league_id}/monitor")
+def add_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    league = db.get(League, league_id)
+    if league and league.is_monitored:
+        raise HTTPException(status_code=409, detail="League is already monitored")
+    if not league:
+        league = League(id=league_id, name="(pending ingest)", is_monitored=True)
+        db.add(league)
+    else:
+        league.is_monitored = True
+    db.commit()
+    _audit(db, "admin_league_add_monitor", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"league_id={league_id}")
+    return {"status": "ok", "league_id": league_id}
+
+
+@router.delete("/admin/leagues/{league_id}/monitor")
+def remove_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    league = db.get(League, league_id)
+    if not league or not league.is_monitored:
+        raise HTTPException(status_code=404, detail="League is not currently monitored")
+    league.is_monitored = False
+    db.commit()
+    _audit(db, "admin_league_remove_monitor", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"league_id={league_id}")
+    return {"status": "ok", "league_id": league_id}
+
+
+@router.delete("/admin/leagues/{league_id}/data")
+def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    match_ids = [r[0] for r in db.execute(
+        text("SELECT match_id FROM matches WHERE league_id = :lid"), {"lid": league_id}
+    ).fetchall()]
+    deleted_stats = 0
+    deleted_bans = 0
+    if match_ids:
+        placeholders = ",".join(str(m) for m in match_ids)
+        deleted_stats = db.execute(
+            text(f"DELETE FROM player_match_stats WHERE match_id IN ({placeholders})")
+        ).rowcount
+        deleted_bans = db.execute(
+            text(f"DELETE FROM match_bans WHERE match_id IN ({placeholders})")
+        ).rowcount
+    deleted_matches = db.execute(
+        text("DELETE FROM matches WHERE league_id = :lid"), {"lid": league_id}
+    ).rowcount
+    league = db.get(League, league_id)
+    if league:
+        league.is_monitored = False
+    db.commit()
+    _audit(db, "admin_league_purge", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"league_id={league_id} matches={deleted_matches} stats={deleted_stats}")
+    return {
+        "status": "ok",
+        "league_id": league_id,
+        "deleted_matches": deleted_matches,
+        "deleted_stats": deleted_stats,
+        "deleted_bans": deleted_bans,
+        "note": "Run /recalculate to refresh fantasy scores after purge",
+    }
 
 
 @router.get("/audit-logs")

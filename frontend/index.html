@@ -191,6 +191,39 @@
   </div>
 </div>
 
+<!-- Add League Modal -->
+<div id="addLeagueModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddLeagueModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">ADD LEAGUE TO MONITORING</h2>
+      <button class="ghost" onclick="closeAddLeagueModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <label>OpenDota League ID<br>
+      <input type="number" id="addLeagueIdInput" placeholder="e.g. 19368" style="width:100%;margin-top:6px;margin-bottom:12px;">
+    </label>
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="submitAddLeague()">Add</button>
+      <button class="secondary" onclick="closeAddLeagueModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Purge League Confirmation Modal -->
+<div id="purgeLeagueModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePurgeLeagueModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">PURGE LEAGUE DATA</h2>
+      <button class="ghost" onclick="closePurgeLeagueModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p id="purgeLeagueDescription" style="margin-bottom:10px;"></p>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:14px;">This deletes all matches and stats for this league and stops monitoring. Fantasy scores must be recalculated manually afterwards.</p>
+    <div style="display:flex;gap:8px;">
+      <button class="danger" style="flex:1;" onclick="confirmPurgeLeague()">Purge</button>
+      <button class="secondary" onclick="closePurgeLeagueModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Team Booster Modal -->
 <div class="modal-overlay hidden" id="boosterModal" onclick="closeBoosterModal()">
   <div class="modal modal-wide" onclick="event.stopPropagation()">
@@ -623,6 +656,20 @@
         <div class="status" id="playerPoolStatus"></div>
       </div>
 
+      <div class="panel" id="leagueManagementPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2 style="margin:0;">League Management</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="openAddLeagueModal()">Add</button>
+            <button class="secondary" onclick="loadLeagues()">Refresh</button>
+          </div>
+        </div>
+        <table id="leagueTable">
+          <thead><tr><th>ID</th><th>Name</th><th>Matches</th><th>Monitored</th><th>Actions</th></tr></thead>
+          <tbody id="leagueTableBody"></tbody>
+        </table>
+      </div>
+
       <div class="panel">
         <h2>Token Balances</h2>
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
@@ -738,12 +785,6 @@
         <div class="status" id="enrichStatus"></div>
       </div>
 
-      <div class="panel">
-        <h2>Ingest League</h2>
-        <input id="leagueId" type="number" placeholder="League ID e.g. 19369" style="width:100%;margin-bottom:8px;" />
-        <button id="ingestBtn" onclick="ingestLeague()" style="width:100%;">Ingest</button>
-        <div class="status" id="ingestStatus"></div>
-      </div>
 
       <div class="panel">
         <h2>Scoring Weights</h2>

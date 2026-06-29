@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
-from models import Week, Weight
+from models import League, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
@@ -68,6 +68,21 @@ def _profile_enrichment_loop():
         time.sleep(_ENRICHMENT_INTERVAL)
 
 
+def _seed_monitored_leagues(league_ids: list[int]):
+    db = SessionLocal()
+    try:
+        for lid in league_ids:
+            league = db.get(League, lid)
+            if not league:
+                league = League(id=lid, name="(pending ingest)", is_monitored=True)
+                db.add(league)
+            else:
+                league.is_monitored = True
+        db.commit()
+    finally:
+        db.close()
+
+
 def _auto_ingest(league_ids: list[int]):
     for league_id in league_ids:
         try:
@@ -91,11 +106,17 @@ def _run_toornament_sync():
         logger.exception("Toornament sync error")
 
 
-def _ingest_poll_loop(league_ids: list[int]):
+def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
     while True:
         try:
-            _auto_ingest(league_ids)
+            db = SessionLocal()
+            try:
+                monitored = db.query(League).filter(League.is_monitored == True).all()
+                ids = [l.id for l in monitored]
+            finally:
+                db.close()
+            _auto_ingest(ids)
             _run_toornament_sync()
             db = SessionLocal()
             try:
@@ -128,8 +149,9 @@ async def lifespan(app: FastAPI):
     _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
-        threading.Thread(target=_ingest_poll_loop, args=(_league_ids,), daemon=True).start()
-        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+        _seed_monitored_leagues(_league_ids)
+    threading.Thread(target=_ingest_poll_loop, daemon=True).start()
+    logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
     threading.Thread(target=_week_maintenance_loop, daemon=True).start()
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()

@@ -18,9 +18,11 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client():
-    """Return a TestClient for the FastAPI app with a test database."""
-    os.environ.setdefault("DEBUG", "true")
+def client(monkeypatch):
+    """Return a TestClient for the FastAPI app. AUTO_INGEST_LEAGUES is blanked so
+    the startup seeding step does not attempt a write to the (read-only) local DB."""
+    monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
+    monkeypatch.setenv("DEBUG", "true")
     import importlib
     import main as main_module
     importlib.reload(main_module)
@@ -57,6 +59,7 @@ def test_content_security_policy_frame_ancestors_present(client):
 def test_hsts_present_when_https_only_true(monkeypatch):
     """When HTTPS_ONLY=true, every response includes
     Strict-Transport-Security: max-age=31536000; includeSubDomains."""
+    monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("HTTPS_ONLY", "true")
     import importlib

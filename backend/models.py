@@ -110,8 +110,9 @@ class User(Base):
 class League(Base):
     __tablename__ = "leagues"
 
-    id = Column(Integer, primary_key=True)  # OpenDota league_id
-    name = Column(String)
+    id           = Column(Integer, primary_key=True)  # OpenDota league_id
+    name         = Column(String)
+    is_monitored = Column(Boolean, default=False, nullable=False)
 
 
 class Weight(Base):

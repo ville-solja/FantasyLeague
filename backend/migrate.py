@@ -309,6 +309,14 @@ def _m016_players_is_active(conn):
         logger.info("Migration: players — added is_active column")
 
 
+def _m017_leagues_is_monitored(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(leagues)"))}
+    if "is_monitored" not in cols:
+        conn.execute(text("ALTER TABLE leagues ADD COLUMN is_monitored INTEGER NOT NULL DEFAULT 0"))
+        conn.commit()
+        logger.info("Migration: leagues — added is_monitored column")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -330,6 +338,7 @@ MIGRATIONS = [
     ("014_cards_league_id_nullable", _m014_cards_league_id_nullable),
     ("015_missing_indexes",          _m015_missing_indexes),
     ("016_players_is_active",        _m016_players_is_active),
+    ("017_leagues_is_monitored",     _m017_leagues_is_monitored),
 ]
 
 
