@@ -51,9 +51,17 @@ def test_content_security_policy_frame_ancestors_present(client):
     frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv."""
     response = client.get("/health")
     csp = response.headers.get("content-security-policy", "")
-    assert "frame-ancestors" in csp
-    assert "https://www.twitch.tv" in csp
-    assert "https://*.ext-twitch.tv" in csp
+    # Parse CSP into directives; frame-ancestors is space-delimited, so split
+    # into exact tokens to avoid substring false-matches.
+    directives = {
+        parts[0]: parts[1:]
+        for d in csp.split(";")
+        if (parts := d.strip().split())
+    }
+    fa_sources = directives.get("frame-ancestors", [])
+    assert fa_sources, "frame-ancestors directive missing from CSP"
+    assert "https://www.twitch.tv" in fa_sources
+    assert "https://*.ext-twitch.tv" in fa_sources
 
 
 def test_hsts_present_when_https_only_true(monkeypatch):
