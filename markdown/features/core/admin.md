@@ -1,6 +1,6 @@
 # Admin Features
 
-Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account must be created via direct database manipulation (e.g. `UPDATE users SET is_admin = 1 WHERE username = 'yourusername';`). Subsequent promotions follow the same pattern — there is no in-app admin creation flow.
+Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account is bootstrapped at startup via the `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` environment variables (see `reference/env-based-admin-seeding.md`). Additional admins require a direct DB update: `UPDATE users SET is_admin = 1 WHERE username = 'yourusername';` — there is no in-app admin promotion flow.
 
 All admin endpoints require an active admin session. Unauthorized requests receive a 403 response.
 
@@ -161,8 +161,32 @@ Returns the most recent audit log entries, newest first. All significant admin a
 Returns public configuration values used by the frontend. No authentication required.
 
 ```json
-{ "token_name": "Kana Tokens", "initial_tokens": 5 }
+{
+  "token_name": "Kana Tokens",
+  "initial_tokens": 5,
+  "app_version": "...",
+  "app_release": "...",
+  "team_booster_cost": 3,
+  "draw_rates": { "common": 60.0, "rare": 25.0, "epic": 10.0, "legendary": 5.0 }
+}
 ```
+
+`draw_rates` values are normalised from the live `draw_rate_*` scoring weights (always sum to 100%). See `reference/draw-panel-redesign.md`.
 
 ### `GET /health`
 Returns `{"status": "ok"}`. No authentication required. Used by container health checks.
+
+---
+
+## Additional Admin Features
+
+These features have dedicated reference documents:
+
+| Feature | Endpoints | Reference |
+|---|---|---|
+| Player Pool Management | `GET/POST/DELETE /admin/players/*` | `reference/admin-player-pool.md` |
+| User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
+| League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
+| Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
+| Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
+| Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` | `reference/admin-week-management.md` |

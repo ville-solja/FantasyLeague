@@ -26,16 +26,7 @@ After ingest, any player who is still missing a display name or avatar is enrich
 
 Note: this stage handles only name/avatar fields. Hero stats, ban correlations, and AI bios are populated by the separate **Profile Enrichment** background loop — see `reference/player-profile-enrichment.md`.
 
-### 3. Card Seeding
-
-For every player that now has match data in the league, cards are generated into the unowned pool if they don't already exist:
-- 1 Legendary, 2 Epic, 4 Rare, 8 Common cards per player
-- Cards start with `owner_id = NULL` (available to draw)
-- Seeding is idempotent — players who already have cards are skipped
-
-See `cards.md` for card distribution details.
-
-### 4. Dotabuff Team Logo Scrape
+### 3. Dotabuff Team Logo Scrape
 
 Team logos are downloaded from Dotabuff league overview pages and stored as PNG files under `assets/dotabuff_league_logos/`. Only missing logos are downloaded — existing files are not re-fetched unless manually deleted.
 
@@ -49,7 +40,7 @@ The ingest pipeline runs in a background daemon thread on a configurable interva
 - **Configured via:** `INGEST_POLL_INTERVAL` environment variable
 - **Leagues polled:** set by `AUTO_INGEST_LEAGUES` (comma-separated OpenDota league IDs, default: `19368,19369`)
 
-Each cycle runs all four stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
+Each cycle runs all three stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
 
 ## Manual Ingest
 
@@ -82,4 +73,3 @@ Without an API key, requests are rate-limited to ~60 requests/minute. With `OPEN
 | `teams` | OpenDota team ID, team name |
 | `player_match_stats` | Per-player per-match stats, calculated fantasy points, and `hero_id` (the hero picked by the player in that match) |
 | `match_bans` | Hero bans extracted from `picks_bans` in the match response — used by profile enrichment ban correlation analysis |
-| `cards` | Generated cards per player per league (initially all unowned) |
