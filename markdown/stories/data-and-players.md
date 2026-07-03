@@ -73,3 +73,38 @@ As an admin, I want to trigger a full profile enrichment pass from the admin tab
 - Admin tab "Re-enrich profiles" button calls `POST /admin/enrich-profiles`
 - Response: `{"enriched": N, "skipped": M, "errors": K}`
 - Logged to audit log
+
+---
+
+## Monitored Leagues Admin Panel
+
+### View Monitored Leagues
+**User story**
+As an admin, I want to see a list of leagues currently being auto-ingested so that I can verify the correct leagues are configured without reading environment variables.
+
+**Acceptance criteria**
+- The admin tab contains a "League Management" panel listing all leagues known to the database
+- Each row shows: league ID, league name, match count, and whether the league is currently monitored
+- The list refreshes when the Refresh button is clicked
+
+### Add or Remove a League from Monitoring
+**User story**
+As an admin, I want to add or remove a league from the monitored set at runtime so that I can fix a configuration mistake without restarting the service.
+
+**Acceptance criteria**
+- An "Add" flow lets the admin enter an OpenDota league ID and marks it as monitored; the next poll cycle will ingest it
+- A "Remove" button on each monitored league unsets the monitored flag; future poll cycles will not ingest it
+- Adding a league that is already monitored returns a clear error
+- Removing a league does not delete its existing match data — it only stops future polling
+
+### Purge Wrongly Ingested League Data
+**User story**
+As an admin, I want to purge all match data ingested for a specific league so that I can roll back an accidental ingest of the wrong league.
+
+**Acceptance criteria**
+- A "Purge data" action is available for any league that has match data in the database
+- The purge deletes all `player_match_stats`, `match_bans`, and `matches` rows for that league and sets `is_monitored = False`
+- The purge does NOT delete player records (they may appear in other leagues)
+- The purge returns counts of deleted rows so the admin can confirm scope
+- After purge, the admin is reminded to use the existing Recalculate endpoint to refresh fantasy scores
+- A confirmation modal is shown before the purge executes

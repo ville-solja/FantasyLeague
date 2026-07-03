@@ -88,3 +88,29 @@ As a logged-in user, I want to click my username in the header to open my Profil
 - The button is visually distinct from surrounding text but cohesive with the header style
 - When logged out the username button is hidden (no empty button visible)
 - After a successful username change, the header button text updates immediately without a page reload
+
+---
+
+## Gmail SMTP Integration
+
+### Configure Gmail as the SMTP Sender
+**User story**
+As an operator, I want to configure Gmail (or Google Workspace) as the SMTP server for
+password reset emails, so that I can leverage a trusted, high-deliverability email service
+without running my own mail server.
+
+**Acceptance criteria**
+- Setting `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASSWORD` (App Password), and `SMTP_TLS=true` results in password reset emails being sent successfully via Gmail STARTTLS
+- The `.env.example` file contains a commented Gmail example block that operators can copy-paste and fill in
+- The operator guide in `markdown/features/reference/gmail-smtp-integration.md` describes the App Password setup steps
+
+### Support Gmail SSL Connection (Port 465)
+**User story**
+As an operator, I want the app to support Gmail's direct SSL connection mode on port 465,
+so that I have the full range of Gmail SMTP options and am not limited to STARTTLS.
+
+**Acceptance criteria**
+- Setting `SMTP_SSL=true` causes the email client to use `smtplib.SMTP_SSL` instead of STARTTLS
+- `SMTP_SSL=true` with `smtp.gmail.com:465` and a valid App Password sends email successfully
+- `SMTP_SSL` and `SMTP_TLS` are mutually exclusive: when `SMTP_SSL=true`, the `SMTP_TLS` value is ignored
+- The `SMTP_SSL` env var is documented in `.env.example` and `markdown/features/reference/commands.md`

@@ -34,3 +34,37 @@ migration goes wrong.
 - `scripts/backup-db.sh` creates a timestamped copy of `data/fantasy.db`
 - The script is referenced in `README.md` under the deployment section
 - The backup takes less than 1 second on a typical database size
+
+---
+
+## Security Headers
+
+### Security Response Headers
+**User story**
+As an operator, I want the server to return standard security response headers so that
+vulnerability scanners report no missing-header findings and browsers apply protective
+policies.
+
+**Acceptance criteria**
+- Every response includes `X-Content-Type-Options: nosniff`
+- Every response includes `Referrer-Policy: strict-origin-when-cross-origin`
+- Every response includes a `Content-Security-Policy` header containing at least
+  `frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv`
+- When `HTTPS_ONLY=true`, every response includes
+  `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- When `HTTPS_ONLY=false` (default), `Strict-Transport-Security` is not sent
+- The headers are added by a middleware layer and do not require changes to individual
+  endpoint handlers
+
+### CORS Wildcard Documentation
+**User story**
+As a security reviewer, I want the intentional `access-control-allow-origin: *`
+configuration to be explained in the codebase and documentation so that it is not
+misread as an oversight.
+
+**Acceptance criteria**
+- The existing inline comment in `main.py` explaining the wildcard is preserved and
+  accurate
+- `markdown/features/reference/security-headers.md` documents the CORS decision: why
+  wildcard is used, why it is safe (`allow_credentials=False` + Twitch JWT auth), and what
+  would need to change if the Twitch extension were removed

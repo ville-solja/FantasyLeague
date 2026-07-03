@@ -12,10 +12,11 @@ When `POST /draw` is called:
 
 1. **Rarity roll** — a weighted random choice across `draw_rate_common`, `draw_rate_rare`,
    `draw_rate_epic`, and `draw_rate_legendary` weight keys determines the card's rarity.
-2. **Player selection** — all players are candidates. Players for whom the user already owns
-   the rolled rarity are excluded. Among the remaining eligible players, those with fewer total
-   cards in the user's collection are given a higher selection weight (proportionality bias).
-   If all players already own the rarity, the exclusion is relaxed and any player is eligible.
+2. **Player selection** — all players are candidates. Players the user already owns any
+   card of (at any rarity) are excluded. Among the remaining eligible players, those with
+   fewer total cards in the user's collection are given a higher selection weight
+   (proportionality bias). If the user owns at least one card of every active player, the
+   exclusion is relaxed and any player is eligible.
 3. **Card creation** — a new `Card` row is inserted with `owner_id`, `player_id`, and
    `card_type` set. Modifiers are assigned using the existing draw-time logic.
 4. **Duplicate prevention** — the `(owner_id, player_id, card_type)` triple is unique per

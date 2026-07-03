@@ -292,6 +292,51 @@ def _m014_cards_league_id_nullable(conn):
     logger.info("Migration: cards — made league_id nullable for dynamic card creation")
 
 
+def _m015_missing_indexes(conn):
+    for stmt in [
+        "CREATE INDEX IF NOT EXISTS ix_matches_week_override_id ON matches(week_override_id)",
+        "CREATE INDEX IF NOT EXISTS ix_match_bans_match_id ON match_bans(match_id)",
+    ]:
+        conn.execute(text(stmt))
+    conn.commit()
+
+
+def _m016_players_is_active(conn):
+    cols = [r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()]
+    if "is_active" not in cols:
+        conn.execute(text("ALTER TABLE players ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
+        conn.commit()
+        logger.info("Migration: players — added is_active column")
+
+
+def _m017_leagues_is_monitored(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(leagues)"))}
+    if "is_monitored" not in cols:
+        conn.execute(text("ALTER TABLE leagues ADD COLUMN is_monitored INTEGER NOT NULL DEFAULT 0"))
+        conn.commit()
+        logger.info("Migration: leagues — added is_monitored column")
+
+
+def _m018_new_indexes(conn):
+    stmts = [
+        "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
+    ]
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )).fetchall()}
+    if "notifications" in tables:
+        stmts.append(
+            "CREATE INDEX IF NOT EXISTS ix_notifications_time ON notifications (start_time, end_time)"
+        )
+    if "token_grant_events" in tables:
+        stmts.append(
+            "CREATE INDEX IF NOT EXISTS ix_token_grant_events_time ON token_grant_events (start_time, end_time)"
+        )
+    for stmt in stmts:
+        conn.execute(text(stmt))
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -311,6 +356,10 @@ MIGRATIONS = [
     ("012_twitch_token_drops_columns", _m012_twitch_token_drops_columns),
     ("013_user_tag_system",          _m013_user_tag_system),
     ("014_cards_league_id_nullable", _m014_cards_league_id_nullable),
+    ("015_missing_indexes",          _m015_missing_indexes),
+    ("016_players_is_active",        _m016_players_is_active),
+    ("017_leagues_is_monitored",     _m017_leagues_is_monitored),
+    ("018_new_indexes",              _m018_new_indexes),
 ]
 
 

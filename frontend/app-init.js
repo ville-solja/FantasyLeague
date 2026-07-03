@@ -83,13 +83,14 @@ async function init() {
     claimTokenEvents();
     checkNotifications();
     loadDeck();
-    loadWeeks().then(() => {
-      loadRoster(_rosterWeekId);
-      _populateLbWeekSelect();
-      loadSeasonLeaderboard();
-    });
+    await loadWeeks();
+    loadRoster(_rosterWeekId);
+    _populateLbWeekSelect();
+    loadSeasonLeaderboard();
   } else {
-    loadWeeks().then(() => { _populateLbWeekSelect(); loadSeasonLeaderboard(); });
+    await loadWeeks();
+    _populateLbWeekSelect();
+    loadSeasonLeaderboard();
   }
   loadLeaderboard();
   loadTop();
