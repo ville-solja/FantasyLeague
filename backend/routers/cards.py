@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy import text
 
-from card_draw import _roll_rarity, _pick_player
+from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _compute_card_points,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
 )
 from database import get_db
 from deps import get_current_user, _audit
-from models import Card, Player, User, Week, Weight
+from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from weeks import get_next_editable_week
 
 router = APIRouter()
@@ -88,7 +88,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
-            WHERE c.owner_id = :user_id
+            WHERE c.owner_id = :user_id AND p.is_active = 1
             GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
@@ -238,6 +238,120 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "team_logo_url": team_row.logo_url if team_row else None,
         "is_active": is_active,
         "tokens": tokens_remaining,
+        "modifiers": _format_modifiers(mods),
+    }
+
+
+@router.get("/deck/booster")
+def get_booster_deck(request: Request, db=Depends(get_db)):
+    """Return per-team drawable card counts for the requesting user."""
+    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+
+    teams = db.query(Team).all()
+
+    # Pre-fetch all (team_id, player_id) pairs in a single query
+    pms_rows = (
+        db.query(PlayerMatchStats.team_id, PlayerMatchStats.player_id)
+          .distinct()
+          .all()
+    )
+    # Build a dict: team_id -> set of player_ids
+    team_players: dict[int, set[int]] = {}
+    for team_id, player_id in pms_rows:
+        team_players.setdefault(team_id, set()).add(player_id)
+
+    # Pre-fetch all player_ids that have players in any team with stats
+    all_player_ids = {pid for pids in team_players.values() for pid in pids}
+
+    # Pre-fetch owned player IDs for the authenticated user in a single query
+    owned_player_ids: set[int] = set()
+    if user_id and all_player_ids:
+        owned_player_ids = {
+            r[0] for r in
+            db.query(Card.player_id).filter(
+                Card.owner_id == user_id,
+                Card.player_id.in_(all_player_ids),
+            ).all()
+        }
+
+    result = []
+    for team in teams:
+        player_ids = team_players.get(team.id)
+        if not player_ids:
+            continue
+        if user_id:
+            remaining = len(player_ids - owned_player_ids)
+        else:
+            remaining = len(player_ids)
+        result.append({
+            "team_id": team.id,
+            "team_name": team.name,
+            "logo_url": team.logo_url,
+            "remaining": remaining,
+        })
+    result.sort(key=lambda t: (t["remaining"] == 0, t["team_name"] or ""))
+    return result
+
+
+@router.post("/draw/booster/{team_id}")
+def draw_booster(team_id: int, db=Depends(get_db),
+                 current_user: dict = Depends(get_current_user)):
+    """Draw a card guaranteed to be from the specified team's player roster."""
+    user_id = current_user["user_id"]
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    team = db.get(Team, team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    weights_map = {w.key: w.value for w in db.query(Weight).all()}
+    cost = int(weights_map.get("team_booster_cost", 3))
+
+    if (user.tokens or 0) < cost:
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+
+    rarity = _roll_rarity(db)
+    player = _pick_player_from_team(db, user_id, rarity, team_id)
+    if player is None:
+        raise HTTPException(status_code=409,
+                            detail="No players available for this team")
+
+    card = Card(card_type=rarity, player_id=player.id, owner_id=user_id,
+                league_id=None, is_active=False, generation=1)
+    db.add(card)
+    db.flush()
+
+    active_count = db.query(Card).filter(
+        Card.owner_id == user_id, Card.is_active == True
+    ).count()
+    card.is_active = active_count < ROSTER_LIMIT
+
+    _assign_modifiers(db, card, weights_map)
+
+    team_row = db.execute(text("""
+        SELECT t.name, t.logo_url FROM player_match_stats s
+        JOIN teams t ON t.id = s.team_id
+        WHERE s.player_id = :pid ORDER BY s.match_id DESC LIMIT 1
+    """), {"pid": player.id}).first()
+
+    user.tokens = (user.tokens or 0) - cost
+    _audit(db, "token_booster_draw", actor_id=user_id, actor_username=user.username,
+           detail=f"card_id={card.id} player={player.name} rarity={rarity} "
+                  f"team_id={team_id} cost={cost}")
+    db.commit()
+
+    mods = _card_modifiers_map(db, [card.id]).get(card.id, {})
+    return {
+        "id": card.id,
+        "card_type": card.card_type,
+        "player_id": player.id,
+        "player_name": player.name,
+        "avatar_url": player.avatar_url,
+        "team_name": team_row.name if team_row else team.name,
+        "team_logo_url": team_row.logo_url if team_row else team.logo_url,
+        "is_active": card.is_active,
+        "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
     }
 

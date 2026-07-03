@@ -149,6 +149,8 @@ DEFAULT_WEIGHTS = [
     {"key": "draw_rate_rare",       "label": "Draw rate: Rare (%)",       "value": 25.0},
     {"key": "draw_rate_epic",       "label": "Draw rate: Epic (%)",       "value": 10.0},
     {"key": "draw_rate_legendary",  "label": "Draw rate: Legendary (%)",  "value": 5.0},
+    # --- Team booster draw cost ---
+    {"key": "team_booster_cost", "label": "Team booster draw cost (Tokens)", "value": 3.0},
 ]
 
 

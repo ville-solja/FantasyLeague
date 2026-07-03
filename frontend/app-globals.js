@@ -4,8 +4,9 @@ let activeUserId   = null;
 let activeUsername = localStorage.getItem("username");
 let activeIsAdmin  = false;
 let activeMustChangePassword = false;
-let _tokenName     = "Tokens";
-let _tokenBalance  = null;
+let _tokenName        = "Tokens";
+let _tokenBalance     = null;
+let _teamBoosterCost  = 3;
 let _weeks         = [];
 /** Increments on modifier reroll so every PNG URL is unique (Date.now() can collide in the same ms). */
 let _cardImageBustSeq = 0;
@@ -25,6 +26,7 @@ async function loadConfig() {
     if (res.ok) {
       const cfg = await res.json();
       _tokenName = cfg.token_name || "Tokens";
+      if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
       const parts = [];
       if (cfg.app_release) parts.push(cfg.app_release);
       if (cfg.app_version) parts.push(cfg.app_version);
@@ -43,6 +45,7 @@ async function loadConfig() {
 
 function updateTokenDisplay(balance) {
   _tokenBalance = balance;
+  if (typeof _updateBoosterBtn === "function") _updateBoosterBtn();
   const el = document.getElementById("tokenBalance");
   const counter = document.getElementById("drawCounter");
   if (counter && balance !== null && activeUserId) {
@@ -84,7 +87,7 @@ function switchTab(name) {
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadAuditLog(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); }
 }
 
 function setStatus(id, msg, ok = true) {

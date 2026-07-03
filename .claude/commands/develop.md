@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Development Orchestrator** for this project.
@@ -10,14 +10,22 @@ clearly. You do not open PRs or push code.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-47-weekly-summary-email`
 
+You also accept the full plan filename: `/develop plan-issue-47-weekly-summary-email.md`
+Both forms resolve to the same file.
+
 ## Precondition check
 
 1. If no plan slug was provided, stop and print:
    > No plan specified. Usage: `/develop <plan-slug>`
 
-2. Resolve the plan file path as `markdown/plans/plan-$ARGUMENTS.md`. If the file does not
+2. Normalise the argument into a bare slug:
+   - Strip a leading `plan-` prefix if present
+   - Strip a trailing `.md` suffix if present
+   - The result is the slug (e.g. `issue-47-weekly-summary-email`)
+
+3. Resolve the plan file path as `markdown/plans/plan-{slug}.md`. If the file does not
    exist, stop and print:
-   > Plan file not found: `markdown/plans/plan-$ARGUMENTS.md`
+   > Plan file not found: `markdown/plans/plan-{slug}.md`
    > Available plans:
    *(list files in `markdown/plans/`)*
 
@@ -27,10 +35,11 @@ clearly. You do not open PRs or push code.
 
 Spawn a subagent with the test-planner role and the following instructions:
 
-> Read `markdown/plans/plan-$ARGUMENTS.md` in full. Write failing pytest stubs to
-> `backend/tests/test_$ARGUMENTS.py` — one stub per acceptance criterion (happy path +
+> Read `markdown/plans/plan-{slug}.md` in full. Write failing pytest stubs to
+> `backend/tests/test_{slug_underscored}.py` — one stub per acceptance criterion (happy path +
 > one failure path per story). Each stub body must be `pytest.fail("not yet implemented")`.
 > Follow the test-planner skill conventions exactly.
+> (Convert hyphens to underscores in the test filename, e.g. slug `foo-bar` → `test_foo_bar.py`)
 
 Collect: number of stubs written, file path created.
 
@@ -40,7 +49,7 @@ Collect: number of stubs written, file path created.
 
 Spawn a subagent with the developer role and the following instructions:
 
-> Read `markdown/plans/plan-$ARGUMENTS.md` and `backend/tests/test_$ARGUMENTS.py` in full.
+> Read `markdown/plans/plan-{slug}.md` and the test file written in Stage 1 in full.
 > Implement the plan following the developer skill instructions. Make every stub in the test
 > file pass by replacing `pytest.fail(...)` bodies with real assertions. Do not skip or
 > delete stubs — fix them.
@@ -56,7 +65,7 @@ Collect: files changed list, verification results.
 Spawn two subagents simultaneously:
 
 **QA Engineer subagent:**
-> Run `cd backend && python -m pytest tests/ -v --tb=short 2>&1` and produce the qa-engineer
+> Run `cd backend && python3 -m pytest tests/ -v --tb=short 2>&1` and produce the qa-engineer
 > report format: pass/fail counts grouped by module, one-line failure reason per failure.
 
 **Documentation Steward subagent:**
@@ -70,9 +79,9 @@ Collect both reports.
 ## Output format
 
 ```
-Development complete: $ARGUMENTS
+Development complete: {slug}
 
-Stage 1 — Test stubs:      backend/tests/test_$ARGUMENTS.py  (N stubs)
+Stage 1 — Test stubs:      backend/tests/test_{slug_underscored}.py  (N stubs)
 Stage 2 — Implementation:  ✓ / ✗
   Files changed:
     <path> — <description>
@@ -94,7 +103,7 @@ If all stages passed, append:
 Ready for review.
 ```
 
-Then extract the issue number: if the plan slug matches `issue-{N}-*`, the plan was created
+Then extract the issue number: if the slug matches `issue-{N}-*`, the plan was created
 from GitHub issue #{N}. In that case append:
 
 ```

@@ -141,6 +141,106 @@
   </div>
 </div>
 
+<!-- Player Pool: Add Player Modal -->
+<div class="modal-overlay hidden" id="addPlayerModal" onclick="closeAddPlayerPopup()">
+  <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">ADD PLAYER</h2>
+      <button class="ghost" onclick="closeAddPlayerPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <input id="addPlayerIdInput" type="number" placeholder="OpenDota account ID" style="width:100%;margin-bottom:12px;" />
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="addPlayer()">Confirm</button>
+      <button class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
+    </div>
+    <div class="status" id="addPlayerStatus"></div>
+  </div>
+</div>
+
+<!-- Player Pool: Bulk Add Modal -->
+<div class="modal-overlay hidden" id="bulkAddPlayersModal" onclick="closeBulkAddPlayersPopup()">
+  <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;">BULK ADD PLAYERS</h2>
+      <button class="ghost" onclick="closeBulkAddPlayersPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.8rem;color:#888;margin-bottom:10px;">Paste a comma-separated list of OpenDota account IDs.</p>
+    <input id="bulkAddIdsInput" type="text" placeholder="12345,67890,..." style="width:100%;margin-bottom:12px;" />
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="bulkAddPlayers()">Confirm</button>
+      <button class="secondary" onclick="closeBulkAddPlayersPopup()">Cancel</button>
+    </div>
+    <div class="status" id="bulkAddPlayersStatus"></div>
+  </div>
+</div>
+
+<!-- Player Pool: Remove Confirm Modal -->
+<div class="modal-overlay hidden" id="removePlayersModal" onclick="closeRemovePlayersConfirm()">
+  <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;">REMOVE PLAYERS</h2>
+      <button class="ghost" onclick="closeRemovePlayersConfirm()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.85rem;margin-bottom:8px;">Remove these players? Their active cards will be deactivated and card holders will each receive 1 refund token per card.</p>
+    <p id="removePlayersNames" style="font-size:0.8rem;color:#e05;margin-bottom:14px;"></p>
+    <div style="display:flex;gap:8px;">
+      <button class="danger" style="flex:1;" onclick="removeSelectedPlayers()">Confirm Remove</button>
+      <button class="secondary" onclick="closeRemovePlayersConfirm()">Cancel</button>
+    </div>
+    <div class="status" id="removePlayersStatus"></div>
+  </div>
+</div>
+
+<!-- Add League Modal -->
+<div id="addLeagueModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeAddLeagueModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">ADD LEAGUE TO MONITORING</h2>
+      <button class="ghost" onclick="closeAddLeagueModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <label>OpenDota League ID<br>
+      <input type="number" id="addLeagueIdInput" placeholder="e.g. 19368" style="width:100%;margin-top:6px;margin-bottom:12px;">
+    </label>
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="submitAddLeague()">Add</button>
+      <button class="secondary" onclick="closeAddLeagueModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Purge League Confirmation Modal -->
+<div id="purgeLeagueModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closePurgeLeagueModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">PURGE LEAGUE DATA</h2>
+      <button class="ghost" onclick="closePurgeLeagueModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p id="purgeLeagueDescription" style="margin-bottom:10px;"></p>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:14px;">This deletes all matches and stats for this league and stops monitoring. Fantasy scores must be recalculated manually afterwards.</p>
+    <div style="display:flex;gap:8px;">
+      <button class="danger" style="flex:1;" onclick="confirmPurgeLeague()">Purge</button>
+      <button class="secondary" onclick="closePurgeLeagueModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Team Booster Modal -->
+<div class="modal-overlay hidden" id="boosterModal" onclick="closeBoosterModal()">
+  <div class="modal modal-wide" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">CHOOSE A TEAM</h2>
+      <button class="ghost" onclick="closeBoosterModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="boosterCostLabel" style="font-size:0.8rem;color:#888;margin-bottom:14px;"></div>
+    <div id="boosterTeamGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:400px;overflow-y:auto;margin-bottom:16px;"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button class="secondary" onclick="closeBoosterModal()">Cancel</button>
+      <button id="boosterDrawBtn" disabled onclick="drawBooster()">Draw Booster</button>
+    </div>
+    <div class="status" id="boosterStatus"></div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <header class="header">
   <div class="header-left">
@@ -267,7 +367,7 @@
     </div>
 
     <div class="panel">
-      <h2>Deck</h2>
+      <h2>Draw</h2>
       <div class="rarity-grid">
         <div class="rarity-card-box">
           <img src="/assets/Card_Template_Common.png" alt="Common" class="rarity-card-thumb" />
@@ -288,6 +388,7 @@
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <button id="drawBtn" onclick="drawCard()">Draw a card</button>
+        <button id="boosterBtn" class="secondary" onclick="openBoosterModal()">Draw Booster from Team</button>
         <span id="drawCounter" style="font-size:0.8rem;color:#555;"></span>
       </div>
       <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
@@ -536,6 +637,40 @@
       </div>
 
       <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2 style="margin:0;">Player Pool</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="openAddPlayerPopup()">Add</button>
+            <button class="secondary" onclick="openBulkAddPlayersPopup()">Bulk Add</button>
+            <button id="removePlayersBtn" class="danger" disabled onclick="openRemovePlayersConfirm()">Remove</button>
+            <button class="secondary" onclick="loadPlayerPool()">Refresh</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input id="playerPoolSearch" type="text" placeholder="Search players…" oninput="filterPlayerPool()" style="flex:1;min-width:160px;" />
+        </div>
+        <table id="playerPoolTable">
+          <thead><tr><th></th><th>Name</th><th>OpenDota ID</th><th>Active Cards</th><th>Status</th></tr></thead>
+          <tbody id="playerPoolBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+        </table>
+        <div class="status" id="playerPoolStatus"></div>
+      </div>
+
+      <div class="panel" id="leagueManagementPanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h2 style="margin:0;">League Management</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="openAddLeagueModal()">Add</button>
+            <button class="secondary" onclick="loadLeagues()">Refresh</button>
+          </div>
+        </div>
+        <table id="leagueTable">
+          <thead><tr><th>ID</th><th>Name</th><th>Matches</th><th>Monitored</th><th>Actions</th></tr></thead>
+          <tbody id="leagueTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
         <h2>Token Balances</h2>
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
           <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
@@ -650,12 +785,6 @@
         <div class="status" id="enrichStatus"></div>
       </div>
 
-      <div class="panel">
-        <h2>Ingest League</h2>
-        <input id="leagueId" type="number" placeholder="League ID e.g. 19369" style="width:100%;margin-bottom:8px;" />
-        <button id="ingestBtn" onclick="ingestLeague()" style="width:100%;">Ingest</button>
-        <div class="status" id="ingestStatus"></div>
-      </div>
 
       <div class="panel">
         <h2>Scoring Weights</h2>

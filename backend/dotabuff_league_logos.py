@@ -10,11 +10,14 @@ Set to empty string to disable fetching entirely.
 from __future__ import annotations
 
 import html
+import logging
 import os
 import re
 import unicodedata
 
 import requests
+
+_logger = logging.getLogger(__name__)
 
 # Default: league overview URLs (no trailing /teams)
 _DEFAULT_PAGES = (
@@ -109,7 +112,7 @@ def ensure_dotabuff_league_logos() -> None:
     try:
         import cloudscraper
     except ImportError:
-        print("[DOTABUFF] cloudscraper missing; skip league logos (pip install cloudscraper)")
+        _logger.warning("cloudscraper missing; skip league logos (pip install cloudscraper)")
         return
 
     logo_dir = league_logo_dir()
@@ -121,16 +124,16 @@ def ensure_dotabuff_league_logos() -> None:
     found: dict[str, str] = {}
     for url in pages:
         try:
-            print(f"[DOTABUFF] GET {url}")
+            _logger.info("GET %s", url)
             r = scraper.get(url, timeout=60)
             r.raise_for_status()
             for alt, src in IMG_RE.findall(r.text):
                 found[html.unescape(alt.strip())] = src
         except Exception as e:
-            print(f"[DOTABUFF] page failed {url!r}: {e}")
+            _logger.error("page failed %r: %s", url, e)
 
     if not found:
-        print("[DOTABUFF] no img-team icons parsed (HTML change?)")
+        _logger.warning("no img-team icons parsed (HTML change?)")
         return
 
     ua = {"User-Agent": "FantasyLeague/1.0 (+local ingest; league logos)"}
@@ -146,10 +149,10 @@ def ensure_dotabuff_league_logos() -> None:
             with open(path, "wb") as f:
                 f.write(ir.content)
             n_new += 1
-            print(f"[DOTABUFF] saved {fn}")
+            _logger.info("saved %s", fn)
         except Exception as e:
-            print(f"[DOTABUFF] skip {fn!r}: {e}")
+            _logger.warning("skip %r: %s", fn, e)
     if n_new:
-        print(f"[DOTABUFF] downloaded {n_new} new logo(s) -> {logo_dir}")
+        _logger.info("downloaded %d new logo(s) -> %s", n_new, logo_dir)
     else:
-        print(f"[DOTABUFF] all {len(found)} league icons already present under {logo_dir}")
+        _logger.info("all %d league icons already present under %s", len(found), logo_dir)

@@ -1,3 +1,4 @@
+import logging
 import os
 import re as _re
 import secrets
@@ -81,10 +82,14 @@ def logout(request: Request):
     return {"status": "ok"}
 
 
+_DUMMY_HASH = hash_password("dummy-timing-equalizer")
+
+
 @router.post("/forgot-password")
 def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not user.email:
+        verify_password("dummy-timing-equalizer", _DUMMY_HASH)  # equalize bcrypt timing
         return {"status": "ok"}
 
     user_email    = user.email
@@ -95,22 +100,30 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
     user.password_hash = hash_password(temp_password)
     user.must_change_password = True
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
-    db.commit()
 
     app_name = os.getenv("APP_NAME", "Kanaliiga Fantasy")
-    send_email(
-        to_address=user_email,
-        subject=f"[{app_name}] Your temporary password",
-        body=(
-            f"Hi {user_username},\n\n"
-            f"A temporary password has been issued for your account:\n\n"
-            f"    {temp_password}\n\n"
-            f"Log in and go to your Profile to set a new password.\n"
-            f"This temporary password will stop working once you change it.\n\n"
-            f"If you did not request this, your account is still safe — "
-            f"the password was not changed until you log in and update it.\n"
-        ),
-    )
+    try:
+        send_email(
+            to_address=user_email,
+            subject=f"[{app_name}] Your temporary password",
+            body=(
+                f"Hi {user_username},\n\n"
+                f"A temporary password has been issued for your account:\n\n"
+                f"    {temp_password}\n\n"
+                f"Log in and go to your Profile to set a new password.\n"
+                f"This temporary password will stop working once you change it.\n\n"
+                f"If you did not request this, your account is still safe — "
+                f"the password was not changed until you log in and update it.\n"
+            ),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "forgot_password: email send failed for user %s — aborting password change", user_username
+        )
+        db.rollback()
+        raise HTTPException(status_code=503, detail="Failed to send reset email; please try again later")
+
+    db.commit()
     return {"status": "ok"}
 
 

@@ -9,6 +9,7 @@ class Player(Base):
     id = Column(Integer, primary_key=True)  # OpenDota account_id
     name = Column(String)
     avatar_url = Column(String)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 
 class Match(Base):
@@ -109,8 +110,9 @@ class User(Base):
 class League(Base):
     __tablename__ = "leagues"
 
-    id = Column(Integer, primary_key=True)  # OpenDota league_id
-    name = Column(String)
+    id           = Column(Integer, primary_key=True)  # OpenDota league_id
+    name         = Column(String)
+    is_monitored = Column(Boolean, default=False, nullable=False)
 
 
 class Weight(Base):
@@ -237,6 +239,9 @@ class ToornamentSyncLog(Base):
 
 class TokenGrantEvent(Base):
     __tablename__ = "token_grant_events"
+    __table_args__ = (
+        Index('ix_token_grant_events_time', 'start_time', 'end_time'),
+    )
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     amount     = Column(Integer)
@@ -258,6 +263,9 @@ class TokenGrantClaim(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
+    __table_args__ = (
+        Index('ix_notifications_time', 'start_time', 'end_time'),
+    )
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     message    = Column(String)
@@ -304,3 +312,6 @@ Index('ix_cards_owner_id',   Card.owner_id)
 Index('ix_cards_player_id',  Card.player_id)
 Index('ix_wre_user_week',    WeeklyRosterEntry.user_id, WeeklyRosterEntry.week_id)
 Index('ix_presence_channel_seen', TwitchPresence.channel_id, TwitchPresence.seen_at)
+Index('ix_matches_week_override_id', Match.week_override_id)
+Index('ix_match_bans_match_id',      MatchBan.match_id)
+Index('ix_matches_league_id',        Match.league_id)

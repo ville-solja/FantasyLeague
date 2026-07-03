@@ -53,6 +53,7 @@ See [DB Sustainability](markdown/features/reference/db-sustainability.md) for th
 ## Documentation
 
 - [Feature documentation](markdown/features/README.md) — Core features and reference details, split into two tiers
+- [Process diagrams](markdown/process-diagrams.md) — Visual flowcharts: season lifecycle, token/card economy, admin tools
 - [User stories](markdown/stories/_index.md) — Full system requirements by section
 - [Developer agents](.claude/commands/README.md) — Slash commands, development pipeline, and agent reference
 

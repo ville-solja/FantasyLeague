@@ -1,15 +1,18 @@
 import os
 import time
+from typing import List
+
+import requests
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Match, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from models import Card, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from toornament import sync_toornament_results
@@ -352,15 +355,19 @@ class TokenGrantEventBody(BaseModel):
 @router.get("/admin/token-grant-events")
 def list_token_grant_events(db=Depends(get_db), _: dict = Depends(require_admin)):
     events = db.query(TokenGrantEvent).order_by(TokenGrantEvent.start_time.desc()).all()
-    result = []
-    for ev in events:
-        claim_count = db.query(TokenGrantClaim).filter_by(event_id=ev.id).count()
-        result.append({
+    claim_counts = {
+        row[0]: row[1]
+        for row in db.query(TokenGrantClaim.event_id, func.count(TokenGrantClaim.id))
+                     .group_by(TokenGrantClaim.event_id).all()
+    }
+    return [
+        {
             "id": ev.id, "amount": ev.amount,
             "start_time": ev.start_time, "end_time": ev.end_time,
-            "created_at": ev.created_at, "claim_count": claim_count,
-        })
-    return result
+            "created_at": ev.created_at, "claim_count": claim_counts.get(ev.id, 0),
+        }
+        for ev in events
+    ]
 
 
 @router.post("/admin/token-grant-events")
@@ -419,15 +426,19 @@ class WeekEditBody(BaseModel):
 @router.get("/admin/weeks")
 def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
     weeks = db.query(Week).order_by(Week.start_time).all()
-    result = []
-    for w in weeks:
-        roster_count = db.query(WeeklyRosterEntry).filter_by(week_id=w.id).count()
-        result.append({
+    roster_counts = {
+        row[0]: row[1]
+        for row in db.query(WeeklyRosterEntry.week_id, func.count(WeeklyRosterEntry.id))
+                     .group_by(WeeklyRosterEntry.week_id).all()
+    }
+    return [
+        {
             "id": w.id, "label": w.label,
             "start_time": w.start_time, "end_time": w.end_time,
-            "is_locked": w.is_locked, "roster_count": roster_count,
-        })
-    return result
+            "is_locked": w.is_locked, "roster_count": roster_counts.get(w.id, 0),
+        }
+        for w in weeks
+    ]
 
 
 @router.post("/admin/weeks")
@@ -499,13 +510,17 @@ class NotificationBody(BaseModel):
 @router.get("/admin/notifications")
 def list_notifications(db=Depends(get_db), _: dict = Depends(require_admin)):
     rows = db.query(Notification).order_by(Notification.start_time.desc()).all()
-    result = []
-    for n in rows:
-        count = db.query(NotificationDismissal).filter_by(notification_id=n.id).count()
-        result.append({"id": n.id, "message": n.message,
-                       "start_time": n.start_time, "end_time": n.end_time,
-                       "dismiss_count": count})
-    return result
+    dismiss_counts = {
+        row[0]: row[1]
+        for row in db.query(NotificationDismissal.notification_id, func.count(NotificationDismissal.id))
+                     .group_by(NotificationDismissal.notification_id).all()
+    }
+    return [
+        {"id": n.id, "message": n.message,
+         "start_time": n.start_time, "end_time": n.end_time,
+         "dismiss_count": dismiss_counts.get(n.id, 0)}
+        for n in rows
+    ]
 
 
 @router.post("/admin/notifications")
@@ -612,6 +627,219 @@ def revoke_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(requ
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Player Pool Management
+# ---------------------------------------------------------------------------
+
+class AddPlayerBody(BaseModel):
+    player_id: int
+
+
+class BulkAddPlayersBody(BaseModel):
+    player_ids: str = Field(..., min_length=1, max_length=2000)  # CSV string
+
+
+class RemovePlayersBody(BaseModel):
+    player_ids: List[int]
+
+
+@router.get("/admin/players")
+def list_players(db=Depends(get_db), _=Depends(require_admin)):
+    rows = db.query(Player).order_by(Player.name).all()
+    card_counts = {
+        r[0]: r[1] for r in
+        db.query(Card.player_id, func.count(Card.id))
+          .filter(Card.is_active == True)
+          .group_by(Card.player_id).all()
+    }
+    return [
+        {
+            "id": p.id, "name": p.name,
+            "is_active": p.is_active,
+            "active_card_count": card_counts.get(p.id, 0),
+        }
+        for p in rows
+    ]
+
+
+@router.post("/admin/players")
+def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_admin)):
+    existing = db.get(Player, body.player_id)
+    if existing and existing.is_active:
+        raise HTTPException(status_code=409, detail="Player already exists in pool")
+    resp = requests.get(f"https://api.opendota.com/api/players/{body.player_id}", timeout=10)
+    if resp.status_code != 200 or not resp.json().get("profile"):
+        raise HTTPException(status_code=422, detail="Player not found on OpenDota")
+    data = resp.json()["profile"]
+    if existing:
+        existing.is_active = True
+        existing.name = data.get("personaname", str(body.player_id))
+        existing.avatar_url = data.get("avatarfull", "")
+        p = existing
+    else:
+        p = Player(
+            id=body.player_id,
+            name=data.get("personaname", str(body.player_id)),
+            avatar_url=data.get("avatarfull", ""),
+            is_active=True,
+        )
+        db.add(p)
+    _audit(db, "admin_player_added", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"player_id={body.player_id}")
+    db.commit()
+    return {"id": p.id, "name": p.name}
+
+
+@router.post("/admin/players/bulk")
+def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
+                     admin=Depends(require_admin)):
+    raw_ids = [s.strip() for s in body.player_ids.split(",") if s.strip()]
+    added, skipped = [], []
+    for raw in raw_ids:
+        try:
+            pid = int(raw)
+        except ValueError:
+            skipped.append({"id": raw, "reason": "not an integer"})
+            continue
+        if db.get(Player, pid):
+            skipped.append({"id": pid, "reason": "already exists"})
+            continue
+        resp = requests.get(f"https://api.opendota.com/api/players/{pid}", timeout=10)
+        if resp.status_code != 200 or not resp.json().get("profile"):
+            skipped.append({"id": pid, "reason": "not found on OpenDota"})
+            continue
+        data = resp.json()["profile"]
+        db.add(Player(
+            id=pid,
+            name=data.get("personaname", str(pid)),
+            avatar_url=data.get("avatarfull", ""),
+            is_active=True,
+        ))
+        added.append(pid)
+    if added:
+        _audit(db, "admin_player_bulk_added", actor_id=admin["user_id"],
+               actor_username=admin["username"], detail=f"added={len(added)}")
+    db.commit()
+    return {"added": len(added), "skipped": skipped}
+
+
+@router.post("/admin/players/remove")
+def remove_players(body: RemovePlayersBody, db=Depends(get_db),
+                   admin=Depends(require_admin)):
+    for pid in body.player_ids:
+        player = db.get(Player, pid)
+        if not player or not player.is_active:
+            continue
+        player.is_active = False
+        cards = db.query(Card).filter(Card.player_id == pid).all()
+        refund_totals: dict = {}
+        for card in cards:
+            card.is_active = False
+            refund_totals[card.owner_id] = refund_totals.get(card.owner_id, 0) + 1
+        for user_id, token_count in refund_totals.items():
+            user = db.get(User, user_id)
+            if user:
+                user.tokens = (user.tokens or 0) + token_count
+                _audit(db, "admin_player_refund_issued", actor_id=admin["user_id"],
+                       actor_username=admin["username"],
+                       detail=f"player_id={pid} user_id={user_id} tokens={token_count}")
+        _audit(db, "admin_player_removed", actor_id=admin["user_id"],
+               actor_username=admin["username"], detail=f"player_id={pid}")
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# League Management
+# ---------------------------------------------------------------------------
+
+@router.get("/admin/leagues")
+def list_leagues(db=Depends(get_db), admin=Depends(require_admin)):
+    leagues = db.query(League).all()
+    match_counts = {
+        r[0]: r[1] for r in
+        db.query(Match.league_id, func.count(Match.match_id))
+          .group_by(Match.league_id).all()
+    }
+    return [
+        {
+            "id": l.id,
+            "name": l.name or "(unknown)",
+            "is_monitored": l.is_monitored,
+            "match_count": match_counts.get(l.id, 0),
+        }
+        for l in leagues
+    ]
+
+
+@router.post("/admin/leagues/{league_id}/monitor")
+def add_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    league = db.get(League, league_id)
+    if league and league.is_monitored:
+        raise HTTPException(status_code=409, detail="League is already monitored")
+    if not league:
+        league = League(id=league_id, name="(pending ingest)", is_monitored=True)
+        db.add(league)
+    else:
+        league.is_monitored = True
+    db.commit()
+    _audit(db, "admin_league_add_monitor", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"league_id={league_id}")
+    return {"status": "ok", "league_id": league_id}
+
+
+@router.delete("/admin/leagues/{league_id}/monitor")
+def remove_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    league = db.get(League, league_id)
+    if not league or not league.is_monitored:
+        raise HTTPException(status_code=404, detail="League is not currently monitored")
+    league.is_monitored = False
+    db.commit()
+    _audit(db, "admin_league_remove_monitor", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"league_id={league_id}")
+    return {"status": "ok", "league_id": league_id}
+
+
+@router.delete("/admin/leagues/{league_id}/data")
+def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
+    match_ids = [r[0] for r in db.execute(
+        text("SELECT match_id FROM matches WHERE league_id = :lid"), {"lid": league_id}
+    ).fetchall()]
+    deleted_stats = 0
+    deleted_bans = 0
+    if match_ids:
+        deleted_stats = (
+            db.query(PlayerMatchStats)
+            .filter(PlayerMatchStats.match_id.in_(match_ids))
+            .delete(synchronize_session=False)
+        )
+        deleted_bans = (
+            db.query(MatchBan)
+            .filter(MatchBan.match_id.in_(match_ids))
+            .delete(synchronize_session=False)
+        )
+    deleted_matches = (
+        db.query(Match)
+        .filter(Match.league_id == league_id)
+        .delete(synchronize_session=False)
+    )
+    league = db.get(League, league_id)
+    if league:
+        league.is_monitored = False
+    db.commit()
+    _audit(db, "admin_league_purge", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"league_id={league_id} matches={deleted_matches} stats={deleted_stats}")
+    return {
+        "status": "ok",
+        "league_id": league_id,
+        "deleted_matches": deleted_matches,
+        "deleted_stats": deleted_stats,
+        "deleted_bans": deleted_bans,
+        "note": "Run /recalculate to refresh fantasy scores after purge",
+    }
 
 
 @router.get("/audit-logs")

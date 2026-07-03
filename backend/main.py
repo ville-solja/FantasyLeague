@@ -3,18 +3,21 @@ import os
 import threading
 import time
 import warnings
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 from twitch import router as twitch_router
-from database import SessionLocal, engine, Base, DATABASE_URL
-from models import Week
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db
+from models import League, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
-from seed import seed_users, seed_admin_from_env, seed_cards, seed_weights, seed_tags
+from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import generate_weeks, auto_lock_weeks
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
@@ -26,6 +29,8 @@ from routers import cards as cards_router
 from routers import admin as admin_router
 
 logger = logging.getLogger(__name__)
+
+_stop_event = threading.Event()
 
 TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
@@ -41,7 +46,7 @@ _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 def _week_maintenance_loop():
     """Background thread: periodically generate new weeks and lock past ones."""
-    while True:
+    while not _stop_event.is_set():
         try:
             db = SessionLocal()
             try:
@@ -51,19 +56,41 @@ def _week_maintenance_loop():
                 db.close()
         except Exception:
             logger.exception("Week maintenance error")
-        time.sleep(_WEEK_CHECK_INTERVAL)
+        _stop_event.wait(timeout=_WEEK_CHECK_INTERVAL)
 
 
 def _profile_enrichment_loop():
     """Background thread: periodically enrich player profiles with hero stats and AI bios."""
-    while True:
+    while not _stop_event.is_set():
         try:
-            result = run_profile_enrichment(batch_size=_ENRICHMENT_BATCH_SIZE)
-            if result["enriched"] or result["errors"]:
-                logger.info("Profile enrichment: %s", result)
+            with ThreadPoolExecutor(max_workers=1) as _executor:
+                _future = _executor.submit(run_profile_enrichment, batch_size=_ENRICHMENT_BATCH_SIZE)
+                try:
+                    result = _future.result(timeout=300)  # 5-minute timeout
+                    if result["enriched"] or result["errors"]:
+                        logger.info("Profile enrichment: %s", result)
+                except FuturesTimeoutError:
+                    logging.warning("Profile enrichment timed out after 300s")
+                except Exception as _e:
+                    logging.error("Profile enrichment error: %s", _e)
         except Exception:
             logger.exception("Profile enrichment loop error")
-        time.sleep(_ENRICHMENT_INTERVAL)
+        _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
+
+
+def _seed_monitored_leagues(league_ids: list[int]):
+    db = SessionLocal()
+    try:
+        for lid in league_ids:
+            league = db.get(League, lid)
+            if not league:
+                league = League(id=lid, name="(pending ingest)", is_monitored=True)
+                db.add(league)
+            else:
+                league.is_monitored = True
+        db.commit()
+    finally:
+        db.close()
 
 
 def _auto_ingest(league_ids: list[int]):
@@ -72,7 +99,6 @@ def _auto_ingest(league_ids: list[int]):
             logger.info("Auto-ingest: league %d starting", league_id)
             ingest_league(league_id)
             run_enrichment()
-            seed_cards(league_id)
             logger.info("Auto-ingest: league %d done", league_id)
         except Exception:
             logger.exception("Auto-ingest: league %d failed", league_id)
@@ -90,24 +116,31 @@ def _run_toornament_sync():
         logger.exception("Toornament sync error")
 
 
-def _ingest_poll_loop(league_ids: list[int]):
+def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
-    while True:
+    while not _stop_event.is_set():
         try:
-            _auto_ingest(league_ids)
+            db = SessionLocal()
+            try:
+                monitored = db.query(League).filter(League.is_monitored == True).all()
+                ids = [l.id for l in monitored]
+            finally:
+                db.close()
+            _auto_ingest(ids)
             _run_toornament_sync()
+            db = SessionLocal()
+            try:
+                now = int(time.time())
+                active = db.query(Week).filter(
+                    Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
+                ).first()
+            finally:
+                db.close()
+            interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
-        db = SessionLocal()
-        try:
-            now = int(time.time())
-            active = db.query(Week).filter(
-                Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
-            ).first()
-        finally:
-            db.close()
-        interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
-        time.sleep(interval)
+            interval = _INGEST_POLL_INTERVAL
+        _stop_event.wait(timeout=interval)
 
 
 @asynccontextmanager
@@ -123,16 +156,24 @@ async def lifespan(app: FastAPI):
     seed_admin_from_env()
     seed_weights()
     seed_tags()
-    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "19368,19369")
+    if os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
+        if os.getenv("SECRET_KEY"):
+            raise RuntimeError(
+                "TWITCH_LOCAL_DEV=true must not be set when SECRET_KEY is configured — "
+                "this bypass must never run in production"
+            )
+    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "")
     _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
     if _league_ids:
-        threading.Thread(target=_ingest_poll_loop, args=(_league_ids,), daemon=True).start()
-        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+        _seed_monitored_leagues(_league_ids)
+    threading.Thread(target=_ingest_poll_loop, daemon=True).start()
+    logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
     threading.Thread(target=_week_maintenance_loop, daemon=True).start()
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
     yield
+    _stop_event.set()
 
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -150,12 +191,31 @@ if not _secret_key:
     )
     _secret_key = "dev-secret-change-me"
 _https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv"
+        )
+        if _https_only:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=_secret_key,
     same_site="lax",
     https_only=_https_only,
+    max_age=86400,
 )
+app.add_middleware(SecurityHeadersMiddleware)
 # Twitch extension iframes are served from *.ext-twitch.tv — a different origin.
 # All /twitch/* endpoints authenticate via JWT (not cookies), so allow_origins="*"
 # is safe: cross-origin requests cannot carry session cookies, so regular
@@ -177,8 +237,33 @@ app.include_router(admin_router.router)
 
 
 @app.get("/config")
-def get_config():
-    return {"token_name": TOKEN_NAME, "initial_tokens": INITIAL_TOKENS, "app_version": _APP_VERSION, "app_release": _APP_RELEASE}
+def get_config(db=Depends(get_db)):
+    booster_row = db.query(Weight).filter_by(key="team_booster_cost").first()
+    booster_cost = int(booster_row.value) if booster_row else 3
+
+    rate_keys = ["draw_rate_common", "draw_rate_rare", "draw_rate_epic", "draw_rate_legendary"]
+    defaults  = {"draw_rate_common": 60.0, "draw_rate_rare": 25.0,
+                 "draw_rate_epic": 10.0, "draw_rate_legendary": 5.0}
+    raw = {}
+    for key in rate_keys:
+        row = db.query(Weight).filter_by(key=key).first()
+        raw[key] = float(row.value) if row else defaults[key]
+    total = sum(raw.values()) or 1.0
+    draw_rates = {
+        "common":    round(raw["draw_rate_common"]    / total * 100, 1),
+        "rare":      round(raw["draw_rate_rare"]      / total * 100, 1),
+        "epic":      round(raw["draw_rate_epic"]      / total * 100, 1),
+        "legendary": round(raw["draw_rate_legendary"] / total * 100, 1),
+    }
+
+    return {
+        "token_name": TOKEN_NAME,
+        "initial_tokens": INITIAL_TOKENS,
+        "app_version": _APP_VERSION,
+        "app_release": _APP_RELEASE,
+        "team_booster_cost": booster_cost,
+        "draw_rates": draw_rates,
+    }
 
 
 @app.get("/health")
