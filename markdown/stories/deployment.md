@@ -37,6 +37,39 @@ migration goes wrong.
 
 ---
 
+## DB Volume Persistence
+
+### Database Survives Container Rebuilds
+**User story**
+As an operator, I want the database to survive container rebuilds and host restarts so
+that player data and league progress are never accidentally lost when deploying a new
+version.
+
+**Acceptance criteria**
+- The SQLite database file persists at `./data/fantasy.db` on the host across
+  `docker compose down && docker compose up --build`
+- The `data/` directory exists in the repository (tracked via `.gitkeep`) so a fresh
+  `git clone` followed by `docker compose up` works without any manual `mkdir` steps
+- The bind-mount strategy and its rationale are documented in
+  `markdown/features/reference/db-volume-persistence.md`
+- The existing versioned migration system ensures schema changes apply once and are
+  skipped on subsequent starts, whether the database is new or has years of existing data
+
+### Consistent Dev and Production Persistence
+**User story**
+As a developer, I want the local development environment to use the same persistence
+strategy as production so that I develop against a real database without losing data
+between sessions.
+
+**Acceptance criteria**
+- `docker-compose.dev.yml` mounts `./data:/app/data` (already in place — no code change)
+- `docker compose ... down --volumes` does NOT delete `./data/` on the host (bind mounts
+  are never removed by `--volumes`; this should be documented to prevent confusion)
+- The database reset procedure in `commands.md` explicitly removes only the db files,
+  not the `data/` directory itself
+
+---
+
 ## Security Headers
 
 ### Security Response Headers
