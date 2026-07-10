@@ -16,25 +16,52 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pathlib
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+def _make_test_engine():
+    return create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+
+def _patch_db_modules(monkeypatch, test_engine, test_sf):
+    """Patch database, enrich, ingest and seed to use the in-memory engine."""
+    import database
+    import enrich
+    import ingest
+    import seed
+    monkeypatch.setattr(database, "engine", test_engine)
+    monkeypatch.setattr(database, "SessionLocal", test_sf)
+    monkeypatch.setattr(enrich, "SessionLocal", test_sf)
+    monkeypatch.setattr(ingest, "SessionLocal", test_sf)
+    monkeypatch.setattr(seed, "SessionLocal", test_sf)
+
+
 @pytest.fixture
 def client(monkeypatch):
-    """FastAPI TestClient backed by an in-memory SQLite database.
-
-    AUTO_INGEST_LEAGUES is cleared so startup seeding never attempts a real DB
-    write. The main module is reloaded so any module-level env reads pick up
-    the patched values.
-    """
+    """FastAPI TestClient backed by an in-memory SQLite database."""
     monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
     monkeypatch.setenv("DEBUG", "true")
+
+    test_engine = _make_test_engine()
+    test_sf = sessionmaker(bind=test_engine)
+    _patch_db_modules(monkeypatch, test_engine, test_sf)
+
     import importlib
     import main as main_module
     importlib.reload(main_module)
+    main_module.engine = test_engine
+    main_module.SessionLocal = test_sf
+
     from fastapi.testclient import TestClient
     with TestClient(main_module.app, raise_server_exceptions=True) as c:
         yield c
@@ -42,28 +69,36 @@ def client(monkeypatch):
 
 @pytest.fixture
 def client_with_custom_weights(monkeypatch):
-    """TestClient with a DB override that lets the test insert Weight rows."""
+    """TestClient where the test controls Weight rows via a separate clean DB.
+
+    lifespan_engine — receives create_all + seeding from the app startup
+    test_engine     — fresh in-memory DB injected via get_db override; tests
+                      insert custom Weight rows here without clashing with seeds
+    """
     monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
     monkeypatch.setenv("DEBUG", "true")
+
+    lifespan_engine = _make_test_engine()
+    lifespan_sf = sessionmaker(bind=lifespan_engine)
+    _patch_db_modules(monkeypatch, lifespan_engine, lifespan_sf)
+
+    test_engine = _make_test_engine()
+    test_sf = sessionmaker(bind=test_engine)
+
     import importlib
     import main as main_module
     importlib.reload(main_module)
+    main_module.engine = lifespan_engine
+    main_module.SessionLocal = lifespan_sf
 
-    from sqlalchemy import create_engine, StaticPool
-    from sqlalchemy.orm import sessionmaker
     from database import Base, get_db
     from models import Weight
 
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
+    # Create tables in the test engine (no seeding — test controls the data)
+    Base.metadata.create_all(test_engine)
 
     def override_get_db():
-        db = TestSession()
+        db = test_sf()
         try:
             yield db
         finally:
@@ -73,7 +108,7 @@ def client_with_custom_weights(monkeypatch):
 
     from fastapi.testclient import TestClient
     with TestClient(main_module.app, raise_server_exceptions=True) as c:
-        session = TestSession()
+        session = test_sf()
         yield c, session, Weight
         session.close()
 
