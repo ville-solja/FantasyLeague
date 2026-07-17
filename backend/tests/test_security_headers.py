@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
 
 # ---------------------------------------------------------------------------
 # Shared client fixture
@@ -19,13 +20,47 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(monkeypatch):
-    """Return a TestClient for the FastAPI app. AUTO_INGEST_LEAGUES is blanked so
-    the startup seeding step does not attempt a write to the (read-only) local DB."""
+    """Return a TestClient backed by an in-memory SQLite database.
+
+    We reload the main module so middleware changes picked up from env vars.
+    The DB lifecycle (create_all, migrations, seed) runs against :memory: so
+    the test never touches the (possibly absent or read-only) local data/fantasy.db.
+    """
     monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
     monkeypatch.setenv("DEBUG", "true")
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
     import importlib
+    import database
     import main as main_module
+
+    # Point the database module at an in-memory engine before reloading main.
+    test_engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    test_session_factory = sessionmaker(bind=test_engine)
+    monkeypatch.setattr(database, "engine", test_engine)
+    monkeypatch.setattr(database, "SessionLocal", test_session_factory)
+
+    # Patch every module that imported SessionLocal at its own module level so
+    # background threads (enrich, ingest, seed) also use the in-memory engine.
+    import enrich
+    import ingest
+    import seed
+    monkeypatch.setattr(enrich, "SessionLocal", test_session_factory)
+    monkeypatch.setattr(ingest, "SessionLocal", test_session_factory)
+    monkeypatch.setattr(seed, "SessionLocal", test_session_factory)
+
     importlib.reload(main_module)
+
+    # After reload, main has re-imported engine/SessionLocal from database —
+    # set them again in main's namespace so lifespan uses the in-memory engine.
+    main_module.engine = test_engine
+    main_module.SessionLocal = test_session_factory
+
     with TestClient(main_module.app, raise_server_exceptions=True) as c:
         yield c
 
@@ -72,9 +107,33 @@ def test_hsts_present_when_https_only_true(monkeypatch):
     monkeypatch.setenv("AUTO_INGEST_LEAGUES", "")
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("HTTPS_ONLY", "true")
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
     import importlib
+    import database
     import main as main_module
+
+    test_engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    test_session_factory = sessionmaker(bind=test_engine)
+    monkeypatch.setattr(database, "engine", test_engine)
+    monkeypatch.setattr(database, "SessionLocal", test_session_factory)
+
+    import enrich
+    import ingest
+    import seed
+    monkeypatch.setattr(enrich, "SessionLocal", test_session_factory)
+    monkeypatch.setattr(ingest, "SessionLocal", test_session_factory)
+    monkeypatch.setattr(seed, "SessionLocal", test_session_factory)
+
     importlib.reload(main_module)
+    main_module.engine = test_engine
+    main_module.SessionLocal = test_session_factory
+
     with TestClient(main_module.app, raise_server_exceptions=True) as c:
         response = c.get("/health")
     assert response.headers.get("strict-transport-security") == "max-age=31536000; includeSubDomains"
