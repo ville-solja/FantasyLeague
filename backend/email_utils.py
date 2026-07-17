@@ -37,24 +37,44 @@ def send_email(to_address: str, subject: str, body: str) -> bool:
     msg["From"]    = from_addr
     msg["To"]      = to_address
 
+    _logger.debug(
+        "SMTP config — host=%s port=%d from=%s user=%s ssl=%s tls=%s",
+        host, port, from_addr, user or "(none)", use_ssl, use_tls,
+    )
+
     try:
         if use_ssl:
+            _logger.debug("Connecting via SMTP_SSL to %s:%d", host, port)
             with smtplib.SMTP_SSL(host, port) as smtp:
+                _logger.debug("Connected (SSL)")
                 if user:
                     smtp.login(user, password)
-                smtp.sendmail(from_addr, [to_address], msg.as_string())
+                    _logger.debug("Logged in as %s", user)
+                refused = smtp.sendmail(from_addr, [to_address], msg.as_string())
         elif use_tls:
+            _logger.debug("Connecting via SMTP+STARTTLS to %s:%d", host, port)
             with smtplib.SMTP(host, port) as smtp:
                 smtp.ehlo()
+                _logger.debug("EHLO ok")
                 smtp.starttls()
+                smtp.ehlo()
+                _logger.debug("STARTTLS ok")
                 if user:
                     smtp.login(user, password)
-                smtp.sendmail(from_addr, [to_address], msg.as_string())
+                    _logger.debug("Logged in as %s", user)
+                refused = smtp.sendmail(from_addr, [to_address], msg.as_string())
         else:
+            _logger.debug("Connecting via plain SMTP to %s:%d", host, port)
             with smtplib.SMTP(host, port) as smtp:
                 if user:
                     smtp.login(user, password)
-                smtp.sendmail(from_addr, [to_address], msg.as_string())
+                    _logger.debug("Logged in as %s", user)
+                refused = smtp.sendmail(from_addr, [to_address], msg.as_string())
+
+        if refused:
+            _logger.warning("Server refused recipients: %s", refused)
+        else:
+            _logger.debug("sendmail accepted by server (no refused recipients)")
         _logger.info("Sent '%s' to %s", subject, to_address)
         return True
     except Exception as e:
