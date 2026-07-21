@@ -103,5 +103,6 @@ def change_password(body: ChangePasswordBody, db=Depends(get_db), current_user: 
         raise HTTPException(status_code=422, detail="New password must be at least 6 characters")
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
+    user.temp_password_expires_at = None
     db.commit()
     return {"status": "ok"}

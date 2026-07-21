@@ -132,33 +132,39 @@ def _pubsub_broadcast(channel_id: str, message: dict):
 
 
 def _post_chat_message(channel_id: str, message: str):
-    """Post a message to Twitch chat via the Helix Send Chat Message API.
+    """Post a message to Twitch chat using the Extension Chat capability.
 
-    Requires TWITCH_BOT_ACCESS_TOKEN (user token with user:write:chat scope)
-    and TWITCH_BOT_USER_ID (Twitch user ID of the sending account).
-    Silently skips if either var is unset.
+    Uses an extension-signed JWT (role=external) — no bot account required.
+    Requires the Chat capability to be enabled in the Twitch developer console.
+    Silently skips in local dev or when extension credentials are absent.
     """
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         logger.info("Twitch chat (dev): %s", message)
         return
-    bot_token   = os.getenv("TWITCH_BOT_ACCESS_TOKEN", "").strip()
-    bot_user_id = os.getenv("TWITCH_BOT_USER_ID", "").strip()
-    client_id   = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
-    if not bot_token or not bot_user_id or not client_id:
+    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
+    client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
+    if not secret_b64 or not client_id:
         return
+    padded = secret_b64 + "=" * (-len(secret_b64) % 4)
+    token = pyjwt.encode(
+        {
+            "exp": int(time.time()) + 60,
+            "user_id": channel_id,
+            "role": "external",
+            "channel_id": channel_id,
+        },
+        base64.urlsafe_b64decode(padded),
+        algorithm="HS256",
+    )
     try:
         _requests.post(
-            "https://api.twitch.tv/helix/chat/messages",
+            f"https://api.twitch.tv/helix/extensions/chat?broadcaster_id={channel_id}",
             headers={
-                "Authorization": f"Bearer {bot_token}",
+                "Authorization": f"Bearer {token}",
                 "Client-Id": client_id,
                 "Content-Type": "application/json",
             },
-            json={
-                "broadcaster_id": channel_id,
-                "sender_id": bot_user_id,
-                "message": message,
-            },
+            json={"text": message},
             timeout=5,
         )
     except Exception:
