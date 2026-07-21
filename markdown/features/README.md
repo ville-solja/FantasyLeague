@@ -62,4 +62,5 @@ Implementation details, integrations, and operator tooling.
 | [Draw Panel Redesign](reference/draw-panel-redesign.md) | Renames "Deck" to "Draw" and replaces card counts with normalised drop percentages from live weights |
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |
 | [SMTP Password Recovery](reference/smtp-password-recovery.md) | Forgot-password flow: temporary password delivery via SMTP with stdout fallback for local dev |
+| [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | Microservice that downloads Dota 2 demos, extracts in-game tip events, and powers a tipping leaderboard |
