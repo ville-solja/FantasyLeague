@@ -73,6 +73,7 @@ class Card(Base):
     league_id = Column(Integer, ForeignKey("leagues.id"))
     is_active = Column(Boolean, default=False)
     generation = Column(Integer, default=1, nullable=False)
+    slot_index = Column(Integer, nullable=True)
 
 
 _VALID_STAT_KEYS_LIST = list(SCORING_STATS) + ["deaths"]
