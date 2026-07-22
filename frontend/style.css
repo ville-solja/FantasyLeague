@@ -703,6 +703,89 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .card-slot[data-rarity="epic"]      .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-epic); }
 .card-slot[data-rarity="legendary"] .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-amber); }
 
+/* ── Drag-and-drop UX ─────────────────────────────────────────────────────── */
+
+/* Item 6 — grab cursor on draggable cards */
+.card-slot[draggable="true"] { cursor: grab; }
+body.roster-dragging,
+body.roster-dragging * { cursor: grabbing !important; }
+
+/* Item 1 — lift effect: card slot needs position:relative for ::after overlay */
+.card-slot { position: relative; }
+
+/* Item 2 — placeholder: dim the source slot after the browser has snapshotted it */
+.card-slot.drag-placeholder { opacity: 0.25; filter: grayscale(0.6); pointer-events: none; }
+.card-slot.drag-placeholder .card-img { transform: none !important; }
+
+/* Item 3 — illuminate empty slots and bench zone the moment any drag starts */
+@keyframes slot-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px var(--accent), inset 0 0 10px rgba(232,93,28,0.08); }
+  50%       { box-shadow: 0 0 0 1px var(--accent), inset 0 0 22px rgba(232,93,28,0.20); }
+}
+.drop-targets-active .card-slot-empty {
+  border-color: var(--accent);
+  color: var(--accent);
+  animation: slot-pulse 1.4s ease-in-out infinite;
+}
+.drop-targets-active .card-slot[draggable="true"]:not(.drag-placeholder) .card-img {
+  box-shadow: 0 0 0 1px rgba(232,93,28,0.22);
+}
+
+/* Bench zone highlight — dashed outline appears immediately; glow pulses after a short offset */
+@keyframes bench-pulse {
+  0%, 100% { box-shadow: inset 0 0 12px rgba(232,93,28,0.05); }
+  50%       { box-shadow: inset 0 0 28px rgba(232,93,28,0.18); }
+}
+#benchGrid.drop-targets-active {
+  border-radius: var(--r-lg);
+  outline: 2px dashed var(--accent); /* static — visible the instant drag starts */
+  animation: bench-pulse 1.4s ease-in-out infinite;
+  animation-delay: 0.7s; /* offset glow from slot-pulse so they don't sync */
+}
+
+/* Generic drag-over highlight for card slots */
+.card-slot.drag-over .card-img {
+  transform: scale(1.03);
+  box-shadow: 0 0 0 2px var(--accent), var(--sh-glow-orange);
+  transition: transform 80ms var(--ease-out), box-shadow 80ms var(--ease-out);
+}
+
+/* Generic drag-over highlight for empty slots */
+.card-slot-empty.drag-over {
+  border-color: var(--accent);
+  background: rgba(232,93,28,0.07);
+  box-shadow: 0 0 0 1px var(--accent), inset 0 0 20px rgba(232,93,28,0.15);
+  color: var(--accent);
+}
+
+/* Item 4 — swap indicator: bench card hovering a populated active slot */
+.card-slot.drag-swap-target .card-img {
+  opacity: 0.4;
+  transform: scale(0.97);
+}
+.card-slot.drag-swap-target::after {
+  content: "⇄";
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.4rem;
+  color: var(--accent);
+  text-shadow: 0 0 16px rgba(232,93,28,0.85);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Item 5 — settle animation after re-render */
+@keyframes card-settle {
+  from { transform: scale(0.93); opacity: 0.55; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.card-slot.reorder-animate      { animation: card-settle 0.18s var(--ease-out) both; }
+.card-slot-empty.reorder-animate { animation: card-settle 0.18s var(--ease-out) both; }
+
+/* ── End drag-and-drop UX ─────────────────────────────────────────────────── */
+
 /* Card reveal modal — fixed slot so placeholder ↔ PNG never resizes the dialog */
 .reveal-img-wrap {
   position: relative;

@@ -5,6 +5,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
@@ -20,6 +21,17 @@ from weeks import get_next_editable_week
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
+
+class ReorderRequest(BaseModel):
+    card_ids: list[int]           # ordered list; positions assigned by index
+    slot_indexes: list[int] | None = None  # explicit positions; overrides sequential when provided
+
+
+class SwapRequest(BaseModel):
+    bench_card_id: int   # card moving from bench → active
+    active_card_id: int  # card moving from active → bench
+    slot_index: int      # the active slot the bench card should occupy
 
 
 _LATEST_TEAM_SUBQUERY = """
@@ -57,7 +69,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
     if week and week.is_locked:
         results = db.execute(text(f"""
-            SELECT c.id, c.card_type, 1 as is_active,
+            SELECT c.id, c.card_type, 1 as is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
                    {week_match_count},
@@ -69,7 +81,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY c.id, c.card_type, p.id, p.name, p.avatar_url, t.name, t.logo_url
+            GROUP BY c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -78,7 +90,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         ws = week.start_time if week else 0
         we = week.end_time if week else now
         results = db.execute(text(f"""
-            SELECT c.id, c.card_type, c.is_active,
+            SELECT c.id, c.card_type, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
                    {week_match_count},
@@ -89,7 +101,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             LEFT JOIN matches m ON m.match_id = s.match_id
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
-            GROUP BY c.id, c.card_type, c.is_active, p.id, p.name, p.avatar_url, t.name, t.logo_url
+            GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -109,8 +121,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
         c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods)
 
-    active.sort(key=lambda c: c["total_points"], reverse=True)
-    bench.sort(key=lambda c: c["total_points"], reverse=True)
+    active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
+    bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
 
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
@@ -514,6 +526,49 @@ def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depen
     card.is_active = False
     db.commit()
     return {"status": "ok", "card_id": card_id}
+
+
+@router.post("/roster/reorder")
+def reorder_roster(body: ReorderRequest, user=Depends(get_current_user), db=Depends(get_db)):
+    """Assign slot_index to each card in the ordered list. Zone (active/bench) is
+    determined by each card's current is_active state; the caller should only mix
+    cards from the same zone in a single call."""
+    user_id = user["user_id"]
+    use_explicit = body.slot_indexes and len(body.slot_indexes) == len(body.card_ids)
+    for i, card_id in enumerate(body.card_ids):
+        card = db.query(Card).filter_by(id=card_id, owner_id=user_id).first()
+        if card:
+            card.slot_index = body.slot_indexes[i] if use_explicit else i
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/roster/swap")
+def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(get_db)):
+    """Atomically move a bench card to the active roster and an active card to the
+    bench. Applies the duplicate-player guard before committing."""
+    user_id = user["user_id"]
+    bench_card = db.query(Card).filter_by(id=body.bench_card_id, owner_id=user_id, is_active=False).first()
+    active_card = db.query(Card).filter_by(id=body.active_card_id, owner_id=user_id, is_active=True).first()
+    if not bench_card or not active_card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    # Duplicate-player guard: bench card's player must not already be active elsewhere
+    duplicate = db.query(Card).filter(
+        Card.owner_id == user_id,
+        Card.player_id == bench_card.player_id,
+        Card.is_active == True,
+        Card.id != active_card.id,
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="A card for this player is already active")
+
+    active_card.is_active = False
+    active_card.slot_index = None
+    bench_card.is_active = True
+    bench_card.slot_index = body.slot_index
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/roster/{user_id}")
