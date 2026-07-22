@@ -116,27 +116,32 @@ def _run_toornament_sync():
         logger.exception("Toornament sync error")
 
 
+def _get_monitored_league_ids() -> list[int]:
+    db = SessionLocal()
+    try:
+        return [l.id for l in db.query(League).filter(League.is_monitored == True).all()]
+    finally:
+        db.close()
+
+
+def _has_active_week() -> bool:
+    db = SessionLocal()
+    try:
+        now = int(time.time())
+        return db.query(Week).filter(
+            Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
+        ).first() is not None
+    finally:
+        db.close()
+
+
 def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
     while not _stop_event.is_set():
         try:
-            db = SessionLocal()
-            try:
-                monitored = db.query(League).filter(League.is_monitored == True).all()
-                ids = [l.id for l in monitored]
-            finally:
-                db.close()
-            _auto_ingest(ids)
+            _auto_ingest(_get_monitored_league_ids())
             _run_toornament_sync()
-            db = SessionLocal()
-            try:
-                now = int(time.time())
-                active = db.query(Week).filter(
-                    Week.start_time <= now, Week.end_time >= now, Week.is_locked == False
-                ).first()
-            finally:
-                db.close()
-            interval = _INGEST_LIVE_POLL_INTERVAL if active else _INGEST_POLL_INTERVAL
+            interval = _INGEST_LIVE_POLL_INTERVAL if _has_active_week() else _INGEST_POLL_INTERVAL
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL
@@ -239,16 +244,14 @@ app.include_router(admin_router.router)
 
 @app.get("/config")
 def get_config(db=Depends(get_db)):
-    booster_row = db.query(Weight).filter_by(key="team_booster_cost").first()
-    booster_cost = int(booster_row.value) if booster_row else 3
+    needed = {"team_booster_cost", "draw_rate_common", "draw_rate_rare", "draw_rate_epic", "draw_rate_legendary"}
+    weights = {w.key: w.value for w in db.query(Weight).filter(Weight.key.in_(needed)).all()}
 
-    rate_keys = ["draw_rate_common", "draw_rate_rare", "draw_rate_epic", "draw_rate_legendary"]
-    defaults  = {"draw_rate_common": 60.0, "draw_rate_rare": 25.0,
-                 "draw_rate_epic": 10.0, "draw_rate_legendary": 5.0}
-    raw = {}
-    for key in rate_keys:
-        row = db.query(Weight).filter_by(key=key).first()
-        raw[key] = float(row.value) if row else defaults[key]
+    booster_cost = int(weights.get("team_booster_cost", 3))
+
+    defaults = {"draw_rate_common": 60.0, "draw_rate_rare": 25.0,
+                "draw_rate_epic": 10.0, "draw_rate_legendary": 5.0}
+    raw = {key: float(weights.get(key, defaults[key])) for key in defaults}
     total = sum(raw.values()) or 1.0
     draw_rates = {
         "common":    round(raw["draw_rate_common"]    / total * 100, 1),

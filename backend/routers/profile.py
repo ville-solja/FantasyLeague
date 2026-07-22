@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from database import get_db
@@ -23,11 +23,8 @@ class ChangePasswordBody(BaseModel):
 
 
 @router.get("/me")
-def me(request: Request, db=Depends(get_db)):
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = db.get(User, user_id)
+def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user = db.get(User, current_user["user_id"])
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
