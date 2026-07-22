@@ -90,6 +90,7 @@ flowchart TD
 | Agent | Trigger | Focus |
 |---|---|---|
 | [`/security-reviewer`](security-reviewer.md) | Any change to `backend/` routers or `main.py` | Auth gaps, session leaks, input validation, data over-exposure |
+| [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert | Fetches alert, fixes flagged code, verifies tests pass |
 | [`/scoring-analyst`](scoring-analyst.md) | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, stat-key mapping, division-by-zero |
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | [`/ui-design`](ui-design.md) | New UI surface or brand/design change | Brand-compliant production edits or throwaway prototypes |

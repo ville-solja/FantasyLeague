@@ -327,8 +327,10 @@ function _initDragAndDrop(activeCards, benchCards) {
 
   // Shared handler for drops onto empty active slots (used by both per-slot and container fallback)
   async function _dropOnEmptySlot(draggedId, draggedZone, targetSlotIndex) {
+    const safeId = parseInt(draggedId, 10);
+    if (!Number.isFinite(safeId)) return;
     if (draggedZone === "bench") {
-      const res = await fetch(`${API}/roster/${draggedId}/activate`, { method: "POST" });
+      const res = await fetch(`${API}/roster/${safeId}/activate`, { method: "POST" });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         const s = document.getElementById("rosterStatus");
@@ -336,10 +338,10 @@ function _initDragAndDrop(activeCards, benchCards) {
         return;
       }
       // Assign this card directly to the target slot; other cards keep their slot_indexes
-      await _apiReorder([draggedId], [targetSlotIndex]);
+      await _apiReorder([safeId], [targetSlotIndex]);
     } else if (draggedZone === "active") {
       // Move the active card to the specific empty slot; leave other cards in place
-      await _apiReorder([draggedId], [targetSlotIndex]);
+      await _apiReorder([safeId], [targetSlotIndex]);
     }
     loadRoster(_rosterWeekId);
   }
@@ -410,8 +412,10 @@ function _initDragAndDrop(activeCards, benchCards) {
 
     const { cardId: draggedId, zone: draggedZone } = payload;
     if (draggedZone !== "active") return;
+    const safeId = parseInt(draggedId, 10);
+    if (!Number.isFinite(safeId)) return;
 
-    const res = await fetch(`${API}/roster/${draggedId}/deactivate`, { method: "POST" });
+    const res = await fetch(`${API}/roster/${safeId}/deactivate`, { method: "POST" });
     if (!res.ok) return;
     const benchIds = [draggedId, ...benchCards.map(c => c.id)];
     await _apiReorder(benchIds);
