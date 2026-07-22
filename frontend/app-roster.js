@@ -259,30 +259,32 @@ function _initDragAndDrop(activeCards, benchCards) {
       catch (_) { return; }
 
       const { cardId: draggedId, zone: draggedZone } = payload;
+      const safeId     = parseInt(draggedId, 10);
+      if (!Number.isFinite(safeId)) return;
       const targetId   = parseInt(slot.dataset.cardId);
       const targetZone = slot.dataset.zone;
 
-      if (draggedId === targetId) return;
+      if (safeId === targetId) return;
 
       // Case 1 — active → active : in-zone reorder
       if (draggedZone === "active" && targetZone === "active") {
         const ids = activeCards.map(c => c.id);
-        const fromIdx = ids.indexOf(draggedId);
+        const fromIdx = ids.indexOf(safeId);
         const toIdx   = ids.indexOf(targetId);
         if (fromIdx === -1 || toIdx === -1) return;
         ids.splice(fromIdx, 1);
-        ids.splice(toIdx, 0, draggedId);
+        ids.splice(toIdx, 0, safeId);
         await _apiReorder(ids);
       }
 
       // Case 2 — bench → bench : in-zone reorder
       else if (draggedZone === "bench" && targetZone === "bench") {
         const ids = benchCards.map(c => c.id);
-        const fromIdx = ids.indexOf(draggedId);
+        const fromIdx = ids.indexOf(safeId);
         const toIdx   = ids.indexOf(targetId);
         if (fromIdx === -1 || toIdx === -1) return;
         ids.splice(fromIdx, 1);
-        ids.splice(toIdx, 0, draggedId);
+        ids.splice(toIdx, 0, safeId);
         await _apiReorder(ids);
       }
 
@@ -294,7 +296,7 @@ function _initDragAndDrop(activeCards, benchCards) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            bench_card_id: draggedId,
+            bench_card_id: safeId,
             active_card_id: targetId,
             slot_index: slotIdx,
           }),
@@ -309,7 +311,7 @@ function _initDragAndDrop(activeCards, benchCards) {
 
       // Case 4 — active → bench : deactivate then reorder
       else if (draggedZone === "active" && targetZone === "bench") {
-        const res = await fetch(`${API}/roster/${draggedId}/deactivate`, { method: "POST" });
+        const res = await fetch(`${API}/roster/${safeId}/deactivate`, { method: "POST" });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
           const s = document.getElementById("rosterStatus");
@@ -317,7 +319,7 @@ function _initDragAndDrop(activeCards, benchCards) {
           return;
         }
         // Place at front of bench
-        const benchIds = [draggedId, ...benchCards.map(c => c.id)];
+        const benchIds = [safeId, ...benchCards.map(c => c.id)];
         await _apiReorder(benchIds);
       }
 
