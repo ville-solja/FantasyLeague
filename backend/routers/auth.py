@@ -121,7 +121,8 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
                 f"Your previous password is no longer valid.\n"
                 f"This temporary password expires in {ttl_hours} hour(s). "
                 f"Log in and go to your Profile to set a permanent password.\n\n"
-                f"If you did not request this reset, contact support immediately.\n"
+                f"If you did not request this, act quickly — your previous password has already been replaced by the temporary one above. "
+                f"Log in and change it immediately, or contact support.\n"
             ),
         )
     except Exception:
