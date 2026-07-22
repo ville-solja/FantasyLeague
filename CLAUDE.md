@@ -96,6 +96,21 @@ Audits every FastAPI endpoint for authentication gaps, session leaks, input vali
 
 ---
 
+### `/security-patcher`
+**Role: Security Patcher**
+Fetches a GitHub code scanning alert (CodeQL or other SAST tool), understands the flagged vulnerability in context, applies the minimum safe fix, and verifies the test suite still passes.
+- Accepts an alert number or full GitHub Security URL
+- Stops cleanly if the alert is already fixed/dismissed or if no safe fix can be determined
+- Handles common Python/JS patterns: SQL injection via unbound `text()`, path traversal, XSS via `innerHTML`, hardcoded credentials
+- Runs `pytest` and import check after patching; reverts if tests regress
+- Appends a lessons-learned entry for novel vulnerability patterns
+
+**When to run:** When a new code scanning alert appears in the GitHub Security tab, or after a CI CodeQL scan flags a regression.
+
+**Usage:** `/security-patcher <alert-number>` or `/security-patcher <github-url>`
+
+---
+
 ### `/documentation-steward`
 **Role: Documentation Steward**
 Detects drift between `markdown/features/` docs and the actual backend implementation.
