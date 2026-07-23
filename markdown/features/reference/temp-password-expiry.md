@@ -31,7 +31,7 @@ POST /login (with temp password)
     → if now > temp_password_expires_at → 401 "Temporary password has expired"
     → else → login succeeds, must_change_password flag signals Profile tab to prompt change
     ↓
-POST /change-password
+PUT /profile/password
     → user.must_change_password = False
     → user.temp_password_expires_at = None
 ```
