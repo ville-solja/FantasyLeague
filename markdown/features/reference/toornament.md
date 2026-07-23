@@ -76,6 +76,6 @@ Each successful push writes or updates a row in `toornament_sync_log`:
 
 ## Limitations
 
-- **All-time win counts**: `resolve_series_result` aggregates all stored matches between two teams for the entire season. If the same two teams meet in both group stage and playoffs, both series' results are summed. This matches the existing schedule view behaviour.
+- **All-time win counts (Toornament only)**: `resolve_series_result` called by the Toornament sync has no date filter — it aggregates all stored matches between two teams across the season. If the same two teams meet in group stage and playoffs, both series are summed. The schedule view uses a separate call with a ±4-day window around the scheduled date (see schedule view note below).
 - **One-directional**: bracket advancement, seeding, and group assignments in toornament are not read back into Kana Cards.
 - **Toornament match scope**: only matches with `status` of `"running"` or `"completed"` and exactly two mapped participants are processed. Byes and TBD slots are skipped automatically.

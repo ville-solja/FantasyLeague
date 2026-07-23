@@ -106,6 +106,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week lock maintenance checks |
 | `SEASON_LOCK_START` | `2026-03-08` | First Sunday lock date (ISO format) |
+| `SEASON_END` | *(empty)* | ISO date after which no new weeks are auto-generated; leave empty during active season |
 | `SCHEDULE_SHEET_URL` | *(Kanaliiga sheet)* | Google Sheets CSV export URL for the match schedule |
 | `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
 | `OPENDOTA_MAX_RPM` | `55` | Max OpenDota requests per rolling 60 s (free tier ~60/min; default leaves headroom) |

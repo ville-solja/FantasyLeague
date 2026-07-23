@@ -12,7 +12,7 @@ Weeks are anchored to the date set in `SEASON_LOCK_START` (ISO date string, must
 | Match window opens | Monday 00:00:00 UTC |
 | Match window closes | Following Sunday 23:59:59 UTC |
 
-Week rows are generated automatically, always keeping at least 4 weeks ahead of the current date. New weeks are added by the week maintenance background thread (runs every 5 minutes by default, configurable via `WEEK_CHECK_INTERVAL`).
+Week rows are generated automatically, always keeping at least 4 weeks ahead of the current date. New weeks are added by the week maintenance background thread (runs every 5 minutes by default, configurable via `WEEK_CHECK_INTERVAL`). Set `SEASON_END` (ISO date) to stop auto-generation after the season concludes — no new weeks will be created with a start date beyond that cutoff.
 
 ## Week Locking
 
