@@ -12,13 +12,12 @@ The admin panel is divided into five tabs:
 
 | Tab | Contents |
 |---|---|
+| **User Management** | User list, token grants, tester flag toggle — default tab |
 | **Week Management** | Week CRUD (create, edit, delete unlocked weeks) |
-| **Player Pool** | Player pool management (add, bulk-add, remove with refund) |
+| **Player Management** | Player management (add, bulk-add, remove with refund) |
+| **Matches** | Ingested match table with MVP selection |
 | **Audit Log** | Chronological audit log of all admin and user actions |
 | **Settings** | League monitoring, Token Grant Events, Notifications, Promo Codes, Scoring Weights, User Tags, Token Balances |
-| **Matches** | Ingested match table with MVP selection |
-
-User management (grant tokens, tester toggle) remains in a persistent top section above the tab bar, always visible.
 
 Tab state is stored in `sessionStorage` so the last-selected tab is restored when the user
 navigates away and returns.
