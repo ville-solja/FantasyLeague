@@ -31,14 +31,14 @@ function loadStatus() {
     }).catch(function() {
         el("view-unlinked").style.display = "block";
         el("view-linked").style.display = "none";
-        showBanner(el("banner"), "Could not reach FantasyLeague server.", true);
+        showBanner(el("banner"), "Could not reach kana-cards.com server.", true);
     });
 }
 
 function doLink() {
     var code = el("link-code-input").value.trim().toUpperCase();
     if (code.length !== 6) {
-        el("link-status").textContent = "Enter the 6-character code from the FantasyLeague site.";
+        el("link-status").textContent = "Enter the 6-character code from kana-cards.com.";
         return;
     }
     el("btn-link").disabled = true;

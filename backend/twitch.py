@@ -290,7 +290,6 @@ def current_matches(
 ):
     """Return the 5 most recent series that have ingested match data, across any week."""
     now = int(time.time())
-    lookback = now - 30 * 86400
 
     ingested_match_ids = [
         r.match_id
@@ -304,7 +303,6 @@ def current_matches(
         .filter(
             Match.match_id.in_(ingested_match_ids),
             Match.start_time <= now,
-            Match.start_time >= lookback,
         )
         .order_by(Match.start_time)
         .all()

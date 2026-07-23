@@ -58,7 +58,7 @@ def main() -> None:
     print(f"radiant_logo={data.get('radiant_logo')!r} dire_logo={data.get('dire_logo')!r}")
     print()
 
-    ua = {"User-Agent": "FantasyLeagueLogoTest/1.0"}
+    ua = {"User-Agent": "KanaCards/1.0 (+https://kana-cards.com)"}
     print("--- Valve team_logos/{team_id}.png ---")
     for side, tid in (("radiant", data.get("radiant_team_id")), ("dire", data.get("dire_team_id"))):
         if not tid:

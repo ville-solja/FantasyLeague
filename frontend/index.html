@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kanaliiga Fantasy</title>
+  <title>Kana Cards</title>
   <link rel="stylesheet" href="/colors_and_type.css">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
@@ -244,7 +244,7 @@
 <!-- MAIN -->
 <header class="header">
   <div class="header-left">
-    <div class="header-title">KANALIIGA DOTA 2 FANTASY LEAGUE</div>
+    <div class="header-title">KANA CARDS</div>
   </div>
   <div class="header-right">
     <div id="tokenBalance" class="header-tokens" style="display:none;">
@@ -320,13 +320,13 @@
       <h2>Twitch Account</h2>
       <div id="twitchLinked" style="display:none">
         <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
-        <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live Kanaliiga streams.</p>
+        <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live streams.</p>
       </div>
       <div id="twitchUnlinked" style="display:none">
-        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to become eligible for token drops during live Kanaliiga streams.</p>
+        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to become eligible for token drops during live streams.</p>
         <button onclick="generateTwitchCode()">Generate Link Code</button>
         <div id="twitchCodeSection" style="display:none;margin-top:16px">
-          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the FantasyLeague extension panel on a Kanaliiga Twitch stream and enter this code:</p>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the Kana Cards extension panel on a Twitch stream and enter this code:</p>
           <div style="font-size:2rem;letter-spacing:0.3em;font-weight:700;color:#9147ff;padding:8px 0" id="twitchCode">------</div>
           <div class="status" id="twitchCodeExpiry"></div>
         </div>
@@ -519,11 +519,11 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Getting Started</h2>
 
-      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kanaliiga Fantasy is a card-collecting game tied to real Dota 2 league matches. Collect cards, build a roster, and score points based on how your players actually perform each week.</p>
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kana Cards is a fan-made card-collecting game tied to real Dota 2 league matches. Collect cards, build a roster, and score points based on how your players actually perform each week.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Each card represents a real Kanaliiga player. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
+        <li>Each card represents a real player from the Finnish Dota 2 league. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
         <li>Draw a card from the shared seasonal deck by spending <strong>1 token</strong>. The system prefers players you do not yet own — duplicates are only possible once you have a card for every available player.</li>
         <li>Higher rarity cards receive a flat point bonus on top of base stats and may come with <strong>stat modifiers</strong> that amplify specific scoring categories.</li>
       </ul>
@@ -531,14 +531,14 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Roster &amp; Weekly Lock</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Activate up to <strong>5 cards</strong> as your active roster. Remaining cards sit on the bench and do not score.</li>
-        <li>Every week the roster <strong>locks automatically</strong>. Locked cards earn fantasy points from every Kanaliiga match played during that week.</li>
+        <li>Every week the roster <strong>locks automatically</strong>. Locked cards earn fantasy points from every league match played during that week.</li>
         <li>You can swap bench cards in and out freely before the lock, but cannot change the roster once the week is locked.</li>
       </ul>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Earning Tokens</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li><strong>+1 token</strong> at the start of each new week.</li>
-        <li>Watch Kanaliiga streams on Twitch — linked viewers receive token drops when the broadcaster selects a match MVP.</li>
+        <li>Watch streams on Twitch — linked viewers receive token drops when the broadcaster selects a match MVP.</li>
         <li>Redeem <strong>promo codes</strong> distributed by admins for bonus tokens.</li>
       </ul>
     </div>
@@ -548,13 +548,13 @@
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Viewers</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Open the Kanaliiga panel on any Kanaliiga stream and link your Fantasy account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
+        <li>Open the Kana Cards panel on a Twitch stream and link your account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
         <li>Once linked, your token balance is shown in the panel and you are eligible for token drops.</li>
       </ul>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Broadcasters</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Install the <strong>Kanaliiga Fantasy</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
+        <li>Install the <strong>Kana Cards</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
         <li>After a match, open <strong>Quick Actions</strong> in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
         <li>Select the series (team vs team) → the specific match (Match 1, Match 2…) → the MVP player, then confirm.</li>
         <li>Token drops fire automatically on confirmation: up to 20 randomly selected linked viewers receive +1 token each. Drops only fire once per match — re-confirming a different MVP does not re-drop.</li>

@@ -1,13 +1,13 @@
-# FantasyLeague
+# Kana Cards
 
-A fantasy sports web app built around [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league.
+A fan-made fantasy sports web app built around match data from [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league. Not officially affiliated with Kanaliiga.
 
 ## What is a fantasy league?
 
 Participants act as virtual team managers — you draft real players onto your fantasy roster and score points based on how those players actually perform in real matches. The better your picks play in real life, the higher you climb on the leaderboard.
 
 In this app:
-- Player cards are generated from real Kanaliiga match data (common → legendary rarity)
+- Player cards are generated from real league match data (common → legendary rarity)
 - You build a roster by drawing cards using tokens
 - Your active roster earns fantasy points from matches played each week
 - Rosters lock every Sunday — make your picks before then
