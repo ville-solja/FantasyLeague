@@ -65,3 +65,4 @@ Implementation details, integrations, and operator tooling.
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | Microservice that downloads Dota 2 demos, extracts in-game tip events, and powers a tipping leaderboard |
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | HTML5 drag-and-drop to reorder the active roster; card viewer backdrop-click dismiss |
+| [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
