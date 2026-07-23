@@ -1,6 +1,6 @@
 # Twitch Extension
 
-A Twitch Panel Extension that connects the broadcaster's stream to the FantasyLeague app. Viewers link their Fantasy accounts, receive token drops on MVP selection, and see MVP announcements — all without leaving Twitch.
+A Twitch Panel Extension that connects the broadcaster's stream to Kana Cards. Viewers link their accounts, receive token drops on MVP selection, and see MVP announcements — all without leaving Twitch.
 
 ---
 
@@ -11,7 +11,7 @@ Twitch Extension (panel/live_config HTML/JS on Twitch CDN)
           ↕  HTTPS + Twitch-signed JWT
 FastAPI EBS (Extension Backend Service) — /twitch/* routes
           ↕
-Fantasy League SQLite database
+Kana Cards SQLite database
 ```
 
 The extension frontend is a standalone HTML/JS bundle uploaded to Twitch CDN. It is **not** served by FastAPI in production, but the `twitch-extension/` folder lives in this repo. The backend routes act as the EBS.
@@ -20,7 +20,7 @@ The extension frontend is a standalone HTML/JS bundle uploaded to Twitch CDN. It
 
 | Role | Responsibility |
 |---|---|
-| **Kanaliiga developer** | Register extension in Twitch dev console; set EBS URL once via `set-ebs-url.sh`; upload packaged ZIP |
+| **Kana Cards developer** | Register extension in Twitch dev console; set EBS URL once via `set-ebs-url.sh`; upload packaged ZIP |
 | **Broadcaster (streamer)** | Install the extension; use Quick Actions to select MVP |
 | **Viewer** | Open panel to link account, see token balance, receive drops |
 

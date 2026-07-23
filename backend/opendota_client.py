@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 OPEN_DOTA_URL = "https://api.opendota.com/api"
 
 DEFAULT_HEADERS = {
-    "User-Agent": "FantasyLeague/1.0 (+https://github.com/)",
+    "User-Agent": "KanaCards/1.0 (+https://kana-cards.com)",
     "Accept": "application/json",
 }
 

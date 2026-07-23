@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the FantasyLeague app. Sessions are server-side, stored in a signed cookie managed by Starlette's `SessionMiddleware`.
+User accounts, sessions, and profile management for the Kana Cards app. Sessions are server-side, stored in a signed cookie managed by Starlette's `SessionMiddleware`.
 
 ---
 
@@ -188,4 +188,4 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
 | `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, port 465); takes priority over `SMTP_TLS` |
-| `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |
+| `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |

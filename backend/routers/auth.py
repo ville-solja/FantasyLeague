@@ -109,7 +109,7 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
     user.temp_password_expires_at = int(time.time()) + ttl_hours * 3600
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
 
-    app_name = os.getenv("APP_NAME", "Kanaliiga Fantasy")
+    app_name = os.getenv("APP_NAME", "Kana Cards")
     try:
         send_email(
             to_address=user_email,
