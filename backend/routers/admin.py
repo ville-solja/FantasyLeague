@@ -784,9 +784,9 @@ def add_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(requi
         db.add(league)
     else:
         league.is_monitored = True
-    db.commit()
     _audit(db, "admin_league_add_monitor", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"league_id={league_id}")
+    db.commit()
     return {"status": "ok", "league_id": league_id}
 
 
@@ -796,9 +796,9 @@ def remove_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(re
     if not league or not league.is_monitored:
         raise HTTPException(status_code=404, detail="League is not currently monitored")
     league.is_monitored = False
-    db.commit()
     _audit(db, "admin_league_remove_monitor", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"league_id={league_id}")
+    db.commit()
     return {"status": "ok", "league_id": league_id}
 
 

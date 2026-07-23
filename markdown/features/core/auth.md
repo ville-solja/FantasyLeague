@@ -161,7 +161,7 @@ Issues a temporary password to the user's registered email address.
 
 The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to prevent username enumeration.
 
-**If SMTP is not configured** (`SMTP_HOST` unset), the email step is skipped and the temporary password is logged to stdout instead.
+**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the password change is still committed and the endpoint returns `{"status": "ok"}`, but the temporary password is not visible anywhere (it is not logged). To use the forgot-password flow locally, configure a real SMTP relay or temporarily set `SMTP_HOST` for testing.
 
 ---
 

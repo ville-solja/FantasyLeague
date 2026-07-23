@@ -9,7 +9,7 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, and `is_tester`.
+Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
 
 ### `POST /users/{user_id}/toggle-tester`
 Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
