@@ -106,6 +106,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week lock maintenance checks |
 | `SEASON_LOCK_START` | `2026-03-08` | First Sunday lock date (ISO format) |
+| `SEASON_END` | *(empty)* | ISO date after which no new weeks are auto-generated; leave empty during active season |
 | `SCHEDULE_SHEET_URL` | *(Kanaliiga sheet)* | Google Sheets CSV export URL for the match schedule |
 | `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
 | `OPENDOTA_MAX_RPM` | `55` | Max OpenDota requests per rolling 60 s (free tier ~60/min; default leaves headroom) |
@@ -127,7 +128,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
 | `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, typically port 465); takes priority over `SMTP_TLS` |
-| `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |
+| `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |

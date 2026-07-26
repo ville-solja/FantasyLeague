@@ -73,6 +73,7 @@ class Card(Base):
     league_id = Column(Integer, ForeignKey("leagues.id"))
     is_active = Column(Boolean, default=False)
     generation = Column(Integer, default=1, nullable=False)
+    slot_index = Column(Integer, nullable=True)
 
 
 _VALID_STAT_KEYS_LIST = list(SCORING_STATS) + ["deaths"]
@@ -104,6 +105,7 @@ class User(Base):
     created_at = Column(Integer, nullable=True)  # Unix timestamp of registration
     player_id = Column(Integer, nullable=True)   # linked OpenDota account_id
     must_change_password = Column(Boolean, default=False)  # True after a temp password is issued
+    temp_password_expires_at = Column(Integer, nullable=True)  # Unix timestamp; NULL when no temp password is active
     twitch_user_id = Column(String, nullable=True, unique=True)  # opaque Twitch user ID from extension JWT
 
 

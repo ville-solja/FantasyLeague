@@ -1,20 +1,20 @@
 # Toornament Integration
 
-The FantasyLeague app automatically synchronises series results to [toornament.com](https://toornament.com), where the Kanaliiga tournament bracket is managed. This eliminates manual result entry by admins and keeps the bracket up to date shortly after each series concludes.
+The Kana Cards app automatically synchronises series results to [toornament.com](https://toornament.com), where the Kanaliiga tournament bracket is managed. This eliminates manual result entry by admins and keeps the bracket up to date shortly after each series concludes.
 
 ## Overview
 
 ```
 OpenDota API
     ↓  (match IDs + per-player stats)
-FantasyLeague DB  ←──────────────────────────┐
+Kana Cards DB  ←──────────────────────────┐
     ↓  (resolve_series_result)               │
  series score (e.g. 2–1)                     │ poll every 15 min
     ↓                                        │
 toornament.com  ←── PATCH /matches/{id}  ────┘
 ```
 
-The integration is one-directional: FantasyLeague pushes results to toornament; it never reads bracket state back.
+The integration is one-directional: Kana Cards pushes results to toornament; it never reads bracket state back.
 
 ## How a Result Gets Pushed
 
@@ -30,7 +30,7 @@ The integration is one-directional: FantasyLeague pushes results to toornament; 
 
 ## Name Mapping
 
-Toornament stores participant names as free-text strings entered by tournament organisers. The FantasyLeague DB stores team names as extracted from OpenDota match data. The mapping relies on `norm_team_name()` in `schedule.py`:
+Toornament stores participant names as free-text strings entered by tournament organisers. The Kana Cards DB stores team names as extracted from OpenDota match data. The mapping relies on `norm_team_name()` in `schedule.py`:
 
 - Converts to lowercase
 - Strips parenthetical suffixes (e.g. `"Meta(no)core"` → `"metacore"`)
@@ -76,6 +76,6 @@ Each successful push writes or updates a row in `toornament_sync_log`:
 
 ## Limitations
 
-- **All-time win counts**: `resolve_series_result` aggregates all stored matches between two teams for the entire season. If the same two teams meet in both group stage and playoffs, both series' results are summed. This matches the existing schedule view behaviour.
-- **One-directional**: bracket advancement, seeding, and group assignments in toornament are not read back into FantasyLeague.
+- **All-time win counts (Toornament only)**: `resolve_series_result` called by the Toornament sync has no date filter — it aggregates all stored matches between two teams across the season. If the same two teams meet in group stage and playoffs, both series are summed. The schedule view uses a separate call with a ±4-day window around the scheduled date (see schedule view note below).
+- **One-directional**: bracket advancement, seeding, and group assignments in toornament are not read back into Kana Cards.
 - **Toornament match scope**: only matches with `status` of `"running"` or `"completed"` and exactly two mapped participants are processed. Byes and TBD slots are skipped automatically.

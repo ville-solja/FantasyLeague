@@ -31,6 +31,20 @@ def _parse_season_lock_anchor() -> int:
     return int(anchor.timestamp())
 
 
+def _parse_season_end() -> int | None:
+    """Return Unix timestamp for the last second of SEASON_END date (UTC), or None if unset."""
+    season_end_str = os.getenv("SEASON_END", "").strip()
+    if not season_end_str:
+        return None
+    try:
+        d = datetime.datetime.strptime(season_end_str, "%Y-%m-%d")
+        return int(datetime.datetime(d.year, d.month, d.day, 23, 59, 59,
+                                     tzinfo=datetime.timezone.utc).timestamp())
+    except ValueError:
+        logger.warning("SEASON_END '%s' is not a valid ISO date (YYYY-MM-DD) — ignored.", season_end_str)
+        return None
+
+
 def generate_weeks(db):
     """Insert missing Week rows from SEASON_LOCK_START through 4 Sundays ahead.
 
@@ -39,10 +53,16 @@ def generate_weeks(db):
       end   = anchor + N*7d             (Sunday 23:59:59 UTC)
 
     The roster for Week N is locked when start_time passes.
+
+    If SEASON_END is set (ISO date), no weeks starting after that date are created.
     """
     anchor = _parse_season_lock_anchor()
     now = int(time.time())
     future_limit = now + 4 * _SECS_PER_WEEK
+
+    season_end = _parse_season_end()
+    if season_end is not None:
+        future_limit = min(future_limit, season_end)
 
     existing_starts = {w.start_time for w in db.query(Week).all()}
 

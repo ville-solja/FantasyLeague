@@ -9,7 +9,7 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, and `is_tester`.
+Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
 
 ### `POST /users/{user_id}/toggle-tester`
 Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
@@ -152,6 +152,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_player_refund_issued` | Tokens granted to a card holder after player removal |
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `password_reset_requested` | Forgot-password flow issued a temporary password |
+| `admin_set_mvp` | Admin set match MVP via the Matches tab |
 
 ---
 
@@ -190,3 +191,4 @@ These features have dedicated reference documents:
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` | `reference/admin-week-management.md` |
+| Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp` | `reference/admin-tab-navigation-mvp.md` |

@@ -100,6 +100,48 @@ As a Kanaliiga streamer, I want the How to Play tab to explain the Twitch extens
 
 ---
 
+## My Team Interactions
+
+### Active Roster Drag-and-Drop
+**User story**
+As a player, I want to drag cards within my active roster to change their display order so
+that I can arrange my lineup in a way that is meaningful to me.
+
+**Acceptance criteria**
+- Cards in the active roster grid are draggable
+- Dragging a card and dropping it onto another card swaps or inserts it at the target position
+- The new order is persisted to the backend so it survives a page refresh
+- When the week is locked, drag handles are hidden and the order cannot be changed
+- A visual drag-over indicator (highlight or gap) shows the drop target while dragging
+
+---
+
+### Bench Drag-and-Drop Reorder
+**User story**
+As a player, I want to drag cards within my bench to change their order so that I can
+organise my reserve cards the same way I can my active roster.
+
+**Acceptance criteria**
+- Bench cards are draggable (when the week is unlocked)
+- Dragging a bench card onto another bench card repositions it at that target position
+- The new bench order is persisted to the backend so it survives a page refresh
+- A visual drag-over indicator shows the drop target while dragging
+
+---
+
+### Card Viewer Backdrop Dismiss
+**User story**
+As a player, I want clicking outside an open card to close it so that I can dismiss the
+card viewer without hunting for the close button.
+
+**Acceptance criteria**
+- Clicking the dark overlay area around the card viewer closes the modal
+- Clicking inside the card content area does not close the modal
+- The close button (X) continues to work as before
+- The behaviour applies when a card is opened from the roster, bench, or any other context
+
+---
+
 ## Table Sortability
 
 ### Sort Players Table by Column Header

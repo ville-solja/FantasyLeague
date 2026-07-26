@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Kanaliiga Fantasy</title>
+  <title>Kana Cards</title>
   <link rel="stylesheet" href="/colors_and_type.css">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
@@ -141,7 +141,7 @@
   </div>
 </div>
 
-<!-- Player Pool: Add Player Modal -->
+<!-- Player Management: Add Player Modal -->
 <div class="modal-overlay hidden" id="addPlayerModal" onclick="closeAddPlayerPopup()">
   <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -157,7 +157,7 @@
   </div>
 </div>
 
-<!-- Player Pool: Bulk Add Modal -->
+<!-- Player Management: Bulk Add Modal -->
 <div class="modal-overlay hidden" id="bulkAddPlayersModal" onclick="closeBulkAddPlayersPopup()">
   <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -174,7 +174,7 @@
   </div>
 </div>
 
-<!-- Player Pool: Remove Confirm Modal -->
+<!-- Player Management: Remove Confirm Modal -->
 <div class="modal-overlay hidden" id="removePlayersModal" onclick="closeRemovePlayersConfirm()">
   <div class="modal" style="max-width:420px;" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -244,7 +244,7 @@
 <!-- MAIN -->
 <header class="header">
   <div class="header-left">
-    <div class="header-title">KANALIIGA DOTA 2 FANTASY LEAGUE</div>
+    <div class="header-title">KANA CARDS</div>
   </div>
   <div class="header-right">
     <div id="tokenBalance" class="header-tokens" style="display:none;">
@@ -320,13 +320,13 @@
       <h2>Twitch Account</h2>
       <div id="twitchLinked" style="display:none">
         <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
-        <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live Kanaliiga streams.</p>
+        <p style="font-size:0.8rem;color:#555">You are eligible to receive token drops while watching live streams.</p>
       </div>
       <div id="twitchUnlinked" style="display:none">
-        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to become eligible for token drops during live Kanaliiga streams.</p>
+        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to become eligible for token drops during live streams.</p>
         <button onclick="generateTwitchCode()">Generate Link Code</button>
         <div id="twitchCodeSection" style="display:none;margin-top:16px">
-          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the FantasyLeague extension panel on a Kanaliiga Twitch stream and enter this code:</p>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the Kana Cards extension panel on a Twitch stream and enter this code:</p>
           <div style="font-size:2rem;letter-spacing:0.3em;font-weight:700;color:#9147ff;padding:8px 0" id="twitchCode">------</div>
           <div class="status" id="twitchCodeExpiry"></div>
         </div>
@@ -519,11 +519,11 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Getting Started</h2>
 
-      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kanaliiga Fantasy is a card-collecting game tied to real Dota 2 league matches. Collect cards, build a roster, and score points based on how your players actually perform each week.</p>
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kana Cards is a fan-made card-collecting game tied to real Dota 2 league matches. Collect cards, build a roster, and score points based on how your players actually perform each week.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Each card represents a real Kanaliiga player. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
+        <li>Each card represents a real player from the Finnish Dota 2 league. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
         <li>Draw a card from the shared seasonal deck by spending <strong>1 token</strong>. The system prefers players you do not yet own — duplicates are only possible once you have a card for every available player.</li>
         <li>Higher rarity cards receive a flat point bonus on top of base stats and may come with <strong>stat modifiers</strong> that amplify specific scoring categories.</li>
       </ul>
@@ -531,14 +531,14 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Roster &amp; Weekly Lock</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Activate up to <strong>5 cards</strong> as your active roster. Remaining cards sit on the bench and do not score.</li>
-        <li>Every week the roster <strong>locks automatically</strong>. Locked cards earn fantasy points from every Kanaliiga match played during that week.</li>
+        <li>Every week the roster <strong>locks automatically</strong>. Locked cards earn fantasy points from every league match played during that week.</li>
         <li>You can swap bench cards in and out freely before the lock, but cannot change the roster once the week is locked.</li>
       </ul>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Earning Tokens</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li><strong>+1 token</strong> at the start of each new week.</li>
-        <li>Watch Kanaliiga streams on Twitch — linked viewers receive token drops when the broadcaster selects a match MVP.</li>
+        <li>Watch streams on Twitch — linked viewers receive token drops when the broadcaster selects a match MVP.</li>
         <li>Redeem <strong>promo codes</strong> distributed by admins for bonus tokens.</li>
       </ul>
     </div>
@@ -548,13 +548,13 @@
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Viewers</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Open the Kanaliiga panel on any Kanaliiga stream and link your Fantasy account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
+        <li>Open the Kana Cards panel on a Twitch stream and link your account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
         <li>Once linked, your token balance is shown in the panel and you are eligible for token drops.</li>
       </ul>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Broadcasters</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Install the <strong>Kanaliiga Fantasy</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
+        <li>Install the <strong>Kana Cards</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
         <li>After a match, open <strong>Quick Actions</strong> in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
         <li>Select the series (team vs team) → the specific match (Match 1, Match 2…) → the MVP player, then confirm.</li>
         <li>Token drops fire automatically on confirmation: up to 20 randomly selected linked viewers receive +1 token each. Drops only fire once per match — re-confirming a different MVP does not re-drop.</li>
@@ -607,195 +607,254 @@
 
 <!-- TAB: ADMIN -->
 <div id="tab-admin" class="tab-content">
-  <div class="grid">
 
-    <div class="tab-col">
-      <div class="panel">
-        <h2>Week Management</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-          <input id="weekLabel"     type="text"           placeholder="Label e.g. Week 7" style="max-width:140px;" />
-          <input id="weekStart"     type="datetime-local" title="Start time" />
-          <input id="weekEnd"       type="datetime-local" title="End time" />
-          <button onclick="createAdminWeek()">Create</button>
-          <button class="secondary" onclick="loadAdminWeeks()">Refresh</button>
+  <!-- Admin tab bar -->
+  <div id="admin-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
+    <button class="admin-tab-btn" data-tab="user-management">User Management</button>
+    <button class="admin-tab-btn" data-tab="week-management">Week Management</button>
+    <button class="admin-tab-btn" data-tab="player-management">Player Management</button>
+    <button class="admin-tab-btn" data-tab="matches">Matches</button>
+    <button class="admin-tab-btn" data-tab="audit-log">Audit Log</button>
+    <button class="admin-tab-btn" data-tab="settings">Settings</button>
+  </div>
+
+  <!-- User Management tab -->
+  <div data-admin-tab="user-management">
+    <div class="panel">
+      <h2>User Management</h2>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+        <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
+        <button class="secondary" onclick="loadUsers()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>User</th><th>Tags</th><th>Tokens</th><th>Actions</th></tr></thead>
+        <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="usersStatus"></div>
+    </div>
+  </div>
+
+  <!-- Week Management tab -->
+  <div data-admin-tab="week-management">
+    <div class="panel">
+      <h2>Week Management</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+        <input id="weekLabel"     type="text"           placeholder="Label e.g. Week 7" style="max-width:140px;" />
+        <input id="weekStart"     type="datetime-local" title="Start time" />
+        <input id="weekEnd"       type="datetime-local" title="End time" />
+        <button onclick="createAdminWeek()">Create</button>
+        <button class="secondary" onclick="loadAdminWeeks()">Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Label</th><th>Start</th><th>End</th><th>Locked</th><th>Rosters</th><th></th></tr></thead>
+        <tbody id="adminWeeksBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div id="weekEditForm" class="hidden" style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:4px;">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <input id="editWeekLabel" type="text"           placeholder="Label" style="max-width:140px;" />
+          <input id="editWeekStart" type="datetime-local" />
+          <input id="editWeekEnd"   type="datetime-local" />
+          <button onclick="saveWeekEdit()">Save</button>
+          <button class="ghost" onclick="cancelWeekEdit()">Cancel</button>
         </div>
+        <input id="editWeekId" type="hidden" />
+      </div>
+      <div class="status" id="weeksAdminStatus"></div>
+    </div>
+  </div>
+
+  <!-- Player Management tab -->
+  <div data-admin-tab="player-management" style="display:none">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin:0;">Player Management</h2>
+        <div style="display:flex;gap:8px;">
+          <button onclick="openAddPlayerPopup()">Add</button>
+          <button class="secondary" onclick="openBulkAddPlayersPopup()">Bulk Add</button>
+          <button id="removePlayersBtn" class="danger" disabled onclick="openRemovePlayersConfirm()">Remove</button>
+          <button class="secondary" onclick="loadPlayerPool()">Refresh</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+        <input id="playerPoolSearch" type="text" placeholder="Search players…" oninput="filterPlayerPool()" style="flex:1;min-width:160px;" />
+      </div>
+      <table id="playerPoolTable">
+        <thead><tr><th></th><th>Name</th><th>OpenDota ID</th><th>Active Cards</th><th>Status</th></tr></thead>
+        <tbody id="playerPoolBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="playerPoolStatus"></div>
+    </div>
+  </div>
+
+  <!-- Audit Log tab -->
+  <div data-admin-tab="audit-log" style="display:none">
+    <div class="panel">
+      <h2>Audit Log</h2>
+      <button class="secondary" onclick="loadAuditLog()" style="margin-bottom:12px;">Refresh</button>
+      <div style="overflow-x:auto;">
         <table>
-          <thead><tr><th>Label</th><th>Start</th><th>End</th><th>Locked</th><th>Rosters</th><th></th></tr></thead>
-          <tbody id="adminWeeksBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
+          <tbody id="auditBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
         </table>
-        <div id="weekEditForm" class="hidden" style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:4px;">
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <input id="editWeekLabel" type="text"           placeholder="Label" style="max-width:140px;" />
-            <input id="editWeekStart" type="datetime-local" />
-            <input id="editWeekEnd"   type="datetime-local" />
-            <button onclick="saveWeekEdit()">Save</button>
-            <button class="ghost" onclick="cancelWeekEdit()">Cancel</button>
+      </div>
+      <div class="status" id="auditStatus"></div>
+    </div>
+  </div>
+
+  <!-- Settings tab -->
+  <div data-admin-tab="settings" style="display:none">
+    <div class="grid">
+      <div class="tab-col">
+        <div class="panel" id="leagueManagementPanel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h2 style="margin:0;">League Management</h2>
+            <div style="display:flex;gap:8px;">
+              <button onclick="openAddLeagueModal()">Add</button>
+              <button class="secondary" onclick="loadLeagues()">Refresh</button>
+            </div>
           </div>
-          <input id="editWeekId" type="hidden" />
-        </div>
-        <div class="status" id="weeksAdminStatus"></div>
-      </div>
-
-      <div class="panel">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h2 style="margin:0;">Player Pool</h2>
-          <div style="display:flex;gap:8px;">
-            <button onclick="openAddPlayerPopup()">Add</button>
-            <button class="secondary" onclick="openBulkAddPlayersPopup()">Bulk Add</button>
-            <button id="removePlayersBtn" class="danger" disabled onclick="openRemovePlayersConfirm()">Remove</button>
-            <button class="secondary" onclick="loadPlayerPool()">Refresh</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
-          <input id="playerPoolSearch" type="text" placeholder="Search players…" oninput="filterPlayerPool()" style="flex:1;min-width:160px;" />
-        </div>
-        <table id="playerPoolTable">
-          <thead><tr><th></th><th>Name</th><th>OpenDota ID</th><th>Active Cards</th><th>Status</th></tr></thead>
-          <tbody id="playerPoolBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="playerPoolStatus"></div>
-      </div>
-
-      <div class="panel" id="leagueManagementPanel">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h2 style="margin:0;">League Management</h2>
-          <div style="display:flex;gap:8px;">
-            <button onclick="openAddLeagueModal()">Add</button>
-            <button class="secondary" onclick="loadLeagues()">Refresh</button>
-          </div>
-        </div>
-        <table id="leagueTable">
-          <thead><tr><th>ID</th><th>Name</th><th>Matches</th><th>Monitored</th><th>Actions</th></tr></thead>
-          <tbody id="leagueTableBody"></tbody>
-        </table>
-      </div>
-
-      <div class="panel">
-        <h2>Token Balances</h2>
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
-          <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
-          <button class="secondary" onclick="loadUsers()">Refresh</button>
-        </div>
-        <table>
-          <thead><tr><th>User</th><th>Tags</th><th>Tokens</th><th>Actions</th></tr></thead>
-          <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="usersStatus"></div>
-      </div>
-
-      <div class="panel">
-        <h2>Tag Definitions</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Define tag types. Grant them to users via the Token Balances table above.</p>
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
-          <input id="tagKeyInput" type="text" placeholder="Key (slug, e.g. caster)" style="max-width:160px;" />
-          <input id="tagLabelInput" type="text" placeholder="Display label" style="max-width:160px;" />
-          <button onclick="createTag()">Create</button>
-          <button class="secondary" onclick="loadTags()">Refresh</button>
-        </div>
-        <table>
-          <thead><tr><th>Key</th><th>Label</th><th></th></tr></thead>
-          <tbody id="tagsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="tagsStatus"></div>
-      </div>
-
-      <div class="panel">
-        <h2>Audit Log</h2>
-        <button class="secondary" onclick="loadAuditLog()" style="margin-bottom:12px;">Refresh</button>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
-            <tbody id="auditBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+          <table id="leagueTable">
+            <thead><tr><th>ID</th><th>Name</th><th>Matches</th><th>Monitored</th><th>Actions</th></tr></thead>
+            <tbody id="leagueTableBody"></tbody>
           </table>
         </div>
-        <div class="status" id="auditStatus"></div>
-      </div>
-    </div>
 
-    <div class="tab-col">
-      <div class="panel">
-        <h2>Promo Codes</h2>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-          <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
-          <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
-          <button onclick="createCode()">Create</button>
-          <button class="secondary" onclick="loadCodes()">Refresh</button>
-        </div>
-        <table>
-          <thead><tr><th>Code</th><th>Tokens</th><th>Uses</th><th></th></tr></thead>
-          <tbody id="codesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="codesStatus"></div>
-      </div>
-
-      <div class="panel">
-        <h2>Notifications</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Broadcast a one-time message to all logged-in players during the active window.</p>
-        <div style="margin-bottom:12px;">
-          <textarea id="notifMsgInput" placeholder="Message (max 500 characters)" rows="3" style="width:100%;margin-bottom:8px;resize:vertical;" maxlength="500"></textarea>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <input id="notifStart" type="datetime-local" title="Start time" />
-            <input id="notifEnd"   type="datetime-local" title="End time" />
-            <button onclick="createNotification()">Create</button>
-            <button class="secondary" onclick="loadNotifications()">Refresh</button>
+        <div class="panel">
+          <h2>Tag Definitions</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Define tag types. Grant them to users via User Management above.</p>
+          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+            <input id="tagKeyInput" type="text" placeholder="Key (slug, e.g. caster)" style="max-width:160px;" />
+            <input id="tagLabelInput" type="text" placeholder="Display label" style="max-width:160px;" />
+            <button onclick="createTag()">Create</button>
+            <button class="secondary" onclick="loadTags()">Refresh</button>
           </div>
+          <table>
+            <thead><tr><th>Key</th><th>Label</th><th></th></tr></thead>
+            <tbody id="tagsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="tagsStatus"></div>
         </div>
-        <table>
-          <thead><tr><th>Message</th><th>Start</th><th>End</th><th>Seen</th><th></th></tr></thead>
-          <tbody id="notifBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="notifAdminStatus"></div>
-      </div>
 
-      <div class="panel">
-        <h2>Token Grant Events</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">All logged-in players claim tokens automatically during the active window.</p>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-          <input id="grantAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
-          <input id="grantStart" type="datetime-local" title="Start time" />
-          <input id="grantEnd"   type="datetime-local" title="End time" />
-          <button onclick="createTokenGrantEvent()">Create</button>
-          <button class="secondary" onclick="loadTokenGrantEvents()">Refresh</button>
+        <div class="panel">
+          <h2>Promo Codes</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+            <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
+            <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
+            <button onclick="createCode()">Create</button>
+            <button class="secondary" onclick="loadCodes()">Refresh</button>
+          </div>
+          <table>
+            <thead><tr><th>Code</th><th>Tokens</th><th>Uses</th><th></th></tr></thead>
+            <tbody id="codesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="codesStatus"></div>
         </div>
-        <table>
-          <thead><tr><th>Tokens</th><th>Start</th><th>End</th><th>Claims</th><th></th></tr></thead>
-          <tbody id="tokenGrantBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="tokenGrantStatus"></div>
+
+        <div class="panel">
+          <h2>Scoring Weights</h2>
+          <table>
+            <thead><tr><th>Stat</th><th>Weight</th></tr></thead>
+            <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="weightsStatus"></div>
+        </div>
       </div>
 
-      <div class="panel">
-        <h2>Refresh Schedule Cache</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
-        <button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button>
-        <div class="status" id="scheduleRefreshStatus"></div>
-      </div>
+      <div class="tab-col">
+        <div class="panel">
+          <h2>Notifications</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Broadcast a one-time message to all logged-in players during the active window.</p>
+          <div style="margin-bottom:12px;">
+            <textarea id="notifMsgInput" placeholder="Message (max 500 characters)" rows="3" style="width:100%;margin-bottom:8px;resize:vertical;" maxlength="500"></textarea>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <input id="notifStart" type="datetime-local" title="Start time" />
+              <input id="notifEnd"   type="datetime-local" title="End time" />
+              <button onclick="createNotification()">Create</button>
+              <button class="secondary" onclick="loadNotifications()">Refresh</button>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>Message</th><th>Start</th><th>End</th><th>Seen</th><th></th></tr></thead>
+            <tbody id="notifBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="notifAdminStatus"></div>
+        </div>
 
-      <div class="panel">
-        <h2>Recalculate Fantasy Points</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
-        <button id="recalculateBtn" onclick="recalculate()">Recalculate</button>
-        <div class="status" id="recalcStatus"></div>
-      </div>
+        <div class="panel">
+          <h2>Token Grant Events</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">All logged-in players claim tokens automatically during the active window.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+            <input id="grantAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
+            <input id="grantStart" type="datetime-local" title="Start time" />
+            <input id="grantEnd"   type="datetime-local" title="End time" />
+            <button onclick="createTokenGrantEvent()">Create</button>
+            <button class="secondary" onclick="loadTokenGrantEvents()">Refresh</button>
+          </div>
+          <table>
+            <thead><tr><th>Tokens</th><th>Start</th><th>End</th><th>Claims</th><th></th></tr></thead>
+            <tbody id="tokenGrantBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="tokenGrantStatus"></div>
+        </div>
 
-      <div class="panel">
-        <h2>Re-enrich Player Profiles</h2>
-        <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
-        <button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button>
-        <div class="status" id="enrichStatus"></div>
-      </div>
+        <div class="panel">
+          <h2>Refresh Schedule Cache</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
+          <button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button>
+          <div class="status" id="scheduleRefreshStatus"></div>
+        </div>
 
+        <div class="panel">
+          <h2>Recalculate Fantasy Points</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
+          <button id="recalculateBtn" onclick="recalculate()">Recalculate</button>
+          <div class="status" id="recalcStatus"></div>
+        </div>
 
-      <div class="panel">
-        <h2>Scoring Weights</h2>
-        <table>
-          <thead><tr><th>Stat</th><th>Weight</th></tr></thead>
-          <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
-        </table>
-        <div class="status" id="weightsStatus"></div>
+        <div class="panel">
+          <h2>Re-enrich Player Profiles</h2>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
+          <button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button>
+          <div class="status" id="enrichStatus"></div>
+        </div>
       </div>
     </div>
+  </div>
 
+  <!-- Matches tab -->
+  <div data-admin-tab="matches" style="display:none">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin:0;">Matches</h2>
+        <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="admin-matches-table">
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="7" style="color:#444">—</td></tr></tbody>
+        </table>
+      </div>
+      <div class="status" id="adminMatchesStatus"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MVP Selection Modal -->
+<div id="mvpModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:680px;width:95vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Set MVP</h2>
+      <button class="ghost" onclick="closeMvpModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="mvpPlayerList" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin-bottom:16px;">
+      <p style="color:#888;grid-column:1/-1">Loading…</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="confirmSetMvp()" style="flex:1;">Confirm</button>
+      <button class="ghost" onclick="closeMvpModal()" style="flex:1;">Cancel</button>
+    </div>
+    <div class="status" id="mvpModalStatus" style="margin-top:8px;"></div>
   </div>
 </div>
 

@@ -191,19 +191,38 @@ def build_team_lookup(db):
         return {}
 
 
-def resolve_series_result(db, team1_name, team2_name, team_lookup):
-    """Return {team1_wins, team2_wins, game_count, start_time} or None if unresolvable."""
+def resolve_series_result(db, team1_name, team2_name, team_lookup, scheduled_dt_iso=None):
+    """Return {team1_wins, team2_wins, game_count, start_time} or None if unresolvable.
+
+    When scheduled_dt_iso is supplied, only matches within ±4 days of that date
+    are counted.  This prevents LAN-finals games from inflating regular-season
+    series results when the same two teams met again later in the season.
+    """
     team1_id = find_team_id(team1_name, team_lookup)
     team2_id = find_team_id(team2_name, team_lookup)
     if not team1_id or not team2_id:
         return None
+
+    WINDOW = 4 * 86400  # 4 days in seconds
+    params = {"a": team1_id, "b": team2_id}
+    time_clause = ""
+    if scheduled_dt_iso:
+        try:
+            anchor = int(datetime.fromisoformat(scheduled_dt_iso).timestamp())
+            params["t0"] = anchor - WINDOW
+            params["t1"] = anchor + WINDOW
+            time_clause = "AND start_time BETWEEN :t0 AND :t1"
+        except (ValueError, TypeError):
+            pass  # malformed date — fall back to all-time
+
     try:
-        rows = db.execute(text("""
+        rows = db.execute(text(f"""
             SELECT match_id, radiant_team_id, radiant_win, start_time FROM matches
-            WHERE (radiant_team_id = :a AND dire_team_id = :b)
-               OR (radiant_team_id = :b AND dire_team_id = :a)
+            WHERE ((radiant_team_id = :a AND dire_team_id = :b)
+               OR  (radiant_team_id = :b AND dire_team_id = :a))
+            {time_clause}
             ORDER BY start_time ASC
-        """), {"a": team1_id, "b": team2_id}).fetchall()
+        """), params).fetchall()
     except Exception:
         return None
     if not rows:
@@ -264,7 +283,8 @@ def get_schedule(db):
             series["team1_id"] = find_team_id(series.get("team1"), team_lookup)
             series["team2_id"] = find_team_id(series.get("team2"), team_lookup)
             series["series_result"] = resolve_series_result(
-                db, series.get("team1"), series.get("team2"), team_lookup
+                db, series.get("team1"), series.get("team2"), team_lookup,
+                scheduled_dt_iso=series.get("datetime_iso"),
             )
 
     data = {

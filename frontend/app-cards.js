@@ -170,6 +170,14 @@ function showCard(card, footer, opts = {}) {
 
   modal.classList.remove("hidden");
 
+  // Backdrop dismiss: clicking outside the card content closes the modal
+  modal.onclick = e => {
+    if (e.target === modal) {
+      modal.classList.add("hidden");
+      _openCardId = null;
+    }
+  };
+
   if (drawFx && imgWrap) {
     const rarityKey = _normalizeDrawRarity(card.card_type);
     const burst = document.getElementById("revealDrawBurst");

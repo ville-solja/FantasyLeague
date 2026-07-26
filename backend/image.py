@@ -163,7 +163,7 @@ def _fetch_pil_image(url: str, diameter: int):
     try:
         import requests as _req
         headers = {
-            "User-Agent": "FantasyLeagueCardBot/1.0 (+https://github.com/)",
+            "User-Agent": "KanaCards/1.0 (+https://kana-cards.com)",
             "Accept": "image/*,*/*;q=0.8",
         }
         r = _req.get(url, timeout=10, headers=headers)

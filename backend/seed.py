@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ def seed_admin_from_env():
 
     db = SessionLocal()
     try:
-        existing = db.query(User).filter_by(email=email).first()
+        existing = db.query(User).filter_by(username=username).first()
         if not existing:
             db.add(User(
                 username=username,
@@ -66,10 +67,21 @@ def seed_admin_from_env():
                 is_admin=True,
                 is_tester=False,
             ))
-            db.commit()
-            logger.info("Seeded admin account from env: %s", username)
+            try:
+                db.commit()
+                logger.info("Admin seed: created admin account %s", username)
+            except IntegrityError:
+                db.rollback()
+                logger.error(
+                    "Admin seed: cannot create %s — email %s is already in use by another account. "
+                    "Set SEED_ADMIN_EMAIL to an unused address.",
+                    username, email,
+                )
         else:
-            logger.debug("Admin account already exists, skipping env seed")
+            existing.is_admin = True
+            existing.password_hash = hash_password(password)
+            db.commit()
+            logger.info("Admin seed: forced admin + password on %s", username)
     finally:
         db.close()
 
