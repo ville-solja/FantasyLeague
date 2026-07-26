@@ -114,3 +114,28 @@ so that I have the full range of Gmail SMTP options and am not limited to STARTT
 - `SMTP_SSL=true` with `smtp.gmail.com:465` and a valid App Password sends email successfully
 - `SMTP_SSL` and `SMTP_TLS` are mutually exclusive: when `SMTP_SSL=true`, the `SMTP_TLS` value is ignored
 - The `SMTP_SSL` env var is documented in `.env.example` and `markdown/features/reference/commands.md`
+
+## Temporary Password Expiry
+
+### Temporary Password Expiry
+**User story**
+As a user, I want temporary passwords issued via the forgot-password flow to expire after a
+set period so that my account is not left permanently accessible via a temporary credential
+if I forget to change my password.
+
+**Acceptance criteria**
+- A temporary password expires after `TEMP_PASSWORD_TTL_HOURS` hours (default: 24)
+- Attempting to log in with an expired temporary password returns 401 with a clear message prompting the user to request a new reset
+- `temp_password_expires_at` is cleared (set to NULL) when the user successfully changes their password via `POST /change-password`
+- The expiry timestamp is stored in the `users` table and covered by a schema migration
+
+### Accurate Password Reset Email
+**User story**
+As a user, I want the password reset email to accurately state that my previous password
+has been invalidated so that I understand the security implications of the request
+immediately.
+
+**Acceptance criteria**
+- The email body states that the previous password is no longer valid and the temporary password expires after the configured TTL
+- The email does not contain the incorrect statement that the password change is deferred until login
+- If the user did not request the reset, the email advises them to contact support immediately

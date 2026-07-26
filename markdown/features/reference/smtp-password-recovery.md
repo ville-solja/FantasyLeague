@@ -1,8 +1,9 @@
 # SMTP Password Recovery
 
 The forgot-password flow generates a temporary password and delivers it to the user's
-registered email address via SMTP. When no SMTP provider is configured the password falls back
-to stdout, allowing local development without an email account.
+registered email address via SMTP. When no SMTP provider is configured (`SMTP_HOST` unset),
+the email is silently skipped — the password change is committed but the temporary password
+is not visible anywhere. A real SMTP relay is required to use this flow in local development.
 
 ---
 
@@ -11,7 +12,7 @@ to stdout, allowing local development without an email account.
 1. User submits `POST /forgot-password` with their username.
 2. A random 12-character temporary password is generated.
 3. The user's password is replaced with the temporary one and `must_change_password` is set to `true`.
-4. The temporary password is emailed to the address on file (or logged to stdout if SMTP is unconfigured).
+4. The temporary password is emailed to the address on file. If SMTP is not configured (`SMTP_HOST` unset), the email is silently skipped — the password change is committed but the temporary password is not logged or otherwise visible.
 5. A `password_reset_requested` audit log entry is written.
 6. The endpoint always returns `{"status": "ok"}` regardless of username or email existence, preventing account enumeration.
 

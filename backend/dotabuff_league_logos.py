@@ -136,7 +136,7 @@ def ensure_dotabuff_league_logos() -> None:
         _logger.warning("no img-team icons parsed (HTML change?)")
         return
 
-    ua = {"User-Agent": "FantasyLeague/1.0 (+local ingest; league logos)"}
+    ua = {"User-Agent": "KanaCards/1.0 (+https://kana-cards.com; league logos)"}
     n_new = 0
     for alt, img_url in found.items():
         fn = team_logo_png_filename(alt)

@@ -342,3 +342,48 @@ card I hold, so that I can draw a replacement without losing my token investment
 - Deactivated cards are no longer shown as drawable or activatable, but may still appear
   in historical views
 - No notification popup is triggered; the token balance update alone is sufficient
+
+## Admin Tab Navigation and MVP Match View
+
+### Admin Tab Navigation
+**User story**
+As an admin, I want the admin panel organised into named tabs so that I can navigate directly
+to the management area I need without scrolling through every section.
+
+**Acceptance criteria**
+- Admin panel shows a tab bar with five tabs: Week Management, Player Pool, Audit Log,
+  Settings (League management + Token Balances + Tag Definitions), and Matches
+- Clicking a tab shows only that tab's content; all other sections are hidden
+- The active tab is visually highlighted
+- Tab selection is preserved within the page session (switching away and back remembers the
+  active tab)
+- Non-admin users never see the tab navigation
+
+---
+
+### Admin Match Table
+**User story**
+As an admin, I want to view all ingested matches in a table so that I have a complete
+picture of the data that has been imported from OpenDota.
+
+**Acceptance criteria**
+- Matches tab shows a table with columns: League, Series ID, Team 1, Team 2, Start Time,
+  Duration, MVP
+- Matches are ordered by start time descending (most recent first)
+- The MVP column shows the current MVP player name, or "—" if no MVP has been set
+- The table loads from `GET /admin/matches`
+
+---
+
+### Admin MVP Selection
+**User story**
+As an admin, I want to set the MVP for any match from the admin panel so that MVP bonuses
+can be applied even when a Twitch broadcaster session is unavailable.
+
+**Acceptance criteria**
+- Each match row has a "Set MVP" button
+- Clicking the button opens a selection UI listing the 10 players who participated in that match
+- Selecting a player and confirming calls `POST /admin/matches/{match_id}/mvp`
+- The MVP column updates immediately to reflect the new selection
+- The action is logged to the audit log as `admin_set_mvp`
+- Setting MVP via the admin panel uses the same `twitch_mvp` table row as the Twitch broadcaster flow

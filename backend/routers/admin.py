@@ -12,7 +12,7 @@ from database import get_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Card, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from models import Card, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, Team, TwitchMVP, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from toornament import sync_toornament_results
@@ -784,9 +784,9 @@ def add_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(requi
         db.add(league)
     else:
         league.is_monitored = True
-    db.commit()
     _audit(db, "admin_league_add_monitor", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"league_id={league_id}")
+    db.commit()
     return {"status": "ok", "league_id": league_id}
 
 
@@ -796,9 +796,9 @@ def remove_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(re
     if not league or not league.is_monitored:
         raise HTTPException(status_code=404, detail="League is not currently monitored")
     league.is_monitored = False
-    db.commit()
     _audit(db, "admin_league_remove_monitor", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"league_id={league_id}")
+    db.commit()
     return {"status": "ok", "league_id": league_id}
 
 
@@ -851,3 +851,83 @@ def get_audit_logs(db=Depends(get_db), limit: int = 200, _: dict = Depends(requi
         LIMIT :limit
     """), {"limit": limit}).fetchall()
     return [dict(r._mapping) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Match table + Admin MVP selection
+# ---------------------------------------------------------------------------
+
+class AdminMVPRequest(BaseModel):
+    player_id: int
+
+
+@router.get("/admin/matches")
+def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
+    matches = db.query(Match).order_by(Match.start_time.desc()).all()
+    result = []
+    for m in matches:
+        mvp = db.query(TwitchMVP).filter(TwitchMVP.match_id == m.match_id).first()
+        mvp_name = None
+        if mvp:
+            p = db.query(Player).filter(Player.id == mvp.player_id).first()
+            mvp_name = p.name if p else None
+        radiant = db.query(Team).filter(Team.id == m.radiant_team_id).first() if m.radiant_team_id else None
+        dire = db.query(Team).filter(Team.id == m.dire_team_id).first() if m.dire_team_id else None
+        result.append({
+            "match_id": m.match_id,
+            "league_id": m.league_id,
+            "radiant_team_id": m.radiant_team_id,
+            "dire_team_id": m.dire_team_id,
+            "team1": radiant.name if radiant else None,
+            "team2": dire.name if dire else None,
+            "start_time": m.start_time,
+            "mvp_player_name": mvp_name,
+            "mvp_player_id": mvp.player_id if mvp else None,
+        })
+    return result
+
+
+@router.get("/admin/matches/{match_id}/players")
+def match_players(match_id: int, db=Depends(get_db), _: dict = Depends(require_admin)):
+    stats = db.query(PlayerMatchStats).filter(
+        PlayerMatchStats.match_id == match_id
+    ).all()
+    players = []
+    for s in stats:
+        p = db.query(Player).filter(Player.id == s.player_id).first()
+        if p:
+            players.append({"id": p.id, "name": p.name})
+    return players
+
+
+@router.post("/admin/matches/{match_id}/mvp")
+def admin_set_mvp(
+    match_id: int,
+    body: AdminMVPRequest,
+    db=Depends(get_db),
+    admin: dict = Depends(require_admin),
+):
+    match = db.query(Match).filter(Match.match_id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    player = db.query(Player).filter(Player.id == body.player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    existing = db.query(TwitchMVP).filter(TwitchMVP.match_id == match_id).first()
+    if existing:
+        existing.player_id = body.player_id
+        existing.channel_id = "admin"
+        existing.selected_at = int(time.time())
+    else:
+        db.add(TwitchMVP(
+            match_id=match_id,
+            player_id=body.player_id,
+            channel_id="admin",
+            selected_at=int(time.time()),
+        ))
+
+    _audit(db, "admin_set_mvp", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"match {match_id} → player {body.player_id} ({player.name})")
+    db.commit()
+    return {"match_id": match_id, "player_id": body.player_id, "player_name": player.name}

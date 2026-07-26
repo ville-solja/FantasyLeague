@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the FantasyLeague app. Sessions are server-side, stored in a signed cookie managed by Starlette's `SessionMiddleware`.
+User accounts, sessions, and profile management for the Kana Cards app. Sessions are server-side, stored in a signed cookie managed by Starlette's `SessionMiddleware`.
 
 ---
 
@@ -161,7 +161,7 @@ Issues a temporary password to the user's registered email address.
 
 The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to prevent username enumeration.
 
-**If SMTP is not configured** (`SMTP_HOST` unset), the email step is skipped and the temporary password is logged to stdout instead.
+**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the password change is still committed and the endpoint returns `{"status": "ok"}`, but the temporary password is not visible anywhere (it is not logged). To use the forgot-password flow locally, configure a real SMTP relay or temporarily set `SMTP_HOST` for testing.
 
 ---
 
@@ -188,4 +188,4 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
 | `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, port 465); takes priority over `SMTP_TLS` |
-| `APP_NAME` | `Kanaliiga Fantasy` | Prefix used in email subject lines |
+| `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |

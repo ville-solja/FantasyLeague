@@ -38,6 +38,12 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    if user.must_change_password and user.temp_password_expires_at:
+        if int(time.time()) > user.temp_password_expires_at:
+            raise HTTPException(
+                status_code=401,
+                detail="Temporary password has expired. Please request a new password reset.",
+            )
     request.session["user_id"]  = user.id
     request.session["username"] = user.username
     request.session["is_admin"] = user.is_admin
@@ -97,11 +103,13 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
     user_id       = user.id
 
     temp_password = secrets.token_urlsafe(9)
+    ttl_hours = int(os.getenv("TEMP_PASSWORD_TTL_HOURS", "24"))
     user.password_hash = hash_password(temp_password)
     user.must_change_password = True
+    user.temp_password_expires_at = int(time.time()) + ttl_hours * 3600
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
 
-    app_name = os.getenv("APP_NAME", "Kanaliiga Fantasy")
+    app_name = os.getenv("APP_NAME", "Kana Cards")
     try:
         send_email(
             to_address=user_email,
@@ -110,10 +118,11 @@ def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
                 f"Hi {user_username},\n\n"
                 f"A temporary password has been issued for your account:\n\n"
                 f"    {temp_password}\n\n"
-                f"Log in and go to your Profile to set a new password.\n"
-                f"This temporary password will stop working once you change it.\n\n"
-                f"If you did not request this, your account is still safe — "
-                f"the password was not changed until you log in and update it.\n"
+                f"Your previous password is no longer valid.\n"
+                f"This temporary password expires in {ttl_hours} hour(s). "
+                f"Log in and go to your Profile to set a permanent password.\n\n"
+                f"If you did not request this, act quickly — your previous password has already been replaced by the temporary one above. "
+                f"Log in and change it immediately, or contact support.\n"
             ),
         )
     except Exception:

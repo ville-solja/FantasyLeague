@@ -317,6 +317,22 @@ def _m017_leagues_is_monitored(conn):
         logger.info("Migration: leagues — added is_monitored column")
 
 
+def _m020_temp_password_expiry(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "temp_password_expires_at" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN temp_password_expires_at INTEGER"))
+        conn.commit()
+        logger.info("Migration: users — added temp_password_expires_at column")
+
+
+def _m021_card_slot_index(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()}
+    if "slot_index" not in cols:
+        conn.execute(text("ALTER TABLE cards ADD COLUMN slot_index INTEGER"))
+        conn.commit()
+        logger.info("Migration: cards — added slot_index column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -360,6 +376,8 @@ MIGRATIONS = [
     ("016_players_is_active",        _m016_players_is_active),
     ("017_leagues_is_monitored",     _m017_leagues_is_monitored),
     ("018_new_indexes",              _m018_new_indexes),
+    ("020_temp_password_expiry",     _m020_temp_password_expiry),
+    ("021_card_slot_index",          _m021_card_slot_index),
 ]
 
 
