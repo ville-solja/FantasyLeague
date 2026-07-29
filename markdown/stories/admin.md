@@ -387,3 +387,74 @@ can be applied even when a Twitch broadcaster session is unavailable.
 - The MVP column updates immediately to reflect the new selection
 - The action is logged to the audit log as `admin_set_mvp`
 - Setting MVP via the admin panel uses the same `twitch_mvp` table row as the Twitch broadcaster flow
+
+## Season Lifecycle
+
+### End Season Archive
+**User story**
+As an admin, I want a one-click "End Season" action that archives the final season standings
+so that season history survives the data purge that follows.
+
+**Acceptance criteria**
+- Admin provides a season label and triggers `POST /admin/season/end`
+- The current season leaderboard (username, total points, rank) is snapshotted into a
+  `season_archive` table
+- Tester accounts are excluded from the archive
+- Re-archiving with the same label returns 409
+- Logged to the audit log as `admin_season_archived`
+
+---
+
+### Season Reset
+**User story**
+As an admin, I want a season reset action that clears all per-season data so that the next
+season starts from a clean slate without touching user accounts.
+
+**Acceptance criteria**
+- `POST /admin/season/reset` deletes matches, stats, bans, weeks, roster entries, Twitch MVP
+  and token drop records
+- Cards are set inactive; user accounts, tags, and audit logs are retained
+- Token balances reset to `INITIAL_TOKENS`
+- Monitored leagues are unmonitored
+- 409 if locked weeks exist without a newer archive, unless `force=true`
+- Logged as `admin_season_reset` with deleted row counts
+
+---
+
+### Past Seasons Visibility
+**User story**
+As a player, I want to see past season results in the leaderboard and my own placements on
+my profile so that season achievements are not lost when a new season starts.
+
+**Acceptance criteria**
+- `GET /leaderboard/seasons` lists archived seasons; `GET /leaderboard/seasons/{season_id}`
+  returns archived standings
+- Leaderboard tab shows a "Past Seasons" selector when at least one archive exists
+- `GET /profile/{user_id}` includes a `past_seasons` array (label, points, rank)
+- Profile view renders past placements
+
+---
+
+### Manual Week Creation with Date-Only Inputs
+**User story**
+As an admin, I want to create weeks by picking start and end dates only so that week setup is
+quick and the end time automatically accounts for matches running past midnight.
+
+**Acceptance criteria**
+- Week Management create/edit forms use date inputs (no time component)
+- `start_time` derives to 00:00:00 UTC on the start date
+- `end_time` derives to 03:00:00 UTC on the day after the end date
+- Weeks are no longer generated automatically — the background loop only auto-locks
+
+---
+
+### Retire Season Env Vars
+**User story**
+As an operator, I want season boundaries and league selection managed entirely in the admin
+UI so that moving between seasons requires no env edits or redeploys.
+
+**Acceptance criteria**
+- `SEASON_LOCK_START`, `SEASON_END`, and `AUTO_INGEST_LEAGUES` are removed from the codebase
+  and `.env.example`
+- Monitored leagues are managed solely via the admin endpoints
+- Existing deployments with the vars still set start up cleanly (ignored)
