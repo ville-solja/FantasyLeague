@@ -30,14 +30,19 @@ Body: `{"season_label": "Season 15"}`. Snapshots the current season leaderboard
 is already archived. Logged as `admin_season_archived`.
 
 ### `POST /admin/season/reset`
-Body: `{"force": false}`. Deletes all rows from `player_match_stats`, `match_bans`, `matches`,
-`weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`, `teams`,
-`card_modifiers`, and `cards`. Resets every user's `tokens` to `INITIAL_TOKENS` and unmonitors
-all leagues. Retains users, tags, audit logs, and `season_archive` rows. Returns 409 if any
-locked week exists with no `season_archive` row archived at or after that week's start time
-(unless `force=true`) — the guard that makes skipping End Season difficult. Response includes
-`{"status", "initial_tokens", "counts": {...}}` with a per-table deleted-row count. Logged as
-`admin_season_reset` with the same counts in the detail string.
+Body: `{"force": false}`. Before any deletes, takes an automatic online backup of the live
+SQLite database (`backup_sqlite_db()` in `backend/database.py`, using SQLite's online backup
+API so it's safe against a WAL-mode connection). If the backup fails, the reset aborts with a
+500 and **no deletes are performed** — there's no code path that wipes season data without a
+fresh backup existing first. Deletes all rows from `player_match_stats`, `match_bans`,
+`matches`, `weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`,
+`teams`, `card_modifiers`, and `cards`. Resets every user's `tokens` to `INITIAL_TOKENS` and
+unmonitors all leagues. Retains users, tags, audit logs, and `season_archive` rows. Returns 409
+if any locked week exists with no `season_archive` row archived at or after that week's start
+time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
+includes `{"status", "initial_tokens", "counts": {...}, "backup_path"}` with a per-table
+deleted-row count and the path of the pre-reset backup file. Logged as `admin_season_reset`,
+with the backup path prefixed to the counts in the detail string.
 
 **Players, Teams, and Cards are wiped entirely — not just deactivated.** The `players` table
 doubles as the admin-curated Player Pool (see `reference/admin-player-pool.md`), so reset
