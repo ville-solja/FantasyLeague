@@ -71,10 +71,10 @@ Validates all agent definitions in `.claude/commands/` and keeps them aligned wi
 ### `/product-planner`
 **Role: Product Planner**
 Formalises the creation of a new feature in one step. Given a feature description as the argument, it:
-- Reads `markdown/stories/_index.md` to assign the correct next section number
+- Reads `markdown/stories/_index.md` to find the right thematic file for the new stories (or determines a new one is needed)
 - Drafts 2–5 user stories in the project's standard format
 - Writes a plan file to `markdown/plans/plan-{slug}.md` (with user stories embedded)
-- Creates a story section file at `markdown/stories/{NN}-{slug}.md` and updates `_index.md`
+- Appends to an existing thematic story file, or creates `markdown/stories/{slug}.md`, and updates `_index.md`
 - Creates a feature stub in `markdown/features/reference/{slug}.md` (or `core/`) and updates `markdown/features/README.md`
 
 **When to run:** At the start of any new feature, before writing any implementation code. Run `/agent-steward` first to ensure file references are current.
@@ -147,7 +147,7 @@ Maps each entry in `markdown/stories/` to the implementation and marks it as Ful
 **Role: QA Engineer**
 Runs the pytest suite in `backend/tests/` and reports results grouped by module.
 - Covers `scoring.py` (unit tests for `fantasy_score` and `card_fantasy_score`)
-- Covers `weeks.py` (fixture tests with in-memory SQLite for `generate_weeks` and `auto_lock_weeks`)
+- Covers `weeks.py` (fixture tests with in-memory SQLite for `auto_lock_weeks`; weeks are now admin-created via the Week Management tab, not auto-generated)
 - Covers `auth.py` (bcrypt hash/verify round-trips)
 
 **When to run:** After any change to `backend/scoring.py`, `backend/weeks.py`, or `backend/auth.py`. Also run after `/scoring-analyst` to confirm analytically traced inputs pass in code.

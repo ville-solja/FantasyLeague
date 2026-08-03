@@ -47,18 +47,17 @@ async function loadAdminWeeks() {
 }
 
 async function createAdminWeek() {
-  const label    = document.getElementById("weekLabel").value.trim();
-  const startVal = document.getElementById("weekStart").value;
-  const endVal   = document.getElementById("weekEnd").value;
-  if (!label)               return setStatus("weeksAdminStatus", "Enter a label", false);
-  if (!startVal || !endVal) return setStatus("weeksAdminStatus", "Set start and end time", false);
-  const start_time = Math.floor(new Date(startVal).getTime() / 1000);
-  const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
-  if (end_time <= start_time) return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  const label = document.getElementById("weekLabel").value.trim();
+  const startEl = document.getElementById("weekStart");
+  const endEl   = document.getElementById("weekEnd");
+  const start_date = dateInputIso(startEl);
+  const end_date   = dateInputIso(endEl);
+  if (!label)                 return setStatus("weeksAdminStatus", "Enter a label", false);
+  if (!start_date || !end_date) return setStatus("weeksAdminStatus", "Set start and end date (pp.kk.vvvv)", false);
   try {
     const res = await fetch(`${API}/admin/weeks`, {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({label, start_time, end_time}),
+      body: JSON.stringify({label, start_date, end_date}),
     });
     const data = await res.json();
     if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
@@ -72,16 +71,18 @@ async function createAdminWeek() {
   }
 }
 
+// Convert a Unix timestamp to its UTC calendar date (YYYY-MM-DD).
+function _utcDateStr(ts) {
+  return new Date(ts * 1000).toISOString().slice(0, 10);
+}
+
 function openWeekEdit(id, label, startTs, endTs) {
-  const toLocal = ts => {
-    const d = new Date(ts * 1000);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
-  };
   document.getElementById("editWeekId").value    = id;
   document.getElementById("editWeekLabel").value = label;
-  document.getElementById("editWeekStart").value = toLocal(startTs);
-  document.getElementById("editWeekEnd").value   = toLocal(endTs);
+  setDateInputIso(document.getElementById("editWeekStart"), _utcDateStr(startTs));
+  // end_time is stored as (end_date + 1 day) 03:00 UTC — subtract a day to
+  // show the date the admin originally picked.
+  setDateInputIso(document.getElementById("editWeekEnd"), _utcDateStr(endTs - 24 * 3600));
   document.getElementById("weekEditForm").classList.remove("hidden");
 }
 
@@ -90,16 +91,14 @@ function cancelWeekEdit() {
 }
 
 async function saveWeekEdit() {
-  const id       = parseInt(document.getElementById("editWeekId").value, 10);
-  const label    = document.getElementById("editWeekLabel").value.trim() || undefined;
-  const startVal = document.getElementById("editWeekStart").value;
-  const endVal   = document.getElementById("editWeekEnd").value;
+  const id        = parseInt(document.getElementById("editWeekId").value, 10);
+  const label     = document.getElementById("editWeekLabel").value.trim() || undefined;
+  const start_date = dateInputIso(document.getElementById("editWeekStart")) || undefined;
+  const end_date   = dateInputIso(document.getElementById("editWeekEnd")) || undefined;
   const body = {};
-  if (label)    body.label      = label;
-  if (startVal) body.start_time = Math.floor(new Date(startVal).getTime() / 1000);
-  if (endVal)   body.end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
-  if (body.start_time && body.end_time && body.end_time <= body.start_time)
-    return setStatus("weeksAdminStatus", "End time must be after start time", false);
+  if (label)     body.label      = label;
+  if (start_date) body.start_date = start_date;
+  if (end_date)   body.end_date   = end_date;
   try {
     const res = await fetch(`${API}/admin/weeks/${id}`, {
       method: "PATCH", headers: {"Content-Type": "application/json"},
@@ -621,18 +620,19 @@ async function loadPlayerPool() {
 function _renderPlayerPool(rows) {
   const search = (document.getElementById("playerPoolSearch")?.value || "").toLowerCase();
   const visible = search
-    ? rows.filter(p => p.name.toLowerCase().includes(search) || String(p.id).includes(search))
+    ? rows.filter(p => p.name.toLowerCase().includes(search) || (p.team_name || "").toLowerCase().includes(search) || String(p.id).includes(search))
     : rows;
   const tbody = document.getElementById("playerPoolBody");
   if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan='5' style='color:#444'>${search ? "No matches" : "No players in pool"}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='6' style='color:#444'>${search ? "No matches" : "No players in pool"}</td></tr>`;
     _updateRemoveBtn();
     return;
   }
   tbody.innerHTML = visible.map(p => `
     <tr data-player-id="${p.id}" data-player-name="${_escHtml(p.name)}">
       <td><input type="checkbox" class="player-pool-cb" onchange="_updateRemoveBtn()" /></td>
-      <td>${_escHtml(p.name)}</td>
+      <td><img src="${p.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${_escHtml(p.name)}</td>
+      <td>${_escHtml(p.team_name || "—")}</td>
       <td style="font-size:0.8rem;color:#888;">${p.id}</td>
       <td>${p.active_card_count}</td>
       <td>${p.is_active ? "" : "<span style='color:#888;font-size:0.75rem;'>INACTIVE</span>"}</td>
@@ -847,6 +847,8 @@ function initAdminTabs() {
     btn.addEventListener('click', () => switchAdminTab(btn.dataset.tab));
   });
 
+  initWeekDateInputs();
+
   // Restore previously selected tab from sessionStorage, defaulting to user-management
   const saved = sessionStorage.getItem('adminTab') || 'user-management';
   switchAdminTab(saved);
@@ -985,4 +987,353 @@ async function confirmSetMvp() {
   } catch (e) {
     document.getElementById('mvpModalStatus').textContent = e.message;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Season Lifecycle — End Season archive + Season Reset
+// ---------------------------------------------------------------------------
+
+async function loadSeasonArchives() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/leaderboard/seasons`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("seasonLifecycleStatus", rows.detail, false);
+    const tbody = document.getElementById("seasonArchivesBody");
+    if (!rows.length) {
+      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No archived seasons yet</td></tr>";
+      return;
+    }
+    tbody.innerHTML = "";
+    rows.forEach(s => {
+      const tr = document.createElement("tr");
+      const archived = new Date(s.archived_at * 1000).toLocaleString();
+      tr.innerHTML = `<td>${s.season_label}</td><td style="font-size:0.8rem;">${archived}</td><td>${s.user_count}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    setStatus("seasonLifecycleStatus", e.message, false);
+  }
+}
+
+async function endSeason() {
+  const label = document.getElementById("endSeasonLabel").value.trim();
+  if (!label) return setStatus("seasonLifecycleStatus", "Enter a season label", false);
+  try {
+    const res = await fetch(`${API}/admin/season/end`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({season_label: label}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("seasonLifecycleStatus", data.detail, false);
+    setStatus("seasonLifecycleStatus", `Archived "${data.season_label}" (${data.archived_users} users)`);
+    document.getElementById("endSeasonLabel").value = "";
+    loadSeasonArchives();
+  } catch (e) {
+    setStatus("seasonLifecycleStatus", e.message, false);
+  }
+}
+
+function openSeasonResetConfirm() {
+  document.getElementById("seasonResetConfirmInput").value = "";
+  document.getElementById("seasonResetModalStatus").textContent = "";
+  document.getElementById("seasonResetModal").style.display = "flex";
+}
+
+function closeSeasonResetConfirm() {
+  document.getElementById("seasonResetModal").style.display = "none";
+}
+
+async function confirmSeasonReset() {
+  const typed = document.getElementById("seasonResetConfirmInput").value.trim();
+  if (typed !== "RESET") {
+    document.getElementById("seasonResetModalStatus").textContent = 'Type "RESET" to confirm.';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/admin/season/reset`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({force: false}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById("seasonResetModalStatus").textContent = data.detail;
+      return;
+    }
+    closeSeasonResetConfirm();
+    setStatus("seasonLifecycleStatus", "Season reset complete");
+    loadSeasonArchives();
+    loadAdminWeeks();
+    loadLeagues();
+  } catch (e) {
+    document.getElementById("seasonResetModalStatus").textContent = e.message;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Demo Mode — clock override + disposable account seeding.
+// Entirely env-gated (window.demoMode, set from GET /config in app-globals.js):
+// the panel markup is only injected into the DOM when true.
+// ---------------------------------------------------------------------------
+
+function renderDemoModePanel() {
+  const container = document.getElementById("demoModePanelContainer");
+  if (!container) return;
+  if (!window.demoMode) {
+    container.innerHTML = "";
+    return;
+  }
+  if (document.getElementById("demoModePanel")) return; // already rendered
+
+  container.innerHTML = `
+    <div class="panel" id="demoModePanel">
+      <h2>Demo Mode</h2>
+      <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">
+        Override the app's simulated "now" to walk through pre-lock, lock, and post-week
+        scoring on demand, and seed disposable accounts pre-loaded with random cards.
+      </p>
+
+      <h3 style="margin-bottom:8px;">Clock</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center;">
+        <input id="demoClockInput" type="datetime-local" title="Simulated now" />
+        <button onclick="setDemoClock()">Set Clock</button>
+        <button class="secondary" onclick="clearDemoClock()">Clear Clock</button>
+        <button class="secondary" onclick="loadDemoClock()">Refresh</button>
+      </div>
+      <div style="font-size:0.8rem;color:#888;margin-bottom:12px;" id="demoClockDisplay">—</div>
+
+      <h3 style="margin-bottom:8px;">Seed Demo Accounts</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+        <input id="demoSeedCount" type="number" placeholder="Accounts" min="1" max="100" style="max-width:100px;" />
+        <input id="demoSeedCards" type="number" placeholder="Cards each" min="0" max="50" style="max-width:100px;" />
+        <button onclick="seedDemoAccounts()">Seed Accounts</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Username</th><th>Password</th></tr></thead>
+          <tbody id="demoSeedResultsBody"><tr><td colspan="2" style="color:#444">—</td></tr></tbody>
+        </table>
+      </div>
+      <div class="status" id="demoModeStatus"></div>
+    </div>
+  `;
+  loadDemoClock();
+}
+
+async function loadDemoClock() {
+  if (!window.demoMode) return;
+  try {
+    const res = await fetch(`${API}/admin/demo/clock`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("demoModeStatus", data.detail, false);
+    const display = document.getElementById("demoClockDisplay");
+    if (display) {
+      const override = data.override_timestamp
+        ? new Date(data.override_timestamp * 1000).toLocaleString()
+        : "unset (real time)";
+      const effective = new Date(data.effective_now * 1000).toLocaleString();
+      display.textContent = `Override: ${override} · Effective now: ${effective}`;
+    }
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+async function setDemoClock() {
+  const val = document.getElementById("demoClockInput").value;
+  if (!val) return setStatus("demoModeStatus", "Pick a date/time first", false);
+  const timestamp = Math.floor(new Date(val).getTime() / 1000);
+  try {
+    const res = await fetch(`${API}/admin/demo/clock`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({timestamp}),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("demoModeStatus", data.detail, false);
+    setStatus("demoModeStatus", "Clock set — auto-lock re-run");
+    loadDemoClock();
+    if (typeof loadAdminWeeks === "function") loadAdminWeeks();
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+async function clearDemoClock() {
+  try {
+    const res = await fetch(`${API}/admin/demo/clock`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("demoModeStatus", data.detail, false);
+    setStatus("demoModeStatus", "Clock override cleared");
+    document.getElementById("demoClockInput").value = "";
+    loadDemoClock();
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+async function seedDemoAccounts() {
+  const countVal = document.getElementById("demoSeedCount").value;
+  const cardsVal = document.getElementById("demoSeedCards").value;
+  const body = {};
+  if (countVal) body.count = parseInt(countVal);
+  if (cardsVal) body.cards_per_account = parseInt(cardsVal);
+  try {
+    const res = await fetch(`${API}/admin/demo/seed-accounts`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) return setStatus("demoModeStatus", data.detail, false);
+    const tbody = document.getElementById("demoSeedResultsBody");
+    tbody.innerHTML = "";
+    data.accounts.forEach(a => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${a.username}</td><td style="font-family:monospace;">${a.password}</td>`;
+      tbody.appendChild(tr);
+    });
+    setStatus("demoModeStatus", `Created ${data.accounts.length} account(s)`);
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Nordic date inputs (d.m.yyyy, e.g. "15.5.2026") with click-to-open calendar
+// picker. Backend endpoints still take/return strict ISO yyyy-mm-dd —
+// dateInputIso() and setDateInputIso() are the only two functions callers need.
+// ---------------------------------------------------------------------------
+
+const _DATE_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+
+function _isoToNordic(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${parseInt(d, 10)}.${parseInt(m, 10)}.${y}`;
+}
+
+function _nordicToIso(str) {
+  const m = _DATE_RE.exec((str || "").trim());
+  if (!m) return "";
+  const dd = parseInt(m[1], 10), mm = parseInt(m[2], 10), yyyy = parseInt(m[3], 10);
+  const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+  const valid = d.getUTCFullYear() === yyyy && d.getUTCMonth() === mm - 1 && d.getUTCDate() === dd;
+  if (!valid) return "";
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+// Reads the ISO (yyyy-mm-dd) value behind a Nordic date input, "" if empty/invalid.
+function dateInputIso(el) {
+  return _nordicToIso(el.value);
+}
+
+// Sets a Nordic date input's displayed value from an ISO (yyyy-mm-dd) string.
+function setDateInputIso(el, iso) {
+  el.value = _isoToNordic(iso);
+  el.classList.remove("invalid");
+}
+
+let _datePickerPopup = null;
+let _datePickerTarget = null;
+
+function _closeDatePicker() {
+  if (_datePickerPopup) _datePickerPopup.remove();
+  _datePickerPopup = null;
+  _datePickerTarget = null;
+  document.removeEventListener("mousedown", _onDatePickerOutsideClick, true);
+}
+
+function _onDatePickerOutsideClick(e) {
+  if (_datePickerPopup && !_datePickerPopup.contains(e.target) && e.target !== _datePickerTarget) {
+    _closeDatePicker();
+  }
+}
+
+const _DATE_PICKER_WEEKDAYS = ["Ma", "Ti", "Ke", "To", "Pe", "La", "Su"]; // Monday-first
+const _DATE_PICKER_MONTHS = ["January", "February", "March", "April", "May", "June",
+                              "July", "August", "September", "October", "November", "December"];
+
+function _renderDatePicker(viewYear, viewMonth) {
+  const popup = _datePickerPopup;
+  const todayIso = _utcDateStr(Math.floor(Date.now() / 1000));
+  const selectedIso = dateInputIso(_datePickerTarget);
+  const firstWeekday = (new Date(Date.UTC(viewYear, viewMonth, 1)).getUTCDay() + 6) % 7; // Monday=0
+  const daysInMonth = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
+
+  let cells = "";
+  for (let i = 0; i < firstWeekday; i++) cells += `<span class="date-picker-day empty"></span>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const cls = ["date-picker-day"];
+    if (iso === todayIso) cls.push("today");
+    if (iso === selectedIso) cls.push("selected");
+    cells += `<button type="button" class="${cls.join(" ")}" data-iso="${iso}">${day}</button>`;
+  }
+
+  popup.innerHTML = `
+    <div class="date-picker-header">
+      <button type="button" class="date-picker-nav" data-nav="-1" aria-label="Previous month">‹</button>
+      <span class="date-picker-title">${_DATE_PICKER_MONTHS[viewMonth]} ${viewYear}</span>
+      <button type="button" class="date-picker-nav" data-nav="1" aria-label="Next month">›</button>
+    </div>
+    <div class="date-picker-weekdays">${_DATE_PICKER_WEEKDAYS.map(w => `<span>${w}</span>`).join("")}</div>
+    <div class="date-picker-grid">${cells}</div>
+  `;
+
+  popup.querySelector('[data-nav="-1"]').addEventListener("click", () => {
+    viewMonth === 0 ? _renderDatePicker(viewYear - 1, 11) : _renderDatePicker(viewYear, viewMonth - 1);
+  });
+  popup.querySelector('[data-nav="1"]').addEventListener("click", () => {
+    viewMonth === 11 ? _renderDatePicker(viewYear + 1, 0) : _renderDatePicker(viewYear, viewMonth + 1);
+  });
+  popup.querySelectorAll(".date-picker-day[data-iso]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setDateInputIso(_datePickerTarget, btn.dataset.iso);
+      _datePickerTarget.dispatchEvent(new Event("change"));
+      _closeDatePicker();
+    });
+  });
+}
+
+function _openDatePicker(inputEl) {
+  if (_datePickerTarget === inputEl) return;
+  _closeDatePicker();
+  _datePickerTarget = inputEl;
+  _datePickerPopup = document.createElement("div");
+  _datePickerPopup.className = "date-picker-popup";
+  document.body.appendChild(_datePickerPopup);
+
+  const iso = dateInputIso(inputEl);
+  const base = iso ? new Date(`${iso}T00:00:00Z`) : new Date();
+  _renderDatePicker(base.getUTCFullYear(), base.getUTCMonth());
+
+  const rect = inputEl.getBoundingClientRect();
+  _datePickerPopup.style.left = `${rect.left + window.scrollX}px`;
+  _datePickerPopup.style.top  = `${rect.bottom + window.scrollY + 4}px`;
+
+  setTimeout(() => document.addEventListener("mousedown", _onDatePickerOutsideClick, true), 0);
+}
+
+// Strips anything that isn't a digit or "." as the admin types — day/month
+// aren't fixed-width in this format (5.5.2026 is as valid as 15.05.2026), so
+// separators aren't auto-inserted; the admin types the dots themselves.
+function _restrictDateChars(e) {
+  e.target.value = e.target.value.replace(/[^\d.]/g, "");
+}
+
+// Wires a d.m.yyyy text input to open the calendar picker on click/focus and
+// to flag itself invalid on blur if it holds unparseable text. Idempotent.
+function _initNordicDateInput(id) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.datePickerInit) return;
+  el.dataset.datePickerInit = "1";
+  el.addEventListener("focus", () => _openDatePicker(el));
+  el.addEventListener("click", () => _openDatePicker(el));
+  el.addEventListener("input", _restrictDateChars);
+  el.addEventListener("blur", () => {
+    el.classList.toggle("invalid", !!el.value && !dateInputIso(el));
+  });
+}
+
+function initWeekDateInputs() {
+  ["weekStart", "weekEnd", "editWeekStart", "editWeekEnd"].forEach(_initNordicDateInput);
 }

@@ -4,15 +4,21 @@ The season is divided into weekly windows. Each week defines when roster changes
 
 ## Week Structure
 
-Weeks are anchored to the date set in `SEASON_LOCK_START` (ISO date string, must be a Sunday). Each week:
+Weeks are created manually by admins in the Week Management tab (Admin panel) — there is no
+automatic week generation. An admin picks a start date and an end date; the backend derives:
 
-| Boundary | Time |
+| Boundary | Derivation |
 |---|---|
-| Lock (roster freezes) | Sunday 23:59:59 UTC |
-| Match window opens | Monday 00:00:00 UTC |
-| Match window closes | Following Sunday 23:59:59 UTC |
+| Start (`start_time`) | Start date, 00:00:00 UTC |
+| End (`end_time`) | The day **after** the end date, 03:00:00 UTC |
 
-Week rows are generated automatically, always keeping at least 4 weeks ahead of the current date. New weeks are added by the week maintenance background thread (runs every 5 minutes by default, configurable via `WEEK_CHECK_INTERVAL`). Set `SEASON_END` (ISO date) to stop auto-generation after the season concludes — no new weeks will be created with a start date beyond that cutoff.
+The 03:00 UTC end buffer means games starting late in the evening on the chosen end date and
+running past midnight still count toward that week. See `reference/admin-week-management.md`
+and `reference/season-lifecycle.md`.
+
+The background maintenance thread (runs every 5 minutes by default, configurable via
+`WEEK_CHECK_INTERVAL`) only auto-locks weeks whose start time has passed — it never creates
+new week rows.
 
 ## Week Locking
 
@@ -83,5 +89,4 @@ Returns all week records sorted by start time:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `SEASON_LOCK_START` | `2026-03-08` | First Sunday lock anchor date |
-| `WEEK_CHECK_INTERVAL` | `300` | Seconds between maintenance checks |
+| `WEEK_CHECK_INTERVAL` | `300` | Seconds between auto-lock maintenance checks |

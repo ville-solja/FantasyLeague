@@ -10,11 +10,11 @@
 
 **Team** — A team taking part in the league. Names are extracted from match data.
 
-**Card** — A player instance that can be owned by a user. Cards are generated dynamically per league on ingestion: 1 legendary, 2 epic, 4 rare, 8 common per player.
+**Card** — A player instance that can be owned by a user. Cards are generated dynamically at draw time (not pre-seeded on ingest): each draw rolls a weighted rarity, then picks a player biased toward proportional representation across the pool. See `cards.md` and `dynamic-card-creation.md`.
 
-**Deck** — The pool of unowned cards available to draw from.
+**Draw** — The action of spending a token to generate a new card (formerly called "Deck" in the UI; renamed as part of `draw-panel-redesign.md`, which also replaced fixed card counts with live drop-rate percentages).
 
-**Roster** — The active cards a user has selected (max 5). The editable roster is snapshotted each Sunday midnight into a weekly locked roster. Weekly value is the sum of fantasy points earned by those locked cards during that week's matches only.
+**Roster** — The active cards a user has selected (max `ROSTER_LIMIT`, default 5). The editable roster is snapshotted at week lock time into a weekly locked roster. Weekly value is the sum of fantasy points earned by those locked cards during that week's matches only.
 
 **Bench** — List of cards that the user owns, but are not in the selected weeks roster
 
@@ -38,9 +38,9 @@
 
 **Admin** — A user with elevated privileges. Can ingest leagues, manage scoring weights, grant tokens, create/delete promo codes, and refresh the schedule cache. Identified by the `is_admin` flag on the user record.
 
-**Week** — A 7-day scoring window anchored to Sundays. Rosters are locked at the start of each week and the snapshot is used to calculate that week's points. See `weeks.md`.
+**Week** — A scoring window with admin-defined start and end boundaries (Week Management tab, date-only inputs — no fixed Sunday cadence). Rosters are locked once the week's start time passes, and the snapshot is used to calculate that week's points. See `weeks.md` and `season-lifecycle.md`.
 
-**Week Lock** — The moment a week's match window opens (Monday 00:00 UTC). At lock time: the active roster is snapshotted, the week is marked locked, and every user receives +1 token.
+**Week Lock** — The moment a week's `start_time` passes (checked by a background maintenance thread). At lock time: the active roster is snapshotted, the week is marked locked (irreversibly), and every user receives +1 token.
 
 **Week Override** — An admin-assigned mapping that moves a specific match into a different fantasy week than the one its timestamp falls in. Used when matches are played outside their scheduled window.
 

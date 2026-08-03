@@ -39,7 +39,3 @@ Idempotent — repeated calls are safe.
 
 `notification_dismissals` — one row per (notification_id, user_id) pair; unique
 constraint prevents duplicates at the database level.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

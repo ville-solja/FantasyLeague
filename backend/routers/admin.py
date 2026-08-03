@@ -1,21 +1,27 @@
+import datetime
 import os
+import secrets
 import time
 from typing import List
-
-import requests
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 
-from database import get_db
+import clock
+from auth import hash_password
+from database import get_db, backup_sqlite_db
 from deps import get_current_user, require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
-from models import Card, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, Team, TwitchMVP, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from models import Card, CardModifier, League, Match, MatchBan, Player, PlayerMatchStats, PromoCode, CodeRedemption, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry, Weight, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal, TagDefinition, UserTag
+from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+from routers.cards import draw_card
+from routers.leaderboard import compute_season_standings
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score
 from toornament import sync_toornament_results
+from weeks import auto_lock_weeks
 
 router = APIRouter()
 
@@ -413,14 +419,43 @@ def delete_token_grant_event(
 
 class WeekCreateBody(BaseModel):
     label:      str = Field(..., min_length=1, max_length=64)
-    start_time: int
-    end_time:   int
+    start_time: int | None = None
+    end_time:   int | None = None
+    start_date: str | None = Field(None, min_length=10, max_length=10)  # ISO date YYYY-MM-DD
+    end_date:   str | None = Field(None, min_length=10, max_length=10)  # ISO date YYYY-MM-DD
 
 
 class WeekEditBody(BaseModel):
     label:      str | None = Field(None, min_length=1, max_length=64)
     start_time: int | None = None
     end_time:   int | None = None
+    start_date: str | None = Field(None, min_length=10, max_length=10)  # ISO date YYYY-MM-DD
+    end_date:   str | None = Field(None, min_length=10, max_length=10)  # ISO date YYYY-MM-DD
+
+
+def _derive_week_times(start_date: str | None, end_date: str | None) -> tuple[int | None, int | None]:
+    """Derive week timestamps from date-only inputs.
+
+    start_time = start_date 00:00:00 UTC
+    end_time   = (end_date + 1 day) 03:00:00 UTC — matches running past
+                 midnight still count toward the week.
+    """
+    start_time = end_time = None
+    try:
+        if start_date:
+            d = datetime.date.fromisoformat(start_date)
+            start_time = int(datetime.datetime(
+                d.year, d.month, d.day, 0, 0, 0,
+                tzinfo=datetime.timezone.utc).timestamp())
+        if end_date:
+            d = datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1)
+            end_time = int(datetime.datetime(
+                d.year, d.month, d.day, 3, 0, 0,
+                tzinfo=datetime.timezone.utc).timestamp())
+    except ValueError:
+        raise HTTPException(status_code=422,
+                            detail="Dates must be ISO format (YYYY-MM-DD)")
+    return start_time, end_time
 
 
 @router.get("/admin/weeks")
@@ -444,10 +479,16 @@ def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
 @router.post("/admin/weeks")
 def create_week(body: WeekCreateBody, db=Depends(get_db),
                 admin: dict = Depends(require_admin)):
-    if body.end_time <= body.start_time:
+    date_start, date_end = _derive_week_times(body.start_date, body.end_date)
+    start_time = date_start if date_start is not None else body.start_time
+    end_time   = date_end   if date_end   is not None else body.end_time
+    if start_time is None or end_time is None:
+        raise HTTPException(status_code=422,
+                            detail="Provide start/end as dates or timestamps")
+    if end_time <= start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
-    w = Week(label=body.label, start_time=body.start_time,
-             end_time=body.end_time, is_locked=False)
+    w = Week(label=body.label, start_time=start_time,
+             end_time=end_time, is_locked=False)
     db.add(w)
     db.flush()
     _audit(db, "admin_week_created", actor_id=admin["user_id"],
@@ -466,11 +507,16 @@ def edit_week(week_id: int, body: WeekEditBody, db=Depends(get_db),
         raise HTTPException(status_code=404, detail="Week not found")
     if w.is_locked:
         raise HTTPException(status_code=409, detail="Cannot edit a locked week")
+    date_start, date_end = _derive_week_times(body.start_date, body.end_date)
     if body.label is not None:
         w.label = body.label
-    if body.start_time is not None:
+    if date_start is not None:
+        w.start_time = date_start
+    elif body.start_time is not None:
         w.start_time = body.start_time
-    if body.end_time is not None:
+    if date_end is not None:
+        w.end_time = date_end
+    elif body.end_time is not None:
         w.end_time = body.end_time
     if w.end_time <= w.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
@@ -647,7 +693,24 @@ class RemovePlayersBody(BaseModel):
 
 @router.get("/admin/players")
 def list_players(db=Depends(get_db), _=Depends(require_admin)):
-    rows = db.query(Player).order_by(Player.name).all()
+    # Same name/avatar/team identity as GET /players (public Players tab) — team
+    # is each player's most recent match's team, not a static assignment.
+    rows = db.execute(text("""
+        SELECT p.id, p.name, p.avatar_url, p.is_active,
+               t.id as team_id, t.name as team_name
+        FROM players p
+        LEFT JOIN (
+            SELECT s2.player_id, s2.team_id
+            FROM player_match_stats s2
+            INNER JOIN (
+                SELECT player_id, MAX(match_id) as max_match
+                FROM player_match_stats
+                GROUP BY player_id
+            ) mx ON mx.player_id = s2.player_id AND mx.max_match = s2.match_id
+        ) latest ON latest.player_id = p.id
+        LEFT JOIN teams t ON t.id = latest.team_id
+        ORDER BY p.name
+    """)).fetchall()
     card_counts = {
         r[0]: r[1] for r in
         db.query(Card.player_id, func.count(Card.id))
@@ -656,11 +719,12 @@ def list_players(db=Depends(get_db), _=Depends(require_admin)):
     }
     return [
         {
-            "id": p.id, "name": p.name,
-            "is_active": p.is_active,
-            "active_card_count": card_counts.get(p.id, 0),
+            "id": r.id, "name": r.name, "avatar_url": r.avatar_url,
+            "team_id": r.team_id, "team_name": r.team_name,
+            "is_active": r.is_active,
+            "active_card_count": card_counts.get(r.id, 0),
         }
-        for p in rows
+        for r in rows
     ]
 
 
@@ -669,10 +733,11 @@ def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_ad
     existing = db.get(Player, body.player_id)
     if existing and existing.is_active:
         raise HTTPException(status_code=409, detail="Player already exists in pool")
-    resp = requests.get(f"https://api.opendota.com/api/players/{body.player_id}", timeout=10)
-    if resp.status_code != 200 or not resp.json().get("profile"):
+    result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{body.player_id}",
+                               label=f"player {body.player_id}")
+    if not result or not result.get("profile"):
         raise HTTPException(status_code=422, detail="Player not found on OpenDota")
-    data = resp.json()["profile"]
+    data = result["profile"]
     if existing:
         existing.is_active = True
         existing.name = data.get("personaname", str(body.player_id))
@@ -706,11 +771,11 @@ def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
         if db.get(Player, pid):
             skipped.append({"id": pid, "reason": "already exists"})
             continue
-        resp = requests.get(f"https://api.opendota.com/api/players/{pid}", timeout=10)
-        if resp.status_code != 200 or not resp.json().get("profile"):
+        result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{pid}", label=f"player {pid}")
+        if not result or not result.get("profile"):
             skipped.append({"id": pid, "reason": "not found on OpenDota"})
             continue
-        data = resp.json()["profile"]
+        data = result["profile"]
         db.add(Player(
             id=pid,
             name=data.get("personaname", str(pid)),
@@ -828,10 +893,10 @@ def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_
     league = db.get(League, league_id)
     if league:
         league.is_monitored = False
-    db.commit()
     _audit(db, "admin_league_purge", actor_id=admin["user_id"],
            actor_username=admin["username"],
            detail=f"league_id={league_id} matches={deleted_matches} stats={deleted_stats}")
+    db.commit()
     return {
         "status": "ok",
         "league_id": league_id,
@@ -840,6 +905,126 @@ def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_
         "deleted_bans": deleted_bans,
         "note": "Run /recalculate to refresh fantasy scores after purge",
     }
+
+
+# ---------------------------------------------------------------------------
+# Season lifecycle — End Season archive + Season Reset
+# ---------------------------------------------------------------------------
+
+class SeasonEndBody(BaseModel):
+    season_label: str = Field(..., min_length=1, max_length=100)
+
+
+class SeasonResetBody(BaseModel):
+    force: bool = False
+
+
+@router.post("/admin/season/end")
+def end_season(body: SeasonEndBody, db=Depends(get_db),
+               admin: dict = Depends(require_admin)):
+    """Snapshot the current season leaderboard into season_archive.
+
+    Run this BEFORE a season reset — standings are computed live from match
+    stats and are destroyed by the reset.
+    """
+    season_label = body.season_label.strip()
+    if not season_label:
+        raise HTTPException(status_code=422, detail="Season label cannot be empty")
+    existing = (db.query(SeasonArchive)
+                .filter(SeasonArchive.season_label == season_label).first())
+    if existing:
+        raise HTTPException(status_code=409,
+                            detail=f"Season '{season_label}' is already archived")
+    standings = compute_season_standings(db)
+    now = int(time.time())
+    for rank, row in enumerate(standings, start=1):
+        db.add(SeasonArchive(
+            season_label=season_label,
+            user_id=row["id"],
+            username=row["username"],
+            points=row["points"],
+            rank=rank,
+            archived_at=now,
+        ))
+    _audit(db, "admin_season_archived", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"season_label={season_label} users={len(standings)}")
+    db.commit()
+    return {"season_label": season_label, "archived_users": len(standings)}
+
+
+@router.post("/admin/season/reset")
+def reset_season(body: SeasonResetBody, db=Depends(get_db),
+                 admin: dict = Depends(require_admin)):
+    """Clear all per-season data so the next season starts from a clean slate.
+
+    Deletes matches, stats, bans, weeks, roster snapshots, Twitch season
+    records, all known players and teams, and every user's cards; resets
+    user tokens to INITIAL_TOKENS; unmonitors all leagues. User accounts,
+    tags, audit logs, and season archives are retained.
+
+    Players and teams are wiped along with match data — this also clears the
+    admin-curated Player Pool, so a new season (or a new league entirely)
+    starts with an empty draft pool that the admin repopulates via Player
+    Management. Cards are deleted outright rather than deactivated: player
+    rosters fluctuate season to season, so keeping cards for players who no
+    longer play would be dead weight, and a "clean slate" season should mean
+    users draw a fresh collection with their reset tokens rather than keep
+    holding cards tied to a season that no longer exists.
+
+    Takes an automatic online backup of the SQLite database immediately
+    before deleting anything, since this single call is the most destructive
+    operation in the app and has no undo path otherwise. Aborts with a 500
+    (no deletes performed) if the backup cannot be taken, rather than
+    proceeding uninsured.
+    """
+    locked_weeks = db.query(Week).filter(Week.is_locked == True).all()  # noqa: E712
+    if locked_weeks and not body.force:
+        newest_lock = max(w.start_time or 0 for w in locked_weeks)
+        newer_archive = (db.query(SeasonArchive)
+                         .filter(SeasonArchive.archived_at >= newest_lock).first())
+        if not newer_archive:
+            raise HTTPException(
+                status_code=409,
+                detail="Locked weeks exist but no season archive was created "
+                       "after the newest locked week. Run End Season first "
+                       "or pass force=true.")
+
+    try:
+        backup_path = backup_sqlite_db()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Season reset aborted — pre-reset backup failed: {e}")
+
+    counts = {
+        "player_match_stats":    db.query(PlayerMatchStats).delete(synchronize_session=False),
+        "match_bans":            db.query(MatchBan).delete(synchronize_session=False),
+        "matches":               db.query(Match).delete(synchronize_session=False),
+        "weekly_roster_entries": db.query(WeeklyRosterEntry).delete(synchronize_session=False),
+        "weeks":                 db.query(Week).delete(synchronize_session=False),
+        "twitch_mvp":            db.query(TwitchMVP).delete(synchronize_session=False),
+        "twitch_token_drops":    db.query(TwitchTokenDrop).delete(synchronize_session=False),
+        "players":               db.query(Player).delete(synchronize_session=False),
+        "teams":                 db.query(Team).delete(synchronize_session=False),
+        "card_modifiers":        db.query(CardModifier).delete(synchronize_session=False),
+        "cards":                 db.query(Card).delete(synchronize_session=False),
+    }
+    initial_tokens = int(os.getenv("INITIAL_TOKENS", "5"))
+    counts["users_tokens_reset"] = (
+        db.query(User).update({User.tokens: initial_tokens},
+                              synchronize_session=False)
+    )
+    counts["leagues_unmonitored"] = (
+        db.query(League).filter(League.is_monitored == True)  # noqa: E712
+        .update({League.is_monitored: False}, synchronize_session=False)
+    )
+    detail = f"backup={backup_path} " + " ".join(f"{k}={v}" for k, v in counts.items())
+    _audit(db, "admin_season_reset", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=detail)
+    db.commit()
+    return {"status": "ok", "initial_tokens": initial_tokens, "counts": counts,
+            "backup_path": backup_path}
 
 
 @router.get("/audit-logs")
@@ -864,15 +1049,29 @@ class AdminMVPRequest(BaseModel):
 @router.get("/admin/matches")
 def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
     matches = db.query(Match).order_by(Match.start_time.desc()).all()
+    match_ids = [m.match_id for m in matches]
+
+    mvps_by_match = {
+        mv.match_id: mv
+        for mv in db.query(TwitchMVP).filter(TwitchMVP.match_id.in_(match_ids)).all()
+    } if match_ids else {}
+
+    mvp_player_ids = {mv.player_id for mv in mvps_by_match.values()}
+    players_by_id = {
+        p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
+    } if mvp_player_ids else {}
+
+    team_ids = {tid for m in matches for tid in (m.radiant_team_id, m.dire_team_id) if tid}
+    teams_by_id = {
+        t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()
+    } if team_ids else {}
+
     result = []
     for m in matches:
-        mvp = db.query(TwitchMVP).filter(TwitchMVP.match_id == m.match_id).first()
-        mvp_name = None
-        if mvp:
-            p = db.query(Player).filter(Player.id == mvp.player_id).first()
-            mvp_name = p.name if p else None
-        radiant = db.query(Team).filter(Team.id == m.radiant_team_id).first() if m.radiant_team_id else None
-        dire = db.query(Team).filter(Team.id == m.dire_team_id).first() if m.dire_team_id else None
+        mvp = mvps_by_match.get(m.match_id)
+        mvp_player = players_by_id.get(mvp.player_id) if mvp else None
+        radiant = teams_by_id.get(m.radiant_team_id) if m.radiant_team_id else None
+        dire = teams_by_id.get(m.dire_team_id) if m.dire_team_id else None
         result.append({
             "match_id": m.match_id,
             "league_id": m.league_id,
@@ -881,7 +1080,7 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
             "team1": radiant.name if radiant else None,
             "team2": dire.name if dire else None,
             "start_time": m.start_time,
-            "mvp_player_name": mvp_name,
+            "mvp_player_name": mvp_player.name if mvp_player else None,
             "mvp_player_id": mvp.player_id if mvp else None,
         })
     return result
@@ -889,15 +1088,13 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
 
 @router.get("/admin/matches/{match_id}/players")
 def match_players(match_id: int, db=Depends(get_db), _: dict = Depends(require_admin)):
-    stats = db.query(PlayerMatchStats).filter(
-        PlayerMatchStats.match_id == match_id
-    ).all()
-    players = []
-    for s in stats:
-        p = db.query(Player).filter(Player.id == s.player_id).first()
-        if p:
-            players.append({"id": p.id, "name": p.name})
-    return players
+    rows = (
+        db.query(Player)
+        .join(PlayerMatchStats, PlayerMatchStats.player_id == Player.id)
+        .filter(PlayerMatchStats.match_id == match_id)
+        .all()
+    )
+    return [{"id": p.id, "name": p.name} for p in rows]
 
 
 @router.post("/admin/matches/{match_id}/mvp")
@@ -931,3 +1128,109 @@ def admin_set_mvp(
            detail=f"match {match_id} → player {body.player_id} ({player.name})")
     db.commit()
     return {"match_id": match_id, "player_id": body.player_id, "player_name": player.name}
+
+
+# ---------------------------------------------------------------------------
+# Demo Mode — env-gated. Structurally invisible (404, not 403) whenever
+# DEMO_MODE is not explicitly "true", regardless of caller identity, so its
+# existence is never revealed in a production deployment.
+# ---------------------------------------------------------------------------
+
+class DemoClockBody(BaseModel):
+    timestamp: int
+
+
+class SeedDemoAccountsBody(BaseModel):
+    count:             int | None = Field(None, ge=1, le=100)
+    cards_per_account: int | None = Field(None, ge=0, le=50)
+
+
+def _require_demo_mode():
+    if os.getenv("DEMO_MODE", "").lower() != "true":
+        raise HTTPException(status_code=404)
+
+
+@router.get("/admin/demo/clock")
+def get_demo_clock(db=Depends(get_db), _demo: None = Depends(_require_demo_mode),
+                   _: dict = Depends(require_admin)):
+    # Also called imperatively (not just via Depends) because this codebase's
+    # test suite invokes endpoint functions directly, bypassing FastAPI's
+    # dependency resolution — a bare Depends() default never fires there.
+    _require_demo_mode()
+    override = clock.get_override(db)
+    return {"override_timestamp": override, "effective_now": clock.now(db)}
+
+
+@router.post("/admin/demo/clock")
+def set_demo_clock(body: DemoClockBody, db=Depends(get_db),
+                   _demo: None = Depends(_require_demo_mode),
+                   admin: dict = Depends(require_admin)):
+    _require_demo_mode()
+    clock.set_override(db, body.timestamp)
+    auto_lock_weeks(db)  # synchronous — make the lock transition observable immediately
+    _audit(db, "admin_demo_clock_set", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"timestamp={body.timestamp}")
+    db.commit()
+    return {"override_timestamp": body.timestamp, "effective_now": clock.now(db)}
+
+
+@router.delete("/admin/demo/clock")
+def clear_demo_clock(db=Depends(get_db), _demo: None = Depends(_require_demo_mode),
+                     admin: dict = Depends(require_admin)):
+    _require_demo_mode()
+    clock.clear_override(db)
+    _audit(db, "admin_demo_clock_cleared", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail="")
+    db.commit()
+    return {"override_timestamp": None}
+
+
+@router.post("/admin/demo/seed-accounts")
+def seed_demo_accounts(body: SeedDemoAccountsBody, db=Depends(get_db),
+                       _demo: None = Depends(_require_demo_mode),
+                       admin: dict = Depends(require_admin)):
+    """Create disposable demo1, demo2, ... accounts pre-loaded with random cards.
+
+    Reuses draw_card from routers/cards.py directly (a plain Python function
+    call, not an HTTP round-trip) — it already handles rarity rolls, player
+    selection, modifier assignment, and roster auto-activation up to
+    ROSTER_LIMIT. Granting cards_per_account tokens up front lets the loop
+    call the real draw path unmodified.
+
+    _require_demo_mode is declared as a dependency ahead of require_admin so a
+    real HTTP request resolves it first: a non-admin caller gets 404 (mode
+    disabled), not 403, when DEMO_MODE is off — the endpoint's existence stays
+    hidden. It is also called imperatively below because this codebase's test
+    suite invokes endpoint functions directly, bypassing FastAPI's dependency
+    resolution entirely; a bare Depends() default would never fire there.
+    """
+    _require_demo_mode()
+    count = body.count or 5
+    cards_per_account = body.cards_per_account if body.cards_per_account is not None else 3
+    existing = {u.username for u in db.query(User).filter(User.username.like("demo%")).all()}
+    created = []
+    n = 1
+    while len(created) < count:
+        username = f"demo{n}"
+        n += 1
+        if username in existing:
+            continue
+        password = secrets.token_urlsafe(9)
+        user = User(username=username, email=f"{username}@demo.local",
+                    password_hash=hash_password(password),
+                    tokens=cards_per_account)
+        db.add(user)
+        db.flush()
+        fake_current_user = {"user_id": user.id, "username": username, "is_admin": False}
+        for _ in range(cards_per_account):
+            try:
+                draw_card(db=db, current_user=fake_current_user)
+            except HTTPException:
+                # No players available to draw (empty pool) or out of tokens —
+                # the account is still created; it just ends up with fewer cards.
+                break
+        created.append({"username": username, "password": password})
+    _audit(db, "admin_demo_accounts_seeded", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"created={len(created)}")
+    db.commit()
+    return {"accounts": created}

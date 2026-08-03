@@ -21,7 +21,3 @@ Excludes tester accounts via `WHERE u.is_tester = 0` added before `GROUP BY`.
 
 ### `GET /leaderboard/weekly` (updated)
 Excludes tester accounts via `WHERE u.is_tester = 0` added before `GROUP BY`.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

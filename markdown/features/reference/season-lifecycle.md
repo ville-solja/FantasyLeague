@@ -12,9 +12,9 @@ between seasons.
 Season running
     ↓  admin: POST /admin/season/end        (archive standings)
 Standings snapshotted to season_archive
-    ↓  admin: POST /admin/season/reset      (clean slate; users retained)
+    ↓  admin: POST /admin/season/reset      (clean slate; users retained; players/teams cleared)
 Empty season state
-    ↓  admin: add monitored league, create weeks (date-only forms)
+    ↓  admin: add monitored league, add players (Player Management tab), create weeks (date-only forms)
 Next season running
 ```
 
@@ -23,30 +23,53 @@ The background maintenance loop still auto-locks weeks whose start time has pass
 
 ## Endpoints
 
-### `POST /admin/season/end` *(planned)*
+### `POST /admin/season/end`
 Body: `{"season_label": "Season 15"}`. Snapshots the current season leaderboard
-(username, points, rank; testers excluded) into `season_archive`. 409 on duplicate label.
-Logged as `admin_season_archived`.
+(username, points, rank; testers excluded) into `season_archive`, computed via the shared
+`compute_season_standings()` helper also used by `GET /leaderboard/season`. 409 if the label
+is already archived. Logged as `admin_season_archived`.
 
-### `POST /admin/season/reset` *(planned)*
-Body: `{"force": false}`. Deletes matches, stats, bans, weeks, roster entries, Twitch MVP and
-token drop rows. Deactivates all cards, resets token balances to `INITIAL_TOKENS`, unmonitors
-all leagues. Retains users, tags, audit logs, and archives. 409 if locked weeks exist without
-a newer archive unless `force=true`. Logged as `admin_season_reset`.
+### `POST /admin/season/reset`
+Body: `{"force": false}`. Deletes all rows from `player_match_stats`, `match_bans`, `matches`,
+`weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`, `teams`,
+`card_modifiers`, and `cards`. Resets every user's `tokens` to `INITIAL_TOKENS` and unmonitors
+all leagues. Retains users, tags, audit logs, and `season_archive` rows. Returns 409 if any
+locked week exists with no `season_archive` row archived at or after that week's start time
+(unless `force=true`) — the guard that makes skipping End Season difficult. Response includes
+`{"status", "initial_tokens", "counts": {...}}` with a per-table deleted-row count. Logged as
+`admin_season_reset` with the same counts in the detail string.
 
-### `GET /leaderboard/seasons` *(planned)*
-Lists archived seasons: `[{id, season_label, archived_at, user_count}]`.
+**Players, Teams, and Cards are wiped entirely — not just deactivated.** The `players` table
+doubles as the admin-curated Player Pool (see `reference/admin-player-pool.md`), so reset
+also empties the draft pool: the admin repopulates it via Player Management once the new
+season's roster is known. Rosters fluctuate season to season, so retaining players/cards
+tied to a roster that no longer exists is a real risk, not just clutter. Cards are deleted
+(not soft-deactivated) for the same reason — a genuine clean slate means every user starts
+the new season by drawing a fresh collection with their reset tokens, rather than keeping
+cards for players who may no longer play. This is a deliberate trade-off, most relevant when
+the same instance is reused for a different league.
 
-### `GET /leaderboard/seasons/{season_id}` *(planned)*
-Returns archived standings for one season: `[{username, points, rank}]`.
+### `GET /leaderboard/seasons`
+Lists archived seasons, one row per distinct `season_label`, newest first:
+`[{id, season_label, archived_at, user_count}]`. `id` is the lowest `season_archive.id` in
+that label's group and is the identifier `GET /leaderboard/seasons/{season_id}` expects.
 
-### `GET /profile/{user_id}` *(extended, planned)*
-Response gains `past_seasons`: `[{season_label, points, rank}]`.
+### `GET /leaderboard/seasons/{season_id}`
+Returns the archived standings for the season containing that `season_archive` row:
+`{id, season_label, archived_at, standings: [{user_id, username, points, rank}]}`. 404 if
+`season_id` does not match any archived row.
 
-### `POST /admin/weeks` and `PATCH /admin/weeks/{week_id}` *(extended, planned)*
-Accept `start_date` / `end_date` (ISO dates). Derivation: `start_time` = start date
-00:00:00 UTC; `end_time` = 03:00:00 UTC on the day **after** the end date, so matches
-running past midnight still count toward the week.
+### `GET /profile/{user_id}` (extended)
+Response gains `past_seasons`: `[{season_label, points, rank}]`, one entry per archived
+season the user appears in, most recent first.
+
+### `POST /admin/weeks` and `PATCH /admin/weeks/{week_id}` (extended)
+Accept `start_date` / `end_date` (ISO `YYYY-MM-DD`) alongside the existing `start_time`/
+`end_time` integer fields (still accepted for backward compatibility; date fields take
+precedence when both are present). Derivation: `start_time` = start date 00:00:00 UTC;
+`end_time` = 03:00:00 UTC on the day **after** the end date, so matches running past
+midnight still count toward the week. Existing validation (end after start, locked weeks
+cannot be edited/deleted) is unchanged.
 
 ## Database
 
@@ -64,6 +87,16 @@ running past midnight still count toward the week.
 
 Deployments that still set these vars start cleanly; the values are ignored.
 
----
+`SCHEDULE_SHEET_URL` remains supported but loses its hardcoded Kanaliiga fallback (default is
+now `""`): unset means an empty schedule tab. Instances hosting Kanaliiga must set it
+explicitly in `.env`.
 
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*
+## Admin UI
+
+The Settings tab (admin panel) has a "Season Lifecycle" section: a season-label input with
+an "End Season (Archive)" button, a "Reset Season…" button that opens a type-to-confirm
+modal (must type `RESET`), and a table of previously archived seasons. The Leaderboard tab
+shows a "Past Seasons" panel with a season selector once at least one archive exists. The
+Profile view shows a "Past Seasons" line per archived season the user appears in
+(e.g. "Season 15 — 3rd, 1240.0 pts"). Week Management's create/edit forms use `<input
+type="date">` instead of `datetime-local`.

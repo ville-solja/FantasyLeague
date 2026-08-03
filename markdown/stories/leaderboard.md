@@ -26,6 +26,32 @@
 
 ---
 
+### Roster Value Leaderboard
+**User story**
+As a user, I want to see a leaderboard ranked by the current value of everyone's active
+roster so that I can compare collections independent of any single week's snapshot.
+
+**Acceptance criteria**
+- `GET /leaderboard/roster` ranks users by the total all-time fantasy points of their
+  currently active cards (not a locked snapshot, not scoped to any week)
+- Tester accounts are excluded
+- No authentication required
+
+---
+
+### Top Single-Match Performances
+**User story**
+As a user, I want to see the standout individual performances across all matches so that I
+can spot which players are having exceptional games.
+
+**Acceptance criteria**
+- `GET /top` returns the 10 highest single-match fantasy point scores across all ingested
+  data, regardless of week or user roster
+- Each entry shows the player, avatar, and the raw fantasy points for that match
+- No authentication required
+
+---
+
 ## Player and Team Browse
 
 ### Player Performance Browser

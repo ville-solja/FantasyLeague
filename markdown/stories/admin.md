@@ -238,6 +238,53 @@ auto-generated placeholder weeks can be removed when the schedule changes.
 - Attempting to delete a week with roster entries returns 409
 - Deletion is logged to the audit log
 
+### Frictionless Date Entry Without Raw Backend Errors
+**User story**
+As an admin, I want to enter week start/end dates in a familiar calendar-based way and never
+see a raw backend error message so that scheduling a week doesn't require knowing the internal
+ISO date format.
+
+**Acceptance criteria**
+- Clicking or focusing a start/end date field opens a calendar picker defaulting to the current
+  month, or the field's existing month if a valid date is already entered
+- Typed dates are parsed and validated entirely client-side; the request sent to the backend is
+  always well-formed ISO `YYYY-MM-DD` or the field is blocked from submitting
+- If a typed value cannot be parsed, the field is visually flagged invalid with a plain-language
+  status message instead of submitting and surfacing the backend's
+  `"Dates must be ISO format (YYYY-MM-DD)"` text
+- Behaviour is identical across browsers/locales — it does not rely on `<input type="date">`'s
+  locale-dependent native rendering
+
+### Inline Week List Editing
+**User story**
+As an admin, I want to edit a week's label and date range directly in the weeks table so that
+I don't have to open a separate edit panel lower on the page.
+
+**Acceptance criteria**
+- The standalone edit form below the weeks table is removed
+- Each unlocked week's row in the table has editable label, start date, and end date fields,
+  using the same calendar-picker date inputs as week creation
+- Locked weeks remain read-only in the table, matching current behaviour
+- A single "Save Changes" button below the table submits every edited (dirty) row
+- Rows with unsaved edits are visually indicated until saved (or reverted)
+- Each row is saved via its own request so one row's rejection (e.g. an overlap) does not
+  prevent the other changed rows from saving; per-row success/error is shown after saving
+- Successful saves refresh the table and are logged to the audit log, one entry per changed week
+
+### Prevent Overlapping Week Date Ranges
+**User story**
+As an admin, I want the system to reject a week create/edit that would make any calendar day
+belong to two weeks at once so that scoring windows never conflict.
+
+**Acceptance criteria**
+- `POST /admin/weeks` rejects a new week whose `[start_time, end_time)` range overlaps any
+  existing week's range, with a `409` and an error naming the conflicting week's label
+- `PATCH /admin/weeks/{id}` rejects an edit whose resulting range would overlap any other
+  week's range (excluding the week being edited itself), same error shape
+- The overlap check runs against all weeks regardless of locked status
+- Existing non-overlapping create/edit flows are unaffected — a week that exactly abuts another
+  (its `end_time` equals the other's `start_time`) is not treated as an overlap
+
 ## Env-Based Admin Seeding
 
 ### Configure the Admin Account via Environment Variables
@@ -351,8 +398,9 @@ As an admin, I want the admin panel organised into named tabs so that I can navi
 to the management area I need without scrolling through every section.
 
 **Acceptance criteria**
-- Admin panel shows a tab bar with five tabs: Week Management, Player Pool, Audit Log,
-  Settings (League management + Token Balances + Tag Definitions), and Matches
+- Admin panel shows a tab bar with six tabs, in order: User Management, Week Management,
+  Player Management, Matches, Audit Log, and Settings (League management + Token Balances +
+  Tag Definitions)
 - Clicking a tab shows only that tab's content; all other sections are hidden
 - The active tab is visually highlighted
 - Tab selection is preserved within the page session (switching away and back remembers the
@@ -412,10 +460,12 @@ season starts from a clean slate without touching user accounts.
 
 **Acceptance criteria**
 - `POST /admin/season/reset` deletes matches, stats, bans, weeks, roster entries, Twitch MVP
-  and token drop records
-- Cards are set inactive; user accounts, tags, and audit logs are retained
-- Token balances reset to `INITIAL_TOKENS`
+  and token drop records, all known players and teams, and every card (and card modifier)
+- User accounts, tags, and audit logs are retained
+- Token balances reset to `INITIAL_TOKENS`, so users draw a fresh collection for the new season
 - Monitored leagues are unmonitored
+- The admin-curated Player Pool is cleared along with players/teams — the admin repopulates
+  it via Player Management for the new season or league
 - 409 if locked weeks exist without a newer archive, unless `force=true`
 - Logged as `admin_season_reset` with deleted row counts
 
@@ -458,3 +508,69 @@ UI so that moving between seasons requires no env edits or redeploys.
   and `.env.example`
 - Monitored leagues are managed solely via the admin endpoints
 - Existing deployments with the vars still set start up cleanly (ignored)
+- The hardcoded Kanaliiga fallback for `SCHEDULE_SHEET_URL` is removed — a fresh instance
+  with the var unset shows an empty schedule tab and generates no weeks
+
+## Demo Mode
+
+### Move the Demo Clock
+**User story**
+As an operator running a demo deployment, I want to set the app's simulated "now" to any
+point in time so that I can walk a viewer through pre-lock, lock, and post-week scoring on
+demand instead of waiting for real time to pass.
+
+**Acceptance criteria**
+- `POST /admin/demo/clock` (body `{"timestamp": <unix>}`) is only reachable when
+  `DEMO_MODE=true`; returns 404 when the env var is unset or false, regardless of admin status
+- When reachable, it requires an admin session like other admin endpoints
+- Setting the clock immediately re-runs the auto-lock pass, so any week whose `start_time`
+  has now passed under the new simulated time locks right away
+- `GET /admin/demo/clock` returns the current override and the effective "now" it produces
+- `DELETE /admin/demo/clock` clears the override; the app falls back to real wall-clock time
+- Every read of "now" used for week locking and editability uses the override when one is set
+
+---
+
+### See Demo Mode Reflected in the App
+**User story**
+As anyone using a demo deployment, I want the app to visibly indicate that I'm in a demo so
+that I understand roster locks and scores are being driven by a simulated clock, not real
+time.
+
+**Acceptance criteria**
+- `GET /config` includes `demo_mode: true` only when `DEMO_MODE=true` is set on the server
+- The frontend shows a small persistent badge when `demo_mode` is true
+- The Settings tab's Demo Mode section (clock control + account seeding) is entirely absent
+  from the DOM unless `demo_mode` is true
+
+---
+
+### Seed Demo Accounts
+**User story**
+As an operator, I want to generate a batch of disposable accounts pre-loaded with a few
+random cards so that I can hand out ready-to-explore logins to people trying the tool.
+
+**Acceptance criteria**
+- `POST /admin/demo/seed-accounts` (body `{"count": 5, "cards_per_account": 3}`, both
+  optional) is only reachable when `DEMO_MODE=true`; 404 otherwise; requires admin
+- Creates that many new users named `demo1`, `demo2`, ... skipping numbers already taken
+- Each account receives `cards_per_account` cards via the existing draw mechanism,
+  auto-activated into its roster up to `ROSTER_LIMIT`
+- The response includes each generated username and a one-time plaintext password
+- Logged to the audit log as `admin_demo_accounts_seeded`
+
+---
+
+### Guard Against Accidental Production Exposure
+**User story**
+As an operator, I want Demo Mode to be structurally incapable of running in production so
+that a misconfigured deployment can't let a stranger rewrite the server's clock.
+
+**Acceptance criteria**
+- `DEMO_MODE` defaults to unset/false; all demo endpoints return 404 (not 403) when it is
+  not explicitly `true`, so their existence is not revealed
+- The app logs a prominent startup warning when `DEMO_MODE=true`, matching the existing
+  `SECRET_KEY`/`TWITCH_LOCAL_DEV` warning pattern
+- `.env.example` documents `DEMO_MODE` with an explicit "never set in production" note
+- The background ingest poll thread does not start when `DEMO_MODE=true`; the week
+  auto-lock thread continues to run

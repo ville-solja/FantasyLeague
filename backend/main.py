@@ -18,7 +18,7 @@ from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
-from weeks import generate_weeks, auto_lock_weeks
+from weeks import auto_lock_weeks
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
 from routers import players as players_router
@@ -36,6 +36,7 @@ TOKEN_NAME     = os.getenv("TOKEN_NAME", "Tokens")
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 _APP_VERSION   = os.getenv("APP_VERSION", "APP_VERSION")
 _APP_RELEASE   = os.getenv("APP_RELEASE", "")
+_DEMO_MODE     = os.getenv("DEMO_MODE", "").lower() == "true"
 
 _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
@@ -45,12 +46,15 @@ _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 
 def _week_maintenance_loop():
-    """Background thread: periodically generate new weeks and lock past ones."""
+    """Background thread: periodically lock weeks whose match window has opened.
+
+    Weeks themselves are created manually by admins (Week Management tab) —
+    this loop no longer auto-generates them.
+    """
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
             try:
-                generate_weeks(db)
                 auto_lock_weeks(db)
             finally:
                 db.close()
@@ -76,21 +80,6 @@ def _profile_enrichment_loop():
         except Exception:
             logger.exception("Profile enrichment loop error")
         _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
-
-
-def _seed_monitored_leagues(league_ids: list[int]):
-    db = SessionLocal()
-    try:
-        for lid in league_ids:
-            league = db.get(League, lid)
-            if not league:
-                league = League(id=lid, name="(pending ingest)", is_monitored=True)
-                db.add(league)
-            else:
-                league.is_monitored = True
-        db.commit()
-    finally:
-        db.close()
 
 
 def _auto_ingest(league_ids: list[int]):
@@ -168,12 +157,15 @@ async def lifespan(app: FastAPI):
                 "TWITCH_LOCAL_DEV=true must not be set when SECRET_KEY is configured — "
                 "this bypass must never run in production"
             )
-    _leagues_env = os.getenv("AUTO_INGEST_LEAGUES", "")
-    _league_ids = [int(x.strip()) for x in _leagues_env.split(",") if x.strip().isdigit()]
-    if _league_ids:
-        _seed_monitored_leagues(_league_ids)
-    threading.Thread(target=_ingest_poll_loop, daemon=True).start()
-    logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+    if _DEMO_MODE:
+        logger.warning(
+            "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
+            "endpoints are active. NEVER enable in production."
+        )
+        logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
+    else:
+        threading.Thread(target=_ingest_poll_loop, daemon=True).start()
+        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
     threading.Thread(target=_week_maintenance_loop, daemon=True).start()
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
@@ -267,6 +259,9 @@ def get_config(db=Depends(get_db)):
         "app_release": _APP_RELEASE,
         "team_booster_cost": booster_cost,
         "draw_rates": draw_rates,
+        # Read live (not the startup-frozen _DEMO_MODE) so tests toggling the env
+        # var per-case observe the current value without reimporting the module.
+        "demo_mode": os.getenv("DEMO_MODE", "").lower() == "true",
     }
 
 

@@ -944,3 +944,88 @@ body.roster-dragging * { cursor: grabbing !important; }
   user-select: none;
   z-index: 9999;
 }
+
+/* ============================================================
+   DEMO MODE BADGE
+   ============================================================ */
+.demo-mode-badge {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #b8390e;
+  color: #fff;
+  font-family: var(--font-display, "Big Shoulders Text", sans-serif);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  padding: 3px 0;
+  z-index: 10000;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ============================================================
+   NORDIC DATE PICKER (dd/mm/yyyy inputs, click to open)
+   ============================================================ */
+.date-picker-popup {
+  position: absolute;
+  z-index: 400;
+  background: var(--bg-card-hi);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+  padding: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  width: 220px;
+}
+.date-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.date-picker-title {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg);
+}
+.date-picker-nav {
+  background: none;
+  border: var(--bw-hair) solid var(--border);
+  color: var(--fg-muted);
+  border-radius: var(--r-xs);
+  padding: 2px 8px;
+  flex: none;
+  font-family: var(--font-body);
+}
+.date-picker-nav:hover { background: var(--k-ink-600); color: var(--fg); }
+.date-picker-weekdays,
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.date-picker-weekdays span {
+  font-size: var(--fs-xs);
+  color: var(--fg-dim);
+  padding: 2px 0;
+}
+.date-picker-day {
+  background: none;
+  border: none;
+  border-radius: var(--r-xs);
+  padding: 4px 0;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.date-picker-day:hover { background: var(--k-ink-600); }
+.date-picker-day.today { color: var(--accent); font-weight: var(--w-bold); }
+.date-picker-day.selected { background: var(--accent); color: var(--accent-fg); }
+.date-picker-day.empty { cursor: default; }
+.date-picker-day.empty:hover { background: none; }

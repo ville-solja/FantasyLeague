@@ -25,14 +25,14 @@
 
 ---
 
-### Auto-ingest on Startup
+### Auto-ingest Monitored Leagues
 **User story**
-As an operator, I want the server to automatically fetch fresh match data when it starts so that the app stays up to date without manual intervention.
+As an operator, I want the server to automatically fetch fresh match data for admin-selected leagues so that the app stays up to date without manual intervention.
 
 **Acceptance criteria**
-- League IDs to ingest are configured via `AUTO_INGEST_LEAGUES` environment variable
-- Ingestion runs in a background thread on startup; already-stored matches are skipped
-- Setting `AUTO_INGEST_LEAGUES=` (empty) disables auto-ingest
+- League IDs to ingest are managed at runtime via the admin League Management panel (`is_monitored` flag), not an environment variable
+- Ingestion runs in a background thread on a recurring interval; already-stored matches are skipped
+- A fresh instance with no leagues marked monitored performs no automatic ingestion
 
 ---
 
