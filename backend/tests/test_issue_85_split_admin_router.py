@@ -32,7 +32,9 @@ that are testable via pytest:
     - The `_stub_backup` monkeypatch fixture in TestSeasonReset targets
       `routers.admin_season.backup_sqlite_db`, not the old path
     - `cd backend && python -m pytest tests/ -v` passes with the same pass/skip
-      counts as before the split (448 passed, 10 skipped as of this writing)
+      counts as before the split (462 passed, 10 skipped as of this writing —
+      this number grows over time as new feature test files land; it is not an
+      eternal invariant, just a regression tripwire for the split itself)
     - `python -c "import main"` succeeds with no import errors, and the old
       `routers.admin` module is no longer importable at all
 
@@ -189,14 +191,19 @@ class TestPreserveExistingTestCoverageThroughSplit:
         assert "routers.admin.backup_sqlite_db" not in source
 
     def test_full_suite_pass_skip_counts_match_pre_split_baseline(self):
-        """`cd backend && python -m pytest tests/ -v` reports the same 448 passed / 10 skipped as before the split."""
+        """`cd backend && python -m pytest tests/ -v` reports the same 462 passed / 10 skipped as before the split.
+
+        This baseline is a regression tripwire for the admin router split, not an
+        eternal invariant — it is expected to be bumped upward whenever a later
+        feature legitimately adds new passing tests elsewhere in the suite (as
+        plan-issue-87-schedule-game-breakdown's 14 new tests did)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "448 passed" in output, output[-3000:]
+        assert "462 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

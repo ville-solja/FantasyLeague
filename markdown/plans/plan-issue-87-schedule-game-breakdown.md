@@ -23,11 +23,18 @@ Investigation findings that shape this plan:
   per-player storage is needed.
 - No hero icon URL mapping exists anywhere in the codebase yet. `backend/enrich.py`'s
   `_fetch_hero_name_map()` calls OpenDota's `GET /constants/heroes` and keeps only
-  `localized_name`; the same response also carries an `icon` path (relative to
-  `https://cdn.cloudflare.steamstatic.com`) that this plan will additionally capture. Hero
-  constants are effectively static within a patch, so this plan caches the icon map for the
-  process lifetime rather than on the schedule's existing 1-hour `CACHE_TTL` — no need to
-  re-fetch it every time the schedule cache refreshes.
+  `localized_name`; the same response also carries an `icon` path. **Verified live** (not
+  assumed): `GET https://api.opendota.com/api/constants/heroes` returns 127 heroes, each with
+  an `id` (int, matches `PlayerMatchStats.hero_id`'s type) and a non-null `icon` path for all
+  127; `https://cdn.cloudflare.steamstatic.com` + that `icon` path returns `200 image/png`
+  (~4.7KB — the small icon variant, not the larger `img` full-portrait path, which is the right
+  size for a compact draft strip). Hero constants are effectively static within a patch, so
+  this plan caches the icon map for the process lifetime rather than on the schedule's existing
+  1-hour `CACHE_TTL` — no need to re-fetch it every time the schedule cache refreshes. The fetch
+  goes through `opendota_client.get_json()`, the same shared throttled client (rolling 60s
+  window capped by `OPENDOTA_MAX_RPM`) used by every other OpenDota call in `ingest.py`/
+  `enrich.py` — no separate rate-limit handling needed, and since it's cached for the process
+  lifetime this is one extra call total, not a per-request cost.
 - `backend/routers/admin_ingest.py` owns `GET /schedule` post the issue-85 router split; no
   route path changes as part of this plan.
 
@@ -35,9 +42,11 @@ Assumptions (flagged for review):
 - "Kills" is read as each **team's total kills** for that game (a single number per side, e.g.
   "32–28"), not a per-player breakdown — matching the issue's "basic information about the
   match" framing and mirroring how the series-level score is already a single aggregate.
-- Hero icons per team are shown in `hero_id` ascending order. No draft-order or lane/slot field
-  is stored anywhere today, so there's no other stable ordering available; this is a reasonable
-  MVP default and easy to change once a real ordering is decided.
+- Each game's heroes are split into two fixed groups of 5 by team (`team1_heroes`,
+  `team2_heroes`), representing that side's draft. Confirmed with the user: the order *within*
+  a team's 5 doesn't matter — no draft-order or lane/slot field is stored anywhere today, so
+  this plan queries in `hero_id` ascending order purely for a stable, deterministic result
+  (not because it reflects pick order).
 - Games with missing `hero_id` data (e.g. very old matches ingested before hero tracking) show
   a placeholder icon rather than omitting the slot, so team rows always show 5 positions.
 - The existing per-game OpenDota link ("G1 ↗") is preserved, just moved into the new expanded

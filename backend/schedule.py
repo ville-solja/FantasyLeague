@@ -5,12 +5,17 @@ import re
 from datetime import datetime
 
 import requests
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 CACHE_TTL = 3600
 
 _cache = {"data": None, "fetched_at": None}
+
+# {hero_id: full icon URL}, fetched once per process lifetime — hero constants
+# are effectively static within a patch, so there is no need to refresh this on
+# the same 1-hour cadence as the schedule cache above.
+_hero_icon_cache = None
 
 
 # -----------------------
@@ -187,6 +192,88 @@ def build_team_lookup(db):
         return {}
 
 
+def _fetch_hero_icon_map() -> dict:
+    """{hero_id: full icon URL}, fetched once per process lifetime — hero constants
+    are effectively static within a patch."""
+    global _hero_icon_cache
+    if _hero_icon_cache is not None:
+        return _hero_icon_cache
+    from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+    try:
+        data = opendota_get_json(f"{OPEN_DOTA_URL}/constants/heroes", label="constants/heroes") or {}
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    _hero_icon_cache = {
+        h["id"]: f"https://cdn.cloudflare.steamstatic.com{h['icon']}"
+        for h in data.values() if h.get("id") and h.get("icon")
+    }
+    return _hero_icon_cache
+
+
+def _pad5(icons):
+    """Pad (or truncate) a hero-icon list to exactly 5 slots, filling gaps with None."""
+    icons = list(icons)[:5]
+    return icons + [None] * (5 - len(icons))
+
+
+def _build_games(db, match_ids, team1_id, team2_id):
+    """Per-game duration/kills/hero-icons for the given match_ids, one entry per
+    match_id (same order as match_ids), mapped to team1/team2 via the already
+    resolved team ids."""
+    if not match_ids:
+        return []
+
+    ids = list(match_ids)
+    hero_icon_map = _fetch_hero_icon_map()
+
+    duration_rows = db.execute(
+        text("SELECT match_id, duration FROM matches WHERE match_id IN :ids")
+            .bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    ).fetchall()
+    duration_by_match = {r[0]: r[1] for r in duration_rows}
+
+    kills_rows = db.execute(
+        text("""
+            SELECT match_id, team_id, SUM(kills) AS kills
+            FROM player_match_stats
+            WHERE match_id IN :ids AND team_id IS NOT NULL
+            GROUP BY match_id, team_id
+        """).bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    ).fetchall()
+    kills_by_match_team = {(r[0], r[1]): (r[2] or 0) for r in kills_rows}
+
+    hero_rows = db.execute(
+        text("""
+            SELECT match_id, team_id, hero_id
+            FROM player_match_stats
+            WHERE match_id IN :ids AND hero_id IS NOT NULL
+            ORDER BY hero_id ASC
+        """).bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    ).fetchall()
+    heroes_by_match_team: dict = {}
+    for match_id, team_id, hero_id in hero_rows:
+        heroes_by_match_team.setdefault((match_id, team_id), []).append(
+            hero_icon_map.get(hero_id)
+        )
+
+    games = []
+    for match_id in ids:
+        games.append({
+            "match_id": match_id,
+            "duration": duration_by_match.get(match_id),
+            "team1_kills": kills_by_match_team.get((match_id, team1_id), 0),
+            "team2_kills": kills_by_match_team.get((match_id, team2_id), 0),
+            "team1_heroes": _pad5(heroes_by_match_team.get((match_id, team1_id), [])),
+            "team2_heroes": _pad5(heroes_by_match_team.get((match_id, team2_id), [])),
+        })
+    return games
+
+
 def resolve_series_result(db, team1_name, team2_name, team_lookup, scheduled_dt_iso=None):
     """Return {team1_wins, team2_wins, game_count, start_time} or None if unresolvable.
 
@@ -242,6 +329,7 @@ def resolve_series_result(db, team1_name, team2_name, team_lookup, scheduled_dt_
         "game_count": len(rows),
         "start_time": min(start_times) if start_times else None,
         "match_ids": match_ids,
+        "games": _build_games(db, match_ids, team1_id, team2_id),
     }
 
 

@@ -7,7 +7,7 @@ Schedule tab itself).
 
 ---
 
-## Concept *(planned)*
+## Concept
 
 A series (one row in the season schedule sheet) is resolved against the database to a list of
 individual `match_id`s via `resolve_series_result()` in `backend/schedule.py`. Previously this
@@ -19,24 +19,83 @@ Team sides in each game are mapped to the series' own `team1`/`team2` (not raw D
 radiant/dire), so hero icons and kills always render on the same side as the team name already
 shown in the series header.
 
+### Implementation
+
+- `backend/models.py` — `Match.duration = Column(Integer, nullable=True)` (seconds, from
+  OpenDota's match JSON).
+- `backend/migrate.py` — `_m022_matches_duration()`, registered as `022_matches_duration` in
+  `MIGRATIONS`, adds `matches.duration` on legacy databases (`PRAGMA table_info` guarded, safe
+  to run twice).
+- `backend/ingest.py` — `ingest_match()` reads `duration = data.get("duration")` once (reused
+  for both the existing too-short-match skip check and the `Match(...)` constructor's
+  `duration=` argument). A payload missing `duration` entirely stores `None` rather than being
+  treated as a 0-second match.
+- `backend/schedule.py`:
+  - `_fetch_hero_icon_map()` — `{hero_id: full_icon_url}`, built from
+    `opendota_client.get_json(f"{OPEN_DOTA_URL}/constants/heroes")`, prefixing each hero's
+    `icon` path with `https://cdn.cloudflare.steamstatic.com`. Cached in the module-level
+    `_hero_icon_cache` for the process lifetime (hero constants are static within a patch) —
+    fetched at most once per process. Degrades to `{}` (never raises) if the OpenDota call
+    fails or raises.
+  - `_build_games(db, match_ids, team1_id, team2_id)` — for the given `match_ids`, queries
+    `matches.duration`, `SUM(player_match_stats.kills)` grouped by `(match_id, team_id)`, and
+    `player_match_stats.hero_id` ordered ascending grouped by `(match_id, team_id)` (all via
+    `sqlalchemy.text()` with `bindparam(expanding=True)` for the `match_id IN (...)` clause,
+    matching this file's existing raw-SQL style). Assembles one dict per `match_id`, in the
+    same order as `match_ids`, mapping raw `team_id`s to `team1`/`team2` via the already-known
+    ids. Hero-icon lists are padded/truncated to exactly 5 slots with `_pad5()`, `None` for
+    unresolved or missing slots.
+  - `resolve_series_result()` calls `_build_games(...)` and attaches the result as `games`
+    alongside the existing `team1_wins`, `team2_wins`, `game_count`, `start_time`, `match_ids`
+    keys. Returns `None` as before (no `games` key at all) when the series doesn't resolve to
+    any DB match.
+
 ## Endpoints
 
-### `GET /schedule` *(planned)*
-Existing endpoint (`backend/routers/admin_ingest.py`); response shape gains a `games` array
-per resolved series inside `series_result`:
+### `GET /schedule`
+Existing endpoint (`backend/routers/admin_ingest.py::schedule_endpoint`, public — no auth
+guard). Response shape gains a `games` array per resolved series inside `series_result`:
 ```json
 {
   "match_id": 8813824412,
   "duration": 2143,
   "team1_kills": 32, "team2_kills": 28,
-  "team1_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, ...],
-  "team2_heroes": [...]
+  "team1_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null],
+  "team2_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null]
 }
 ```
 `duration` is `null` for matches ingested before the `Match.duration` column existed, until
-re-ingested. Hero slots are padded to 5 with `null` when fewer than 5 heroes resolved.
+re-ingested. Hero slots are padded to 5 with `null` when fewer than 5 heroes resolved. Upcoming
+(unresolved) series are untouched — `series_result` stays `None`, with no `games` key.
+
+## Frontend rendering
+
+`frontend/app-players.js`'s `renderRow(s)` (used by `loadSchedule()`'s Results section) renders
+one `.game-row` `<div>` per entry in `series_result.games`, appended as a sibling immediately
+after the series' `.series-row` header:
+- `_formatGameDuration(seconds)` — `mm:ss`, or `"—"` when `null`.
+- `_gameHeroIconsHtml(heroUrls)` — one `<img class="hero-icon">` per resolved URL (with
+  `onerror="this.style.display='none'"`, the same broken-image guard used for player avatars in
+  `renderPlayers()`), or a `<span class="hero-icon hero-icon-placeholder">` for a `null` slot.
+- Each row also shows `team1_kills`–`team2_kills` and preserves the per-match OpenDota link
+  (`https://www.opendota.com/matches/{match_id}`), now scoped to that one game instead of a flat
+  "G1 ↗" list next to the score.
+
+The series header's own `.series-links` cell now only carries the series' stream link for past
+rows (unchanged for upcoming rows, which still show time + watch link). The old flat
+`match_ids`-based link list was removed: `resolve_series_result()` always attaches `games` in the
+same order as `match_ids` whenever it returns a non-`None` result (confirmed in
+`backend/schedule.py` — `_build_games()` is called unconditionally right after `match_ids` is
+computed, from the same non-empty `rows`), so there is no code path where `match_ids` is
+populated but `games` is not.
+
+Styling (`frontend/style.css`): `.game-row` mirrors `.series-row`'s 5-column grid
+(`40px 1fr 64px 1fr minmax(0, 170px)`) with a `bg-card-hi` background and left padding so it
+reads as a nested child under the series row above it. `.hero-icon` is a 20px rounded image;
+`.hero-icon-placeholder` uses a dashed `border-soft` border over a darker `k-ink-900` fill (same
+visual language as the existing `.card-slot-empty` empty-state convention) so a missing hero slot
+is visibly distinct rather than blank.
 
 ---
 
-*This document is a stub created at feature planning time. Fill in implementation details once
-the feature is built.*
+*Covered by `backend/tests/test_issue_87_schedule_game_breakdown.py`.*

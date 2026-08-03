@@ -29,5 +29,4 @@ a pure file reorganization of what previously all lived in `backend/routers/admi
 
 ---
 
-*This document is a stub created at feature planning time. Fill in implementation details once
-the feature is built.*
+*Covered by `backend/tests/test_issue_85_split_admin_router.py`.*
