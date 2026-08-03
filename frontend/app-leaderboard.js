@@ -69,6 +69,48 @@ async function loadWeeklyLeaderboard(weekId) {
   }
 }
 
+async function loadPastSeasons() {
+  const panel = document.getElementById("pastSeasonsPanel");
+  try {
+    const res = await fetch(`${API}/leaderboard/seasons`);
+    const seasons = await res.json();
+    if (!res.ok || !seasons.length) {
+      if (panel) panel.style.display = "none";
+      return;
+    }
+    if (panel) panel.style.display = "";
+    const sel = document.getElementById("pastSeasonSelect");
+    sel.innerHTML = seasons.map(s => `<option value="${s.id}">${_escHtml(s.season_label)}</option>`).join("");
+    await loadPastSeasonStandings(seasons[0].id);
+  } catch (e) {
+    if (panel) panel.style.display = "none";
+  }
+}
+
+async function onPastSeasonChange() {
+  const sel = document.getElementById("pastSeasonSelect");
+  if (sel) loadPastSeasonStandings(parseInt(sel.value));
+}
+
+async function loadPastSeasonStandings(seasonId) {
+  try {
+    const res = await fetch(`${API}/leaderboard/seasons/${seasonId}`);
+    const data = await res.json();
+    const tbody = document.getElementById("pastSeasonStandingsBody");
+    if (!res.ok) return setStatus("pastSeasonStatus", data.detail, false);
+    if (!data.standings.length) {
+      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data</td></tr>";
+      return;
+    }
+    tbody.innerHTML = data.standings.map(r => `<tr>
+      <td>${r.rank}</td><td>${_escHtml(r.username)}</td><td>${Number(r.points).toFixed(1)}</td>
+    </tr>`).join("");
+    setStatus("pastSeasonStatus", "");
+  } catch (e) {
+    setStatus("pastSeasonStatus", e.message, false);
+  }
+}
+
 function _populateLbWeekSelect() {
   const sel = document.getElementById("lbWeekSelect");
   if (!sel) return;

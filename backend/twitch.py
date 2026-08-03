@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+import clock
 from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
@@ -289,7 +290,7 @@ def current_matches(
     db: Session = Depends(get_db),
 ):
     """Return the 5 most recent series that have ingested match data, across any week."""
-    now = int(time.time())
+    now = clock.now(db)
 
     ingested_match_ids = [
         r.match_id

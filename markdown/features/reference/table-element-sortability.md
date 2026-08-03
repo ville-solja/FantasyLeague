@@ -33,7 +33,3 @@ All other headers show no arrow. The cursor changes to `pointer` on sortable hea
 | Avg deaths | number | descending |
 | Avg assists | number | descending |
 | Avg GPM | number | descending |
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

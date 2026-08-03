@@ -18,7 +18,3 @@ Makes the player name shown on a viewed card clickable, opening the player detai
 | `frontend/app-cards.js` — `showCard()` | `#revealPlayer` rendered as `entity-link` when `card.player_id` present; plain text during draw animation or when no player |
 | `frontend/app-init.js` — Escape handler | `keydown` listener closes top-most open modal: `playerModal` → `teamModal` → `revealModal` |
 | `backend/routers/cards.py` — draw response | Added `player_id` field to the `POST /draw` response so newly drawn cards also get the clickable name |
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

@@ -8,17 +8,21 @@ import random
 
 from sqlalchemy import func
 
-from models import Card, Player, PlayerMatchStats, Weight
+from models import Card, Player, PlayerMatchStats
 
 
-def _roll_rarity(db) -> str:
+def _roll_rarity(weights: dict) -> str:
+    """Roll a rarity from the draw_rate_* weights.
+
+    Takes the already-loaded {key: value} weights dict (see card_utils._load_weights
+    or the equivalent inline fetch at each call site) instead of querying the DB
+    itself, so callers that already have weights loaded don't pay for 4 extra
+    single-row queries per draw.
+    """
     labels  = ["common", "rare", "epic", "legendary"]
     wt_keys = ["draw_rate_common", "draw_rate_rare", "draw_rate_epic", "draw_rate_legendary"]
-    weights = []
-    for k in wt_keys:
-        w = db.query(Weight).filter_by(key=k).first()
-        weights.append(float(w.value) if w else 1.0)
-    return random.choices(labels, weights=weights, k=1)[0]
+    weight_values = [float(weights.get(k, 1.0)) for k in wt_keys]
+    return random.choices(labels, weights=weight_values, k=1)[0]
 
 
 def _pick_player(db, owner_id: int, rarity: str):

@@ -24,7 +24,3 @@ The label is set after each draw response, before the user can interact with the
 Clicking the dark overlay area surrounding the modal content closes the modal. Clicks
 inside the content box are stopped with `stopPropagation()` so they do not bubble to the
 backdrop. The existing X-button close path is unchanged.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

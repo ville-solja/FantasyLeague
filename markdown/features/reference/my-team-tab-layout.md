@@ -25,7 +25,3 @@ Contains (top to bottom):
 ## Endpoints
 
 No new endpoints. Layout change is purely frontend.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

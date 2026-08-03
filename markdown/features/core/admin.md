@@ -132,27 +132,50 @@ Returns the most recent audit log entries, newest first. All significant admin a
 |---|---|
 | `user_register` | New user registration |
 | `user_login` | Successful user login |
+| `password_reset_requested` | Forgot-password flow issued a temporary password |
 | `token_draw` | Card drawn |
+| `token_booster_draw` | Team booster pack drawn |
 | `reroll_modifiers` | User spent a token to reroll card modifiers |
 | `token_redeem` | User redeemed a code |
+| `token_grant_event_claim` | User auto-claimed tokens during an active token grant event |
+| `weekly_token_grant` | Automatic token grant at week lock |
 | `admin_grant_tokens` | Admin granted tokens to a user |
+| `admin_toggle_tester` | Admin toggled tester flag on a user |
+| `admin_code_create` | Admin created a redeemable code |
+| `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
 | `admin_recalculate` | Fantasy points recalculated |
 | `admin_schedule_refresh` | Schedule cache busted via `POST /schedule/refresh` |
 | `admin_set_match_week` | Admin manually assigned a match to a week |
 | `admin_sync_match_weeks` | Bulk week override sync |
 | `admin_sync_toornament` | Toornament result push |
-| `admin_code_create` | Admin created a redeemable code |
-| `admin_code_delete` | Admin deleted a redeemable code |
-| `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_enrich_profiles` | Admin triggered a manual profile enrichment batch |
 | `admin_player_added` | Admin added a player to the pool by OpenDota ID |
 | `admin_player_bulk_added` | Admin bulk-added players via CSV |
 | `admin_player_removed` | Admin soft-deleted a player from the pool |
 | `admin_player_refund_issued` | Tokens granted to a card holder after player removal |
-| `weekly_token_grant` | Automatic token grant at week lock |
-| `password_reset_requested` | Forgot-password flow issued a temporary password |
+| `admin_league_add_monitor` | Admin added a league to monitoring |
+| `admin_league_remove_monitor` | Admin removed a league from monitoring (data untouched) |
+| `admin_league_purge` | Admin purged a league's matches/stats/bans |
+| `admin_week_created` | Admin created a week (Week Management tab) |
+| `admin_week_edited` | Admin edited an unlocked week |
+| `admin_week_deleted` | Admin deleted an unlocked, roster-free week |
+| `admin_token_grant_event_created` | Admin created a token grant event |
+| `admin_token_grant_event_deleted` | Admin deleted a token grant event |
+| `admin_notification_created` | Admin created a broadcast notification |
+| `admin_notification_deleted` | Admin deleted a notification |
+| `admin_tag_definition_created` | Admin created a tag definition |
+| `admin_tag_definition_deleted` | Admin deleted a tag definition |
+| `admin_tag_grant` | Admin granted a tag to a user |
+| `admin_tag_revoke` | Admin revoked a tag from a user |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
+| `twitch_mvp_set` | Broadcaster set match MVP via the Twitch extension |
+| `twitch_token_drop` | Token drop fired on MVP confirmation |
+| `admin_season_archived` | Admin archived final season standings via End Season |
+| `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
+| `admin_demo_clock_cleared` | Operator cleared the demo clock override (`DEMO_MODE` only) |
+| `admin_demo_accounts_seeded` | Operator seeded disposable demo accounts (`DEMO_MODE` only) |
 
 ---
 
@@ -168,11 +191,14 @@ Returns public configuration values used by the frontend. No authentication requ
   "app_version": "...",
   "app_release": "...",
   "team_booster_cost": 3,
-  "draw_rates": { "common": 60.0, "rare": 25.0, "epic": 10.0, "legendary": 5.0 }
+  "draw_rates": { "common": 60.0, "rare": 25.0, "epic": 10.0, "legendary": 5.0 },
+  "demo_mode": false
 }
 ```
 
 `draw_rates` values are normalised from the live `draw_rate_*` scoring weights (always sum to 100%). See `reference/draw-panel-redesign.md`.
+
+`demo_mode` is `true` only when the server has `DEMO_MODE=true` set. See `reference/demo-mode.md`.
 
 ### `GET /health`
 Returns `{"status": "ok"}`. No authentication required. Used by container health checks.
@@ -190,5 +216,7 @@ These features have dedicated reference documents:
 | League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
-| Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` | `reference/admin-week-management.md` |
+| Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp` | `reference/admin-tab-navigation-mvp.md` |
+| Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |

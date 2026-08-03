@@ -49,10 +49,12 @@ As a user, I want to assign cards to the upcoming week's roster.
 
 ### Weekly Lock
 **User story**
-As a user, I want cards to lock before the week begins.
+As a user, I want cards to lock once a week's match window begins.
 
 **Acceptance criteria**
-- Auto-lock every Sunday at end of day (UTC)
+- Weeks are created by an admin with explicit start/end boundaries (no fixed weekly
+  cadence) — see `reference/season-lifecycle.md`
+- A background maintenance thread locks a week automatically once its start time passes
 - UI indicates that the week is locked and shows a locked banner
 - User is informed of the upcoming lock date on the My Team tab
 - Locked roster is immutable and shown as a read-only snapshot

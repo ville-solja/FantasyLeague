@@ -6,7 +6,11 @@ Admin interface for viewing and managing which OpenDota leagues the app polls fo
 
 ## Concept
 
-League IDs to auto-ingest are seeded from the `AUTO_INGEST_LEAGUES` environment variable on startup, but the live set is stored in the `leagues` table (`is_monitored` column). The background poll loop reads monitored leagues from the database each cycle, so changes take effect without a restart.
+The set of leagues to ingest is stored entirely in the `leagues` table (`is_monitored`
+column) and managed at runtime via this admin panel — there is no environment-variable
+bootstrap. The background poll loop reads monitored leagues from the database each cycle,
+so adding or removing a league takes effect at the next poll interval without a restart.
+A fresh instance starts with zero monitored leagues until an admin adds one.
 
 ## Endpoints
 
@@ -30,14 +34,11 @@ Purges all `player_match_stats`, `match_bans`, and `matches` rows for the league
 
 Migration: `_m017_leagues_is_monitored` in `backend/migrate.py`.
 
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `AUTO_INGEST_LEAGUES` | `19368,19369` | Comma-separated league IDs seeded as monitored on startup |
-
 ---
 
-## Startup behaviour
+## Poll behaviour
 
-On startup, `_seed_monitored_leagues(league_ids)` upserts each ID from `AUTO_INGEST_LEAGUES` into the `leagues` table with `is_monitored=True`. The background poll thread (`_ingest_poll_loop`) then queries `leagues WHERE is_monitored=True` each cycle, so adding or removing leagues via the admin panel takes effect at the next poll interval without a restart.
+The background poll thread (`_ingest_poll_loop`) queries `leagues WHERE is_monitored=True`
+each cycle, so adding or removing leagues via this admin panel takes effect at the next poll
+interval. `POST /admin/season/reset` (see `reference/season-lifecycle.md`) unmonitors every
+league as part of clearing per-season state — add the new season's league(s) here afterward.

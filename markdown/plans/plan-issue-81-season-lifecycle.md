@@ -12,6 +12,13 @@ creation becomes fully manual (date-only inputs) so the auto-generation loop and
 admin-managed via monitored leagues; the `AUTO_INGEST_LEAGUES` bootstrap env var is retired
 at the same time.
 
+A related fresh-instance defect folds into this plan: `backend/schedule.py` hardcodes the
+Kanaliiga Google Sheet as the fallback for `SCHEDULE_SHEET_URL`, and `backend/weeks.py`
+hardcodes `2026-03-08` as the fallback season anchor. A new instance hosted for a different
+league therefore silently shows Kanaliiga's schedule and generates ~22 stale weeks. Removing
+week auto-generation fixes the latter; this plan also empties the schedule URL default so an
+unconfigured instance shows an empty schedule tab instead of another league's fixtures.
+
 Decisions confirmed with the product owner:
 - Archive captures **final standings only** (username, points, rank per user)
 - Archived seasons are visible in **both** the Leaderboard tab (Past Seasons) and the Profile view
@@ -101,6 +108,8 @@ UI so that moving between seasons requires no env edits or redeploys.
   the existing admin endpoints
 - `.env.example` and docs no longer list the three retired variables
 - Existing deployments with the vars still set start up cleanly (vars are simply ignored)
+- The hardcoded Kanaliiga fallback for `SCHEDULE_SHEET_URL` is removed — when the var is
+  unset, the schedule tab is empty rather than showing another league's fixtures
 
 ---
 
@@ -115,6 +124,7 @@ UI so that moving between seasons requires no env edits or redeploys.
 | `backend/routers/profile.py` | Add `past_seasons` to `GET /profile/{user_id}` |
 | `backend/weeks.py` | Remove `generate_weeks`, `_parse_season_lock_anchor`, `_parse_season_end`; keep `auto_lock_weeks` |
 | `backend/main.py` | Remove `generate_weeks` call from maintenance loop; remove `AUTO_INGEST_LEAGUES` seeding |
+| `backend/schedule.py` | Remove hardcoded `_DEFAULT_SCHEDULE_URL` — default becomes empty (schedule disabled until configured) |
 | `frontend/app-admin.js` | Season lifecycle panel (Settings tab); date-only week form handling |
 | `frontend/app-leaderboard.js` | Past Seasons selector and archived table rendering |
 | `frontend/app-profile.js` | Past season placements line |
@@ -173,6 +183,10 @@ action share one implementation.
 - `weeks.py`: delete `generate_weeks`, `_parse_season_lock_anchor`, `_parse_season_end`
 - `main.py`: maintenance loop body becomes auto-lock only; remove `_seed_monitored_leagues`
   call and `AUTO_INGEST_LEAGUES` read (`_seed_monitored_leagues` itself can be deleted)
+- `schedule.py`: change `_DEFAULT_SCHEDULE_URL` to `""` (or drop the constant) so an
+  unconfigured instance gets an empty schedule; the existing `if not SCHEDULE_SHEET_URL`
+  guard already handles the empty case. Kanaliiga deployments must set `SCHEDULE_SHEET_URL`
+  explicitly in `.env` — note this in the deploy checklist
 - Update `test_weeks.py` accordingly
 
 ### Step 6 — Date-only week forms
@@ -206,4 +220,7 @@ existing archives.
 - Week created via date inputs: start 00:00 UTC, end 03:00 UTC the day after the chosen end date
 - App starts cleanly with `SEASON_LOCK_START`/`SEASON_END`/`AUTO_INGEST_LEAGUES` still present
   in the environment (ignored) and with them absent
+- Fresh instance with no `SCHEDULE_SHEET_URL`: schedule tab is empty, zero weeks exist,
+  nothing references Kanaliiga
+- Kanaliiga instance with `SCHEDULE_SHEET_URL` set: schedule loads as before
 - Non-admin requests to all new endpoints return 403

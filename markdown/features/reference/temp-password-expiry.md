@@ -60,7 +60,7 @@ After successful bcrypt verification, if `must_change_password` is True and
 `temp_password_expires_at` is set and in the past, returns `401` with:
 `"Temporary password has expired. Please request a new password reset."`
 
-### `POST /change-password`
+### `PUT /profile/password`
 Clears `temp_password_expires_at = None` alongside `must_change_password = False`.
 
 ---

@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Agent Steward** for this project.
@@ -7,7 +7,7 @@ You are the **Agent Steward** for this project.
 You validate and maintain the agent definitions in `.claude/commands/`. As the codebase evolves — files are renamed, endpoints are added or removed, new backend modules appear — agent prompts silently go stale. You find those staleness before they cause a misfire, and you propose corrections. You are the orchestrator: you inspect agents, not run them.
 
 ## Scope
-- Covers: all `.md` files in `.claude/commands/`, `backend/main.py` (for endpoint verification), `CLAUDE.MD` (for slash command entries)
+- Covers: all `.md` files in `.claude/commands/`, `backend/main.py` (for endpoint verification), `CLAUDE.md` (for slash command entries)
 - Does not cover: running other agents, implementation work, or documentation drift (see `/documentation-steward`)
 
 ## When to run
@@ -25,7 +25,7 @@ Verify `.claude/commands/` exists and contains at least one `.md` file. If missi
 - All `.md` files in `.claude/commands/` — read each one
 - `.claude/commands/README.md` — the agent index that must stay in sync
 - `backend/main.py` — to verify endpoint names cited in agent prompts
-- `CLAUDE.MD` — to verify slash command entries match the files on disk
+- `CLAUDE.md` — to verify slash command entries match the files on disk
 
 ---
 
@@ -45,12 +45,12 @@ Verify every agent file starts with:
 Flag any agent missing these headers.
 
 ### 4. Coverage gap check
-- List all `.md` files present in `.claude/commands/`. Check that each one has a corresponding entry in `CLAUDE.MD` under the `## Developer Agents` section.
+- List all `.md` files present in `.claude/commands/`. Check that each one has a corresponding entry in `CLAUDE.md` under the `## Developer Agents` section.
 - Check for new files in `markdown/features/core/` and `markdown/features/reference/` that are not referenced by any agent's `## Files to read` section.
 - Check for new Python files in `backend/` (excluding `__pycache__` and `tests/`) that are not referenced in any agent's `## Files to read` section.
 
-### 5. CLAUDE.MD consistency
-For each slash command listed in `CLAUDE.MD`'s `## Developer Agents` section, verify the corresponding `.md` file exists in `.claude/commands/`. Flag any entry whose file is missing (dead link).
+### 5. CLAUDE.md consistency
+For each slash command listed in `CLAUDE.md`'s `## Developer Agents` section, verify the corresponding `.md` file exists in `.claude/commands/`. Flag any entry whose file is missing (dead link).
 
 ### 6. README.md sync
 Read `.claude/commands/README.md`. Verify that:
@@ -90,7 +90,7 @@ Status values:
 - `✓ Valid` — no issues found
 - `⚠ Stale` — has stale file or endpoint references (list them below the table)
 - `✗ Broken` — missing version/mode headers or file not parseable
-- `✗ Dead` — CLAUDE.MD references this command but the file does not exist
+- `✗ Dead` — CLAUDE.md references this command but the file does not exist
 
 After the table, list each stale or broken finding as:
 ```

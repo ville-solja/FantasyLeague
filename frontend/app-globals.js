@@ -39,6 +39,11 @@ async function loadConfig() {
           versionEl.style.display = "none";
         }
       }
+
+      window.demoMode = cfg.demo_mode === true;
+      const demoBadge = document.getElementById("demo-mode-badge");
+      if (demoBadge) demoBadge.style.display = window.demoMode ? "" : "none";
+      if (typeof renderDemoModePanel === "function") renderDemoModePanel();
     }
   } catch (_) { /* non-fatal */ }
 }
@@ -82,12 +87,13 @@ function switchTab(name) {
       const weekId = sel ? parseInt(sel.value) : null;
       if (weekId) loadWeeklyLeaderboard(weekId);
     });
+    loadPastSeasons();
   }
   if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); }
 }
 
 function setStatus(id, msg, ok = true) {

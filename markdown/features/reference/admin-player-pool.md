@@ -16,16 +16,24 @@ historical `player_match_stats` records and card history remain intact.
 When a player is removed, every active `Card` referencing that player is also deactivated, and
 the card's owner receives 1 refund token per deactivated card.
 
+`POST /admin/season/reset` (see `reference/season-lifecycle.md`) deletes every row in this
+table outright — a season reset empties the Player Pool entirely, not just soft-deletes it.
+The admin repopulates the pool for the new season or league afterward.
+
 ## Endpoints
 
 ### `GET /admin/players`
-Returns all players (active and inactive) ordered by name, with `id`, `name`, `is_active`, and
-`active_card_count`. Admin only (`Depends(require_admin)`).
+Returns all players (active and inactive) ordered by name, with `id`, `name`, `avatar_url`,
+`team_id`, `team_name`, `is_active`, and `active_card_count`. `avatar_url`/`team_id`/`team_name`
+are computed the same way as the public `GET /players` endpoint — team is each player's most
+recent match's team (via a join through `player_match_stats`), not a static assignment — so the
+two views always show the same identity for a given player. Admin only (`Depends(require_admin)`).
 
 **Response shape:**
 ```json
 [
-  {"id": 12345, "name": "Player Name", "is_active": true, "active_card_count": 3}
+  {"id": 12345, "name": "Player Name", "avatar_url": "https://...", "team_id": 99,
+   "team_name": "Team Name", "is_active": true, "active_card_count": 3}
 ]
 ```
 
@@ -103,7 +111,9 @@ Historical `PlayerMatchStats` rows are untouched.
 ## Frontend
 
 The admin tab includes a "Player Pool" section with:
-- A table (`#playerPoolTable`) listing all players with checkbox, Name, OpenDota ID, Active Cards columns
+- A table (`#playerPoolTable`) listing all players with checkbox, Name (with avatar icon), Team,
+  OpenDota ID, Active Cards, and Status columns — matching the identity shown on the public
+  Players tab
 - "Add Player" button — opens a popup to enter a single OpenDota ID
 - "Bulk Add" button — opens a popup to paste a CSV of IDs
 - "Remove Selected" button — disabled until at least one checkbox is checked; shows a confirmation popup with selected player names before calling `POST /admin/players/remove`

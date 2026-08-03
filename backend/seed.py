@@ -8,7 +8,6 @@ from database import SessionLocal
 logger = logging.getLogger(__name__)
 from models import User, Card, Weight, PlayerMatchStats, Match, TagDefinition
 from auth import hash_password
-from weeks import generate_weeks, auto_lock_weeks
 from scoring import SCORING_STATS
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
@@ -23,23 +22,25 @@ CARD_SCHEMA = [
 
 def seed_users():
     db = SessionLocal()
-    with open(os.path.join(SEED_DIR, "users.json")) as f:
-        users = json.load(f)
+    try:
+        with open(os.path.join(SEED_DIR, "users.json")) as f:
+            users = json.load(f)
 
-    for u in users:
-        if not db.get(User, u["id"]):
-            db.add(User(
-                id=u["id"],
-                username=u["username"],
-                email=u["email"],
-                password_hash=hash_password(u["password"]),
-                is_admin=u.get("is_admin", False),
-                is_tester=u.get("is_tester", False),
-            ))
-            logger.info("Seeded user %s", u["username"])
+        for u in users:
+            if not db.get(User, u["id"]):
+                db.add(User(
+                    id=u["id"],
+                    username=u["username"],
+                    email=u["email"],
+                    password_hash=hash_password(u["password"]),
+                    is_admin=u.get("is_admin", False),
+                    is_tester=u.get("is_tester", False),
+                ))
+                logger.info("Seeded user %s", u["username"])
 
-    db.commit()
-    db.close()
+        db.commit()
+    finally:
+        db.close()
 
 
 def seed_admin_from_env():
@@ -88,43 +89,44 @@ def seed_admin_from_env():
 
 def seed_cards(league_id: int, generation: int = 1):
     db = SessionLocal()
+    try:
+        player_ids = (
+            db.query(PlayerMatchStats.player_id)
+            .join(Match, Match.match_id == PlayerMatchStats.match_id)
+            .filter(Match.league_id == league_id)
+            .distinct()
+            .all()
+        )
+        player_ids = [r[0] for r in player_ids]
 
-    player_ids = (
-        db.query(PlayerMatchStats.player_id)
-        .join(Match, Match.match_id == PlayerMatchStats.match_id)
-        .filter(Match.league_id == league_id)
-        .distinct()
-        .all()
-    )
-    player_ids = [r[0] for r in player_ids]
+        already_seeded = {
+            r[0] for r in
+            db.query(Card.player_id).filter(
+                Card.league_id == league_id,
+                Card.generation == generation,
+            ).distinct().all()
+        }
 
-    already_seeded = {
-        r[0] for r in
-        db.query(Card.player_id).filter(
-            Card.league_id == league_id,
-            Card.generation == generation,
-        ).distinct().all()
-    }
+        count = 0
+        for player_id in player_ids:
+            if player_id in already_seeded:
+                continue
+            for card_type, quantity in CARD_SCHEMA:
+                for _ in range(quantity):
+                    db.add(Card(
+                        player_id=player_id,
+                        owner_id=None,
+                        card_type=card_type,
+                        league_id=league_id,
+                        generation=generation,
+                    ))
+                    count += 1
 
-    count = 0
-    for player_id in player_ids:
-        if player_id in already_seeded:
-            continue
-        for card_type, quantity in CARD_SCHEMA:
-            for _ in range(quantity):
-                db.add(Card(
-                    player_id=player_id,
-                    owner_id=None,
-                    card_type=card_type,
-                    league_id=league_id,
-                    generation=generation,
-                ))
-                count += 1
-
-    db.commit()
-    db.close()
-    logger.info("Seeded %d cards (gen %d) for league %d across %d players",
-                count, generation, league_id, len(player_ids))
+        db.commit()
+        logger.info("Seeded %d cards (gen %d) for league %d across %d players",
+                    count, generation, league_id, len(player_ids))
+    finally:
+        db.close()
 
 
 DEFAULT_WEIGHTS = [
@@ -226,15 +228,3 @@ def seed_tags():
         db.close()
 
 
-def seed_weeks():
-    """Generate week rows and retroactively lock past weeks.
-
-    Safe to call multiple times (idempotent). Past weeks are snapshotted using
-    each user's current active roster, which is the fairest option when the
-    feature didn't exist during those weeks. Run this after cards are seeded so
-    the snapshots capture real active rosters.
-    """
-    db = SessionLocal()
-    generate_weeks(db)
-    auto_lock_weeks(db)
-    db.close()

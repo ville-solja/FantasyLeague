@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from deps import get_current_user
-from models import Player, User, UserTag, TagDefinition
+from models import Player, SeasonArchive, User, UserTag, TagDefinition
 from auth import hash_password, verify_password
 
 router = APIRouter()
@@ -52,6 +52,15 @@ def get_profile(user_id: int, db=Depends(get_db)):
         .all()
     )
     result["tags"] = [{"key": td.key, "label": td.label} for _, td in tag_rows]
+    past_rows = (
+        db.query(SeasonArchive)
+        .filter(SeasonArchive.user_id == user.id)
+        .order_by(SeasonArchive.archived_at.desc(), SeasonArchive.id.desc())
+        .all()
+    )
+    result["past_seasons"] = [{"season_label": r.season_label,
+                               "points": r.points, "rank": r.rank}
+                              for r in past_rows]
     return result
 
 

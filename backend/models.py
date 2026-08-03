@@ -130,8 +130,8 @@ class Week(Base):
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     label      = Column(String)   # "Week 1", "Week 2", ...
-    start_time = Column(Integer)  # Unix timestamp — 0 for week 1, Monday 00:00 UTC thereafter
-    end_time   = Column(Integer)  # Unix timestamp — Sunday 23:59:59 UTC
+    start_time = Column(Integer)  # Unix timestamp — admin-defined, no fixed weekly cadence
+    end_time   = Column(Integer)  # Unix timestamp — admin-defined
     is_locked  = Column(Boolean, default=False)
 
 
@@ -142,6 +142,25 @@ class WeeklyRosterEntry(Base):
     week_id = Column(Integer, ForeignKey("weeks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     card_id = Column(Integer, ForeignKey("cards.id"))
+
+
+class SeasonArchive(Base):
+    """Final standings snapshot taken by POST /admin/season/end.
+
+    One row per (season_label, user). username is denormalised so the archive
+    survives later renames or account deletion.
+    """
+    __tablename__ = "season_archive"
+    __table_args__ = (UniqueConstraint("season_label", "user_id",
+                                       name="uq_season_archive_label_user"),)
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    season_label = Column(String, nullable=False)
+    user_id      = Column(Integer, ForeignKey("users.id"))
+    username     = Column(String, nullable=False)   # denormalised: survives renames
+    points       = Column(Float, nullable=False)
+    rank         = Column(Integer, nullable=False)
+    archived_at  = Column(Integer, nullable=False)  # Unix timestamp
 
 
 class PromoCode(Base):
@@ -286,6 +305,16 @@ class NotificationDismissal(Base):
     notification_id = Column(Integer, ForeignKey("notifications.id"))
     user_id         = Column(Integer, ForeignKey("users.id"))
     dismissed_at    = Column(Integer)
+
+
+class DemoClock(Base):
+    """Singleton row (id=1) holding the operator-set simulated 'now' override for
+    DEMO_MODE deployments. See backend/clock.py."""
+    __tablename__ = "demo_clock"
+
+    id                  = Column(Integer, primary_key=True)  # always 1
+    override_timestamp  = Column(Integer, nullable=True)
+    updated_at          = Column(Integer, nullable=True)
 
 
 class TagDefinition(Base):
