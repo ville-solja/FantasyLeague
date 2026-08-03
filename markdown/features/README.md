@@ -63,7 +63,7 @@ Implementation details, integrations, and operator tooling.
 | [Draw Panel Redesign](reference/draw-panel-redesign.md) | Renames "Deck" to "Draw" and replaces card counts with normalised drop percentages from live weights |
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |
 | [SMTP Password Recovery](reference/smtp-password-recovery.md) | Forgot-password flow: temporary password delivery via SMTP with stdout fallback for local dev |
-| [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons |
+| [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons; results also derive directly from ingested matches when the schedule sheet has no row for them |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | Microservice that downloads Dota 2 demos, extracts in-game tip events, and powers a tipping leaderboard |
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | HTML5 drag-and-drop to reorder the active roster; card viewer backdrop-click dismiss |

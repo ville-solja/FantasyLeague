@@ -64,6 +64,48 @@ the draft at a glance without looking the match up on OpenDota.
 - A hero with no resolved icon (unknown `hero_id`, or the constants fetch failed) shows a
   placeholder rather than a broken image
 
+### Show Past Results Without Requiring a Schedule-Sheet Row
+**User story**
+As a user, I want completed matches to appear in the Schedule tab's results even when the
+schedule spreadsheet has no corresponding fixture row (playoffs, bracket stages, or matches the
+sheet simply never listed) so that the results I see always reflect what's actually been played.
+
+**Acceptance criteria**
+- `GET /schedule` additionally derives series from completed matches not already resolved by any
+  sheet row, grouping consecutive matches between the same two teams (played within a short time
+  window of each other) into one series
+- These derived series appear in the same Results list as sheet-resolved series, sorted
+  chronologically together — not a separate or hidden section
+- Each derived series shows the same detail as a sheet-resolved one: aggregate score and the
+  per-game breakdown (duration, kills, hero icons)
+- A completed match is never shown twice — matches already claimed by a resolved sheet series
+  are excluded from the independently-derived results
+
+### Results Remain Available Without a Configured Schedule Sheet
+**User story**
+As an operator running this app for a league that doesn't maintain a Google Sheets schedule, I
+want the Schedule tab's Results to still populate directly from ingested match data so that the
+app is useful without requiring a spreadsheet at all.
+
+**Acceptance criteria**
+- When `SCHEDULE_SHEET_URL` is unset (or the sheet is unreachable with no prior cache),
+  `GET /schedule` returns an empty Upcoming set but still returns fully-populated Results derived
+  from the database
+- The existing "Schedule unavailable" messaging is scoped to Upcoming only — it is not shown
+  (or is clearly secondary) when Results have data to display
+
+### Upcoming Fixtures Remain Sheet-Sourced
+**User story**
+As a user, I want upcoming/future fixtures to keep coming from the schedule spreadsheet so that
+planned dates and stream links — information that doesn't exist anywhere else before a match is
+played — are still shown.
+
+**Acceptance criteria**
+- No change to how Upcoming series are resolved or displayed — still sourced entirely from the
+  schedule sheet
+- Existing sheet-resolved Results (series the sheet does describe) are unaffected in shape or
+  content by this plan
+
 ---
 
 ## Layout

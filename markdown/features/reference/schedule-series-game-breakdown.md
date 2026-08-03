@@ -3,7 +3,8 @@
 Expands each resolved series in the Schedule tab's Results section from a single aggregate
 score into a parent row with an expandable child row per individual game, showing duration,
 each team's kills, and each team's hero picks. Visible to everyone (same audience as the
-Schedule tab itself).
+Schedule tab itself). Results also include series derived directly from ingested match data
+when the schedule sheet has no corresponding row — see "Schedule-independent results" below.
 
 ---
 
@@ -50,6 +51,38 @@ shown in the series header.
     keys. Returns `None` as before (no `games` key at all) when the series doesn't resolve to
     any DB match.
 
+## Schedule-independent results
+
+`resolve_series_result()` requires a schedule-sheet row (team names + planned date) to anchor
+its DB lookup — so a completed match with no corresponding sheet row (a playoff/bracket stage
+the sheet never listed row-by-row, or a league that doesn't maintain a comparable spreadsheet at
+all) was previously invisible in the Schedule tab, even though it was fully ingested. `GET
+/schedule` gains a second, sheet-independent path that derives series directly from the
+database:
+
+- `_tally_wins(rows, team1_id)` — shared win/loss tally, extracted out of
+  `resolve_series_result()`'s existing inline loop so both paths compute it identically.
+- `_build_unscheduled_results(db, claimed_match_ids, div1_team_ids, div2_team_ids)` — queries
+  every completed match (`radiant_team_id`/`dire_team_id` both set) not already claimed by a
+  sheet-resolved series, clusters consecutive matches between the same two teams into one series
+  when the gap between them is under 6 hours (a Bo3/Bo5 session heuristic — there's no
+  series-id field to group by instead), and reuses `_build_games(...)` for the per-game
+  breakdown. Division badge is inferred from whichever side (`div1`/`div2`) either team was seen
+  on anywhere in the sheet across the season; `None` if neither team ever appeared in the sheet.
+- `get_schedule()` accumulates `claimed_match_ids` from every sheet-resolved series' `match_ids`
+  while looping over `weeks`, then calls `_build_unscheduled_results(...)` and attaches the
+  result as a new top-level `extra_results` key. This also runs (and still returns real Results)
+  when `SCHEDULE_SHEET_URL` is unset or unreachable with no cache — only `weeks` (Upcoming) is
+  empty in that case, not the whole response.
+- A side benefit: a sheet row whose team names fail fuzzy matching (`find_team_id()` returns
+  `None`) previously showed as bare "vs" with no result at all, since its matches were never
+  "claimed." Those matches now surface correctly via this same unclaimed-match path.
+
+Frontend: `loadSchedule()` merges `data.extra_results` into the same `past` array built from the
+sheet, before the upcoming/past split — so derived series sort into the existing Results list
+chronologically alongside sheet-resolved ones, not a separate section. The division badge
+renders nothing when `division` is `null` instead of assuming `div1`/`div2`.
+
 ## Endpoints
 
 ### `GET /schedule`
@@ -67,6 +100,11 @@ guard). Response shape gains a `games` array per resolved series inside `series_
 `duration` is `null` for matches ingested before the `Match.duration` column existed, until
 re-ingested. Hero slots are padded to 5 with `null` when fewer than 5 heroes resolved. Upcoming
 (unresolved) series are untouched — `series_result` stays `None`, with no `games` key.
+
+Response also gains a top-level `extra_results` array — see "Schedule-independent results" above
+— of series shaped like a resolved sheet series (`team1`/`team2`/`team1_id`/`team2_id`/
+`division`/`datetime_iso`/`match_status: "past"`/`series_result`) but with no `stream_url`,
+`stream_label`, or `time` (not applicable — these only exist for sheet rows).
 
 ## Frontend rendering
 
@@ -98,4 +136,5 @@ is visibly distinct rather than blank.
 
 ---
 
-*Covered by `backend/tests/test_issue_87_schedule_game_breakdown.py`.*
+*Covered by `backend/tests/test_issue_87_schedule_game_breakdown.py` (game breakdown) and
+`backend/tests/test_schedule_independent_results.py` (schedule-independent results).*
