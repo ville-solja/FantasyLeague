@@ -68,7 +68,7 @@ class TestMoveTheDemoClock:
     def test_get_demo_clock_404_when_demo_mode_unset(self, db, monkeypatch):
         """GET /admin/demo/clock returns 404 when DEMO_MODE is unset, even for an admin."""
         monkeypatch.delenv("DEMO_MODE", raising=False)
-        from routers.admin import get_demo_clock
+        from routers.admin_demo import get_demo_clock
         with pytest.raises(HTTPException) as exc:
             get_demo_clock(db=db, _=_ADMIN)
         assert exc.value.status_code == 404
@@ -84,7 +84,7 @@ class TestMoveTheDemoClock:
     def test_post_demo_clock_sets_override_and_reruns_auto_lock_weeks(self, db, monkeypatch):
         """Setting the clock past a week's start_time locks it synchronously, in-request."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import set_demo_clock, DemoClockBody
+        from routers.admin_demo import set_demo_clock, DemoClockBody
         from models import Week
         week = Week(label="W1", start_time=1_000_000, end_time=1_600_000, is_locked=False)
         db.add(week)
@@ -96,7 +96,7 @@ class TestMoveTheDemoClock:
     def test_get_demo_clock_returns_override_and_effective_now(self, db, monkeypatch):
         """GET /admin/demo/clock reports both the stored override and clock.now(db)."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import set_demo_clock, get_demo_clock, DemoClockBody
+        from routers.admin_demo import set_demo_clock, get_demo_clock, DemoClockBody
         set_demo_clock(DemoClockBody(timestamp=5_000_000), db=db, admin=_ADMIN)
         result = get_demo_clock(db=db, _=_ADMIN)
         assert result["override_timestamp"] == 5_000_000
@@ -105,7 +105,7 @@ class TestMoveTheDemoClock:
     def test_delete_demo_clock_clears_override_and_falls_back_to_real_time(self, db, monkeypatch):
         """DELETE /admin/demo/clock clears the override; clock.now(db) resumes tracking real time."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import set_demo_clock, clear_demo_clock, DemoClockBody
+        from routers.admin_demo import set_demo_clock, clear_demo_clock, DemoClockBody
         import clock
         set_demo_clock(DemoClockBody(timestamp=5_000_000), db=db, admin=_ADMIN)
         clear_demo_clock(db=db, admin=_ADMIN)
@@ -173,7 +173,7 @@ class TestSeedDemoAccounts:
     def test_seed_accounts_404_when_demo_mode_unset(self, db, monkeypatch):
         """POST /admin/demo/seed-accounts returns 404 when DEMO_MODE is unset."""
         monkeypatch.delenv("DEMO_MODE", raising=False)
-        from routers.admin import seed_demo_accounts, SeedDemoAccountsBody
+        from routers.admin_demo import seed_demo_accounts, SeedDemoAccountsBody
         with pytest.raises(HTTPException) as exc:
             seed_demo_accounts(SeedDemoAccountsBody(), db=db, admin=_ADMIN)
         assert exc.value.status_code == 404
@@ -181,7 +181,7 @@ class TestSeedDemoAccounts:
     def test_seed_accounts_creates_named_accounts_skipping_taken_usernames(self, db, monkeypatch):
         """Repeated calls add demo1, demo2, ... without colliding with existing usernames."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import seed_demo_accounts, SeedDemoAccountsBody
+        from routers.admin_demo import seed_demo_accounts, SeedDemoAccountsBody
         from models import User
         db.add(User(username="demo1", email="demo1@demo.local", password_hash="x", tokens=0))
         db.commit()
@@ -194,7 +194,7 @@ class TestSeedDemoAccounts:
         """Each generated account receives cards_per_account cards via draw_card,
         auto-activated into its roster up to ROSTER_LIMIT."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import seed_demo_accounts, SeedDemoAccountsBody
+        from routers.admin_demo import seed_demo_accounts, SeedDemoAccountsBody
         from models import Card, Player, User
         for i in range(3):
             db.add(Player(id=i + 1, name=f"P{i}"))
@@ -210,7 +210,7 @@ class TestSeedDemoAccounts:
         """The one-time plaintext password in the response verifies against the bcrypt
         hash actually stored on the User row."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import seed_demo_accounts, SeedDemoAccountsBody
+        from routers.admin_demo import seed_demo_accounts, SeedDemoAccountsBody
         from auth import verify_password
         from models import User
         result = seed_demo_accounts(
@@ -223,7 +223,7 @@ class TestSeedDemoAccounts:
         """A successful seed call writes an AuditLog row with action
         admin_demo_accounts_seeded."""
         monkeypatch.setenv("DEMO_MODE", "true")
-        from routers.admin import seed_demo_accounts, SeedDemoAccountsBody
+        from routers.admin_demo import seed_demo_accounts, SeedDemoAccountsBody
         from models import AuditLog
         seed_demo_accounts(SeedDemoAccountsBody(count=2, cards_per_account=0),
                             db=db, admin=_ADMIN)
@@ -241,7 +241,7 @@ class TestGuardAgainstProductionExposure:
         """All three /admin/demo/* endpoints return 404 (not 403) when DEMO_MODE is
         unset/false, regardless of caller identity, so their existence isn't revealed."""
         monkeypatch.delenv("DEMO_MODE", raising=False)
-        from routers.admin import (
+        from routers.admin_demo import (
             get_demo_clock, set_demo_clock, clear_demo_clock, seed_demo_accounts,
             DemoClockBody, SeedDemoAccountsBody,
         )

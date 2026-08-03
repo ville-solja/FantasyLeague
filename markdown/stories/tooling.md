@@ -78,3 +78,46 @@ documentation entry points so that I do not have to know they exist in order to 
 - `markdown/features/README.md` includes a link to `markdown/process-diagrams.md`
 - The main `README.md` documentation section also links to `markdown/process-diagrams.md`
 - The page title and file name are descriptive enough to be findable by search
+
+## Admin Router Organization
+
+### Split Admin Endpoints into Focused Router Modules
+**User story**
+As a developer working on this codebase, I want admin endpoints grouped into small,
+concern-specific router files instead of one 1,200+ line file so that I can find and change
+the code for one admin feature without scanning past nine unrelated ones.
+
+**Acceptance criteria**
+- `backend/routers/admin.py` is replaced by focused modules, each a self-contained
+  `APIRouter()` covering one concern (users/tokens/codes, ingest/schedule, weeks,
+  notifications, tags, player pool, leagues, season lifecycle, matches/MVP, demo mode)
+- Every existing endpoint keeps its exact path, method, request/response shape, and
+  `Depends()` auth guard — this is a file reorganization, not a behavior change
+- `backend/main.py` imports and `include_router()`s each new module in place of the single
+  `admin_router`
+- No file in the new split exceeds roughly 350 lines
+
+### Preserve Existing Test Coverage Through the Split
+**User story**
+As a developer relying on CI, I want the full existing test suite to keep passing unmodified
+in behavior (only import paths change) so that the refactor is verifiably behavior-preserving.
+
+**Acceptance criteria**
+- Test files that import handler functions directly from `routers.admin` have those imports
+  updated to the correct new module for each function
+- Any monkeypatch fixture targeting a function that moved (e.g. `backup_sqlite_db` used by
+  season reset) is updated to patch the function's new module path
+- The full backend test suite passes with the same pass/skip counts as before the split
+- `python -c "import main"` succeeds with no import errors
+
+### Keep Developer Agent Definitions Accurate After the Split
+**User story**
+As a maintainer relying on the project's slash-command agents, I want agent definitions that
+cite `backend/routers/admin.py` updated to reference the correct new file(s) so that agent
+prompts don't silently point at a file that no longer contains what they describe.
+
+**Acceptance criteria**
+- `/agent-steward` is run after the split lands
+- Every agent definition that previously cited `backend/routers/admin.py` is corrected to
+  reference the new module(s), with its version header incremented
+- `/agent-steward`'s final status table shows 0 stale/broken agents

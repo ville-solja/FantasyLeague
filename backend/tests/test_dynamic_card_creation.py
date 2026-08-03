@@ -387,27 +387,38 @@ class TestConfigurableDropRates:
 class TestDeprecatePoolManagement:
 
     def test_top_up_cards_endpoint_is_gone_or_returns_410(self, db):
-        """POST /admin/top-up-cards is removed — the handler function must not exist."""
+        """POST /admin/top-up-cards is removed — the handler function must not exist
+        in any of the ten focused admin_*.py modules that replaced the old admin.py."""
         import os
-        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin.py")
-        with open(admin_path) as f:
-            source = f.read()
-        assert "top_up_cards" not in source, (
-            "top_up_cards handler should have been removed from admin.py"
+        import glob
+        admin_paths = glob.glob(
+            os.path.join(os.path.dirname(__file__), "..", "routers", "admin_*.py")
         )
-        assert "/admin/top-up-cards" not in source, (
-            "top-up-cards route should have been removed from admin.py"
-        )
+        assert admin_paths, "expected split admin_*.py router modules to exist"
+        for admin_path in admin_paths:
+            with open(admin_path) as f:
+                source = f.read()
+            assert "top_up_cards" not in source, (
+                f"top_up_cards handler should have been removed from {admin_path}"
+            )
+            assert "/admin/top-up-cards" not in source, (
+                f"top-up-cards route should have been removed from {admin_path}"
+            )
 
     def test_ingest_does_not_generate_cards(self, db):
         """Running the ingest pipeline creates Player/Team/Match rows but no Card rows."""
         import os
-        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin.py")
-        with open(admin_path) as f:
-            source = f.read()
-        assert "seed_cards" not in source, (
-            "admin.py should not call seed_cards — card generation removed from ingest"
+        import glob
+        admin_paths = glob.glob(
+            os.path.join(os.path.dirname(__file__), "..", "routers", "admin_*.py")
         )
+        assert admin_paths, "expected split admin_*.py router modules to exist"
+        for admin_path in admin_paths:
+            with open(admin_path) as f:
+                source = f.read()
+            assert "seed_cards" not in source, (
+                f"{admin_path} should not call seed_cards — card generation removed from ingest"
+            )
 
     def test_deck_endpoint_returns_available_draw_combinations_for_authenticated_user(self, db):
         """GET /deck for an authenticated user returns per-rarity counts of un-owned combinations."""
