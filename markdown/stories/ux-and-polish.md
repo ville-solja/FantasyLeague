@@ -164,10 +164,10 @@ As a new user, I want a tab that explains how the fantasy app works so that I ca
 
 **Acceptance criteria**
 - A "How to Play" tab is visible to all users (logged in and logged out) in the main navigation
-- Tab contains three clearly separated sections: Getting Started, Twitch & MVP, and Scoring & Modifiers
+- The tab's Users subtab contains three clearly separated sections: Getting Started, Watching on Twitch, and Scoring & Modifiers *(superseded by the Role-Based How to Play Subtabs story below — content now lives in the Users subtab rather than three flat top-level sections)*
 - Getting Started section explains: draw a card using a token, activate up to 5 cards into the roster, roster locks weekly, points accumulate from locked rosters
 - Getting Started section explains how to obtain more tokens: week lock bonus, Twitch extension drops, promo codes
-- Twitch & MVP section explains the broadcaster MVP selection flow and that the selected MVP receives a point bonus for that match
+- Watching on Twitch section explains the viewer half of the MVP flow — linking a Fantasy account and receiving token drops
 - Scoring & Modifiers section lists the scoring stats and reads live weight values from the server to show current multipliers
 - Scoring section explains card rarity bonuses and card modifier bonuses using live weight values
 - Tab renders correctly with no active session (weights endpoint is public)
@@ -179,10 +179,74 @@ As a new user, I want a tab that explains how the fantasy app works so that I ca
 As a Kanaliiga streamer, I want the How to Play tab to explain the Twitch extension MVP flow so that I can set it up and use it without reading separate documentation.
 
 **Acceptance criteria**
-- The Twitch & MVP section explains: install the extension, use Quick Actions to select a series → match → player
+- The tab's Streamers subtab explains: apply/install the extension, use Quick Actions to select a series → match → player *(superseded by the Streamers Subtab story below — this content now lives in its own subtab alongside extension application/installation instructions, rather than a flat "Twitch & MVP" section)*
 - Explains that token drops fire automatically on MVP confirmation (once per match)
 - Explains that the MVP selection also grants a fantasy score bonus to that player's match
-- The section is visible to all users (not restricted to admins or streamers)
+- The subtab is visible to all users (not restricted to admins or streamers)
+
+---
+
+### Role-Based How to Play Subtabs
+**User story**
+As any visitor to the app, I want the How to Play tab organised into subtabs by role (Users,
+Players, Streamers, Developers) so that I can jump straight to the instructions relevant to me
+instead of reading unrelated content.
+
+**Acceptance criteria**
+- The How to Play tab shows a row of four subtab buttons: Users, Players, Streamers, Developers
+- Exactly one subtab panel is visible at a time; clicking a button shows its panel and hides the others
+- The Users subtab is shown by default when the How to Play tab is first opened
+- Subtab switching is client-side only — no additional network request is made when switching
+- All four subtabs are visible regardless of login state (the tab remains public, matching current behaviour)
+- Existing content (Getting Started, Twitch & MVP viewer/broadcaster split, Scoring & Modifiers with live `GET /weights` values) is preserved and reviewed for accuracy against the current codebase, with any outdated statements corrected
+
+---
+
+### Users Subtab
+**User story**
+As a new user, I want a "Users" subtab that explains how the fantasy app works and how scoring is calculated so that I can get started without reading external documentation.
+
+**Acceptance criteria**
+- Contains the existing Getting Started content: drawing cards, roster/weekly lock, earning tokens
+- Contains the existing Scoring & Modifiers content: live stat weight table, rarity bonus table, modifier table, and MVP bonus value, all loaded from `GET /weights`
+- Contains the viewer half of the existing Twitch & MVP content: linking a Fantasy account via Profile → Generate Twitch Code, and that watching linked streams makes a viewer eligible for token drops
+- Renders correctly with no active session, since `GET /weights` is a public endpoint
+
+---
+
+### Players Subtab
+**User story**
+As a Kanaliiga player, I want a "Players" subtab that explains how to link my Dota 2 profile to my Fantasy account so that tags and stickers granted to me appear correctly on my cards and the leaderboard.
+
+**Acceptance criteria**
+- Explains that a Kanaliiga player who also wants a Fantasy account can link the two via Profile tab → enter Dota 2 (OpenDota) player ID
+- Explains what linking unlocks: admin-granted tags appear as card stickers and leaderboard chips (per `reference/player-linking-and-tag-visibility.md`)
+- Explains that linking is optional and can be changed later from the Profile tab
+- Clarifies that a player does not need a Fantasy account for their real match performance to count toward other users' rosters — only linking affects their own tags/stickers
+
+---
+
+### Streamers Subtab
+**User story**
+As a Kanaliiga broadcaster, I want a "Streamers" subtab that explains both how to apply for the Twitch extension and how to use it, so that I can get set up and run MVP selection without contacting a developer for every step.
+
+**Acceptance criteria**
+- Explains how to apply: while the extension is in Twitch's "Local Test" status, a broadcaster needs a developer-provided test install link to whitelist their channel; once publicly released this step is not needed
+- Explains how to install: add the extension from the Twitch Extension Manager (or via the test install link), no URL configuration required on the broadcaster's side
+- Explains how to use it: Quick Actions (Live Config view in Twitch Stream Manager) → Select match MVP → series → match → player → confirm
+- Explains the effects of confirming an MVP: automatic one-time token drop to eligible linked viewers, and a configurable fantasy score bonus applied to that player for that match
+- Content matches the current implementation described in `markdown/features/core/twitch-extension.md` (no stale steps, e.g. no mention of manually setting an EBS URL, which is a one-time operator task, not a broadcaster task)
+
+---
+
+### Developers Subtab
+**User story**
+As a prospective contributor, I want a "Developers" subtab that summarises the app's key design decisions so that I can understand the reasoning behind the architecture before reading the full documentation.
+
+**Acceptance criteria**
+- Summarises 4-6 notable, currently-accurate design decisions (e.g. dynamic per-draw card generation instead of a shared static pool, SQLite with an online-backup safety net instead of a heavier DB engine, admin-driven season lifecycle instead of env-var season boundaries, demo mode for reproducing the season lifecycle on demand)
+- Links out to `README.md`, `markdown/features/README.md`, and `markdown/process-diagrams.md` for full depth rather than duplicating their content
+- Does not restate implementation details already covered by other subtabs (Users/Players/Streamers) — stays scoped to high-level rationale
 
 ---
 

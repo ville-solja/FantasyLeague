@@ -11,7 +11,8 @@ Changes the MVP selection panel to show the 5 most recent series with ingested m
 
 Previously returned matches from the current or most-recently-locked week only. After this
 change, returns the 5 most recent series (team-pair groups) that have at least one match
-with ingested `player_match_stats` rows, looking back across a 30-day rolling window.
+with ingested `player_match_stats` rows, with no lower time bound — a stale first week with no
+subsequent ingest activity would still surface here indefinitely.
 
 Response shape (simplified — `week` key removed):
 

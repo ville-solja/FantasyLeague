@@ -531,7 +531,17 @@
 
 <!-- TAB: HOW TO PLAY -->
 <div id="tab-howtoplay" class="tab-content">
-  <div class="grid">
+
+  <!-- How to Play subtab bar -->
+  <div id="howtoplay-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
+    <button class="howtoplay-tab-btn" data-tab="users">Users</button>
+    <button class="howtoplay-tab-btn" data-tab="players">Players</button>
+    <button class="howtoplay-tab-btn" data-tab="streamers">Streamers</button>
+    <button class="howtoplay-tab-btn" data-tab="developers">Developers</button>
+  </div>
+
+  <!-- Users subtab -->
+  <div id="howtoplay-panel-users" data-howtoplay-tab="users" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Getting Started</h2>
@@ -541,7 +551,7 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Each card represents a real player from the Finnish Dota 2 league. Cards come in four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
-        <li>Draw a card from the shared seasonal deck by spending <strong>1 token</strong>. The system prefers players you do not yet own — duplicates are only possible once you have a card for every available player.</li>
+        <li>Draw a card by spending <strong>1 token</strong>. Cards are generated fresh at draw time (rarity and player are rolled individually, not pulled from a shared pre-built deck) — the system prefers players you do not yet own — duplicates are only possible once you have a card for every available player.</li>
         <li>Higher rarity cards receive a flat point bonus on top of base stats and may come with <strong>stat modifiers</strong> that amplify specific scoring categories.</li>
       </ul>
 
@@ -561,24 +571,14 @@
     </div>
 
     <div class="panel" style="grid-column: span 2;">
-      <h2>Twitch &amp; MVP</h2>
+      <h2>Watching on Twitch</h2>
 
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Viewers</h3>
-      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Open the Kana Cards panel on a Twitch stream and link your account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
-        <li>Once linked, your token balance is shown in the panel and you are eligible for token drops.</li>
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Linking your account</h3>
+      <ul style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Open the Kana Cards panel on a Kanaliiga Twitch stream and link your account: go to <strong>Profile → Generate Twitch Code</strong>, then enter the 6-character code in the Twitch panel. The code expires after 10 minutes.</li>
+        <li>Once linked, your token balance is shown in the panel, and watching a linked stream makes you eligible for a token drop whenever the broadcaster confirms a match MVP.</li>
       </ul>
-
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">For Broadcasters</h3>
-      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Install the <strong>Kana Cards</strong> Twitch extension from the Twitch Extension Manager. No URL configuration is needed — the backend is pre-configured.</li>
-        <li>After a match, open <strong>Quick Actions</strong> in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
-        <li>Select the series (team vs team) → the specific match (Match 1, Match 2…) → the MVP player, then confirm.</li>
-        <li>Token drops fire automatically on confirmation: up to 20 randomly selected linked viewers receive +1 token each. Drops only fire once per match — re-confirming a different MVP does not re-drop.</li>
-      </ul>
-
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">MVP Fantasy Bonus</h3>
-      <p style="color:#ccc;font-size:0.9rem;">The confirmed MVP receives a bonus on their fantasy score for that specific match. The bonus is applied retroactively and is reflected in all leaderboards and roster totals. Current bonus: <strong id="howtoplay-mvp-bonus">—</strong>.</p>
+      <p style="color:#999;font-size:0.8rem;">Looking to broadcast instead of watch? See the <strong>Streamers</strong> subtab above.</p>
     </div>
 
     <div class="panel" style="grid-column: span 2;">
@@ -616,10 +616,102 @@
 
       </div>
 
+      <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">The confirmed match MVP (see the <strong>Streamers</strong> subtab) also receives a bonus on their fantasy score for that specific match, applied retroactively and reflected in all leaderboards and roster totals. Current MVP bonus: <strong id="howtoplay-mvp-bonus">—</strong>.</p>
+
       <p style="color:#999;font-size:0.8rem;">Weights are configured by administrators and may be adjusted between seasons. The values above are live — they update whenever an admin changes the weights.</p>
     </div>
 
   </div>
+
+  <!-- Players subtab -->
+  <div id="howtoplay-panel-players" data-howtoplay-tab="players" class="grid" style="display:none;">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Linking Your Dota 2 Profile</h2>
+
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">If you're a Kanaliiga player, you don't need a Fantasy account at all for your real match performance to count — every card featuring you scores points for whoever holds it, based purely on your in-game stats each week. Creating an account and linking your Dota 2 profile is entirely optional, and only affects how <strong>your own</strong> tags are displayed.</p>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">How to link</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Register a Fantasy account (or log into an existing one), then open the <strong>Profile</strong> tab.</li>
+        <li>Enter your Dota 2 (OpenDota) player ID in the linking field. This self-reported ID connects your user account to the <code>Card</code> records that represent you.</li>
+        <li>Linking is optional and can be changed or removed at any time from the Profile tab.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What linking unlocks</h3>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>If admins have granted you tags (e.g. a caster or player-of-note tag), linking your player ID makes those tags appear as sticker badges composited onto your cards and as chips next to your name on the leaderboard.</li>
+        <li>The Profile tab shows a <strong>Your Tags</strong> section so you can see what's granted, and hints if you have tags but haven't linked your ID yet.</li>
+        <li>Without linking, any tags you've been granted exist but won't be visually attached to your cards or leaderboard entry.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Streamers subtab -->
+  <div id="howtoplay-panel-streamers" data-howtoplay-tab="streamers" class="grid" style="display:none;">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Applying &amp; Installing</h2>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Applying (Local Test status)</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>While the Kana Cards extension is still in Twitch's <strong>Local Test</strong> status (pre-public-release), Twitch requires each broadcaster's channel to be individually whitelisted. Contact a Kana Cards developer for a <strong>test install link</strong> to get your channel added.</li>
+        <li>Once the extension has passed Twitch review and is publicly released, this step is no longer needed — any broadcaster can install it directly from the Twitch Extension Manager.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Installing</h3>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Add the <strong>Kana Cards</strong> extension to your channel from the Twitch Extension Manager (or via the test install link while in Local Test status).</li>
+        <li>No URL configuration is required on your side — the backend connection is pre-configured globally by the developer and applies automatically to every install.</li>
+        <li>Once installed, a <strong>Quick Actions</strong> panel appears automatically in your Twitch Stream Manager's Live Config view.</li>
+      </ul>
+    </div>
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Selecting a Match MVP</h2>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Using Quick Actions</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>After a match, open <strong>Quick Actions</strong> (Live Config view) in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
+        <li>Select the series (team vs team) → the specific match (Match 1, Match 2…) → the MVP player, then confirm.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What confirming does</h3>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>An automatic, one-time token drop fires to eligible linked viewers watching your stream — re-confirming a different MVP for the same match does not re-drop tokens.</li>
+        <li>The confirmed MVP receives a configurable fantasy score bonus applied to their score for that specific match, reflected in all leaderboards and roster totals.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Developers subtab -->
+  <div id="howtoplay-panel-developers" data-howtoplay-tab="developers" class="grid" style="display:none;">
+
+    <div class="panel" style="grid-column: span 2;">
+      <h2>Design Decisions</h2>
+
+      <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">A high-level look at a few notable architecture choices behind Kana Cards. For full depth, see the links at the bottom of this panel rather than the summaries below.</p>
+
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li><strong>Dynamic per-draw card generation</strong> — cards are generated at draw time (rarity rolled from configurable weights, player chosen with a proportionality bias) instead of being pulled from a shared pre-built static pool.</li>
+        <li><strong>SQLite with a deploy-time safety net</strong> — SQLite is used instead of a heavier database engine, paired with a versioned migration registry and a pre-deploy backup script so schema changes and deploys can't silently corrupt or lose data.</li>
+        <li><strong>Admin-driven season lifecycle</strong> — ending a season, archiving standings, and starting the next one are all admin actions (season end/reset endpoints, manual week creation) rather than being controlled by env-var season boundaries requiring a redeploy.</li>
+        <li><strong>Demo Mode for the season lifecycle</strong> — an env-gated (<code>DEMO_MODE=true</code>) clock override and disposable account seeder lets the entire pre-lock → lock → scored arc be demonstrated on demand, structurally absent in production.</li>
+        <li><strong>Generic tag system decoupled from linking</strong> — admin-granted tags (stickers/leaderboard chips) are a separate concern from Dota 2 profile linking; a new tag needs only a database row and an image asset, and tags persist even before a player links their profile.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-top:20px;margin-bottom:8px;">Read more</h3>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li><a href="https://github.com/ville-solja/FantasyLeague/blob/main/README.md" target="_blank" rel="noopener">README.md</a> — project overview, quick start, deployment</li>
+        <li><a href="https://github.com/ville-solja/FantasyLeague/blob/main/markdown/features/README.md" target="_blank" rel="noopener">markdown/features/README.md</a> — full feature documentation index</li>
+        <li><a href="https://github.com/ville-solja/FantasyLeague/blob/main/markdown/process-diagrams.md" target="_blank" rel="noopener">markdown/process-diagrams.md</a> — Mermaid flowcharts of the season lifecycle and token/card economy</li>
+      </ul>
+    </div>
+
+  </div>
+
 </div>
 
 <!-- TAB: ADMIN -->

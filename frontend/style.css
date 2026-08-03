@@ -208,6 +208,20 @@ button.danger {
 }
 button.danger:hover { background: #c83838; }
 
+.admin-tab-btn,
+.howtoplay-tab-btn {
+  background: none;
+  color: var(--fg-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 14px;
+}
+.admin-tab-btn:hover,
+.howtoplay-tab-btn:hover { background: none; color: var(--fg); }
+.admin-tab-btn.active,
+.howtoplay-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
 button:disabled {
   opacity: 0.35;
   cursor: not-allowed;

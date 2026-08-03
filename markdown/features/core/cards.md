@@ -150,7 +150,7 @@ Requires authentication. The card must be owned by the calling user.
 }
 ```
 
-Returns the new modifier list and the user's remaining token balance. Returns 409 if the user has no tokens.
+Returns the new modifier list and the user's remaining token balance. Returns 409 if the user has no tokens. Returns 400 `"Common cards cannot be rerolled"` if the card's rarity is `common` (no modifier stats to reroll) — no token is deducted in that case. The Reroll button is also hidden client-side for common cards. See `reference/prevent-common-card-reroll.md`.
 
 The reroll applies the **current** `modifier_count_<rarity>` and `modifier_bonus_pct` weight values, so a reroll may produce a different number of modifiers than the card originally had if an admin has changed the weights since the card was drawn.
 
@@ -196,7 +196,7 @@ Requires authentication. Returns 401 if not logged in.
 
 Moves a benched card into the active roster. Requires authentication; the card must be owned by the caller.
 
-- Returns 409 `"Roster full"` if the user already has `ROSTER_LIMIT` active cards (default: 5).
+- Returns 409 `"Roster full ({ROSTER_LIMIT} cards max)"` if the user already has `ROSTER_LIMIT` active cards (default: 5).
 - Returns 409 `"A card for this player is already active"` if another card for the same player is already active.
 - Returns `{ "status": "ok", "card_id": N }` on success.
 
@@ -207,6 +207,23 @@ Moves a benched card into the active roster. Requires authentication; the card m
 Moves an active card to the bench. Requires authentication; the card must be owned by the caller.
 
 Returns `{ "status": "ok", "card_id": N }`.
+
+---
+
+### `POST /roster/reorder`
+
+Sets `slot_index` (drag-and-drop display position) for a list of the caller's own cards within
+their current zone (active or bench). Requires authentication. See
+`reference/my-team-drag-and-drop.md`.
+
+---
+
+### `POST /roster/swap`
+
+Atomically activates a bench card into a given slot while deactivating an active card, applying
+the same duplicate-player guard as `activate`. Requires authentication. Returns 404 if either
+card isn't found in the expected zone; 409 on a duplicate-player conflict. See
+`reference/my-team-drag-and-drop.md`.
 
 ---
 
@@ -282,3 +299,12 @@ Generates and returns a PNG card image for any card (owner not required). Return
 Returns 404 if the card does not exist. Returns 503 if the Pillow image library is not available in the runtime environment.
 
 The image includes the player avatar, team logo, card rarity border, player name, and any stat modifier labels. Used by the frontend draw reveal modal.
+
+---
+
+### `GET /deck/booster` and `POST /draw/booster/{team_id}`
+
+A variant of the standard deck/draw pair, restricted to one team's player roster at a
+configurable Token cost (`team_booster_cost`, default 3) instead of the usual 1. Duplicate
+prevention and response shape otherwise match `GET /deck` and `POST /draw`. See
+`reference/team-booster-draws.md` for the full endpoint contract and configuration.

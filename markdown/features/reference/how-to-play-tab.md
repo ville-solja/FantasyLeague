@@ -1,32 +1,26 @@
 # How to Play Tab
 
-A static informational tab visible to all users that explains the fantasy league rules, the scoring formula, card modifiers, and the Twitch extension MVP flow. Scoring weight values are loaded live from `GET /weights` so the displayed numbers stay accurate when an admin adjusts weights.
+A static informational tab visible to all users that explains the fantasy league rules, the
+scoring formula, card modifiers, and the Twitch extension MVP flow. It is organised into four
+role-based subtabs so each audience can jump straight to what applies to them. Scoring weight
+values are loaded live from `GET /weights` so the displayed numbers stay accurate when an admin
+adjusts weights.
 
 ---
 
-## Sections
+## Role-based subtabs
 
-### Getting Started
-Explains the core user loop:
-- Draw a card (costs 1 token) → drawn from the shared seasonal deck
-- Activate up to 5 cards as your roster; the rest go to the bench
-- Roster locks each week — locked cards earn fantasy points from matches played that week
-- How to earn more tokens: +1 at each weekly lock, Twitch extension viewer drops, admin promo codes
+| Subtab | Audience | Content |
+|---|---|---|
+| **Users** *(default)* | Every visitor | Getting Started (drawing cards, roster/weekly lock, earning tokens), Watching on Twitch (linking a Fantasy account via Profile → Generate Twitch Code, token drop eligibility), and Scoring & Modifiers (live stat/rarity/modifier tables + MVP bonus, all from `GET /weights`) |
+| **Players** | Kanaliiga players | How to link a Dota 2 (OpenDota) player ID to a Fantasy account via the Profile tab so admin-granted tags appear as card stickers and leaderboard chips (see `reference/player-linking-and-tag-visibility.md`); clarifies linking is optional/changeable and that match performance counts toward other users' rosters regardless of whether the player has linked (or even has) a Fantasy account |
+| **Streamers** | Broadcasters | How to apply for the Twitch extension (developer-provided test install link while in Twitch's Local Test status; not needed once publicly released), how to install it (Twitch Extension Manager, no broadcaster-side URL configuration), and the broadcaster half of the MVP flow: Quick Actions → Select match MVP → series → match → player → confirm, plus the resulting token drop and fantasy score bonus |
+| **Developers** | Contributors | High-level design-decision summary (dynamic per-draw card generation, SQLite with a migration registry + backup script, admin-driven season lifecycle, Demo Mode, the generic tag system) linking out to `README.md`, `markdown/features/README.md`, and `markdown/process-diagrams.md` rather than duplicating their content |
 
-### Twitch & MVP
-Explains the broadcaster and viewer flows:
-- Broadcasters install the Kanaliiga Twitch extension — no URL configuration required
-- Quick Actions (Live Config view in Twitch Stream Manager) → Select match MVP → series → match → player → confirm
-- Token drop fires automatically on confirmation to eligible linked viewers (once per match)
-- The confirmed MVP receives a configurable fantasy point bonus for that specific match
-- Viewers link their Fantasy account: Profile tab → Generate Twitch Code → enter code in the Twitch panel
-
-### Scoring & Modifiers
-Live weight tables loaded from `GET /weights`:
-- **Stat weights table** — twelve scoring stats (Kills, Last Hits, Denies, GPM, Observer Wards, Towers, Roshan, Teamfight Participation, Camps Stacked, Rune Pickups, First Blood, Stun Seconds) plus the deaths survival bonus row, with current values
-- **Rarity bonus table** — flat % multiplier applied to the card's total score, by rarity (Common through Legendary)
-- **Modifier table** — how many per-stat modifiers each rarity receives at draw time, and the bonus % each applies
-- **MVP bonus** — the current `mvp_bonus_pct` value shown inline
+Subtab switching is client-side only (no additional network request) — clicking a
+`.howtoplay-tab-btn` toggles which `[data-howtoplay-tab]` panel is visible and does not re-fetch
+`GET /weights` or call any other endpoint. The Users subtab is always shown first when the How
+to Play tab is opened.
 
 ---
 
@@ -36,10 +30,14 @@ The tab is entirely frontend. No new backend endpoints are introduced.
 
 | Surface | Change |
 |---|---|
-| `frontend/index.html` | New tab button `#tab-btn-howtoplay`; new content div `#tab-howtoplay` |
-| `frontend/app-init.js` | `loadHowToPlay()` fetches `GET /weights` and populates three `<tbody>` elements and one inline span |
+| `frontend/index.html` | Tab button `#tab-btn-howtoplay`; content div `#tab-howtoplay` containing a `#howtoplay-tab-bar` of four `.howtoplay-tab-btn` buttons (`data-tab="users\|players\|streamers\|developers"`) and four panel divs `#howtoplay-panel-users`, `#howtoplay-panel-players`, `#howtoplay-panel-streamers`, `#howtoplay-panel-developers` (each tagged `data-howtoplay-tab="..."`) |
+| `frontend/app-init.js` | `switchHowToPlayTab(role)` toggles panel `display` via `[data-howtoplay-tab]` and active-button state via `.howtoplay-tab-btn.active`; `initHowToPlayTabs()` wires button click listeners and calls `switchHowToPlayTab('users')` as the default; `loadHowToPlay()` calls `initHowToPlayTabs()` then fetches `GET /weights` and populates three `<tbody>` elements (`#howtoplay-stats-tbody`, `#howtoplay-rarity-tbody`, `#howtoplay-mods-tbody`) and one inline span (`#howtoplay-mvp-bonus`), all inside the Users panel |
+| `frontend/style.css` | `.howtoplay-tab-btn` / `.howtoplay-tab-btn.active` (shared rule with `.admin-tab-btn`, mirroring the Admin panel's subtab styling) |
 
-`switchTab('howtoplay')` calls `loadHowToPlay()`. The tab button has no auth-state visibility logic — it is always shown.
+`switchTab('howtoplay')` calls `loadHowToPlay()`, which in turn calls `initHowToPlayTabs()` before
+its `GET /weights` fetch. The tab button and all four subtabs have no auth-state visibility
+logic — they are always shown, matching the tab's public nature.
 
 ### Graceful fallback
-If `GET /weights` fails, the stat/rarity/modifier tables are empty but all surrounding explanatory text remains visible. No error banner is shown for this failure.
+If `GET /weights` fails, the stat/rarity/modifier tables in the Users subtab are empty but all
+surrounding explanatory text remains visible. No error banner is shown for this failure.
