@@ -534,6 +534,41 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .schedule-date-hd { font-size: var(--fs-xs); color: var(--border); padding: 10px 0 2px; }
 .stale-notice { font-size: var(--fs-xs); color: var(--fg-dim); margin-bottom: 12px; }
 
+.game-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 64px 1fr minmax(0, 170px);
+  align-items: center;
+  column-gap: 10px;
+  padding: 5px 0 5px 14px;
+  border-bottom: var(--bw-hair) solid var(--k-ink-900);
+  background: var(--bg-card-hi);
+  font-size: var(--fs-xs);
+}
+.game-row-num { color: var(--border); }
+.game-row-heroes { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.game-row-heroes.right { justify-content: flex-end; }
+.game-row-score { text-align: center; color: var(--fg-dim); }
+.game-row-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.game-row-duration { color: var(--fg-dim); white-space: nowrap; }
+.hero-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-xs);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: var(--bw-hair) solid var(--border-soft);
+}
+.hero-icon-placeholder {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-xs);
+  background: var(--k-ink-900);
+  border: 1px dashed var(--border-soft);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
 /* ============================================================
    ENTITY LINKS
    ============================================================ */

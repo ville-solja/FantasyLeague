@@ -253,6 +253,20 @@ function closeTeamModal() {
   document.getElementById("teamModal").classList.add("hidden");
 }
 
+function _formatGameDuration(seconds) {
+  if (seconds == null) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function _gameHeroIconsHtml(heroUrls) {
+  return (heroUrls || []).map(url => url
+    ? `<img class="hero-icon" src="${url}" title="" onerror="this.style.display='none'" />`
+    : `<span class="hero-icon hero-icon-placeholder"></span>`
+  ).join("");
+}
+
 async function loadSchedule() {
   const content = document.getElementById("scheduleContent");
   const staleEl = document.getElementById("scheduleStale");
@@ -318,13 +332,12 @@ async function loadSchedule() {
         ? `<span class="series-score">${r.team1_wins}–${r.team2_wins}</span>`
         : `<span class="series-score no-result">vs</span>`;
 
+      const games = (isPast && r && r.games && r.games.length) ? r.games : [];
+
       let linksContent = "";
-      if (isPast && r && r.match_ids && r.match_ids.length) {
-        linksContent = r.match_ids.map((id, i) =>
-          `<a class="stream-link" href="https://www.opendota.com/matches/${id}" target="_blank" rel="noopener noreferrer">G${i + 1} ↗</a>`
-        ).join("");
+      if (games.length) {
         if (s.stream_url) {
-          linksContent += `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
+          linksContent = `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
         }
       } else if (!isPast) {
         const time = s.time ? `<span class="series-time">${s.time}</span>` : "";
@@ -334,13 +347,26 @@ async function loadSchedule() {
         linksContent = time + (time && watch ? " · " : "") + watch;
       }
 
+      const gameRowsHtml = games.map((g, i) => `
+        <div class="game-row">
+          <span class="game-row-num">G${i + 1}</span>
+          <span class="game-row-heroes">${_gameHeroIconsHtml(g.team1_heroes)}</span>
+          <span class="game-row-score">${g.team1_kills}–${g.team2_kills}</span>
+          <span class="game-row-heroes right">${_gameHeroIconsHtml(g.team2_heroes)}</span>
+          <span class="game-row-meta">
+            <span class="game-row-duration">${_formatGameDuration(g.duration)}</span>
+            <a class="stream-link" href="https://www.opendota.com/matches/${g.match_id}" target="_blank" rel="noopener noreferrer">↗</a>
+          </span>
+        </div>`
+      ).join("");
+
       return `<div class="series-row${isPast ? " past" : ""}">
         ${divLabel}
         <span class="series-team">${s.team1_id ? teamLink(s.team1_id, s.team1) : (s.team1 || "—")}</span>
         ${scoreHtml}
         <span class="series-team right">${s.team2_id ? teamLink(s.team2_id, s.team2) : (s.team2 || "—")}</span>
         <span class="series-links">${linksContent}</span>
-      </div>`;
+      </div>${gameRowsHtml}`;
     };
 
     const renderGroup = (groups) => groups.map(g =>
