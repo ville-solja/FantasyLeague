@@ -200,7 +200,8 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     if (user.tokens or 0) <= 0:
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
-    rarity = _roll_rarity(db)
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    rarity = _roll_rarity(weights)
     player = _pick_player(db, user_id, rarity)
     if player is None:
         raise HTTPException(status_code=409, detail="No players available to draw")
@@ -222,7 +223,6 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     is_active = active_count < ROSTER_LIMIT
     card.is_active = is_active
 
-    weights = {w.key: w.value for w in db.query(Weight).all()}
     _assign_modifiers(db, card, weights)
 
     team_row = db.execute(text("""
@@ -323,7 +323,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
     if (user.tokens or 0) < cost:
         raise HTTPException(status_code=409, detail="Not enough tokens")
 
-    rarity = _roll_rarity(db)
+    rarity = _roll_rarity(weights_map)
     player = _pick_player_from_team(db, user_id, rarity, team_id)
     if player is None:
         raise HTTPException(status_code=409,

@@ -38,7 +38,7 @@ The ingest pipeline runs in a background daemon thread on a configurable interva
 
 - **Default interval:** 900 seconds (15 minutes)
 - **Configured via:** `INGEST_POLL_INTERVAL` environment variable
-- **Leagues polled:** set by `AUTO_INGEST_LEAGUES` (comma-separated OpenDota league IDs, default: `19368,19369`)
+- **Leagues polled:** whichever leagues are marked `is_monitored=true`, managed at runtime via the admin League Management panel (see `reference/monitored-leagues-admin.md`) — no env var or restart needed
 
 Each cycle runs all three stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
 

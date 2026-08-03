@@ -1,4 +1,4 @@
-<!-- version: 4 -->
+<!-- version: 5 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -37,7 +37,8 @@ After a plan file exists in `markdown/plans/` and has been reviewed. Run `/secur
 3. Read each critical file before writing any code.
 4. Glob `backend/` and `frontend/` to understand the overall structure if the plan references files that do not yet exist.
 5. Read `backend/models.py` and `backend/main.py` if the plan touches the backend — understand existing patterns for models, endpoints, and dependencies before writing new ones.
-6. `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
+6. Read `backend/migrate.py` if the plan adds a column to an existing model — per the CLAUDE.md schema-migration rule, every new column on an existing table needs a corresponding numbered migration added in the same edit session. New tables need no migration entry.
+7. `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
 
 ---
 

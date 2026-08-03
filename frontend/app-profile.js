@@ -24,9 +24,30 @@ async function loadProfile() {
     if (gapHint) {
       gapHint.style.display = (tags.length > 0 && !data.player_id) ? "block" : "none";
     }
+    _renderPastSeasons(data.past_seasons || []);
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
   }
+}
+
+function _ordinal(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function _renderPastSeasons(seasons) {
+  const panel = document.getElementById("profilePastSeasonsPanel");
+  const container = document.getElementById("profilePastSeasonsContainer");
+  if (!panel || !container) return;
+  if (!seasons.length) {
+    panel.style.display = "none";
+    return;
+  }
+  panel.style.display = "";
+  container.innerHTML = seasons.map(s =>
+    `<div>${_escHtml(s.season_label)} — ${_ordinal(s.rank)}, ${Number(s.points).toFixed(1)} pts</div>`
+  ).join("");
 }
 
 function _renderTwitchLinkStatus(linked) {

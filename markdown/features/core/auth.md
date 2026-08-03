@@ -80,7 +80,8 @@ Returns basic public information for any user by ID. No authentication required.
   "player_name": "SomePlayer",
   "player_avatar_url": "https://...",
   "twitch_linked": true,
-  "tags": [{"key": "caster", "label": "Caster"}]
+  "tags": [{"key": "caster", "label": "Caster"}],
+  "past_seasons": [{"season_label": "Season 15", "points": 1240.0, "rank": 3}]
 }
 ```
 
@@ -89,6 +90,8 @@ Returns basic public information for any user by ID. No authentication required.
 `player_name` and `player_avatar_url` are `null` if the user has not linked a Dota 2 account, or if the linked `player_id` does not exist in the local database.
 
 `tags` is an array of admin-granted tag objects (`key` + `label`); empty array when the user holds no tags.
+
+`past_seasons` lists every archived season the user appears in (most recent first); empty array if none. See `reference/season-lifecycle.md`.
 
 ---
 

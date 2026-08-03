@@ -1,60 +1,13 @@
-import os
 import time
 from unittest.mock import patch
 
 import pytest
 
-os.environ.setdefault("SEASON_LOCK_START", "2020-01-05")  # a known Sunday
-
 from models import AuditLog, Card, User, Week, WeeklyRosterEntry
-from weeks import auto_lock_weeks, generate_weeks
+from weeks import auto_lock_weeks
 
-# Anchor for SEASON_LOCK_START=2020-01-05: Sunday 2020-01-05 23:59:59 UTC
+# Fixed reference instant used across auto-lock tests (arbitrary Sunday 23:59:59 UTC)
 _ANCHOR = 1578268799  # int(datetime(2020,1,5,23,59,59, tzinfo=timezone.utc).timestamp())
-
-
-class TestGenerateWeeks:
-    def test_creates_weeks_up_to_four_ahead(self, db):
-        now = _ANCHOR + 1  # just after first lock
-        with patch("weeks.time.time", return_value=now), \
-             patch.dict(os.environ, {"SEASON_LOCK_START": "2020-01-05"}), \
-             patch("weeks._parse_season_lock_anchor", return_value=_ANCHOR):
-            generate_weeks(db)
-
-        weeks = db.query(Week).order_by(Week.start_time).all()
-        assert len(weeks) >= 4
-
-    def test_idempotent_on_second_call(self, db):
-        now = _ANCHOR + 1
-        with patch("weeks.time.time", return_value=now), \
-             patch("weeks._parse_season_lock_anchor", return_value=_ANCHOR):
-            generate_weeks(db)
-            count_after_first = db.query(Week).count()
-            generate_weeks(db)
-            count_after_second = db.query(Week).count()
-
-        assert count_after_first == count_after_second
-
-    def test_week_labels_sequential(self, db):
-        now = _ANCHOR + 1
-        with patch("weeks.time.time", return_value=now), \
-             patch("weeks._parse_season_lock_anchor", return_value=_ANCHOR):
-            generate_weeks(db)
-
-        weeks = db.query(Week).order_by(Week.start_time).all()
-        for i, week in enumerate(weeks, start=1):
-            assert week.label == f"Week {i}"
-
-    def test_week_boundaries_are_contiguous(self, db):
-        now = _ANCHOR + 1
-        with patch("weeks.time.time", return_value=now), \
-             patch("weeks._parse_season_lock_anchor", return_value=_ANCHOR):
-            generate_weeks(db)
-
-        weeks = db.query(Week).order_by(Week.start_time).all()
-        for i in range(len(weeks) - 1):
-            # each week ends exactly 1 second before the next starts
-            assert weeks[i + 1].start_time == weeks[i].end_time + 1
 
 
 class TestAutoLockWeeks:
@@ -67,7 +20,7 @@ class TestAutoLockWeeks:
 
     def test_locks_past_weeks(self, db):
         week = self._make_past_week(db)
-        with patch("weeks.time.time", return_value=_ANCHOR):
+        with patch("clock.time.time", return_value=_ANCHOR):
             auto_lock_weeks(db)
 
         db.refresh(week)
@@ -91,7 +44,7 @@ class TestAutoLockWeeks:
         db.add(user)
         db.commit()
 
-        with patch("weeks.time.time", return_value=_ANCHOR):
+        with patch("clock.time.time", return_value=_ANCHOR):
             auto_lock_weeks(db)
             auto_lock_weeks(db)
 
@@ -105,7 +58,7 @@ class TestAutoLockWeeks:
         db.add(user)
         db.commit()
 
-        with patch("weeks.time.time", return_value=_ANCHOR):
+        with patch("clock.time.time", return_value=_ANCHOR):
             auto_lock_weeks(db)
 
         db.refresh(user)
@@ -127,7 +80,7 @@ class TestAutoLockWeeks:
         db.add(card)
         db.commit()
 
-        with patch("weeks.time.time", return_value=_ANCHOR):
+        with patch("clock.time.time", return_value=_ANCHOR):
             auto_lock_weeks(db)
 
         entries = db.query(WeeklyRosterEntry).filter_by(week_id=week.id, user_id=user.id).all()

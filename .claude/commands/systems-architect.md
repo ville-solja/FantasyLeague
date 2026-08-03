@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 4 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -26,7 +26,8 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/models.py` — SQLAlchemy models and relationships
 - `backend/scoring.py` — scoring logic
 - `backend/ingest.py` — data ingestion pipeline
-- `backend/weeks.py` — week generation and locking
+- `backend/weeks.py` — week locking (admin-created; no auto-generation)
+- `backend/clock.py` — demo-clock override read by week-locking logic under `DEMO_MODE`
 - `backend/twitch.py` — Twitch EBS router
 - `backend/database.py` — database setup and session factory
 - `backend/seed.py` — seeding and DEFAULT_WEIGHTS

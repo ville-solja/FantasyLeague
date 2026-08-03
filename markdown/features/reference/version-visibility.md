@@ -40,7 +40,3 @@ frontend        →  badge textContent = "abc1234"
 ```
 
 `APP_RELEASE` is set as a deploy-time env var (e.g. in `docker-compose.yml`) rather than a build arg, since it identifies a release rather than an image.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

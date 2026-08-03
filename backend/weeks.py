@@ -1,89 +1,9 @@
-import datetime
 import logging
-import os
-import time
 
+import clock
 from models import AuditLog, Card, User, Week, WeeklyRosterEntry
 
 logger = logging.getLogger(__name__)
-
-_SECS_PER_WEEK = 7 * 24 * 3600
-_DEFAULT_SEASON_LOCK = "2026-03-08"
-
-
-def _parse_season_lock_anchor() -> int:
-    """Return Unix timestamp for SEASON_LOCK_START 23:59:59 UTC.
-
-    This is the first Sunday lock. Week 1's match window opens immediately
-    after (Monday 00:00:00 UTC) and runs through the following Sunday 23:59:59.
-    """
-    season_lock_str = os.getenv("SEASON_LOCK_START", "")
-    if not season_lock_str:
-        logger.warning(
-            "SEASON_LOCK_START is not set — using hardcoded default %s. "
-            "Set this env var for a new season.", _DEFAULT_SEASON_LOCK
-        )
-        season_lock_str = _DEFAULT_SEASON_LOCK
-    start_str = season_lock_str
-    d = datetime.datetime.strptime(start_str, "%Y-%m-%d")
-    anchor = datetime.datetime(d.year, d.month, d.day, 23, 59, 59,
-                               tzinfo=datetime.timezone.utc)
-    return int(anchor.timestamp())
-
-
-def _parse_season_end() -> int | None:
-    """Return Unix timestamp for the last second of SEASON_END date (UTC), or None if unset."""
-    season_end_str = os.getenv("SEASON_END", "").strip()
-    if not season_end_str:
-        return None
-    try:
-        d = datetime.datetime.strptime(season_end_str, "%Y-%m-%d")
-        return int(datetime.datetime(d.year, d.month, d.day, 23, 59, 59,
-                                     tzinfo=datetime.timezone.utc).timestamp())
-    except ValueError:
-        logger.warning("SEASON_END '%s' is not a valid ISO date (YYYY-MM-DD) — ignored.", season_end_str)
-        return None
-
-
-def generate_weeks(db):
-    """Insert missing Week rows from SEASON_LOCK_START through 4 Sundays ahead.
-
-    Week N covers the match window that opens after the Nth lock:
-      start = anchor + (N-1)*7d + 1s   (Monday 00:00:00 UTC)
-      end   = anchor + N*7d             (Sunday 23:59:59 UTC)
-
-    The roster for Week N is locked when start_time passes.
-
-    If SEASON_END is set (ISO date), no weeks starting after that date are created.
-    """
-    anchor = _parse_season_lock_anchor()
-    now = int(time.time())
-    future_limit = now + 4 * _SECS_PER_WEEK
-
-    season_end = _parse_season_end()
-    if season_end is not None:
-        future_limit = min(future_limit, season_end)
-
-    existing_starts = {w.start_time for w in db.query(Week).all()}
-
-    week_num = 1
-    while True:
-        start = anchor + (week_num - 1) * _SECS_PER_WEEK + 1
-        end   = anchor +  week_num      * _SECS_PER_WEEK
-
-        if start > future_limit:
-            break
-
-        if start not in existing_starts:
-            db.add(Week(label=f"Week {week_num}", start_time=start, end_time=end,
-                        is_locked=False))
-            logger.info("Generated Week %d (%d–%d)", week_num, start, end)
-
-        week_num += 1
-        if end > future_limit:
-            break
-
-    db.commit()
 
 
 def _snapshot_week(db, week: Week):
@@ -109,7 +29,7 @@ def auto_lock_weeks(db):
     A week is locked as soon as its start_time passes — before any matches
     can contribute points — so users cannot react to results mid-week.
     """
-    now = int(time.time())
+    now = clock.now(db)
     unlocked = (
         db.query(Week)
         .filter(Week.start_time <= now, Week.is_locked == False)  # noqa: E712
@@ -137,7 +57,7 @@ def auto_lock_weeks(db):
 
 def get_current_week(db):
     """Return the Week whose match window contains the current moment, or None."""
-    now = int(time.time())
+    now = clock.now(db)
     return (
         db.query(Week)
         .filter(Week.start_time <= now, Week.end_time >= now)
@@ -147,7 +67,7 @@ def get_current_week(db):
 
 def get_next_editable_week(db):
     """Return the earliest week that hasn't started yet (roster still editable)."""
-    now = int(time.time())
+    now = clock.now(db)
     return (
         db.query(Week)
         .filter(Week.start_time > now)

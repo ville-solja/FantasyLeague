@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+import sqlite3
+import time
 from pathlib import Path
 
 
@@ -40,3 +42,31 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def backup_sqlite_db() -> str | None:
+    """Online backup of the live SQLite database, mirroring scripts/backup-db.sh's
+    naming convention ({db}.backup-{timestamp}) but callable from within a request.
+
+    Uses sqlite3's backup API (not a raw file copy) so a backup taken while the
+    engine holds a WAL-mode connection is always transactionally consistent.
+    Returns the backup file path, or None if the database isn't a local SQLite
+    file (e.g. a future non-SQLite DATABASE_URL).
+    """
+    prefix = "sqlite:///"
+    if not DATABASE_URL.startswith(prefix):
+        return None
+    db_path = DATABASE_URL[len(prefix):]
+    if not os.path.isfile(db_path):
+        return None
+    backup_path = f"{db_path}.backup-{time.strftime('%Y%m%d-%H%M%S')}"
+    src = sqlite3.connect(db_path)
+    try:
+        dst = sqlite3.connect(backup_path)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+    return backup_path

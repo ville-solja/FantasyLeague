@@ -1,36 +1,21 @@
 # Cards
 
-### Generate Deck
-**User story**
-As a system administrator, I want the seasonal card deck to reflect real Dota 2 league players participating in the season.
-
-**Acceptance criteria**
-- Admin can provide a league ID for ingestion, which generates cards based on the player list obtained from match data
-- Deck avoids duplicate seeding (idempotent)
-- Shared deck among all users
-- Deck contains per player: 1 legendary, 2 epic, 4 rare, 8 common
-
----
+> **Note:** The original card system used a shared pre-generated pool ("Generate Deck",
+> fixed rarity per card) with an admin "Mid-Season Card Top-Up" action. Both were replaced
+> by the **Dynamic Card Creation** system below — cards are generated per draw with a
+> weighted rarity roll, so there is no shared pool, no seed-time rarity, and no top-up
+> action to run. See the "Dynamic Card Creation" and "Deprecate Pool Management" sections
+> further down this file for the current, authoritative stories.
 
 ### Draw Card
 **User story**
-As a user, I want to be able to draw cards from the deck.
+As a user, I want to be able to draw cards using tokens.
 
 **Acceptance criteria**
 - User can draw a card if they have at least 1 token
 - Card is shown to the user in a reveal modal
 - Card is added to the user's active roster if empty slots exist, otherwise to their bench
-- System prefers players the user does not yet own; only allows duplicates when the user owns all available players
-
----
-
-### Card Rarity
-**User story**
-As a user, I want each drawn card to have a rarity.
-
-**Acceptance criteria**
-- Cards are generated with a fixed rarity (common / rare / epic / legendary) set at deck creation time, not at draw time
-- Rarity is shown on the card in the reveal modal and roster views
+- Rarity and duplicate-avoidance rules are covered by the "Dynamic Card Creation" stories below
 
 ---
 
@@ -127,15 +112,9 @@ As a user, I want to click the player name displayed on a viewed card so that I 
 
 ---
 
-### Mid-Season Card Top-Up
-**User story**
-As an admin, I want to add a new batch of cards to the deck mid-season so that new users joining late have cards to draw.
-
-**Acceptance criteria**
-- Admin can trigger a top-up that adds one additional set (1L/2E/4R/8C per player) to the unowned pool
-- Top-up is idempotent per generation — running it twice does not double the pool
-- Existing owned cards are unaffected
-- Audit log records the top-up event
+> **Superseded:** "Mid-Season Card Top-Up" (an admin action to add a fresh batch of cards to
+> the shared pool) no longer applies — cards are generated per draw, so there is no pool to
+> top up. See "Deprecate Pool Management" below, which removed `POST /admin/top-up-cards`.
 
 ---
 
@@ -271,12 +250,12 @@ system is simpler to operate.
 
 ### Team Booster Draw
 **User story**
-As a user, I want to open a team selector in the Deck tab and draw a card from a chosen
+As a user, I want to open a team selector in the Draw tab and draw a card from a chosen
 team for 3 Tokens so that I can target the players I care about rather than relying on
 random selection from the full pool.
 
 **Acceptance criteria**
-- A "Draw Booster from Team" button is visible in the Deck tab
+- A "Draw Booster from Team" button is visible in the Draw tab
 - Clicking the button opens a team selection modal listing all teams with at least one
   player with match data, each showing how many drawable (player, rarity) combinations
   remain for the current user
