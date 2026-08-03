@@ -90,7 +90,7 @@ def _make_week(db, label="Week 1", start_time=1_000_000, end_time=1_600_000, is_
 
 class TestEndSeasonArchive:
     def test_end_season_snapshots_leaderboard_into_season_archive(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
 
         _make_user(db, "alice")
         _make_user(db, "bob")
@@ -109,7 +109,7 @@ class TestEndSeasonArchive:
             assert r.rank in (1, 2)
 
     def test_end_season_excludes_tester_accounts(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
 
         _make_user(db, "realuser")
         _make_user(db, "testeruser", is_tester=True)
@@ -123,7 +123,7 @@ class TestEndSeasonArchive:
         assert rows[0].username == "realuser"
 
     def test_end_season_duplicate_label_returns_409(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
 
         _make_user(db, "carol")
         db.commit()
@@ -137,7 +137,7 @@ class TestEndSeasonArchive:
         assert len(rows) == 1  # not duplicated
 
     def test_end_season_writes_audit_log_admin_season_archived(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
 
         _make_user(db, "dave")
         db.commit()
@@ -158,7 +158,7 @@ class TestEndSeasonArchive:
             require_admin({"user_id": 2, "username": "u", "is_admin": False})
         assert exc.value.status_code == 403
 
-        admin_path = os.path.join(_BACKEND_DIR, "routers", "admin.py")
+        admin_path = os.path.join(_BACKEND_DIR, "routers", "admin_season.py")
         with open(admin_path) as f:
             source = f.read()
         assert '"/admin/season/end"' in source
@@ -175,8 +175,8 @@ class TestSeasonReset:
         which is unrelated to this test's isolated in-memory `db` session and may not exist
         or be writable in a test environment — stub it out so these tests only exercise the
         reset logic itself, not the filesystem backup side effect."""
-        import routers.admin as admin_module
-        monkeypatch.setattr(admin_module, "backup_sqlite_db", lambda: "/tmp/fake-backup.db")
+        import routers.admin_season as admin_season_module
+        monkeypatch.setattr(admin_season_module, "backup_sqlite_db", lambda: "/tmp/fake-backup.db")
 
     def _seed_full_season_state(self, db):
         league = League(id=1, name="TestLeague", is_monitored=True)
@@ -207,7 +207,7 @@ class TestSeasonReset:
         return {"user": user, "card": card, "week": week, "league": league}
 
     def test_reset_deletes_all_per_season_data(self, db):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         self._seed_full_season_state(db)
 
@@ -225,7 +225,7 @@ class TestSeasonReset:
         """Players and Teams (including the admin-curated Player Pool) are
         cleared on reset so browse tabs don't show stale names forever —
         the admin repopulates the pool for the new season/league."""
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         self._seed_full_season_state(db)
         assert db.query(Player).count() == 1
@@ -240,7 +240,7 @@ class TestSeasonReset:
         """Cards (and their modifiers) are deleted outright — not just
         deactivated — while user accounts, tags, audit logs, and season
         archives survive the reset."""
-        from routers.admin import reset_season, SeasonResetBody, end_season, SeasonEndBody
+        from routers.admin_season import reset_season, SeasonResetBody, end_season, SeasonEndBody
 
         seeded = self._seed_full_season_state(db)
         db.add(CardModifier(card_id=seeded["card"].id, stat_key="kills", bonus_pct=10.0))
@@ -258,7 +258,7 @@ class TestSeasonReset:
         assert db.query(AuditLog).filter_by(action="some_prior_action").count() == 1
 
     def test_reset_restores_tokens_to_initial_tokens(self, db, monkeypatch):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         monkeypatch.setenv("INITIAL_TOKENS", "7")
         seeded = self._seed_full_season_state(db)
@@ -270,7 +270,7 @@ class TestSeasonReset:
         assert seeded["user"].tokens == 7
 
     def test_reset_unmonitors_all_leagues(self, db):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         seeded = self._seed_full_season_state(db)
         assert seeded["league"].is_monitored is True
@@ -281,7 +281,7 @@ class TestSeasonReset:
         assert seeded["league"].is_monitored is False
 
     def test_reset_returns_409_when_locked_weeks_not_archived(self, db):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         _make_week(db, start_time=1_000_000, end_time=1_600_000, is_locked=True)
         db.commit()
@@ -293,7 +293,7 @@ class TestSeasonReset:
         assert db.query(Week).count() == 1  # nothing deleted
 
     def test_reset_force_true_overrides_archive_guard(self, db):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         _make_week(db, start_time=1_000_000, end_time=1_600_000, is_locked=True)
         db.commit()
@@ -304,7 +304,7 @@ class TestSeasonReset:
         assert db.query(Week).count() == 0
 
     def test_reset_writes_audit_log_admin_season_reset_with_counts(self, db):
-        from routers.admin import reset_season, SeasonResetBody
+        from routers.admin_season import reset_season, SeasonResetBody
 
         self._seed_full_season_state(db)
 
@@ -323,7 +323,7 @@ class TestSeasonReset:
             require_admin({"user_id": 2, "username": "u", "is_admin": False})
         assert exc.value.status_code == 403
 
-        admin_path = os.path.join(_BACKEND_DIR, "routers", "admin.py")
+        admin_path = os.path.join(_BACKEND_DIR, "routers", "admin_season.py")
         with open(admin_path) as f:
             source = f.read()
         assert '"/admin/season/reset"' in source
@@ -335,7 +335,7 @@ class TestSeasonReset:
 
 class TestPastSeasonsVisibility:
     def test_leaderboard_seasons_lists_archived_labels_with_dates(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
         from routers.leaderboard import list_archived_seasons
 
         _make_user(db, "u1")
@@ -352,7 +352,7 @@ class TestPastSeasonsVisibility:
             assert s["user_count"] == 1
 
     def test_leaderboard_season_detail_returns_archived_standings(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
         from routers.leaderboard import list_archived_seasons, archived_season_detail
 
         _make_user(db, "u2")
@@ -376,7 +376,7 @@ class TestPastSeasonsVisibility:
         assert exc.value.status_code == 404
 
     def test_profile_includes_past_seasons_array(self, db):
-        from routers.admin import end_season, SeasonEndBody
+        from routers.admin_season import end_season, SeasonEndBody
         from routers.profile import get_profile
 
         user = _make_user(db, "u3")
@@ -414,7 +414,7 @@ class TestPastSeasonsVisibility:
 
 class TestManualWeekCreationDateOnly:
     def test_create_week_derives_start_time_midnight_utc(self, db):
-        from routers.admin import create_week, WeekCreateBody
+        from routers.admin_weeks import create_week, WeekCreateBody
 
         result = create_week(
             WeekCreateBody(label="Week X", start_date="2026-04-06", end_date="2026-04-12"),
@@ -426,7 +426,7 @@ class TestManualWeekCreationDateOnly:
         assert result["start_time"] == expected_start
 
     def test_create_week_derives_end_time_3am_day_after_end_date(self, db):
-        from routers.admin import create_week, WeekCreateBody
+        from routers.admin_weeks import create_week, WeekCreateBody
 
         result = create_week(
             WeekCreateBody(label="Week Y", start_date="2026-04-06", end_date="2026-04-12"),
@@ -438,7 +438,7 @@ class TestManualWeekCreationDateOnly:
         assert result["end_time"] == expected_end
 
     def test_patch_week_accepts_date_only_inputs(self, db):
-        from routers.admin import create_week, edit_week, WeekCreateBody, WeekEditBody
+        from routers.admin_weeks import create_week, edit_week, WeekCreateBody, WeekEditBody
 
         created = create_week(
             WeekCreateBody(label="Week Z", start_date="2026-05-04", end_date="2026-05-10"),
@@ -459,7 +459,7 @@ class TestManualWeekCreationDateOnly:
         assert result["end_time"] == expected_end
 
     def test_create_week_rejects_end_before_start(self, db):
-        from routers.admin import create_week, WeekCreateBody
+        from routers.admin_weeks import create_week, WeekCreateBody
 
         with pytest.raises(HTTPException) as exc:
             create_week(
@@ -470,7 +470,7 @@ class TestManualWeekCreationDateOnly:
         assert exc.value.status_code == 422
 
     def test_locked_week_edit_and_delete_stay_blocked(self, db):
-        from routers.admin import edit_week, delete_week, WeekEditBody
+        from routers.admin_weeks import edit_week, delete_week, WeekEditBody
 
         week = _make_week(db, is_locked=True)
         db.commit()

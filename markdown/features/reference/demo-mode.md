@@ -29,7 +29,7 @@ requested stages observable.
   matches" panel, used when selecting an MVP) also reads `now = clock.now(db)`, so a demo
   walkthrough of the Twitch MVP flow reflects the dialed-in simulated time rather than real
   wall-clock time.
-- `backend/routers/admin.py` — the four endpoints below. `_require_demo_mode()` is declared
+- `backend/routers/admin_demo.py` — the four endpoints below. `_require_demo_mode()` is declared
   as a real FastAPI dependency (`Depends(_require_demo_mode)`) positioned *before*
   `Depends(require_admin)` in each signature, so a real HTTP request resolves it first: a
   non-admin (or unauthenticated) caller gets 404 when the mode is off, not 403/401 — the

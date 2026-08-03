@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 6 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -21,7 +21,16 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 ## Files to read
 
 - `backend/main.py` — middleware, lifespan setup, and top-level route mounts
-- `backend/routers/admin.py` — admin endpoint definitions
+- `backend/routers/admin_users.py` — user/token/promo-code endpoint definitions
+- `backend/routers/admin_ingest.py` — ingest/schedule/enrichment trigger endpoints
+- `backend/routers/admin_weeks.py` — week CRUD endpoints
+- `backend/routers/admin_notifications.py` — notification CRUD endpoints
+- `backend/routers/admin_tags.py` — tag definition and grant/revoke endpoints
+- `backend/routers/admin_players.py` — player pool endpoints
+- `backend/routers/admin_leagues.py` — monitored league endpoints
+- `backend/routers/admin_season.py` — season lifecycle + audit log endpoints
+- `backend/routers/admin_matches.py` — admin match table + MVP endpoints
+- `backend/routers/admin_demo.py` — demo mode endpoints
 - `backend/routers/auth.py` — auth endpoint definitions
 - `backend/routers/cards.py` — card endpoint definitions
 - `backend/routers/leaderboard.py` — leaderboard, weights, and simulate endpoints
