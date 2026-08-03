@@ -238,6 +238,7 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
+| `ENV` | *(unset)* | Defense-in-depth: with `TWITCH_LOCAL_DEV=true`, setting `ENV=production` makes the JWT bypass refuse to run (500) instead of silently accepting it. |
 
 ---
 
