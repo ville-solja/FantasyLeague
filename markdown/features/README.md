@@ -39,7 +39,7 @@ Implementation details, integrations, and operator tooling.
 | [Tester Account Exclusion](reference/tester-account-exclusion.md) | `is_tester` flag; admin toggle; leaderboard filtering |
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
-| [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab: getting started, Twitch MVP flow, live scoring formula display |
+| [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
