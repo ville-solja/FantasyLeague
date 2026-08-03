@@ -63,7 +63,3 @@ No new environment variables are introduced. The CI workflows use existing `.env
 | `TEST_BASE_URL` | Playwright config | Defaults to `http://localhost:8000`; overridden in CI |
 | `SECRET_KEY` | App startup | Set to a fixed CI value in the workflow; not a repo secret |
 | `DEBUG` | App startup | Set to `true` in CI to bypass `SECRET_KEY` strength check |
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

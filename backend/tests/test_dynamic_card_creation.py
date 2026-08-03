@@ -89,6 +89,13 @@ def _make_weight(db, key, value):
     return w
 
 
+def _weights_dict(db):
+    """Fresh {key: value} weights dict, matching how each real request handler
+    (draw_card, draw_booster) loads weights once and passes them to _roll_rarity."""
+    from models import Weight
+    return {w.key: w.value for w in db.query(Weight).all()}
+
+
 # ---------------------------------------------------------------------------
 # Import helpers from card_draw (no FastAPI dependency)
 # ---------------------------------------------------------------------------
@@ -108,7 +115,7 @@ class TestWeightedRarityDraw:
         _make_weight(db, "draw_rate_rare", 25.0)
         _make_weight(db, "draw_rate_epic", 10.0)
         _make_weight(db, "draw_rate_legendary", 5.0)
-        result = _roll_rarity(db)
+        result = _roll_rarity(_weights_dict(db))
         assert result in {"common", "rare", "epic", "legendary"}
 
     def test_draw_rarity_reflects_configured_rates(self, db):
@@ -117,8 +124,9 @@ class TestWeightedRarityDraw:
         _make_weight(db, "draw_rate_rare", 0.0)
         _make_weight(db, "draw_rate_epic", 0.0)
         _make_weight(db, "draw_rate_legendary", 100.0)
+        weights = _weights_dict(db)
         for _ in range(20):
-            assert _roll_rarity(db) == "legendary"
+            assert _roll_rarity(weights) == "legendary"
 
     def test_draw_never_fails_due_to_pool_exhaustion(self, db):
         """POST /draw always creates a card even when no pre-generated pool exists."""
@@ -133,7 +141,7 @@ class TestWeightedRarityDraw:
         from models import Card
         assert db.query(Card).filter(Card.owner_id == None).count() == 0  # noqa: E711
 
-        rarity = _roll_rarity(db)
+        rarity = _roll_rarity(_weights_dict(db))
         chosen = _pick_player(db, user.id, rarity)
         assert chosen is not None
         card = Card(card_type=rarity, player_id=chosen.id, owner_id=user.id,
@@ -311,7 +319,13 @@ class TestConfigurableDropRates:
             assert by_key[k] > 0, f"{k} default should be positive"
 
     def test_draw_reads_weights_at_draw_time_not_from_cache(self, db):
-        """Changing draw_rate_legendary to 100 at runtime immediately affects the next draw."""
+        """Changing draw_rate_legendary to 100 at runtime immediately affects the next draw.
+
+        _roll_rarity itself takes an already-loaded weights dict (each request
+        handler fetches weights fresh at the top of the request — see
+        draw_card/draw_booster in routers/cards.py); this test re-fetches the
+        dict after the DB mutation to model that same fresh-read contract.
+        """
         from models import Weight
         _make_weight(db, "draw_rate_common", 60.0)
         _make_weight(db, "draw_rate_rare", 25.0)
@@ -319,7 +333,7 @@ class TestConfigurableDropRates:
         _make_weight(db, "draw_rate_legendary", 0.0)
 
         # Before change: legendary weight is 0, should never be selected
-        results_before = {_roll_rarity(db) for _ in range(50)}
+        results_before = {_roll_rarity(_weights_dict(db)) for _ in range(50)}
         assert "legendary" not in results_before
 
         # Update weight in DB at runtime
@@ -330,8 +344,9 @@ class TestConfigurableDropRates:
         db.flush()
 
         # After change: legendary must be selected
+        weights_after = _weights_dict(db)
         for _ in range(20):
-            assert _roll_rarity(db) == "legendary"
+            assert _roll_rarity(weights_after) == "legendary"
 
     def test_draw_rates_do_not_need_to_sum_to_100(self, db):
         """Weights of 1/1/1/1 (25% each in relative terms) are accepted and produce valid rarities."""
@@ -339,7 +354,8 @@ class TestConfigurableDropRates:
         _make_weight(db, "draw_rate_rare", 1.0)
         _make_weight(db, "draw_rate_epic", 1.0)
         _make_weight(db, "draw_rate_legendary", 1.0)
-        results = {_roll_rarity(db) for _ in range(200)}
+        weights = _weights_dict(db)
+        results = {_roll_rarity(weights) for _ in range(200)}
         assert results == {"common", "rare", "epic", "legendary"}, (
             "All four rarities should appear with equal weights over many draws"
         )
@@ -347,7 +363,7 @@ class TestConfigurableDropRates:
     def test_draw_rate_weight_missing_from_db_falls_back_to_default(self, db):
         """If a draw_rate_* key is absent from the weights table, _roll_rarity uses a fallback value."""
         # Add nothing — all four keys absent
-        result = _roll_rarity(db)
+        result = _roll_rarity(_weights_dict(db))
         assert result in {"common", "rare", "epic", "legendary"}
 
     def test_non_admin_cannot_update_draw_rate_weights(self, db):

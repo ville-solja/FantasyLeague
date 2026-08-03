@@ -7,7 +7,7 @@ from card_utils import (
     _compute_card_points,
 )
 from database import get_db
-from models import Match, Weight, UserTag, TagDefinition
+from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
 from scoring import fantasy_score, SCORING_STATS
 
 router = APIRouter()
@@ -142,8 +142,13 @@ def roster_leaderboard(db=Depends(get_db)):
     return [dict(r._mapping) for r in results]
 
 
-@router.get("/leaderboard/season")
-def season_leaderboard(db=Depends(get_db)):
+def compute_season_standings(db) -> list[dict]:
+    """Compute the live season standings (one dict per non-tester user).
+
+    Returns [{"id", "username", "points", "tags", "cards"}, ...] sorted by
+    points descending. Shared by GET /leaderboard/season and the End Season
+    archive action (POST /admin/season/end).
+    """
     rows = db.execute(text("""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
@@ -174,9 +179,57 @@ def season_leaderboard(db=Depends(get_db)):
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
-    result = _leaderboard_rows(db, rows)
+    return _leaderboard_rows(db, rows)
+
+
+@router.get("/leaderboard/season")
+def season_leaderboard(db=Depends(get_db)):
+    result = compute_season_standings(db)
     return [{"id": r["id"], "username": r["username"], "season_points": r["points"],
              "tags": r["tags"], "cards": r["cards"]} for r in result]
+
+
+# ---------------------------------------------------------------------------
+# Past Seasons (archived standings)
+#
+# Addressing scheme: a "season" is a group of season_archive rows sharing one
+# season_label. Its public season_id is MIN(id) within the group — stable, and
+# any row id belonging to the group resolves to the same season (the detail
+# endpoint looks up the row by id and serves that row's whole label group).
+# ---------------------------------------------------------------------------
+
+@router.get("/leaderboard/seasons")
+def list_archived_seasons(db=Depends(get_db)):
+    rows = db.execute(text("""
+        SELECT MIN(id) as id, season_label, MAX(archived_at) as archived_at,
+               COUNT(*) as user_count
+        FROM season_archive
+        GROUP BY season_label
+        ORDER BY MAX(archived_at) DESC, season_label
+    """)).fetchall()
+    return [{"id": r.id, "season_label": r.season_label,
+             "archived_at": r.archived_at, "user_count": r.user_count}
+            for r in rows]
+
+
+@router.get("/leaderboard/seasons/{season_id}")
+def archived_season_detail(season_id: int, db=Depends(get_db)):
+    anchor = db.get(SeasonArchive, season_id)
+    if not anchor:
+        raise HTTPException(status_code=404, detail="Archived season not found")
+    rows = (
+        db.query(SeasonArchive)
+        .filter(SeasonArchive.season_label == anchor.season_label)
+        .order_by(SeasonArchive.rank)
+        .all()
+    )
+    return {
+        "id": season_id,
+        "season_label": anchor.season_label,
+        "archived_at": anchor.archived_at,
+        "standings": [{"user_id": r.user_id, "username": r.username,
+                       "points": r.points, "rank": r.rank} for r in rows],
+    }
 
 
 @router.get("/leaderboard/weekly")

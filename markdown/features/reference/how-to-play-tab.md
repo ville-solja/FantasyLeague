@@ -43,7 +43,3 @@ The tab is entirely frontend. No new backend endpoints are introduced.
 
 ### Graceful fallback
 If `GET /weights` fails, the stat/rarity/modifier tables are empty but all surrounding explanatory text remains visible. No error banner is shown for this failure.
-
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

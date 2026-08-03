@@ -126,7 +126,7 @@ if I forget to change my password.
 **Acceptance criteria**
 - A temporary password expires after `TEMP_PASSWORD_TTL_HOURS` hours (default: 24)
 - Attempting to log in with an expired temporary password returns 401 with a clear message prompting the user to request a new reset
-- `temp_password_expires_at` is cleared (set to NULL) when the user successfully changes their password via `POST /change-password`
+- `temp_password_expires_at` is cleared (set to NULL) when the user successfully changes their password via `PUT /profile/password`
 - The expiry timestamp is stored in the `users` table and covered by a schema migration
 
 ### Accurate Password Reset Email

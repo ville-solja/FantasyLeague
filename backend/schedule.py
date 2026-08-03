@@ -7,11 +7,7 @@ from datetime import datetime
 import requests
 from sqlalchemy import text
 
-_DEFAULT_SCHEDULE_URL = (
-    "https://docs.google.com/spreadsheets/d/"
-    "13rcLiJ99tQqdKMKIC7qs7ISqCZIZHoiz6XXLdv4rLlM/export?format=csv"
-)
-SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", _DEFAULT_SCHEDULE_URL)
+SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 CACHE_TTL = 3600
 
 _cache = {"data": None, "fetched_at": None}

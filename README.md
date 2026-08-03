@@ -10,7 +10,7 @@ In this app:
 - Player cards are generated from real league match data (common → legendary rarity)
 - You build a roster by drawing cards using tokens
 - Your active roster earns fantasy points from matches played each week
-- Rosters lock every Sunday — make your picks before then
+- Rosters lock when each admin-defined week begins — make your picks before then
 
 ## Quick start
 
@@ -18,7 +18,8 @@ In this app:
 
 ```bash
 cp .env.example .env
-# Edit .env — set SECRET_KEY, SCHEDULE_SHEET_URL, and optionally AUTO_INGEST_LEAGUES
+# Edit .env — set SECRET_KEY and, if hosting the Kanaliiga schedule, SCHEDULE_SHEET_URL
+# Leagues and season weeks are configured from the admin panel after first login
 docker compose up -d
 ```
 

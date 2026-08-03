@@ -57,6 +57,7 @@ twitch-extension/
 | **Extension status** | **Local Test** or higher | Configuration Service API returns 401 if extension is still in "Created" status |
 | **Client ID** | Shown in the top-right corner of Extension Settings | Used as `TWITCH_EXTENSION_CLIENT_ID` |
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
+| **Capabilities** | Enable **Chat** | Without it, MVP chat announcements silently fail — PubSub/token drops still work |
 
 ### Step 1 — Register the extension
 
@@ -169,6 +170,25 @@ with a broadcaster-role JWT signed by `TWITCH_EXTENSION_SECRET`. When `TWITCH_LO
 
 ---
 
+## Twitch Extension Chat
+
+On the same MVP confirmation, the EBS also posts a plain-text announcement directly to the
+channel's Twitch chat (visible to every viewer, not just those with the extension panel
+open):
+```
+POST https://api.twitch.tv/helix/extensions/chat?broadcaster_id={channel_id}
+```
+with an extension-signed JWT (`role: external`) — no bot account is required. Message text
+follows the pattern `"Match MVP: {player_name}!"`, appended with
+`" Token drop winners (+1 {TOKEN_NAME}): {names}"` when viewers received tokens, or
+`" (No linked viewers in the drop pool.)"` when the pool was empty. Requires the **Chat**
+capability to be enabled for the extension in the Twitch developer console (Extension
+Settings → Capabilities), in addition to the Configuration Service setup in Step 2 below.
+Like PubSub, this call is skipped (logged instead) when `TWITCH_LOCAL_DEV=true`, and silently
+skipped entirely if `TWITCH_EXTENSION_SECRET`/`TWITCH_EXTENSION_CLIENT_ID` are unset.
+
+---
+
 ## Local Development
 
 The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
@@ -193,7 +213,7 @@ Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 Twitch JWT. Returns matches from the current/most-recent week with per-match player lists.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
 ---
 
@@ -224,7 +244,8 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 ## Notes
 
 - Twitch does not expose a live viewer list — the drop pool is built from heartbeat calls only.
-- PubSub is EBS→panel only; the extension cannot send messages to other viewers.
+- PubSub is EBS→panel only; the extension cannot send messages to other viewers. The chat
+  announcement is the one channel that reaches everyone watching, not just panel viewers.
 - MVP selection has no scoring impact — engagement and drops only.
 - The extension must pass Twitch review before public release, or be used in developer test mode.
 - Token drop deduplication is keyed on match ID — once dropped for a match, it will not drop again even if the broadcaster re-confirms a different MVP.
