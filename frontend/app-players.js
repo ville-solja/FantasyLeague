@@ -281,12 +281,12 @@ async function loadSchedule() {
       staleEl.textContent = `Cached data from ${data.cached_at ? new Date(data.cached_at).toLocaleString() : "unknown"}`;
       staleEl.style.display = "";
     }
-    if (data.error && !data.weeks?.length) {
+    if (data.error && !data.weeks?.length && !data.extra_results?.length) {
       content.innerHTML = `<span style='color:#555'>${data.error}</span>`;
       setStatus("scheduleStatus", "");
       return;
     }
-    if (!data.weeks?.length) {
+    if (!data.weeks?.length && !data.extra_results?.length) {
       content.innerHTML = "<span style='color:#555'>No schedule data available.</span>";
       setStatus("scheduleStatus", "");
       return;
@@ -297,6 +297,7 @@ async function loadSchedule() {
       for (const s of (week.div1 || [])) if (s.datetime_iso) allSeries.push({...s, division: "div1"});
       for (const s of (week.div2 || [])) if (s.datetime_iso) allSeries.push({...s, division: "div2"});
     }
+    for (const s of (data.extra_results || [])) allSeries.push(s);
 
     const upcoming = allSeries.filter(s => s.match_status !== "past")
                               .sort((a, b) => b.datetime_iso.localeCompare(a.datetime_iso));
@@ -325,7 +326,9 @@ async function loadSchedule() {
       const isPast = s.match_status === "past";
       const divLabel = s.division === "div1"
         ? `<span class="badge badge-division div1">Div 1</span>`
-        : `<span class="badge badge-division div2">Div 2</span>`;
+        : s.division === "div2"
+        ? `<span class="badge badge-division div2">Div 2</span>`
+        : "";
 
       const r = s.series_result;
       const scoreHtml = r
