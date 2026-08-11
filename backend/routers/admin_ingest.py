@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,7 @@ from scoring import fantasy_score
 from toornament import sync_toornament_results
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class MatchWeekBody(BaseModel):
@@ -91,7 +93,8 @@ def schedule_debug(_: dict = Depends(require_admin)):
         result["response_length"] = len(res.text)
         result["first_200_chars"] = res.text[:200]
     except Exception as e:
-        result["error"] = str(e)
+        logger.exception("schedule_debug: fetch failed for %s", url)
+        result["error"] = type(e).__name__
 
     return result
 
