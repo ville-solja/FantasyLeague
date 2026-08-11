@@ -306,7 +306,7 @@ As a player, I want to see the drop chance for each rarity in the Draw panel so 
 - Each rarity card template displays its drop percentage (e.g. "60%") instead of a card count
 - Percentages are normalised from the live `draw_rate_*` weights so they always sum to 100%
 - Percentages update if an admin changes the draw rate weights (on next page load)
-- The "X draws available" status line and the draw/booster buttons are unchanged
+- The "X draws available" status line and the draw/booster buttons are unchanged *(superseded — the status line's data source was corrected by "Fix Available Draws Count Display" below, issue #89; the buttons themselves remain unchanged)*
 
 ### Expose Draw Rates via the Config Endpoint
 **User story**
@@ -316,3 +316,38 @@ As a frontend client, I want the `/config` endpoint to include the current draw 
 - `GET /config` returns a `draw_rates` object with keys `common`, `rare`, `epic`, `legendary`
 - Each value is a float representing the normalised percentage (rounds to 1 decimal place)
 - If all four `draw_rate_*` weights are missing from the database the endpoint falls back to the seeded defaults (60/25/10/5)
+
+## Fix Available Draws Count Display
+
+### Accurate Available Draws Count
+**User story**
+As a user, I want the "draws available" number on the Draw panel to reflect my actual remaining
+draws (my token balance) so that I am not misled into thinking I can draw far more cards than I
+actually can.
+
+**Acceptance criteria**
+- The Draw panel's `#deckStatus` line shows a number derived from the user's current token
+  balance, not from `GET /deck`'s summed per-rarity undrawn-combination counts
+- Immediately after a successful standard or team-booster draw, the number decreases by 1 to
+  match the new token balance returned by the draw response, with no page refresh needed
+- When the user has 0 tokens, the line shows "No draws available", matching the account's actual
+  draw eligibility (`POST /draw` returns 409 at this point)
+- Logged-out users are not shown a specific draws-available number derived from data that
+  doesn't apply to them, mirroring the existing logged-out behavior of `#drawCounter`
+
+---
+
+### Consistent Draw-Count Messaging
+**User story**
+As a user, I want the two draw-count indicators near the Draw button (the counter beside the
+button and the status line below it) to always agree with each other so that I am not shown two
+different numbers for the same thing.
+
+**Acceptance criteria**
+- `#drawCounter` and `#deckStatus`'s "draws available" text derive from the same source of truth
+  (the user's token balance, `_tokenBalance`)
+- After a successful draw (standard or team-booster), both indicators update together in the
+  same call, so they can never show conflicting numbers even momentarily
+- `GET /deck`'s response shape, and its use by the team-booster panel (`GET /deck/booster`,
+  `loadBoosterTeams()`), are unaffected — this fix only changes how `loadDeck()`'s status line
+  interprets data, not the `/deck` endpoint's contract or any other caller of it

@@ -122,9 +122,8 @@ def sync_toornament_results(db, dry_run: bool = False) -> dict:
         team_lookup = build_team_lookup(db)
         toornament_matches = fetch_tournament_matches(TOORNAMENT_TOURNAMENT_ID)
     except Exception as e:
-        msg = f"Setup error: {e}"
-        print(f"[TOORNAMENT] {msg}")
-        result["errors"].append(msg)
+        print(f"[TOORNAMENT] Setup error: {e}")
+        result["errors"].append(f"Setup error: {type(e).__name__}")
         return result
 
     for tm in toornament_matches:

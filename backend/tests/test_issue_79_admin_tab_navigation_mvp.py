@@ -307,7 +307,7 @@ class TestAdminMatchTable:
         """A request without admin credentials to GET /admin/matches returns 403."""
         # The guard is enforced by require_admin (deps.py), which raises
         # HTTPException(403) when is_admin is False.  Verify via source inspection.
-        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin.py")
+        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin_matches.py")
         with open(admin_path) as f:
             source = f.read()
         assert "require_admin" in source
@@ -348,7 +348,7 @@ class TestAdminMVPSelection:
 
     def test_get_match_players_requires_admin_auth(self, db):
         """A non-admin request to GET /admin/matches/{match_id}/players returns 403."""
-        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin.py")
+        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin_matches.py")
         with open(admin_path) as f:
             source = f.read()
         assert "require_admin" in source
@@ -458,7 +458,7 @@ class TestAdminMVPSelection:
 
     def test_post_set_mvp_requires_admin_auth(self, db):
         """A non-admin request to POST /admin/matches/{match_id}/mvp returns 403."""
-        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin.py")
+        admin_path = os.path.join(os.path.dirname(__file__), "..", "routers", "admin_matches.py")
         with open(admin_path) as f:
             source = f.read()
         assert "require_admin" in source

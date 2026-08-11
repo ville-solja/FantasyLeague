@@ -41,6 +41,9 @@ Authenticates with username and password.
 ```
 
 - Returns 401 if credentials are invalid.
+- Returns 401 with `"Temporary password has expired. Please request a new password reset."` if the
+  account has an unexpired-check-failed temporary password (`must_change_password` set and
+  `temp_password_expires_at` in the past). See `reference/temp-password-expiry.md`.
 - Returns `{ "username", "is_admin", "tokens" }` and sets the session cookie. (`must_change_password` is only returned by `GET /me`.)
 - Records a `user_login` audit log entry.
 
@@ -159,8 +162,12 @@ Issues a temporary password to the user's registered email address.
 1. A random 12-character temporary password is generated.
 2. The user's password is immediately replaced with the temporary one.
 3. The `must_change_password` flag is set to `true` on the user record.
-4. The temporary password is emailed to the address on file.
-5. A `password_reset_requested` audit log entry is written.
+4. `temp_password_expires_at` is set to `now + TEMP_PASSWORD_TTL_HOURS` hours (default 24) — the
+   temporary password stops working after this point and `POST /login` returns 401. Cleared back
+   to `null` once the user sets a real password via `PUT /profile/password`. See
+   `reference/temp-password-expiry.md`.
+5. The temporary password is emailed to the address on file.
+6. A `password_reset_requested` audit log entry is written.
 
 The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to prevent username enumeration.
 
@@ -184,6 +191,7 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy |
 | `DEBUG` | `false` | Bypasses `SECRET_KEY` requirement for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
+| `TEMP_PASSWORD_TTL_HOURS` | `24` | Hours before a forgot-password temporary password expires |
 | `SMTP_HOST` | *(empty — disables email)* | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP login username |

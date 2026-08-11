@@ -779,11 +779,12 @@ function _renderLeagues() {
       <td>${l.is_monitored ? 'Yes' : 'No'}</td>
       <td>
         ${l.is_monitored
-          ? `<button onclick="unmonitorLeague(${l.id})">Unmonitor</button>`
+          ? `<button data-ingest-id="${l.id}" onclick="ingestLeagueNow(${l.id})">Ingest Now</button>
+             <button class="secondary" onclick="unmonitorLeague(${l.id})">Unmonitor</button>`
           : `<button onclick="monitorLeague(${l.id})">Monitor</button>`
         }
         ${l.match_count > 0
-          ? `<button onclick="openPurgeLeagueModal(${l.id}, '${_escHtml(l.name)}')">Purge data</button>`
+          ? `<button class="danger" onclick="openPurgeLeagueModal(${l.id}, '${_escHtml(l.name)}')">Purge data</button>`
           : ''
         }
       </td>
@@ -815,6 +816,23 @@ async function unmonitorLeague(id) {
   const data = await res.json();
   if (!res.ok) alert(data.detail);
   loadLeagues();
+}
+
+async function ingestLeagueNow(id) {
+  const btn = document.querySelector(`button[data-ingest-id="${id}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Ingesting…'; }
+  setStatus('leaguesStatus', `Ingesting league ${id} — this can take a few minutes for a full season…`);
+  try {
+    const res = await fetch(`${API}/ingest/league/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) return setStatus('leaguesStatus', data.detail || 'Ingest failed', false);
+    setStatus('leaguesStatus', `Ingest complete for league ${id}`);
+    loadLeagues();
+  } catch (e) {
+    setStatus('leaguesStatus', e.message, false);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingest Now'; }
+  }
 }
 
 function openPurgeLeagueModal(id, name) {

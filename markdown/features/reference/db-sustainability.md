@@ -48,6 +48,11 @@ bash scripts/backup-db.sh /path/to/other.db   # custom path
 
 Run before every deploy.
 
+This is separate from the automatic in-app backup `backup_sqlite_db()` (also in
+`backend/database.py`, same online-backup mechanism) takes immediately before
+`POST /admin/season/reset` deletes any data — see `reference/season-lifecycle.md`. That backup
+runs unconditionally on every reset; `scripts/backup-db.sh` is the manual pre-deploy step.
+
 ---
 
 ## CI enforcement

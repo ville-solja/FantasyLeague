@@ -39,7 +39,7 @@ Implementation details, integrations, and operator tooling.
 | [Tester Account Exclusion](reference/tester-account-exclusion.md) | `is_tester` flag; admin toggle; leaderboard filtering |
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
-| [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab: getting started, Twitch MVP flow, live scoring formula display |
+| [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
@@ -51,6 +51,7 @@ Implementation details, integrations, and operator tooling.
 | [Env-Based Admin Seeding](reference/env-based-admin-seeding.md) | Replace hardcoded seed credentials with `SEED_ADMIN_*` env vars; empty `users.json` stub in repo |
 | [Process Diagrams](../process-diagrams.md) | Mermaid flowcharts: season lifecycle, token/card economy, admin tools overview |
 | [Agent Lessons Log](reference/agent-lessons-log.md) | Append-only lessons file read by agents at run start to avoid recurring pitfalls |
+| [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |
@@ -62,8 +63,9 @@ Implementation details, integrations, and operator tooling.
 | [Draw Panel Redesign](reference/draw-panel-redesign.md) | Renames "Deck" to "Draw" and replaces card counts with normalised drop percentages from live weights |
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |
 | [SMTP Password Recovery](reference/smtp-password-recovery.md) | Forgot-password flow: temporary password delivery via SMTP with stdout fallback for local dev |
+| [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons; results also derive directly from ingested matches when the schedule sheet has no row for them |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
-| [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | Microservice that downloads Dota 2 demos, extracts in-game tip events, and powers a tipping leaderboard |
+| [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | HTML5 drag-and-drop to reorder the active roster; card viewer backdrop-click dismiss |
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |

@@ -130,7 +130,7 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 ### Flow
 
 1. Broadcaster clicks **"Select match MVP"**
-2. Series from the current/most-recent week are listed
+2. The 5 most recently played series (regardless of week boundaries) are listed
 3. Broadcaster selects the series (team1 vs team2), then the specific match (Match 1, Match 2…)
 4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**
 5. MVP is saved; tokens drop automatically to the presence pool
@@ -210,7 +210,9 @@ Twitch JWT. Records viewer presence. Call every ~55 seconds.
 Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 
 ### `GET /twitch/matches/current`
-Twitch JWT. Returns matches from the current/most-recent week with per-match player lists.
+Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
+data, regardless of week boundaries, with per-match player lists. See
+`reference/twitch-mvp-series-window.md`.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
 Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
@@ -238,6 +240,7 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
+| `ENV` | *(unset)* | Defense-in-depth: with `TWITCH_LOCAL_DEV=true`, setting `ENV=production` makes the JWT bypass refuse to run (500) instead of silently accepting it. |
 
 ---
 
@@ -246,6 +249,8 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 - Twitch does not expose a live viewer list — the drop pool is built from heartbeat calls only.
 - PubSub is EBS→panel only; the extension cannot send messages to other viewers. The chat
   announcement is the one channel that reaches everyone watching, not just panel viewers.
-- MVP selection has no scoring impact — engagement and drops only.
+- MVP selection **does** have a scoring impact: the confirmed MVP's fantasy points for that
+  match are multiplied by `1 + mvp_bonus_pct / 100` (default 10%), affecting cards, rosters, and
+  leaderboards — not engagement/drops only. See `reference/mvp-fantasy-bonus.md`.
 - The extension must pass Twitch review before public release, or be used in developer test mode.
 - Token drop deduplication is keyed on match ID — once dropped for a match, it will not drop again even if the broadcaster re-confirms a different MVP.
