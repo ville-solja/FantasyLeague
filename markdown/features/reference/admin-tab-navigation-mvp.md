@@ -48,7 +48,9 @@ Returns all ingested matches ordered by start time descending. Admin-only.
 
 `team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set.
 
-Note: the `Match` model does not store `duration` or `series_id` — those fields are not available in this endpoint.
+Note: `Match.duration` exists on the model (added by `reference/schedule-series-game-breakdown.md`,
+migration `022_matches_duration`) but this endpoint's response does not include it. `series_id`
+still does not exist as a column anywhere on `Match`. Neither field is available here.
 
 ### `GET /admin/matches/{match_id}/players`
 
