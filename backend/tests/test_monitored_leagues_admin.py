@@ -172,15 +172,15 @@ class TestViewMonitoredLeagues:
         """GET /admin/leagues without admin credentials is rejected with 401
         or 403; the require_admin guard must be present on the endpoint."""
         admin_router_path = os.path.join(
-            os.path.dirname(__file__), "..", "routers", "admin.py"
+            os.path.dirname(__file__), "..", "routers", "admin_leagues.py"
         )
         with open(admin_router_path) as f:
             source = f.read()
         assert "require_admin" in source, (
-            "routers/admin.py must import and use require_admin"
+            "routers/admin_leagues.py must import and use require_admin"
         )
         assert 'GET /admin/leagues' in source or 'admin/leagues' in source, (
-            "routers/admin.py must define the /admin/leagues endpoint"
+            "routers/admin_leagues.py must define the /admin/leagues endpoint"
         )
 
 

@@ -22,7 +22,10 @@ new week rows.
 
 ## Week Locking
 
-A week locks automatically when its match window opens (Monday 00:00 UTC). Locking is irreversible and has three effects:
+A week locks automatically once its own admin-set `start_time` has passed (checked by the
+background maintenance thread — see Week Structure above; there is no fixed weekday or time-of-day
+cadence, since weeks are created manually with arbitrary start dates). Locking is irreversible and
+has three effects:
 
 1. **Roster snapshot** — Each user's current active roster (up to 5 cards) is copied into `WeeklyRosterEntry` records. This snapshot is immutable for the rest of the week and is used for all scoring calculations for that week.
 2. **Week marked locked** — `weeks.is_locked = true`. The roster for that week can no longer be changed.

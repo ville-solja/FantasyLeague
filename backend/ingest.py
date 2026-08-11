@@ -101,8 +101,9 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
         logger.warning("Skipping match %d — unavailable after retries", match_id)
         return
 
-    if data.get("duration", 0) < 900:
-        logger.info("Skipping match %d — too short (%ds)", match_id, data.get("duration", 0))
+    duration = data.get("duration")
+    if duration is not None and duration < 900:
+        logger.info("Skipping match %d — too short (%ds)", match_id, duration)
         return
 
     radiant_team_id = data.get("radiant_team_id")
@@ -137,6 +138,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
         league_id=league_id,
         start_time=data.get("start_time"),
         radiant_win=data.get("radiant_win"),
+        duration=duration,
     )
     db.add(match)
 

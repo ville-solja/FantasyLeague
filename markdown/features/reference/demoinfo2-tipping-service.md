@@ -81,7 +81,7 @@ Downloads and parses the demo for the given match. Returns extracted tip events.
 
 Returns 404 if demo file is not found or has expired. Returns 503 if the parser fails.
 
-### `GET /leaderboard/tipping` — `backend/routers/leaderboard.py`
+### `GET /leaderboard/tipping` *(planned — not implemented; service is shelved)*
 Returns players ranked by tips received during the current season.
 
 ```json

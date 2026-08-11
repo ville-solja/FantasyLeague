@@ -26,7 +26,16 @@ from routers import auth as auth_router
 from routers import profile as profile_router
 from routers import leaderboard as leaderboard_router
 from routers import cards as cards_router
-from routers import admin as admin_router
+from routers import admin_users as admin_users_router
+from routers import admin_ingest as admin_ingest_router
+from routers import admin_weeks as admin_weeks_router
+from routers import admin_notifications as admin_notifications_router
+from routers import admin_tags as admin_tags_router
+from routers import admin_players as admin_players_router
+from routers import admin_leagues as admin_leagues_router
+from routers import admin_season as admin_season_router
+from routers import admin_matches as admin_matches_router
+from routers import admin_demo as admin_demo_router
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +240,16 @@ app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(leaderboard_router.router)
 app.include_router(cards_router.router)
-app.include_router(admin_router.router)
+app.include_router(admin_users_router.router)
+app.include_router(admin_ingest_router.router)
+app.include_router(admin_weeks_router.router)
+app.include_router(admin_notifications_router.router)
+app.include_router(admin_tags_router.router)
+app.include_router(admin_players_router.router)
+app.include_router(admin_leagues_router.router)
+app.include_router(admin_season_router.router)
+app.include_router(admin_matches_router.router)
+app.include_router(admin_demo_router.router)
 
 
 @app.get("/config")

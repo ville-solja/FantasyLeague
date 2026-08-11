@@ -35,7 +35,17 @@
       "Bash(find /home/mint /usr/local/lib ~/.local/lib -name \"fastapi\" -type d 2>/dev/null | head -5; find /home/mint -name \"*.cfg\" -path \"*/fastapi*\" 2>/dev/null | head -3)",
       "Read(//home/mint/**)",
       "Bash(python3 -m pytest tests/test_migrate.py -v --tb=short)",
-      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")"
+      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")",
+      "Bash(gh api *)",
+      "Bash(DEBUG=true python3 -c \"import main\")",
+      "Bash(xargs -n1 basename)",
+      "Bash(python -m pytest tests/test_issue_89_fix_available_draws_count.py -v)",
+      "Bash(python3 -m pytest tests/test_issue_89_fix_available_draws_count.py -v)",
+      "Bash(python3 -m pytest tests/test_issue_89_fix_available_draws_count.py --collect-only -q)",
+      "Bash(python3 -m pytest tests/ -q)",
+      "Bash(python3 -m pytest tests/test_issue_89_fix_available_draws_count.py -v -q)",
+      "Bash(grep -rhoE \"os\\\\.\\(getenv|environ\\\\.get\\)\\\\\\(['\\\\\"][A-Z0-9_]+['\\\\\"]\" *.py routers/*.py | grep -oE \"['\\\\\"][A-Z0-9_]+['\\\\\"]\" | tr -d \"'\\\\\"\" | sort -u > /tmp/code_envs.txt *)",
+      "Read(//tmp/**)"
     ]
   }
 }
