@@ -15,6 +15,21 @@ Format:
 
 ---
 
+### 2026-08-11 — security-patcher — endpoints
+**Problem:** `py/stack-trace-exposure` (CWE-209) flagged `result["error"] = str(e)` in the
+admin-only `GET /admin/schedule/debug` diagnostic endpoint (`backend/routers/admin_ingest.py`).
+The endpoint's entire purpose is surfacing why `SCHEDULE_SHEET_URL` fetches fail, so returning
+nothing useful would defeat it — but CodeQL's taint tracker doesn't model `Depends(require_admin)`
+as a sanitizer, so raw exception-message flow to any HTTP response is flagged regardless of auth.
+**Solution:** Log the full exception server-side via `logger.exception(...)` (this repo's
+established `logging.getLogger(__name__)` pattern, e.g. `backend/routers/auth.py`'s forgot-password
+handler), and return only `type(e).__name__` (e.g. `"ConnectionError"`, `"Timeout"`) to the caller
+instead of `str(e)`. This keeps the endpoint diagnostically useful (failure category is visible)
+without leaking exception message text, which breaks CodeQL's taint flow since the exception class
+name is a different derivation than the message content the query tracks.
+
+---
+
 ### 2026-08-03 — developer — testing
 **Problem:** `test_issue_85_split_admin_router.py::test_full_suite_pass_skip_counts_match_pre_split_baseline` hardcodes an exact `"448 passed"` string from a subprocess run of the whole suite ("as of this writing") — it breaks the instant any other plan adds new passing tests anywhere, even in unrelated files, which is the normal/expected outcome of this repo's plan-driven workflow.
 **Solution:** When a change legitimately adds N new passing tests, bump that hardcoded count (and the mirrored docstring number) by N rather than treating the failure as a regression in the new work — but only after confirming via `git stash` that the rest of the suite (`--ignore` both that file and the new test file) still matches the pre-change baseline exactly.

@@ -35,7 +35,9 @@
       "Bash(find /home/mint /usr/local/lib ~/.local/lib -name \"fastapi\" -type d 2>/dev/null | head -5; find /home/mint -name \"*.cfg\" -path \"*/fastapi*\" 2>/dev/null | head -3)",
       "Read(//home/mint/**)",
       "Bash(python3 -m pytest tests/test_migrate.py -v --tb=short)",
-      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")"
+      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")",
+      "Bash(gh api *)",
+      "Bash(DEBUG=true python3 -c \"import main\")"
     ]
   }
 }
