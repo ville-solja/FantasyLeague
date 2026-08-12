@@ -1,6 +1,6 @@
 # Admin Features
 
-Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account is bootstrapped at startup via the `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` environment variables (see `reference/env-based-admin-seeding.md`). Additional admins require a direct DB update: `UPDATE users SET is_admin = 1 WHERE username = 'yourusername';` — there is no in-app admin promotion flow.
+Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account (and optionally further admins) is bootstrapped at startup via the `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` environment variables and their `_2`, `_3`, ... suffixed counterparts (see `reference/env-based-admin-seeding.md`). Additional admins can also be promoted in-app by an existing admin via the User Management tab's admin toggle, with no DB access required.
 
 All admin endpoints require an active admin session. Unauthorized requests receive a 403 response.
 
@@ -9,10 +9,19 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
+Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, `is_admin`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
 
 ### `POST /users/{user_id}/toggle-tester`
 Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
+
+### `POST /users/{user_id}/toggle-admin`
+Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_admin }`. Logged
+as `admin_toggle_admin`. Two guards prevent the app from ever ending up with zero admins: an
+admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
+the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
+A promoted user's session is not retroactively upgraded — `is_admin` is cached in the session
+cookie at login, so a promoted user must log in again before admin endpoints accept their
+session.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.
@@ -143,6 +152,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `admin_grant_tokens` | Admin granted tokens to a user |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
+| `admin_toggle_admin` | Admin toggled admin flag on a user |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |

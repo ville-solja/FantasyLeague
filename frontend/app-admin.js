@@ -163,17 +163,23 @@ function _renderUsers(rows) {
     const testerBadge = u.is_tester
       ? ` <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>`
       : "";
+    const adminBadge = u.is_admin
+      ? ` <span class="badge" style="background:var(--k-flame-700,#8a2e0c);color:#fff;font-size:0.7rem;">ADMIN</span>`
+      : "";
     const tagChips = (u.tags || []).map(t =>
       `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.65rem;padding:1px 6px;border-radius:2px;margin-right:3px;">${t.label}</span>`
     ).join("");
+    const adminToggleBtn = u.id === activeUserId ? "" :
+      `<button class="ghost" style="font-size:0.8rem;" onclick="toggleAdmin(${u.id})">${u.is_admin ? "Demote from admin" : "Promote to admin"}</button>`;
     return `<tr data-user-id="${u.id}">
-      <td>${u.username}${testerBadge}</td>
+      <td>${u.username}${testerBadge}${adminBadge}</td>
       <td>${tagChips || '<span style="color:#555;font-size:0.8rem;">—</span>'}</td>
       <td>${u.tokens}</td>
       <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
         <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
         <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
+        ${adminToggleBtn}
         <button class="ghost" style="font-size:0.8rem;" onclick="openTagManager(${u.id})">Manage tags</button>
       </td>
     </tr>`;
@@ -296,6 +302,18 @@ async function toggleTester(userId) {
     const data = await res.json();
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", `${data.username} ${data.is_tester ? "marked as tester" : "unmarked as tester"}`);
+    loadUsers();
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function toggleAdmin(userId) {
+  try {
+    const res = await fetch(`${API}/users/${userId}/toggle-admin`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("usersStatus", data.detail, false);
+    setStatus("usersStatus", `${data.username} ${data.is_admin ? "promoted to admin" : "demoted from admin"}`);
     loadUsers();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
