@@ -111,9 +111,7 @@ All three settings are configurable in the admin panel under Scoring Weights.
 
 ### Modifier visibility
 
-- Displayed as green pills on the card row in the My Team roster (active and bench).
-- Shown in the card reveal modal immediately after drawing.
-- Shown in the card detail popup when clicking a player name in the roster.
+Modifiers are rendered directly onto the card's PNG image (see `reference/card-image-generation.md`) — that is the only place they're shown. There is deliberately no separate text/pill rendering anywhere in the UI (My Team roster rows, the reveal modal, or the card detail popup); the values are already readable on the card image itself, so a second text rendering would be duplicate information.
 
 ### Modifier configuration (admin)
 

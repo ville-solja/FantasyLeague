@@ -119,21 +119,3 @@ function teamLink(id, name) {
   if (!id) return _escHtml(name) || "—";
   return `<span class="entity-link" tabindex="0" role="button" onclick="openTeamModal(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTeamModal(${id})}">${_escHtml(name)}</span>`;
 }
-
-const _MOD_STAT_LABELS = {
-  kills: "Kills", deaths: "Deaths", gold_per_min: "GPM", obs_placed: "Wards",
-  last_hits: "LH", denies: "Denies", towers_killed: "Towers", roshan_kills: "Roshan",
-  teamfight_participation: "TF%", camps_stacked: "Stacks", rune_pickups: "Runes",
-  firstblood_claimed: "FB", stuns: "Stuns",
-};
-
-/** Renders a card's per-stat modifiers as small pills — used on My Team roster
- * card slots and the reveal/detail popup, so modifier info isn't only baked
- * into the card PNG's painted text (which screen readers can't see). */
-function modifierPillsHtml(modifiers) {
-  if (!modifiers || !modifiers.length) return "";
-  return modifiers.map(m => {
-    const label = _MOD_STAT_LABELS[m.stat] || _escHtml(m.stat);
-    return `<span class="mod-pill">${label} +${m.bonus_pct}%</span>`;
-  }).join("");
-}

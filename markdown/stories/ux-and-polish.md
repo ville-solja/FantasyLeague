@@ -279,6 +279,39 @@ organise my reserve cards the same way I can my active roster.
 
 ---
 
+### Decluttered Card Slot Controls
+**User story**
+As a player, I want the My Team card slots to show only the card itself (no move or
+bench/activate buttons) so that the roster view stays visually clean and drag-and-drop is the
+obvious, primary way to manage my lineup.
+
+**Acceptance criteria**
+- The ◀/▶ move-left/move-right buttons are removed from every card slot (active and bench)
+- The Bench/Activate text buttons are removed from every card slot
+- Card slots show only the card image, its points value, and modifier pills (if any);
+  drag-and-drop remains the way to reorder within a zone or move a card between zones by mouse
+- Locked-week card slots are unaffected (they never showed these buttons)
+
+---
+
+### Keyboard Fallback for Bench/Active Toggle
+**User story**
+As a keyboard-only user, I want to move a card between my bench and active roster without a
+mouse, so that removing the visible Bench/Activate buttons doesn't lock me out of that action
+entirely.
+
+**Acceptance criteria**
+- Focusing a card slot's image and pressing Enter or Space toggles the card between active and
+  bench: an active card is benched, a benched card is activated
+- Activation failure cases reuse the existing `activateCard()` error handling (e.g. roster full,
+  a card for this player is already active) — no new error copy is introduced
+- The toggle does nothing when the current week is locked, matching drag-and-drop's existing
+  lock gating (`_rosterLocked`)
+- Mouse click on the card image continues to open the card detail modal, unchanged; this is a
+  distinct interaction from the new keyboard toggle, not a replacement for it
+
+---
+
 ### Card Viewer Backdrop Dismiss
 **User story**
 As a player, I want clicking outside an open card to close it so that I can dismiss the
