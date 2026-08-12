@@ -28,7 +28,7 @@ from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
-from scoring import fantasy_score
+from scoring import apply_mvp_bonus_to_row
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
 
@@ -392,22 +392,15 @@ def current_matches(
 # ---------------------------------------------------------------------------
 
 def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, weights: dict):
-    """Set or clear the MVP flag and adjust fantasy_points on a PlayerMatchStats row."""
+    """Set or clear the MVP flag and adjust fantasy_points on a PlayerMatchStats row.
+
+    Thin DB-lookup wrapper around scoring.apply_mvp_bonus_to_row() for the two
+    callers here that only have (player_id, match_id), not an already-loaded row.
+    """
     row = db.query(PlayerMatchStats).filter_by(player_id=player_id, match_id=match_id).first()
     if not row:
         return
-    base_pts = fantasy_score({
-        "kills": row.kills or 0, "deaths": row.deaths or 0,
-        "gold_per_min": row.gold_per_min or 0, "obs_placed": row.obs_placed or 0,
-        "last_hits": row.last_hits or 0, "denies": row.denies or 0,
-        "towers_killed": row.towers_killed or 0, "roshan_kills": row.roshan_kills or 0,
-        "teamfight_participation": row.teamfight_participation or 0.0,
-        "camps_stacked": row.camps_stacked or 0, "rune_pickups": row.rune_pickups or 0,
-        "firstblood_claimed": row.firstblood_claimed or 0, "stuns": row.stuns or 0.0,
-    }, weights)
-    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
-    row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4) if apply else round(base_pts, 4)
-    row.is_mvp = apply
+    apply_mvp_bonus_to_row(row, weights, apply)
 
 
 # ---------------------------------------------------------------------------

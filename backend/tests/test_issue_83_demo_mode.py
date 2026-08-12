@@ -78,7 +78,7 @@ class TestMoveTheDemoClock:
         monkeypatch.setenv("DEMO_MODE", "true")
         from deps import require_admin
         with pytest.raises(HTTPException) as exc:
-            require_admin(_NON_ADMIN)
+            require_admin(_NON_ADMIN, db=db)
         assert exc.value.status_code == 403
 
     def test_post_demo_clock_sets_override_and_reruns_auto_lock_weeks(self, db, monkeypatch):
@@ -263,7 +263,7 @@ class TestGuardAgainstProductionExposure:
         monkeypatch.setenv("DEMO_MODE", "true")
         from deps import require_admin
         with pytest.raises(HTTPException) as exc:
-            require_admin(_NON_ADMIN)
+            require_admin(_NON_ADMIN, db=db)
         assert exc.value.status_code == 403
 
     def test_env_example_documents_demo_mode(self):

@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 from card_utils import (
-    _SCORED_STAT_COLS, _load_weights, _compute_card_points,
+    _SCORED_STAT_COLS, _load_weights, _compute_card_points, _mvp_bonus_delta,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
 )
 from database import get_db
@@ -48,10 +48,21 @@ _LATEST_TEAM_SUBQUERY = """
 """
 
 
+def _mvp_bonus_map(mvp_rows, weights: dict) -> dict[int, float]:
+    """{card_id: summed _mvp_bonus_delta()} across a set of raw, un-aggregated
+    is_mvp=1 match rows (one row per MVP match, not per card)."""
+    result: dict[int, float] = {}
+    for row in mvp_rows:
+        result[row.card_id] = result.get(row.card_id, 0.0) + _mvp_bonus_delta(row, weights)
+    return result
+
+
 def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     """Compute roster data for a user, scoped to the given week (or next editable week)."""
     week = db.get(Week, week_id) if week_id is not None else get_next_editable_week(db)
     now = int(time.time())
+    weights, rarity = _load_weights(db)
+    mvp_stat_cols = ", ".join(f"s.{col}" for col in _SCORED_STAT_COLS)
 
     def _week_stat_case(col):
         return (
@@ -86,6 +97,16 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
         active, bench = cards, []
+        mvp_rows = db.execute(text(f"""
+            SELECT c.id as card_id, {mvp_stat_cols}
+            FROM weekly_roster_entries wre
+            JOIN cards c ON c.id = wre.card_id
+            JOIN player_match_stats s ON s.player_id = c.player_id
+            JOIN matches m ON m.match_id = s.match_id
+            WHERE wre.week_id = :week_id AND wre.user_id = :user_id AND s.is_mvp = 1
+              AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+        """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
+               "user_id": user_id}).fetchall()
     else:
         ws = week.start_time if week else 0
         we = week.end_time if week else now
@@ -107,10 +128,19 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         cards = [dict(r._mapping) for r in results]
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
+        mvp_rows = db.execute(text(f"""
+            SELECT c.id as card_id, {mvp_stat_cols}
+            FROM cards c
+            JOIN players p ON p.id = c.player_id
+            JOIN player_match_stats s ON s.player_id = c.player_id
+            JOIN matches m ON m.match_id = s.match_id
+            WHERE c.owner_id = :user_id AND p.is_active = 1 AND s.is_mvp = 1
+              AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+        """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
 
     card_ids = [c["id"] for c in cards]
     modifiers_map = _card_modifiers_map(db, card_ids)
-    weights, rarity = _load_weights(db)
+    mvp_bonus_map = _mvp_bonus_map(mvp_rows, weights)
 
     for c in cards:
         mods = modifiers_map.get(c["id"], {})
@@ -119,7 +149,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             c["total_points"] = 0.0
             continue
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
-        c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods)
+        c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods,
+                                                   mvp_bonus_map.get(c["id"], 0.0))
 
     active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
     bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
@@ -153,12 +184,27 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         GROUP BY c.id, c.card_type
     """), {"user_id": user_id}).fetchall()
 
+    season_mvp_rows = db.execute(text(f"""
+        SELECT c.id as card_id, {mvp_stat_cols}
+        FROM weekly_roster_entries wre
+        JOIN weeks wk ON wk.id = wre.week_id
+        JOIN cards c ON c.id = wre.card_id
+        JOIN player_match_stats s ON s.player_id = c.player_id
+        JOIN matches m ON m.match_id = s.match_id
+        WHERE wre.user_id = :user_id
+          AND wk.is_locked = 1
+          AND s.is_mvp = 1
+          AND (m.week_override_id = wk.id OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+    """), {"user_id": user_id}).fetchall()
+    season_mvp_bonus_map = _mvp_bonus_map(season_mvp_rows, weights)
+
     from card_utils import _stat_sums_from_row
     season_card_ids = [r.card_id for r in season_pts_rows]
     season_mods = _card_modifiers_map(db, season_card_ids)
     season_points = sum(
         _compute_card_points(_stat_sums_from_row(row), row.card_type, weights, rarity,
-                             season_mods.get(row.card_id, {}))
+                             season_mods.get(row.card_id, {}),
+                             season_mvp_bonus_map.get(row.card_id, 0.0))
         for row in season_pts_rows
     )
 

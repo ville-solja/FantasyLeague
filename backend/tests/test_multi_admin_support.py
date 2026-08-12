@@ -48,7 +48,7 @@ from models import User
 
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 FRONTEND_DIR = os.path.join(REPO_ROOT, "frontend")
-APP_ADMIN_JS_PATH = os.path.join(FRONTEND_DIR, "app-admin.js")
+APP_ADMIN_JS_PATH = os.path.join(FRONTEND_DIR, "app-admin-users.js")
 
 _ADMIN = {"user_id": 1, "username": "admin", "is_admin": True}
 
@@ -363,7 +363,7 @@ class TestToggleAdminLastAdminGuard:
 class TestFrontendAdminBadgeAndToggleButton:
 
     def test_admin_badge_rendered_for_users_with_is_admin_true(self):
-        """_renderUsers() in frontend/app-admin.js renders an ADMIN badge next to the username for any user row with is_admin true, alongside the existing TESTER badge pattern."""
+        """_renderUsers() in frontend/app-admin-users.js renders an ADMIN badge next to the username for any user row with is_admin true, alongside the existing TESTER badge pattern."""
         with open(APP_ADMIN_JS_PATH) as f:
             source = f.read()
         assert "u.is_admin" in source
@@ -380,7 +380,7 @@ class TestFrontendAdminBadgeAndToggleButton:
         assert "Demote from admin" in source
 
     def test_toggle_admin_js_function_calls_toggle_admin_endpoint(self):
-        """toggleAdmin(userId) in frontend/app-admin.js POSTs to /users/{userId}/toggle-admin and reloads the user list on success, mirroring toggleTester()'s fetch/status/reload pattern."""
+        """toggleAdmin(userId) in frontend/app-admin-users.js POSTs to /users/{userId}/toggle-admin and reloads the user list on success, mirroring toggleTester()'s fetch/status/reload pattern."""
         with open(APP_ADMIN_JS_PATH) as f:
             source = f.read()
         start = source.index("async function toggleAdmin(userId)")
