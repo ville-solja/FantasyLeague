@@ -3,12 +3,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from card_utils import (
-    _SCORED_STAT_COLS, _load_weights, _stat_sums_from_row,
+    _SCORED_STAT_COLS, _load_weights,
     _compute_card_points, _mvp_bonus_delta,
 )
 from database import get_db
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
-from scoring import fantasy_score, SCORING_STATS
+from scoring import fantasy_score, stat_dict_from_row, SCORING_STATS
 
 router = APIRouter()
 
@@ -80,7 +80,7 @@ def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
             continue
         if getattr(r, 'match_count', 1) == 0:
             continue
-        stat_sums = _stat_sums_from_row(r)
+        stat_sums = stat_dict_from_row(r)
         mods = mods_map.get(r.card_id, {})
         card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods,
                                          mvp_bonus_map.get(r.card_id, 0.0))

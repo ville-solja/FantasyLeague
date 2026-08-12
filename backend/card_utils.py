@@ -3,7 +3,7 @@ import random
 from sqlalchemy import text
 
 from models import Card, CardModifier, Weight
-from scoring import card_fantasy_score, fantasy_score, SCORING_STATS
+from scoring import card_fantasy_score, fantasy_score, stat_dict_from_row, SCORING_STATS
 
 
 _SCORED_STAT_COLS = list(SCORING_STATS) + ["deaths"]
@@ -25,13 +25,6 @@ def _load_weights(db) -> tuple[dict, dict]:
     return all_weights, rarity
 
 
-def _stat_sums_from_row(row) -> dict:
-    """Extract scored stat values (SCORING_STATS + deaths) from a SQLAlchemy Row or dict."""
-    if hasattr(row, "_mapping"):
-        return {stat: row._mapping.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
-    return {stat: getattr(row, stat, 0) or 0 for stat in _SCORED_STAT_COLS}
-
-
 def _mvp_bonus_delta(row, weights: dict) -> float:
     """Additive fantasy-point bonus for one MVP-flagged match.
 
@@ -45,7 +38,7 @@ def _mvp_bonus_delta(row, weights: dict) -> float:
     term for every card, which is what a naive per-match SQL restructure
     would otherwise do.
     """
-    stats = _stat_sums_from_row(row)
+    stats = stat_dict_from_row(row)
     base = fantasy_score(stats, weights)
     bonus_pct = weights.get("mvp_bonus_pct", 10.0)
     return base * bonus_pct / 100

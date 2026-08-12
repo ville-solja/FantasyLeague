@@ -34,23 +34,22 @@ def _death_contribution(deaths: float, weights: dict) -> float:
 
 
 def stat_dict_from_row(row) -> dict:
-    """Extract the raw stat fields fantasy_score() needs from a PlayerMatchStats-like row.
+    """Extract the raw stat fields fantasy_score() needs (SCORING_STATS + "deaths")
+    from either a PlayerMatchStats ORM object or a raw SQLAlchemy Core Row (e.g.
+    from db.execute(text(...)).fetchall()).
 
-    Single source of truth for this field list — it was previously copy-pasted
-    (with the same fallback-to-0 defaults) in three places: twitch.py's MVP
-    bonus helper, ingest.py's post-ingest MVP re-apply step, and admin_ingest.py's
-    /recalculate loop. Keeping one copy means a field added to fantasy_score()'s
-    inputs only needs updating here.
+    Single source of truth for this field list. Before consolidation it was
+    copy-pasted three separate times for the ORM case (twitch.py's MVP bonus
+    helper, ingest.py's post-ingest MVP re-apply step, admin_ingest.py's
+    /recalculate loop), plus a second, separately-maintained version for the
+    raw-Row case (card_utils.py's card/leaderboard aggregate-row path). Keeping
+    one copy means a field added to fantasy_score()'s inputs only needs
+    updating here, for both row shapes.
     """
-    return {
-        "kills": row.kills or 0, "deaths": row.deaths or 0,
-        "gold_per_min": row.gold_per_min or 0, "obs_placed": row.obs_placed or 0,
-        "last_hits": row.last_hits or 0, "denies": row.denies or 0,
-        "towers_killed": row.towers_killed or 0, "roshan_kills": row.roshan_kills or 0,
-        "teamfight_participation": row.teamfight_participation or 0.0,
-        "camps_stacked": row.camps_stacked or 0, "rune_pickups": row.rune_pickups or 0,
-        "firstblood_claimed": row.firstblood_claimed or 0, "stuns": row.stuns or 0.0,
-    }
+    stat_keys = SCORING_STATS + ["deaths"]
+    if hasattr(row, "_mapping"):
+        return {stat: row._mapping.get(stat, 0) or 0 for stat in stat_keys}
+    return {stat: getattr(row, stat, 0) or 0 for stat in stat_keys}
 
 
 def apply_mvp_bonus_to_row(row, weights: dict, apply: bool) -> None:
