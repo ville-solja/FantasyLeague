@@ -165,47 +165,27 @@ function _cardSlotHTML(c, action) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
   const zone = action === "bench" ? "active" : "bench";
-  let actionBtn = "";
-  if (action === "bench") {
-    actionBtn = `<button class="secondary card-slot-btn" onclick="deactivateCard(${c.id})">Bench</button>`;
-  } else if (action === "activate") {
-    actionBtn = `<button class="secondary card-slot-btn" onclick="activateCard(${c.id})">Activate</button>`;
-  }
-  // Keyboard-reachable alternative to drag-and-drop for in-zone reordering.
-  // Gated on lock state only — bench cards must stay reorderable even when
-  // the active roster is full and "Activate" is hidden (action === null then).
-  const moveBtns = !_rosterLocked ? `
-      <button class="ghost card-slot-btn card-slot-btn--move" onclick="moveCardInZone(${c.id},-1)" aria-label="Move card left">&#x25C0;</button>
-      <button class="ghost card-slot-btn card-slot-btn--move" onclick="moveCardInZone(${c.id},1)" aria-label="Move card right">&#x25B6;</button>` : "";
+  const isActiveCard = action === "bench";
   return `
     <div class="card-slot" data-rarity="${c.card_type}" data-card-id="${c.id}" data-zone="${zone}">
       <img class="card-img" src="${imgSrc}" alt="${c.player_name}"
            draggable="false" tabindex="0" role="button"
            onclick="if(!window._rosterDragging)showRosterCard(${c.id})"
-           onkeydown="if((event.key==='Enter'||event.key===' ')&&!window._rosterDragging){event.preventDefault();showRosterCard(${c.id})}"
+           onkeydown="if((event.key==='Enter'||event.key===' ')&&!window._rosterDragging&&!_rosterLocked){event.preventDefault();toggleCardZone(${c.id},${isActiveCard})}"
            onerror="this.outerHTML='<div class=\\'card-img-loading\\'>${c.card_type.toUpperCase()}<br><span style=\\'font-size:0.65rem;margin-top:4px;\\'>${c.player_name}</span></div>'" />
       <div class="card-slot-pts">${pts} pts</div>
-      <div class="card-slot-mods">${modifierPillsHtml(c.modifiers)}</div>
-      <div class="card-slot-actions">${moveBtns}${actionBtn}</div>
     </div>`;
 }
 
-/** Keyboard/tap alternative to drag reordering: swap a card with its left/right
- * neighbor within its own zone (active grid or bench), then persist via the
- * same POST /roster/reorder endpoint drag-and-drop uses. */
-async function moveCardInZone(cardId, direction) {
-  const slot = document.querySelector(`.card-slot[data-card-id="${cardId}"]`);
-  if (!slot) return;
-  const container = slot.closest("#rosterActiveGrid, #benchGrid");
-  if (!container) return;
-  const ids = [...container.querySelectorAll(".card-slot[data-card-id]")]
-    .map(el => parseInt(el.dataset.cardId, 10));
-  const idx = ids.indexOf(cardId);
-  const newIdx = idx + direction;
-  if (idx === -1 || newIdx < 0 || newIdx >= ids.length) return;
-  [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-  await _apiReorder(ids);
-  loadRoster(_rosterWeekId);
+/** Keyboard fallback for the removed Bench/Activate buttons: Enter/Space on a
+ * focused card image toggles it between active and bench, reusing the
+ * existing activate/deactivate machinery (and its error handling). */
+async function toggleCardZone(cardId, isActiveCard) {
+  if (isActiveCard) {
+    await deactivateCard(cardId);
+  } else {
+    await activateCard(cardId);
+  }
 }
 
 

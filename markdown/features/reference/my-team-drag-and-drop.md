@@ -6,6 +6,20 @@ viewer modal.
 
 ---
 
+## Button Removal (issue #93)
+
+Card slots previously also rendered a Bench/Activate text button and ◀/▶ move-left/move-right
+buttons (added for keyboard/non-drag-touch accessibility). Per issue #93, all four are removed
+so drag-and-drop is the sole, uncluttered mouse-based way to move cards. To avoid leaving
+keyboard-only users with no way to activate/bench a card, focusing a card image and pressing
+Enter or Space now toggles it between bench and active (reusing `activateCard()`/
+`deactivateCard()` and their existing error handling) instead of opening the card detail modal.
+Mouse click still opens the detail modal, unchanged. In-zone reordering (the ◀/▶ buttons'
+function) has no keyboard fallback after this change — it is drag-and-drop only, an explicit
+accepted tradeoff, not an oversight.
+
+---
+
 ## Drag Zones
 
 The My Team tab has two drop zones:

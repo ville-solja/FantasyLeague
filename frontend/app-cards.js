@@ -90,7 +90,6 @@ function showCard(card, footer, opts = {}) {
   }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
   document.getElementById("revealDestination").textContent = footer || "";
-  document.getElementById("revealModifiers").innerHTML = drawFx ? "" : modifierPillsHtml(card.modifiers);
   closeRerollConfirm();
 
   img.style.display = "none";
@@ -292,8 +291,6 @@ async function confirmReroll() {
     // Update cached roster card if present
     const cached = _rosterCards.find(x => x.id === _openCardId);
     if (cached) cached.modifiers = data.modifiers;
-    const modsEl = document.getElementById("revealModifiers");
-    if (modsEl) modsEl.innerHTML = modifierPillsHtml(data.modifiers);
     // Refresh card art (modifiers are painted on PNG) + roster thumbnails
     const img = document.getElementById("revealCardImg");
     const placeholder = document.getElementById("revealImgPlaceholder");
