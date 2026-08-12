@@ -227,7 +227,7 @@ class TestMatchHistoryShowsMvpOpponentAndOpenDotaLink:
         `<td colspan='6'>No matches yet</td>` row's colspan is updated to
         match the new total column count."""
         html = _read(INDEX_HTML_PATH)
-        m = re.search(r'<thead><tr>(<th>.*?</th>)+</tr></thead>\s*<tbody id="playerModalHistory">', html, re.S)
+        m = re.search(r'<thead><tr>(<th>[^<]*</th>)+</tr></thead>\s*<tbody id="playerModalHistory">', html, re.S)
         assert m, "match history thead not found"
         thead = m.group(0)
         headers = re.findall(r"<th>(.*?)</th>", thead)
