@@ -16,6 +16,7 @@ from card_utils import (
 from database import get_db
 from deps import get_current_user, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
+from scoring import stat_dict_from_row
 from weeks import get_next_editable_week
 
 router = APIRouter()
@@ -198,11 +199,10 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     """), {"user_id": user_id}).fetchall()
     season_mvp_bonus_map = _mvp_bonus_map(season_mvp_rows, weights)
 
-    from card_utils import _stat_sums_from_row
     season_card_ids = [r.card_id for r in season_pts_rows]
     season_mods = _card_modifiers_map(db, season_card_ids)
     season_points = sum(
-        _compute_card_points(_stat_sums_from_row(row), row.card_type, weights, rarity,
+        _compute_card_points(stat_dict_from_row(row), row.card_type, weights, rarity,
                              season_mods.get(row.card_id, {}),
                              season_mvp_bonus_map.get(row.card_id, 0.0))
         for row in season_pts_rows
