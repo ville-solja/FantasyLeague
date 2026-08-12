@@ -106,7 +106,10 @@ Triggers a full ingest cycle for the specified OpenDota league ID:
 
 Note: card generation was removed from the ingest pipeline. Cards are now created dynamically at draw time.
 
-Ingest also runs automatically every 15 minutes in the background. The manual endpoint is useful immediately after new matches are played.
+Ingest also runs automatically every 15 minutes in the background (`INGEST_POLL_INTERVAL`), or
+every 2 minutes (`INGEST_LIVE_POLL_INTERVAL`) while any week is currently active, so live-series
+results land faster during play. The manual endpoint is useful immediately after new matches are
+played. See `reference/toornament.md`.
 
 ---
 
@@ -223,7 +226,7 @@ These features have dedicated reference documents:
 
 | Feature | Endpoints | Reference |
 |---|---|---|
-| Player Pool Management | `GET/POST/DELETE /admin/players/*` | `reference/admin-player-pool.md` |
+| Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
 | League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |

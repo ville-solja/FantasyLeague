@@ -31,17 +31,24 @@ has three effects:
 2. **Week marked locked** — `weeks.is_locked = true`. The roster for that week can no longer be changed.
 3. **Token grant** — Every registered user receives +1 token automatically.
 
-Locking is idempotent: if the maintenance thread runs multiple times after a week's start time, the second run skips weeks that already have snapshots.
+Locking is idempotent: `auto_lock_weeks()` only queries weeks with `is_locked = false`
+(`backend/weeks.py`), so a week drops out of that query — and is never touched again — the
+moment its lock commits, regardless of the thread's run frequency. `_snapshot_week()` separately
+guards against double-snapshotting the same user within a single lock pass via an
+already-snapshotted set, but that guard is not what makes re-runs across ticks safe; the
+`is_locked` filter is.
 
 ## Roster Scoring
 
-Points for a week are calculated from the locked snapshot:
+Points for a week are calculated from the locked snapshot, recomputed from each match's raw
+per-stat columns rather than any stored `fantasy_points` value:
 
 ```
 For each card in the user's WeeklyRosterEntry for that week:
-  sum the fantasy_points of all player_match_stats
-  where the match start_time falls within the week's [start_time, end_time]
-  apply rarity bonus and card modifier bonuses
+  for each player_match_stats row for that card's player
+  where the match start_time falls within the week's [start_time, end_time]:
+    sum the raw per-stat columns (kills, last_hits, gold_per_min, ...)
+  apply stat weights, then rarity bonus and card modifier bonuses (card_fantasy_score())
 ```
 
 Only matches played during the week's window contribute. Matches outside the window (including those with a `week_override_id` pointing to a different week) do not count.

@@ -12,7 +12,20 @@ When a broadcaster selects the MVP of a match via the Twitch extension, the desi
 4. `POST /recalculate` re-applies the current `mvp_bonus_pct` weight to all `is_mvp = true` rows, so changing the bonus weight takes effect on the next recalculate run.
 5. When a match is ingested and a `TwitchMVP` record already exists for it, the bonus is applied immediately to the new `PlayerMatchStats` row.
 
-The bonus affects `player_match_stats.fantasy_points` directly, so it propagates automatically into all existing aggregation queries — roster totals, weekly leaderboard, season leaderboard, and match history — without any additional changes.
+The bonus affects `player_match_stats.fantasy_points` directly, so it propagates automatically
+into queries that read that column: player match history (`GET /players/{player_id}`), the
+player-performance browser and Top Single-Match Performances (`GET /leaderboard`, `GET /top`).
+
+**It does not reach card, roster, weekly-leaderboard, or season-leaderboard totals.** Those are
+computed by `card_fantasy_score()`/`_compute_card_points()` (`backend/card_utils.py`,
+`backend/scoring.py`), which recompute from raw per-stat columns (`kills`, `last_hits`, etc.)
+independently of the stored `fantasy_points` column and have no `is_mvp` or bonus term at all.
+`backend/routers/leaderboard.py::_leaderboard_rows()` — shared by both the season and weekly
+leaderboard endpoints — and `GET /roster/{user_id}` in `backend/routers/cards.py` both go
+through this recompute path. This is a real divergence between the two scoring paths, not a
+documentation nit: a confirmed match MVP's bonus is visible on their own profile and in the
+player-performance leaderboard, but invisible in every card-based total (My Team roster value,
+weekly leaderboard, season leaderboard) for the cards that represent them.
 
 ---
 
