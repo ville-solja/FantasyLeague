@@ -191,7 +191,7 @@ class TestPreserveExistingTestCoverageThroughSplit:
         assert "routers.admin.backup_sqlite_db" not in source
 
     def test_full_suite_pass_skip_counts_match_pre_split_baseline(self):
-        """`cd backend && python -m pytest tests/ -v` reports the same 553 passed / 10 skipped as before the split.
+        """`cd backend && python -m pytest tests/ -v` reports the same 564 passed / 10 skipped as before the split.
 
         This baseline is a regression tripwire for the admin router split, not an
         eternal invariant — it is expected to be bumped upward whenever a later
@@ -203,15 +203,18 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-multi-admin-support's 19 new tests did after that,
         the ingest-league-empty-response bug fix's 4 new tests did after that,
         plan-my-team-remove-move-buttons's 10 new tests did after that,
-        plan-mvp-visibility's 13 new tests did after that, and the
-        admin-mvp-reflects-in-views bug fix's 4 new tests did after that)."""
+        plan-mvp-visibility's 13 new tests did after that,
+        the admin-mvp-reflects-in-views bug fix's 4 new tests did after that,
+        the require_admin session-freshness security fix's 4 new tests did after that,
+        the MVP/card scoring parity fix's 5 new tests did after that, and the
+        cross-pipeline scoring parity guardrail's 2 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "553 passed" in output, output[-3000:]
+        assert "564 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

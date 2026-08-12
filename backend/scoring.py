@@ -33,6 +33,39 @@ def _death_contribution(deaths: float, weights: dict) -> float:
     return max(0.0, pool - deaths * deduction)
 
 
+def stat_dict_from_row(row) -> dict:
+    """Extract the raw stat fields fantasy_score() needs from a PlayerMatchStats-like row.
+
+    Single source of truth for this field list — it was previously copy-pasted
+    (with the same fallback-to-0 defaults) in three places: twitch.py's MVP
+    bonus helper, ingest.py's post-ingest MVP re-apply step, and admin_ingest.py's
+    /recalculate loop. Keeping one copy means a field added to fantasy_score()'s
+    inputs only needs updating here.
+    """
+    return {
+        "kills": row.kills or 0, "deaths": row.deaths or 0,
+        "gold_per_min": row.gold_per_min or 0, "obs_placed": row.obs_placed or 0,
+        "last_hits": row.last_hits or 0, "denies": row.denies or 0,
+        "towers_killed": row.towers_killed or 0, "roshan_kills": row.roshan_kills or 0,
+        "teamfight_participation": row.teamfight_participation or 0.0,
+        "camps_stacked": row.camps_stacked or 0, "rune_pickups": row.rune_pickups or 0,
+        "firstblood_claimed": row.firstblood_claimed or 0, "stuns": row.stuns or 0.0,
+    }
+
+
+def apply_mvp_bonus_to_row(row, weights: dict, apply: bool) -> None:
+    """Set or clear the MVP bonus + is_mvp flag on a PlayerMatchStats-like row, in place.
+
+    Recomputes the base score from the row's own raw stats (not its current
+    fantasy_points), so this is safe to call regardless of what fantasy_points
+    currently holds. Caller is responsible for committing.
+    """
+    base_pts = fantasy_score(stat_dict_from_row(row), weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4) if apply else round(base_pts, 4)
+    row.is_mvp = apply
+
+
 def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict) -> float:
     """
     Fantasy points for a specific card, applying per-stat card modifiers.

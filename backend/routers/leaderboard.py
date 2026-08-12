@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _stat_sums_from_row,
-    _compute_card_points,
+    _compute_card_points, _mvp_bonus_delta,
 )
 from database import get_db
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
@@ -46,18 +46,26 @@ def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
     return result
 
 
-def _leaderboard_rows(db, rows) -> list[dict]:
+def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
     """Compute leaderboard totals using per-stat card_fantasy_score().
 
     rows must have: user_id, username, card_id, card_type, player_name,
                     deaths, kills, last_hits, denies, gold_per_min, obs_placed,
                     towers_killed, roshan_kills, teamfight_participation,
                     camps_stacked, rune_pickups, firstblood_claimed, stuns
+
+    mvp_rows — optional raw (un-aggregated) is_mvp=1 match rows, one per MVP
+    match, each with card_id + the same per-stat columns as `rows`. Summed
+    per card via _mvp_bonus_delta() and added to that card's total.
     """
     from card_utils import _card_modifiers_map
     weights, rarity = _load_weights(db)
     card_ids = list({r.card_id for r in rows if r.card_id})
     mods_map = _card_modifiers_map(db, card_ids)
+
+    mvp_bonus_map: dict[int, float] = {}
+    for r in (mvp_rows or []):
+        mvp_bonus_map[r.card_id] = mvp_bonus_map.get(r.card_id, 0.0) + _mvp_bonus_delta(r, weights)
 
     totals: dict[int, float] = {}
     usernames: dict[int, str] = {}
@@ -74,7 +82,8 @@ def _leaderboard_rows(db, rows) -> list[dict]:
             continue
         stat_sums = _stat_sums_from_row(r)
         mods = mods_map.get(r.card_id, {})
-        card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods)
+        card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods,
+                                         mvp_bonus_map.get(r.card_id, 0.0))
         totals[uid] += card_pts
         cards_by_user[uid].append({
             "card_id": r.card_id,
@@ -179,7 +188,21 @@ def compute_season_standings(db) -> list[dict]:
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
-    return _leaderboard_rows(db, rows)
+    mvp_rows = db.execute(text("""
+        SELECT c.id as card_id,
+               s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
+               s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
+               s.rune_pickups, s.firstblood_claimed, s.stuns
+        FROM weekly_roster_entries wre
+        JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
+        JOIN cards c ON c.id = wre.card_id
+        JOIN player_match_stats s ON s.player_id = c.player_id
+        JOIN matches m ON m.match_id = s.match_id
+            AND (m.week_override_id = wk.id
+                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+        WHERE s.is_mvp = 1
+    """)).fetchall()
+    return _leaderboard_rows(db, rows, mvp_rows)
 
 
 @router.get("/leaderboard/season")
@@ -267,7 +290,20 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
-    result = _leaderboard_rows(db, rows)
+    mvp_rows = db.execute(text("""
+        SELECT c.id as card_id,
+               s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
+               s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
+               s.rune_pickups, s.firstblood_claimed, s.stuns
+        FROM weekly_roster_entries wre
+        JOIN cards c ON c.id = wre.card_id
+        JOIN player_match_stats s ON s.player_id = c.player_id
+        JOIN matches m ON m.match_id = s.match_id
+            AND (m.week_override_id = :week_id
+                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+        WHERE wre.week_id = :week_id AND s.is_mvp = 1
+    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
+    result = _leaderboard_rows(db, rows, mvp_rows)
     return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
              "tags": r["tags"], "cards": r["cards"]} for r in result]
 

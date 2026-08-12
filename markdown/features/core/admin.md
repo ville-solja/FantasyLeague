@@ -19,9 +19,14 @@ Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_a
 as `admin_toggle_admin`. Two guards prevent the app from ever ending up with zero admins: an
 admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
 the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
-A promoted user's session is not retroactively upgraded — `is_admin` is cached in the session
-cookie at login, so a promoted user must log in again before admin endpoints accept their
-session.
+`require_admin` (`backend/deps.py`) re-checks `is_admin` against the database on every
+admin-gated request rather than trusting the session's cached value, so a promotion or
+demotion takes effect on the very next request — not just at the next login. This closes what
+would otherwise be a real gap: without it, a demoted admin would keep destructive access
+(season reset, league purge, user management) for the rest of their existing session. One
+UI-only asymmetry remains: the frontend's Admin tab visibility (`activeIsAdmin`, populated from
+`GET /me`) is still session-cached and only refreshes at next login, so a freshly-promoted user
+can call admin endpoints directly before the Admin tab appears in their own browser.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.

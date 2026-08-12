@@ -155,7 +155,7 @@ class TestEndSeasonArchive:
         from deps import require_admin
 
         with pytest.raises(HTTPException) as exc:
-            require_admin({"user_id": 2, "username": "u", "is_admin": False})
+            require_admin({"user_id": 2, "username": "u", "is_admin": False}, db=db)
         assert exc.value.status_code == 403
 
         admin_path = os.path.join(_BACKEND_DIR, "routers", "admin_season.py")
@@ -320,7 +320,7 @@ class TestSeasonReset:
         from deps import require_admin
 
         with pytest.raises(HTTPException) as exc:
-            require_admin({"user_id": 2, "username": "u", "is_admin": False})
+            require_admin({"user_id": 2, "username": "u", "is_admin": False}, db=db)
         assert exc.value.status_code == 403
 
         admin_path = os.path.join(_BACKEND_DIR, "routers", "admin_season.py")

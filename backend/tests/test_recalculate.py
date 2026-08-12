@@ -1,12 +1,18 @@
 """
 Tests for the recalculate and MVP bonus logic.
 
-The recalculate endpoint (POST /recalculate in main.py) and the MVP bonus
-helper (_apply_mvp_bonus in twitch.py) both depend on FastAPI and cannot be
-imported directly.  These tests exercise the identical arithmetic — using
-fantasy_score() and the same weight lookups — directly against the models
-so that any future change to the formula is caught without needing an HTTP
-layer.
+The recalculate endpoint itself (POST /recalculate in routers/admin_ingest.py)
+depends on FastAPI and cannot be invoked directly, so TestRecalculateLogic's
+_recalculate() helper below mirrors its two-pass shape (recompute base scores,
+then apply the MVP multiplier to is_mvp rows) — but it now calls the same
+scoring.fantasy_score()/stat_dict_from_row() the real endpoint calls, rather
+than a parallel reimplementation, since scoring.py has no FastAPI dependency.
+
+TestMvpBonus calls scoring.apply_mvp_bonus_to_row() directly — the single
+shared helper now used by twitch.py, ingest.py, and admin_matches.py for
+setting/clearing the MVP bonus on one row (previously three independent
+inline copies of this same arithmetic; see markdown/features/reference/
+mvp-fantasy-bonus.md).
 """
 
 import os
@@ -16,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 
 from models import League, Match, Player, PlayerMatchStats, Weight
-from scoring import fantasy_score, SCORING_STATS
+from scoring import apply_mvp_bonus_to_row, fantasy_score, stat_dict_from_row, SCORING_STATS
 
 
 # Weights that mirror the DEFAULT_WEIGHTS used in production
@@ -132,8 +138,7 @@ class TestMvpBonus:
         bonus_pct = WEIGHTS["mvp_bonus_pct"]
         expected = round(base_pts * (1 + bonus_pct / 100), 4)
 
-        stat.fantasy_points = round(stat.fantasy_points * (1 + bonus_pct / 100), 4)
-        stat.is_mvp = True
+        apply_mvp_bonus_to_row(stat, WEIGHTS, apply=True)
         db.commit()
         db.refresh(stat)
 
@@ -143,25 +148,11 @@ class TestMvpBonus:
     def test_clearing_mvp_restores_base_score(self, db):
         stat = _make_stat(db)
         base_pts = stat.fantasy_points
-        bonus_pct = WEIGHTS["mvp_bonus_pct"]
 
-        # Apply bonus
-        stat.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4)
-        stat.is_mvp = True
+        apply_mvp_bonus_to_row(stat, WEIGHTS, apply=True)
         db.commit()
 
-        # Clear bonus (re-derive from raw stats)
-        raw = {
-            "kills": stat.kills or 0, "deaths": stat.deaths or 0,
-            "gold_per_min": stat.gold_per_min or 0, "obs_placed": stat.obs_placed or 0,
-            "last_hits": stat.last_hits or 0, "denies": stat.denies or 0,
-            "towers_killed": stat.towers_killed or 0, "roshan_kills": stat.roshan_kills or 0,
-            "teamfight_participation": stat.teamfight_participation or 0,
-            "camps_stacked": stat.camps_stacked or 0, "rune_pickups": stat.rune_pickups or 0,
-            "firstblood_claimed": stat.firstblood_claimed or 0, "stuns": stat.stuns or 0,
-        }
-        stat.fantasy_points = round(fantasy_score(raw, WEIGHTS), 4)
-        stat.is_mvp = False
+        apply_mvp_bonus_to_row(stat, WEIGHTS, apply=False)
         db.commit()
         db.refresh(stat)
 
@@ -178,11 +169,10 @@ class TestMvpBonus:
     def test_mvp_bonus_with_custom_percentage(self, db):
         stat = _make_stat(db)
         base_pts = stat.fantasy_points
-        bonus_pct = 25.0  # custom
+        custom_weights = dict(WEIGHTS, mvp_bonus_pct=25.0)
         expected = round(base_pts * 1.25, 4)
 
-        stat.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4)
-        stat.is_mvp = True
+        apply_mvp_bonus_to_row(stat, custom_weights, apply=True)
         db.commit()
         db.refresh(stat)
 
@@ -191,9 +181,9 @@ class TestMvpBonus:
     def test_mvp_bonus_with_zero_percentage_is_identity(self, db):
         stat = _make_stat(db)
         base_pts = stat.fantasy_points
+        zero_weights = dict(WEIGHTS, mvp_bonus_pct=0.0)
 
-        stat.fantasy_points = round(base_pts * (1 + 0 / 100), 4)
-        stat.is_mvp = True
+        apply_mvp_bonus_to_row(stat, zero_weights, apply=True)
         db.commit()
         db.refresh(stat)
 
@@ -212,16 +202,7 @@ def _recalculate(db, weights_dict, mvp_bonus_pct=10.0):
     """
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
-        p = {
-            "kills": stat.kills or 0, "deaths": stat.deaths or 0,
-            "gold_per_min": stat.gold_per_min or 0, "obs_placed": stat.obs_placed or 0,
-            "last_hits": stat.last_hits or 0, "denies": stat.denies or 0,
-            "towers_killed": stat.towers_killed or 0, "roshan_kills": stat.roshan_kills or 0,
-            "teamfight_participation": stat.teamfight_participation or 0.0,
-            "camps_stacked": stat.camps_stacked or 0, "rune_pickups": stat.rune_pickups or 0,
-            "firstblood_claimed": stat.firstblood_claimed or 0, "stuns": stat.stuns or 0.0,
-        }
-        stat.fantasy_points = fantasy_score(p, weights_dict)
+        stat.fantasy_points = fantasy_score(stat_dict_from_row(stat), weights_dict)
     for stat in stats:
         if stat.is_mvp:
             stat.fantasy_points = round(stat.fantasy_points * (1 + mvp_bonus_pct / 100), 4)
