@@ -15,6 +15,26 @@ Format:
 
 ---
 
+### 2026-08-12 — security-patcher — testing
+**Problem:** `py/redos` (CWE-1333/400/730) flagged `r'<thead><tr>(<th>.*?</th>)+</tr></thead>...'`
+in `backend/tests/test_mvp_visibility.py`. The inner `.*?` (non-greedy, `re.S` so it also
+matches newlines) inside a `+`-repeated group is the classic ambiguous-repetition ReDoS shape:
+`.*?` can match across a `</th>` boundary into the next `<th>`, so the regex engine has multiple
+ways to partition the same input across repetitions of the group, causing exponential
+backtracking on crafted input. Low real-world risk here (the match target is a static,
+developer-controlled `frontend/index.html`, not user input), but the pattern itself is the
+security-relevant thing CodeQL flags, and the same shape could reappear in a genuinely
+user-facing regex later.
+**Solution:** Replace the ambiguous `.*?` with a negated character class scoped to what the
+content actually needs — `[^<]*` — since real `<th>` cells here contain only plain text, never
+nested tags. `[^<]*` can never match the `<` that starts `</th>`, removing the overlap between
+repetitions entirely and eliminating the backtracking blowup while matching the exact same
+strings as before. General pattern: for `(TAG_OPEN.*?TAG_CLOSE)+`-style regexes over HTML/XML-ish
+text, prefer a negated-class exclusion of the tag-opening character over `.*?` whenever the
+content is known not to contain nested tags.
+
+---
+
 ### 2026-08-11 — security-patcher — endpoints
 **Problem:** `py/stack-trace-exposure` (CWE-209) flagged `result["error"] = str(e)` in the
 admin-only `GET /admin/schedule/debug` diagnostic endpoint (`backend/routers/admin_ingest.py`).
