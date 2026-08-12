@@ -332,6 +332,15 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   font-size: var(--fs-xs);
 }
 .lb-chip-pts { font-weight: var(--w-bold); opacity: 0.9; }
+.lb-chip-rarity {
+  font-weight: var(--w-bold);
+  font-size: 0.68rem;
+  opacity: 0.85;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.3;
+}
 
 /* ============================================================
    DECK SUMMARY
@@ -743,6 +752,18 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 }
 .card-slot-actions { display: flex; gap: 5px; justify-content: center; }
 .card-slot-pts { font-size: var(--fs-xs); color: var(--fg-dim); text-align: center; }
+.card-slot-btn { font-size: var(--fs-xs); padding: 6px 10px; min-height: 32px; }
+.card-slot-btn--move { padding: 6px 8px; min-width: 32px; }
+.card-slot-mods { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; max-width: 180px; }
+.mod-pill {
+  display: inline-block;
+  background: var(--k-flame-700, #8a2e0c);
+  color: #fff;
+  font-size: 0.62rem;
+  padding: 1px 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
 
 /* Rarity glows on card slots */
 .card-slot[data-rarity="rare"]      .card-img { box-shadow: var(--sh-glow-rare); }
@@ -965,6 +986,8 @@ body.roster-dragging * { cursor: grabbing !important; }
   #tab-admin .grid {
     grid-template-columns: 1fr;
   }
+  .card-slot-btn { min-height: 44px; padding: 10px 14px; }
+  .card-slot-btn--move { min-width: 44px; padding: 10px; }
 }
 .tab-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 

@@ -46,6 +46,7 @@ def get_player(player_id: int, db=Depends(get_db)):
     stats = db.execute(text("""
         SELECT s.match_id, m.start_time, s.fantasy_points, s.is_mvp,
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
+               s.tower_damage,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
                s.teamfight_participation, s.camps_stacked, s.rune_pickups,
                s.firstblood_claimed, s.stuns,

@@ -44,7 +44,7 @@ def get_league_info(league_id: int):
 def ingest_league(league_id: int):
     db = SessionLocal()
     try:
-        league_data = get_league_info(league_id)
+        league_data = get_league_info(league_id) or {}
         league_name = league_data.get("name", "unknown")
 
         logger.info("League: %s", league_name)
@@ -58,7 +58,7 @@ def ingest_league(league_id: int):
 
         db.commit()
 
-        match_ids = get_league_matches(league_id)
+        match_ids = get_league_matches(league_id) or []
         logger.info("League %d: %d matches found", league_id, len(match_ids))
 
         # Pre-fetch already-ingested match IDs in one query
