@@ -981,6 +981,37 @@ async function loadAdminMatches() {
 let _mvpTargetMatchId = null;
 let _mvpTargetRow = null;
 
+/** Splits the match's players into two team columns (team1 left, team2 right)
+ * for #mvpPlayerList's 2-column grid. Falls back to one flat list when the
+ * data doesn't cleanly resolve to exactly two teams. */
+function _mvpPlayerColumnsHtml(players) {
+  const teamOrder = [];
+  const byTeam = {};
+  players.forEach(p => {
+    const key = p.team_id ?? "unknown";
+    if (!byTeam[key]) { byTeam[key] = []; teamOrder.push(key); }
+    byTeam[key].push(p);
+  });
+
+  const playerRow = p =>
+    `<label style="display:block;padding:6px 0;cursor:pointer;">` +
+    `<input type="radio" name="mvpPlayer" value="${p.id}" style="margin-right:8px;">${_escHtml(p.name)}` +
+    `</label>`;
+
+  if (teamOrder.length !== 2) {
+    return `<div style="grid-column:1/-1;">${players.map(playerRow).join('')}</div>`;
+  }
+
+  return teamOrder.map(key => {
+    const teamPlayers = byTeam[key];
+    const teamName = teamPlayers[0].team_name || 'Unknown Team';
+    return `<div>
+      <div style="font-size:0.7rem;letter-spacing:0.05em;text-transform:uppercase;color:#888;margin-bottom:6px;">${_escHtml(teamName)}</div>
+      ${teamPlayers.map(playerRow).join('')}
+    </div>`;
+  }).join('');
+}
+
 async function openMvpModal(matchId, row) {
   _mvpTargetMatchId = matchId;
   _mvpTargetRow = row;
@@ -1001,11 +1032,7 @@ async function openMvpModal(matchId, row) {
         '<p style="color:#888">No players found for this match.</p>';
       return;
     }
-    document.getElementById('mvpPlayerList').innerHTML = players.map(p =>
-      `<label style="display:block;padding:6px 0;cursor:pointer;">` +
-      `<input type="radio" name="mvpPlayer" value="${p.id}" style="margin-right:8px;">${p.name}` +
-      `</label>`
-    ).join('');
+    document.getElementById('mvpPlayerList').innerHTML = _mvpPlayerColumnsHtml(players);
   } catch (e) {
     document.getElementById('mvpPlayerList').innerHTML =
       `<p style='color:#e05'>${e.message}</p>`;

@@ -55,17 +55,29 @@ still does not exist as a column anywhere on `Match`. Neither field is available
 ### `GET /admin/matches/{match_id}/players`
 
 Returns the players who participated in the specified match, sourced from
-`player_match_stats`. Admin-only.
+`player_match_stats`, with each player's team for that match. Admin-only.
 
 ```json
-[{"id": 42, "name": "SomePlayer"}, ...]
+[{"id": 42, "name": "SomePlayer", "team_id": 100, "team_name": "SomeTeam"}, ...]
 ```
+
+`team_id`/`team_name` are `null` if the player's `player_match_stats.team_id` didn't resolve to
+an ingested team. The Set MVP modal (`#mvpPlayerList`, a 2-column grid) uses these to split
+players into a left column (team 1) and right column (team 2); if the match's players don't
+resolve to exactly two distinct teams, the modal falls back to one flat list spanning both
+columns instead of guessing a split.
 
 ### `POST /admin/matches/{match_id}/mvp`
 
 Sets or updates the MVP for a match. Admin-only alternative to the Twitch broadcaster flow.
-Writes to the same `twitch_mvp` table, so fantasy bonuses apply correctly regardless of
-which path was used.
+Writes to the same `twitch_mvp` table and calls the same `_apply_mvp_bonus()` helper
+(`backend/twitch.py`) `POST /twitch/mvp` uses — clearing the bonus and `is_mvp` flag from the
+previous MVP if the match already had one and a different player is now selected, then applying
+both to the new player's `player_match_stats` row. This is what makes the admin-set MVP show up
+correctly in `mvp_count` (`GET /players`), match history's MVP column (`GET /players/{id}`), and
+the Schedule tab's per-game MVP link (`GET /schedule`) — all of which read `is_mvp` directly, not
+the `twitch_mvp` table. No token drop or Twitch PubSub/chat announcement fires from this path —
+those are viewer-engagement mechanics specific to the Twitch extension.
 
 ```json
 { "player_id": 42 }

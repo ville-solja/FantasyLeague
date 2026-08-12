@@ -94,12 +94,15 @@ guard). Response shape gains a `games` array per resolved series inside `series_
   "duration": 2143,
   "team1_kills": 32, "team2_kills": 28,
   "team1_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null],
-  "team2_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null]
+  "team2_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null],
+  "mvp_player_id": 123456789, "mvp_player_name": "SomePlayer"
 }
 ```
 `duration` is `null` for matches ingested before the `Match.duration` column existed, until
 re-ingested. Hero slots are padded to 5 with `null` when fewer than 5 heroes resolved. Upcoming
 (unresolved) series are untouched — `series_result` stays `None`, with no `games` key.
+`mvp_player_id`/`mvp_player_name` are both `null` when the match has no `player_match_stats` row
+with `is_mvp = true` — the same flag `POST /twitch/mvp` sets (see `core/twitch-extension.md`).
 
 Response also gains a top-level `extra_results` array — see "Schedule-independent results" above
 — of series shaped like a resolved sheet series (`team1`/`team2`/`team1_id`/`team2_id`/
@@ -118,6 +121,10 @@ after the series' `.series-row` header:
 - Each row also shows `team1_kills`–`team2_kills` and preserves the per-match OpenDota link
   (`https://www.opendota.com/matches/{match_id}`), now scoped to that one game instead of a flat
   "G1 ↗" list next to the score.
+- When `mvp_player_id` is present, a ★ star (the same marker used in the player detail modal's
+  match history MVP column) precedes the MVP's name, rendered as a `playerLink()` (opens the
+  player detail modal), immediately before `.game-row-duration`; games with no MVP set show
+  nothing in that position (see `markdown/stories/leaderboard.md`'s "MVP Visibility" section).
 
 The series header's own `.series-links` cell now only carries the series' stream link for past
 rows (unchanged for upcoming rows, which still show time + watch link). The old flat

@@ -261,8 +261,20 @@ def _build_games(db, match_ids, team1_id, team2_id):
             hero_icon_map.get(hero_id)
         )
 
+    mvp_rows = db.execute(
+        text("""
+            SELECT s.match_id, s.player_id, p.name
+            FROM player_match_stats s
+            JOIN players p ON p.id = s.player_id
+            WHERE s.match_id IN :ids AND s.is_mvp = 1
+        """).bindparams(bindparam("ids", expanding=True)),
+        {"ids": ids},
+    ).fetchall()
+    mvp_by_match = {r[0]: (r[1], r[2]) for r in mvp_rows}
+
     games = []
     for match_id in ids:
+        mvp_player_id, mvp_player_name = mvp_by_match.get(match_id, (None, None))
         games.append({
             "match_id": match_id,
             "duration": duration_by_match.get(match_id),
@@ -270,6 +282,8 @@ def _build_games(db, match_ids, team1_id, team2_id):
             "team2_kills": kills_by_match_team.get((match_id, team2_id), 0),
             "team1_heroes": _pad5(heroes_by_match_team.get((match_id, team1_id), [])),
             "team2_heroes": _pad5(heroes_by_match_team.get((match_id, team2_id), [])),
+            "mvp_player_id": mvp_player_id,
+            "mvp_player_name": mvp_player_name,
         })
     return games
 
