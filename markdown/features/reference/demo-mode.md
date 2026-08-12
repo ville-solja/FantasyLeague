@@ -42,8 +42,9 @@ requested stages observable.
 
 ## Endpoints
 
-All three endpoints return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence
-is not revealed on a production deployment. When reachable, all require an admin session.
+All four endpoints (`GET`/`POST`/`DELETE /admin/demo/clock` and `POST /admin/demo/seed-accounts`)
+return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence is not revealed on a
+production deployment. When reachable, all require an admin session.
 
 ### `GET /admin/demo/clock`
 Returns `{"override_timestamp": <unix or null>, "effective_now": <unix>}`.
@@ -58,7 +59,8 @@ Clears the override; the app falls back to real wall-clock time. Logged as
 `admin_demo_clock_cleared`.
 
 ### `POST /admin/demo/seed-accounts`
-Body: `{"count": 5, "cards_per_account": 3}` (both optional). Creates `demo1`, `demo2`, ...
+Body: `{"count": 5, "cards_per_account": 3}` (both optional; `count` 1-100, `cards_per_account`
+0-50, enforced by Pydantic `Field` bounds — a value outside range returns 422). Creates `demo1`, `demo2`, ...
 accounts (skipping already-taken numbers), each granted `cards_per_account` tokens and drawn
 that many cards via the existing draw mechanism (`draw_card`, called directly as a plain
 Python function) — auto-activated into the roster up to `ROSTER_LIMIT`. If the player pool

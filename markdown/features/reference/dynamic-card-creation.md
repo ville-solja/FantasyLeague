@@ -45,7 +45,8 @@ no longer selects from a pool — generates a new card instead.
 ### `GET /deck` *(updated)*
 Previously returned unowned pool counts. Now returns per-user available draw combinations:
 the number of distinct `(player, rarity)` pairs the authenticated user does not yet own.
-Requires authentication for per-user counts.
+No `Depends()` auth guard — if a session is present it's used for the per-user count;
+anonymous callers get the total combinations across all players instead, rather than a 401.
 
 ---
 

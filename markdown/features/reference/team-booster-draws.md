@@ -22,19 +22,22 @@ eligible again. The result is revealed in the same reveal modal as a standard dr
 ## Endpoints
 
 ### `GET /deck/booster`
-Returns a list of teams (sorted by remaining count descending, then name) with per-team
-counts of players the authenticated user does not yet own any card of. Unauthenticated
-callers see the total player count per team. Teams with no players in the DB are omitted.
-Each entry contains `team_id`, `team_name`, `logo_url`, and `remaining`.
+Returns a list of teams, sorted into two buckets — teams with at least one undrawn player
+first, fully-collected teams last — alphabetically by name within each bucket (not a numeric
+sort on `remaining`). Each entry contains per-team counts of players the authenticated user
+does not yet own any card of. Unauthenticated callers see the total player count per team.
+Teams with no players in the DB are omitted. Each entry contains `team_id`, `team_name`,
+`logo_url`, and `remaining`.
 
 ### `POST /draw/booster/{team_id}`
 Auth required. Spends `team_booster_cost` Tokens, rolls a rarity using the standard
 `draw_rate_*` weights, and picks a player from the specified team. Duplicate prevention
 is player-level: players the user already owns any card of are excluded; only when every
 player on the team has been collected does the fallback allow any player. Returns the
-same card payload shape as `POST /draw` plus `tokens_remaining`. Returns 404 if
-`team_id` doesn't exist or user not found; 409 if insufficient tokens or no players
-available for the team. The draw is recorded in the audit log as `token_booster_draw`.
+same card payload shape as `POST /draw`, including the user's new balance as `tokens`
+(not `tokens_remaining`). Returns 404 if `team_id` doesn't exist or user not found; 409 if
+insufficient tokens or no players available for the team. The draw is recorded in the audit
+log as `token_booster_draw`.
 
 ## Configuration
 

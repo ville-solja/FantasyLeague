@@ -53,7 +53,9 @@ Clears the session cookie. No request body required. Always returns `{ "status":
 
 ### `GET /me`
 
-Returns the current session user. Returns 401 if unauthenticated.
+Returns the current session user. Returns 401 if unauthenticated. Implemented in
+`backend/routers/profile.py`, not `routers/auth.py`, despite living in this "Session Endpoints"
+section alongside the other endpoints below (which are all in `auth.py`).
 
 ```json
 {
@@ -177,7 +179,12 @@ The endpoint always returns `{"status": "ok"}` regardless of whether the usernam
 
 ## Session Cookie
 
-Sessions are signed with `SECRET_KEY`. In production `SECRET_KEY` must be set — the app refuses to start without it unless `DEBUG=true`.
+Sessions are signed with `SECRET_KEY`. In production `SECRET_KEY` must be set — the app refuses
+to start without it unless `DEBUG=true` **or** `TWITCH_LOCAL_DEV=true` (both are treated as
+equivalent local-dev bypasses at startup, `backend/main.py`). Conversely, setting
+`TWITCH_LOCAL_DEV=true` together with a real `SECRET_KEY` raises a startup `RuntimeError` —
+that combination would silently accept the insecure Twitch JWT bypass in what looks like a
+production config, so the app refuses to boot rather than risk it.
 
 Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie.
 
