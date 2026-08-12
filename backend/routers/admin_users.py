@@ -47,6 +47,7 @@ def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
             "username": u.username,
             "tokens": u.tokens if u.tokens is not None else 0,
             "is_tester": bool(u.is_tester),
+            "is_admin": bool(u.is_admin),
             "tags": tags_by_user.get(u.id, []),
         }
         for u in users
@@ -63,6 +64,22 @@ def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends
            detail=f"{user.username} is_tester={user.is_tester}")
     db.commit()
     return {"user_id": user.id, "username": user.username, "is_tester": user.is_tester}
+
+
+@router.post("/users/{user_id}/toggle-admin")
+def toggle_admin(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    if user_id == admin["user_id"]:
+        raise HTTPException(status_code=409, detail="Cannot change your own admin status")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.is_admin and db.query(User).filter_by(is_admin=True).count() <= 1:
+        raise HTTPException(status_code=409, detail="Cannot demote the last remaining admin")
+    user.is_admin = not bool(user.is_admin)
+    _audit(db, "admin_toggle_admin", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"{user.username} is_admin={user.is_admin}")
+    db.commit()
+    return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin}
 
 
 @router.post("/grant-tokens")
