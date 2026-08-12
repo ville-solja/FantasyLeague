@@ -114,7 +114,7 @@
     <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
     <div style="overflow-x:auto;">
       <table>
-        <thead><tr><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th></tr></thead>
+        <thead><tr><th>MVP</th><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th><th>Opponent</th><th>OpenDota</th></tr></thead>
         <tbody id="playerModalHistory"></tbody>
       </table>
     </div>
@@ -469,8 +469,9 @@
           <th data-col="matches"      data-default-dir="desc">Matches</th>
           <th data-col="avg_points"   data-default-dir="desc">Avg pts</th>
           <th data-col="total_points" data-default-dir="desc">Total pts</th>
+          <th data-col="mvp_count"    data-default-dir="desc">MVPs</th>
         </tr></thead>
-        <tbody id="playersBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+        <tbody id="playersBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="playersStatus"></div>
     </div>
@@ -495,6 +496,14 @@
           <tbody id="topBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
         </table>
         <div class="status" id="topStatus"></div>
+      </div>
+
+      <div class="panel">
+        <h2>MVP leaderboard</h2>
+        <table>
+          <thead><tr><th>Rank</th><th>Player</th><th>MVPs</th></tr></thead>
+          <tbody id="mvpLeaderboardBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+        </table>
       </div>
     </div>
 
