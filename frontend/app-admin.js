@@ -12,6 +12,7 @@ async function loadAdminWeeks() {
     tbody.innerHTML = "";
     rows.forEach(w => {
       const tr = document.createElement("tr");
+      tr.dataset.weekId = w.id;
       const start = new Date(w.start_time * 1000).toLocaleString();
       const end   = new Date(w.end_time   * 1000).toLocaleString();
       tr.innerHTML = `
@@ -114,7 +115,25 @@ async function saveWeekEdit() {
   }
 }
 
-async function deleteAdminWeek(weekId) {
+function deleteAdminWeek(weekId) {
+  const existing = document.getElementById(`deleteWeekConfirm_${weekId}`);
+  if (existing) { existing.remove(); return; }
+  const row = document.querySelector(`[data-week-id="${weekId}"]`);
+  if (!row) return;
+  const confirm = document.createElement("tr");
+  confirm.id = `deleteWeekConfirm_${weekId}`;
+  confirm.className = "delete-confirm-row";
+  confirm.innerHTML = `<td colspan="6" style="padding:8px 10px;">
+    <span class="delete-confirm-msg">Delete this week? This also removes any roster snapshots for it.</span>
+    <span style="margin-left:12px;display:inline-flex;gap:6px;">
+      <button class="danger" style="padding:3px 10px;" onclick="_confirmDeleteAdminWeek(${weekId})">Delete</button>
+      <button class="ghost" style="padding:3px 10px;" onclick="document.getElementById('deleteWeekConfirm_${weekId}').remove()">Cancel</button>
+    </span>
+  </td>`;
+  row.after(confirm);
+}
+
+async function _confirmDeleteAdminWeek(weekId) {
   try {
     const res = await fetch(`${API}/admin/weeks/${weekId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("weeksAdminStatus", d.detail, false); }
@@ -814,25 +833,28 @@ function closeAddLeagueModal() { document.getElementById('addLeagueModal').style
 
 async function submitAddLeague() {
   const id = parseInt(document.getElementById('addLeagueIdInput').value);
-  if (!id) return alert('Enter a valid league ID');
+  if (!id) return setStatus('leaguesStatus', 'Enter a valid league ID', false);
   const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'POST' });
   const data = await res.json();
-  if (!res.ok) { alert(data.detail); return; }
+  if (!res.ok) { setStatus('leaguesStatus', data.detail, false); return; }
   closeAddLeagueModal();
+  setStatus('leaguesStatus', `League ${id} added`);
   loadLeagues();
 }
 
 async function monitorLeague(id) {
   const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'POST' });
   const data = await res.json();
-  if (!res.ok) alert(data.detail);
+  if (!res.ok) { setStatus('leaguesStatus', data.detail, false); return; }
+  setStatus('leaguesStatus', `League ${id} is now monitored`);
   loadLeagues();
 }
 
 async function unmonitorLeague(id) {
   const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'DELETE' });
   const data = await res.json();
-  if (!res.ok) alert(data.detail);
+  if (!res.ok) { setStatus('leaguesStatus', data.detail, false); return; }
+  setStatus('leaguesStatus', `League ${id} unmonitored`);
   loadLeagues();
 }
 
@@ -866,8 +888,9 @@ async function confirmPurgeLeague() {
   if (!_purgeTargetLeagueId) return;
   const res = await fetch(`${API}/admin/leagues/${_purgeTargetLeagueId}/data`, { method: 'DELETE' });
   const data = await res.json();
-  alert(`Purged: ${data.deleted_matches} matches, ${data.deleted_stats} stats. ${data.note}`);
   closePurgeLeagueModal();
+  if (!res.ok) { setStatus('leaguesStatus', data.detail, false); return; }
+  setStatus('leaguesStatus', `Purged: ${data.deleted_matches} matches, ${data.deleted_stats} stats. ${data.note}`);
   loadLeagues();
 }
 

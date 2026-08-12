@@ -92,10 +92,11 @@ async function checkNotifications() {
 function showNotificationPopup(notif) {
   document.getElementById("notifMessage").textContent = notif.message;
   document.getElementById("notifModal").classList.remove("hidden");
-  document.getElementById("notifDismissBtn").onclick = async () => {
+  window._dismissActiveNotification = async () => {
     await fetch(`${API}/notifications/${notif.id}/dismiss`, { method: "POST" });
     document.getElementById("notifModal").classList.add("hidden");
   };
+  document.getElementById("notifDismissBtn").onclick = window._dismissActiveNotification;
 }
 
 async function claimTokenEvents() {
