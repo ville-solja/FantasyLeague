@@ -33,6 +33,38 @@ def _death_contribution(deaths: float, weights: dict) -> float:
     return max(0.0, pool - deaths * deduction)
 
 
+def stat_dict_from_row(row) -> dict:
+    """Extract the raw stat fields fantasy_score() needs (SCORING_STATS + "deaths")
+    from either a PlayerMatchStats ORM object or a raw SQLAlchemy Core Row (e.g.
+    from db.execute(text(...)).fetchall()).
+
+    Single source of truth for this field list. Before consolidation it was
+    copy-pasted three separate times for the ORM case (twitch.py's MVP bonus
+    helper, ingest.py's post-ingest MVP re-apply step, admin_ingest.py's
+    /recalculate loop), plus a second, separately-maintained version for the
+    raw-Row case (card_utils.py's card/leaderboard aggregate-row path). Keeping
+    one copy means a field added to fantasy_score()'s inputs only needs
+    updating here, for both row shapes.
+    """
+    stat_keys = SCORING_STATS + ["deaths"]
+    if hasattr(row, "_mapping"):
+        return {stat: row._mapping.get(stat, 0) or 0 for stat in stat_keys}
+    return {stat: getattr(row, stat, 0) or 0 for stat in stat_keys}
+
+
+def apply_mvp_bonus_to_row(row, weights: dict, apply: bool) -> None:
+    """Set or clear the MVP bonus + is_mvp flag on a PlayerMatchStats-like row, in place.
+
+    Recomputes the base score from the row's own raw stats (not its current
+    fantasy_points), so this is safe to call regardless of what fantasy_points
+    currently holds. Caller is responsible for committing.
+    """
+    base_pts = fantasy_score(stat_dict_from_row(row), weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    row.fantasy_points = round(base_pts * (1 + bonus_pct / 100), 4) if apply else round(base_pts, 4)
+    row.is_mvp = apply
+
+
 def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict) -> float:
     """
     Fantasy points for a specific card, applying per-stat card modifiers.

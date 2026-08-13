@@ -50,7 +50,10 @@ Admins can trigger an immediate ingest via:
 POST /ingest/league/{league_id}
 ```
 
-This runs all four stages for the specified league and returns once complete. The background polling loop continues independently.
+This runs the three pipeline stages (in order: Match Ingest → Dotabuff Team Logo Scrape →
+Name & Avatar Backfill) for the specified league and returns once complete — it does not trigger
+a toornament sync, unlike the background poll cycle. The background polling loop continues
+independently.
 
 ## Data Sources
 

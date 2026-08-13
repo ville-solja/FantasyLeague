@@ -9,10 +9,30 @@ async function loadPlayers() {
     _playerSort = { col: null, dir: "desc" };
     _initPlayerSortHeaders();
     renderPlayers(_getFilteredPlayers());
+    _renderMvpLeaderboard();
     setStatus("playersStatus", `${rows.length} players`);
   } catch (e) {
     setStatus("playersStatus", e.message, false);
   }
+}
+
+function _renderMvpLeaderboard() {
+  const tbody = document.getElementById("mvpLeaderboardBody");
+  if (!tbody) return;
+  const ranked = _playersData
+    .filter(p => (p.mvp_count || 0) > 0)
+    .sort((a, b) => b.mvp_count - a.mvp_count)
+    .slice(0, 10);
+  if (!ranked.length) {
+    tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No MVPs awarded yet</td></tr>";
+    return;
+  }
+  tbody.innerHTML = ranked.map((p, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
+      <td>${p.mvp_count}</td>
+    </tr>`).join("");
 }
 
 function _getFilteredPlayers() {
@@ -67,7 +87,7 @@ function renderPlayers(rows) {
   const sorted = _sortPlayers(rows);
   const tbody = document.getElementById("playersBody");
   if (!sorted.length) {
-    tbody.innerHTML = "<tr><td colspan='5' style='color:#444'>No players found</td></tr>";
+    tbody.innerHTML = "<tr><td colspan='6' style='color:#444'>No players found</td></tr>";
     return;
   }
   tbody.innerHTML = sorted.map(p => `
@@ -77,6 +97,7 @@ function renderPlayers(rows) {
       <td>${p.matches}</td>
       <td>${Number(p.avg_points).toFixed(1)}</td>
       <td>${Number(p.total_points).toFixed(1)}</td>
+      <td>${p.mvp_count}</td>
     </tr>`).join("");
 }
 
@@ -128,7 +149,7 @@ async function openPlayerModal(playerId) {
 
     document.getElementById("playerModalName").textContent = p.name;
     document.getElementById("playerModalTeam").innerHTML = p.team_id
-      ? `<span class="entity-link" onclick="closePlayerModal();openTeamModal(${p.team_id})">${p.team_name}</span>`
+      ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${p.team_name}</span>`
       : (p.team_name || "");
 
     document.getElementById("playerModalStats").innerHTML = `
@@ -141,18 +162,24 @@ async function openPlayerModal(playerId) {
 
     if (!p.match_history.length) {
       document.getElementById("playerModalHistory").innerHTML =
-        "<tr><td colspan='4' style='color:#444'>No matches yet</td></tr>";
+        "<tr><td colspan='9' style='color:#444'>No matches yet</td></tr>";
     } else {
       document.getElementById("playerModalHistory").innerHTML = p.match_history.map(m => {
         const date = m.start_time
           ? new Date(m.start_time * 1000).toLocaleDateString("fi-FI", {day: "numeric", month: "numeric", year: "2-digit"})
           : "—";
-        const mvpBadge = m.is_mvp ? ' <span style="font-size:0.7rem;color:#f5c842;font-weight:700;letter-spacing:0.05em;">MVP</span>' : '';
+        const mvpStar = m.is_mvp ? '<span style="font-size:0.85rem;color:#f5c842;">★</span>' : '';
+        const opponent = m.opponent_team_id ? teamLink(m.opponent_team_id, m.opponent_team_name) : (m.opponent_team_name || "—");
         return `<tr>
+          <td>${mvpStar}</td>
           <td>${date}</td>
-          <td>${Number(m.fantasy_points).toFixed(1)}${mvpBadge}</td>
+          <td>${Number(m.fantasy_points).toFixed(1)}</td>
           <td>${m.kills}/${m.assists}/${m.deaths}</td>
           <td>${Math.round(m.gold_per_min)}</td>
+          <td>${m.obs_placed ?? 0}</td>
+          <td>${m.tower_damage ?? 0}</td>
+          <td>${opponent}</td>
+          <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">↗</a></td>
         </tr>`;
       }).join("");
     }
@@ -238,7 +265,7 @@ async function openTeamModal(teamId) {
     } else {
       document.getElementById("teamModalPlayers").innerHTML = t.players.map(p => `
         <tr>
-          <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" onclick="closeTeamModal();openPlayerModal(${p.id})">${p.name}</span></td>
+          <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${p.name}</span></td>
           <td>${p.matches}</td>
           <td>${Number(p.avg_points).toFixed(1)}</td>
           <td>${Number(p.total_points).toFixed(1)}</td>
@@ -357,6 +384,7 @@ async function loadSchedule() {
           <span class="game-row-score">${g.team1_kills}–${g.team2_kills}</span>
           <span class="game-row-heroes right">${_gameHeroIconsHtml(g.team2_heroes)}</span>
           <span class="game-row-meta">
+            ${g.mvp_player_id ? `<span style="font-size:0.85rem;color:#f5c842;">★</span> ${playerLink(g.mvp_player_id, g.mvp_player_name)}` : ""}
             <span class="game-row-duration">${_formatGameDuration(g.duration)}</span>
             <a class="stream-link" href="https://www.opendota.com/matches/${g.match_id}" target="_blank" rel="noopener noreferrer">↗</a>
           </span>

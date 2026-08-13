@@ -18,7 +18,8 @@ def list_players(db=Depends(get_db)):
                t.name as team_name, t.id as team_id,
                COUNT(s.id) as matches,
                COALESCE(AVG(s.fantasy_points), 0) as avg_points,
-               COALESCE(SUM(s.fantasy_points), 0) as total_points
+               COALESCE(SUM(s.fantasy_points), 0) as total_points,
+               COALESCE(SUM(CASE WHEN s.is_mvp THEN 1 ELSE 0 END), 0) as mvp_count
         FROM players p
         LEFT JOIN player_match_stats s ON s.player_id = p.id
         LEFT JOIN (
@@ -46,13 +47,18 @@ def get_player(player_id: int, db=Depends(get_db)):
     stats = db.execute(text("""
         SELECT s.match_id, m.start_time, s.fantasy_points, s.is_mvp,
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
+               s.tower_damage,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
                s.teamfight_participation, s.camps_stacked, s.rune_pickups,
                s.firstblood_claimed, s.stuns,
-               t.id as team_id, t.name as team_name
+               t.id as team_id, t.name as team_name,
+               ot.id as opponent_team_id,
+               ot.name as opponent_team_name
         FROM player_match_stats s
         LEFT JOIN matches m ON m.match_id = s.match_id
         LEFT JOIN teams t ON t.id = s.team_id
+        LEFT JOIN teams ot ON ot.id = CASE WHEN s.team_id = m.radiant_team_id THEN m.dire_team_id
+                                           ELSE m.radiant_team_id END
         WHERE s.player_id = :player_id
         ORDER BY COALESCE(m.start_time, 0) DESC
     """), {"player_id": player_id}).fetchall()

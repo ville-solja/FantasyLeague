@@ -28,8 +28,11 @@ All other headers show no arrow. The cursor changes to `pointer` on sortable hea
 |---|---|---|
 | Player name | string | ascending |
 | Team | string | ascending |
-| Avg fantasy points | number | descending |
-| Avg kills | number | descending |
-| Avg deaths | number | descending |
-| Avg assists | number | descending |
-| Avg GPM | number | descending |
+| Matches | number | descending |
+| Avg pts | number | descending |
+| Total pts | number | descending |
+| MVPs | number | descending |
+
+These match `GET /players`'s actual response fields (`name`, `team_name`, `matches`,
+`avg_points`, `total_points`, `mvp_count`) — there is no per-stat kills/deaths/assists/GPM
+average anywhere in that response; only the aggregate fantasy-point averages and MVP count.

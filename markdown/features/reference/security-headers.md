@@ -54,3 +54,24 @@ to the app's own origin and `allow_credentials` may be set to `True`.
 already-resolved `_https_only` boolean (derived from the `HTTPS_ONLY` env var) to decide
 whether to include `Strict-Transport-Security`.
 
+---
+
+## Global Exception Handler
+
+`backend/main.py` registers `@app.exception_handler(Exception)`, catching any exception not
+already turned into an `HTTPException`. It logs the full traceback server-side
+(`logger.exception(...)`) and returns a generic `JSONResponse({"detail": "Internal server
+error"}, status_code=500)` to the caller. Without this, Starlette's default handler returns a
+**plain-text** body for unhandled exceptions, which breaks every frontend caller's
+`res.json()` — this was a real bug (`Unexpected token 'I', "Internal S"...`) traced to a league
+ingest crashing on an empty OpenDota response; fixed both at the source and with this handler
+as a systemic backstop for any future unhandled exception.
+
+---
+
+## Session Cookie
+
+`SessionMiddleware` is configured with `same_site="lax"` and `max_age=86400` (24 hours), in
+addition to the `HTTPS_ONLY`-gated `Secure` flag described above. See `core/auth.md`'s
+"Session Cookie" section for the `SECRET_KEY` requirement.
+

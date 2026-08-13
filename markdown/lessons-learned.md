@@ -15,6 +15,60 @@ Format:
 
 ---
 
+### 2026-08-12 — security-reviewer — endpoints
+**Problem:** `GET /roster/{user_id}` (`backend/routers/cards.py`) authorizes cross-user access with
+its own inline `if user_id != current_user["user_id"] and not current_user.get("is_admin")` check
+instead of composing with `Depends(require_admin)`. `current_user["is_admin"]` comes from
+`get_current_user()`, which reads the session-cached value set at login — it is never
+re-verified against the DB. `require_admin` (`backend/deps.py`) was hardened earlier this session
+to re-check `is_admin` against the DB on every call specifically to close this class of gap (a
+demoted admin keeping destructive access until their session expires), but that fix only helps
+endpoints that actually depend on `require_admin`. Any endpoint that reimplements its own
+`is_admin` check inline — as `get_roster` does — silently misses the hardening.
+**Solution:** When an endpoint needs "owner OR admin" access (not a pure admin-only gate), do not
+inline a session-trusting `is_admin` check. Either call `require_admin`'s logic explicitly (query
+`User.is_admin` fresh) or add a small shared helper (e.g. `is_admin_fresh(db, user_id) -> bool`)
+that both `require_admin` and mixed owner/admin endpoints can call, so there is one DB-authoritative
+place this check lives. When auditing, grep for `current_user.get("is_admin")` /
+`current_user["is_admin"]` outside `deps.py` — every hit is a candidate for this same gap.
+
+---
+
+### 2026-08-12 — security-reviewer — endpoints
+**Problem:** `enrich.py::enrich_players()` opens `db = SessionLocal()` with no enclosing
+`try/finally` — only calls `db.close()` at two normal-exit points (early return, end of
+function). If `db.query(Player)...all()` itself raises, the session leaks. This function isn't
+just a background-thread helper (which would be exempt from the session-leak check) — it's also
+reachable synchronously from `POST /ingest/league/{league_id}` (`admin_ingest.py`) via
+`run_enrichment()`, so it's in an actual request path.
+**Solution:** Wrap the function body in `try: ... finally: db.close()`, matching the pattern
+already used correctly by the sibling function in the same file, `run_profile_enrichment()`.
+When auditing for session leaks, don't stop at "this function is called from a background loop"
+— trace all callers, since the same helper can be shared between a background loop and a
+request-time endpoint.
+
+---
+
+### 2026-08-12 — security-patcher — testing
+**Problem:** `py/redos` (CWE-1333/400/730) flagged `r'<thead><tr>(<th>.*?</th>)+</tr></thead>...'`
+in `backend/tests/test_mvp_visibility.py`. The inner `.*?` (non-greedy, `re.S` so it also
+matches newlines) inside a `+`-repeated group is the classic ambiguous-repetition ReDoS shape:
+`.*?` can match across a `</th>` boundary into the next `<th>`, so the regex engine has multiple
+ways to partition the same input across repetitions of the group, causing exponential
+backtracking on crafted input. Low real-world risk here (the match target is a static,
+developer-controlled `frontend/index.html`, not user input), but the pattern itself is the
+security-relevant thing CodeQL flags, and the same shape could reappear in a genuinely
+user-facing regex later.
+**Solution:** Replace the ambiguous `.*?` with a negated character class scoped to what the
+content actually needs — `[^<]*` — since real `<th>` cells here contain only plain text, never
+nested tags. `[^<]*` can never match the `<` that starts `</th>`, removing the overlap between
+repetitions entirely and eliminating the backtracking blowup while matching the exact same
+strings as before. General pattern: for `(TAG_OPEN.*?TAG_CLOSE)+`-style regexes over HTML/XML-ish
+text, prefer a negated-class exclusion of the tag-opening character over `.*?` whenever the
+content is known not to contain nested tags.
+
+---
+
 ### 2026-08-11 — security-patcher — endpoints
 **Problem:** `py/stack-trace-exposure` (CWE-209) flagged `result["error"] = str(e)` in the
 admin-only `GET /admin/schedule/debug` diagnostic endpoint (`backend/routers/admin_ingest.py`).

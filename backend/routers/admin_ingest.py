@@ -11,7 +11,7 @@ from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league
 from models import Match, PlayerMatchStats, Week, Weight
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
-from scoring import fantasy_score
+from scoring import fantasy_score, stat_dict_from_row
 from toornament import sync_toornament_results
 
 router = APIRouter()
@@ -37,22 +37,7 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
     weights = {w.key: w.value for w in db.query(Weight).all()}
     stats = db.query(PlayerMatchStats).all()
     for stat in stats:
-        p = {
-            "kills": stat.kills or 0,
-            "deaths": stat.deaths or 0,
-            "gold_per_min": stat.gold_per_min or 0,
-            "obs_placed": stat.obs_placed or 0,
-            "last_hits": stat.last_hits or 0,
-            "denies": stat.denies or 0,
-            "towers_killed": stat.towers_killed or 0,
-            "roshan_kills": stat.roshan_kills or 0,
-            "teamfight_participation": stat.teamfight_participation or 0.0,
-            "camps_stacked": stat.camps_stacked or 0,
-            "rune_pickups": stat.rune_pickups or 0,
-            "firstblood_claimed": stat.firstblood_claimed or 0,
-            "stuns": stat.stuns or 0.0,
-        }
-        stat.fantasy_points = fantasy_score(p, weights)
+        stat.fantasy_points = fantasy_score(stat_dict_from_row(stat), weights)
     bonus_pct = weights.get("mvp_bonus_pct", 10.0)
     for stat in stats:
         if stat.is_mvp:

@@ -20,12 +20,16 @@ Returns all ingested players sorted by total fantasy points descending. Each ent
     "team_id": 42,
     "matches": 18,
     "avg_points": 28.4,
-    "total_points": 511.2
+    "total_points": 511.2,
+    "mvp_count": 2
   }
 ]
 ```
 
-`team_name` and `team_id` are resolved from the player's most recent ingested match.
+`team_name` and `team_id` are resolved from the player's most recent ingested match. `mvp_count`
+is the number of that player's `player_match_stats` rows with `is_mvp = true` — the same flag
+`POST /twitch/mvp` sets (see `core/twitch-extension.md`) — and is `0`, not omitted, for players
+never named MVP.
 
 ---
 
@@ -66,11 +70,16 @@ Returns full detail for a single player, including a complete per-match history 
       "firstblood_claimed": 0,
       "stuns": 10.0,
       "is_mvp": false,
-      "team_id": 42, "team_name": "SomeTeam"
+      "team_id": 42, "team_name": "SomeTeam",
+      "opponent_team_id": 99, "opponent_team_name": "OtherTeam"
     }
   ]
 }
 ```
+
+`opponent_team_id`/`opponent_team_name` are resolved from whichever of the match's
+`radiant_team_id`/`dire_team_id` is not the player's own `team_id` for that row — both are
+`null` if the opponent team hasn't been ingested.
 
 Returns 404 if the player has not been ingested.
 

@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from database import get_db
 from deps import require_admin, _audit
-from models import Match, Player, PlayerMatchStats, Team, TwitchMVP
+from models import Match, Player, PlayerMatchStats, Team, TwitchMVP, Weight
+from twitch import _apply_mvp_bonus
 
 router = APIRouter()
 
@@ -61,12 +62,16 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
 @router.get("/admin/matches/{match_id}/players")
 def match_players(match_id: int, db=Depends(get_db), _: dict = Depends(require_admin)):
     rows = (
-        db.query(Player)
+        db.query(Player, PlayerMatchStats.team_id, Team.name)
         .join(PlayerMatchStats, PlayerMatchStats.player_id == Player.id)
+        .outerjoin(Team, Team.id == PlayerMatchStats.team_id)
         .filter(PlayerMatchStats.match_id == match_id)
         .all()
     )
-    return [{"id": p.id, "name": p.name} for p in rows]
+    return [
+        {"id": p.id, "name": p.name, "team_id": team_id, "team_name": team_name}
+        for p, team_id, team_name in rows
+    ]
 
 
 @router.post("/admin/matches/{match_id}/mvp")
@@ -84,6 +89,7 @@ def admin_set_mvp(
         raise HTTPException(status_code=404, detail="Player not found")
 
     existing = db.query(TwitchMVP).filter(TwitchMVP.match_id == match_id).first()
+    old_player_id = existing.player_id if existing else None
     if existing:
         existing.player_id = body.player_id
         existing.channel_id = "admin"
@@ -95,6 +101,11 @@ def admin_set_mvp(
             channel_id="admin",
             selected_at=int(time.time()),
         ))
+
+    weights = {w.key: w.value for w in db.query(Weight).all()}
+    if old_player_id and old_player_id != body.player_id:
+        _apply_mvp_bonus(db, old_player_id, match_id, apply=False, weights=weights)
+    _apply_mvp_bonus(db, body.player_id, match_id, apply=True, weights=weights)
 
     _audit(db, "admin_set_mvp", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"match {match_id} → player {body.player_id} ({player.name})")
