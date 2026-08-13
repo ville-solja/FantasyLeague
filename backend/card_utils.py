@@ -3,7 +3,7 @@ import random
 from sqlalchemy import text
 
 from models import Card, CardModifier, Weight
-from scoring import card_fantasy_score, SCORING_STATS
+from scoring import card_fantasy_score, fantasy_score, stat_dict_from_row, SCORING_STATS
 
 
 _SCORED_STAT_COLS = list(SCORING_STATS) + ["deaths"]
@@ -25,16 +25,34 @@ def _load_weights(db) -> tuple[dict, dict]:
     return all_weights, rarity
 
 
-def _stat_sums_from_row(row) -> dict:
-    """Extract scored stat values (SCORING_STATS + deaths) from a SQLAlchemy Row or dict."""
-    if hasattr(row, "_mapping"):
-        return {stat: row._mapping.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
-    return {stat: getattr(row, stat, 0) or 0 for stat in _SCORED_STAT_COLS}
+def _mvp_bonus_delta(row, weights: dict) -> float:
+    """Additive fantasy-point bonus for one MVP-flagged match.
+
+    Mirrors the player-level bonus applied by scoring.apply_mvp_bonus_to_row(): the
+    match's own fantasy_score() (deaths included) times mvp_bonus_pct,
+    computed on that single match rather than on a card's multi-match
+    aggregate. The death-survival term is a clamped, non-linear formula
+    (max(0, pool - deaths*deduction)), so summing per-match contributions is
+    not the same as computing it on aggregated deaths — keeping this
+    per-match and adding the result as a flat bonus avoids distorting that
+    term for every card, which is what a naive per-match SQL restructure
+    would otherwise do.
+    """
+    stats = stat_dict_from_row(row)
+    base = fantasy_score(stats, weights)
+    bonus_pct = weights.get("mvp_bonus_pct", 10.0)
+    return base * bonus_pct / 100
 
 
-def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity: dict, mods: dict) -> float:
-    """Apply card_fantasy_score + rarity multiplier for one card."""
-    base = card_fantasy_score(stat_sums, weights, mods)
+def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity: dict, mods: dict,
+                          mvp_bonus: float = 0.0) -> float:
+    """Apply card_fantasy_score + rarity multiplier for one card.
+
+    mvp_bonus is the sum of _mvp_bonus_delta() across any MVP-flagged matches
+    in the card's scoring window — added before the rarity multiplier so an
+    MVP bonus scales with card rarity the same way every other stat does.
+    """
+    base = card_fantasy_score(stat_sums, weights, mods) + mvp_bonus
     rarity_mod = 1 + rarity.get(f"mod_{card_type}", 0)
     return base * rarity_mod
 

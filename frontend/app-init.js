@@ -25,7 +25,13 @@ function initHowToPlayTabs() {
 async function loadHowToPlay() {
   initHowToPlayTabs();
   const res = await fetch(`${API}/weights`);
-  if (!res.ok) return;
+  if (!res.ok) {
+    ["howtoplay-stats-tbody", "howtoplay-rarity-tbody", "howtoplay-mods-tbody"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<tr><td colspan="2" style="color:#c44;">Could not load scoring data</td></tr>';
+    });
+    return;
+  }
   const weights = await res.json();
   const byKey = Object.fromEntries(weights.map(w => [w.key, w]));
 
@@ -89,16 +95,63 @@ async function loadHowToPlay() {
   }
 }
 
+// Generic modal handling: every `.modal-overlay`/`.reveal-overlay` declares its own
+// close function via `data-close="fnName"`, so Escape, backdrop clicks, and focus
+// management all work uniformly without a per-modal hardcoded list.
+function _isModalVisible(el) {
+  return getComputedStyle(el).display !== "none";
+}
+
+function _getVisibleModal() {
+  return [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].find(_isModalVisible) || null;
+}
+
+function _getFocusableIn(container) {
+  return [...container.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.offsetParent !== null);
+}
+
 document.addEventListener("keydown", function(e) {
   if (e.key !== "Escape") return;
-  const visible = id => !document.getElementById(id).classList.contains("hidden");
-  if (visible("playerModal"))  { closePlayerModal();  return; }
-  if (visible("teamModal"))    { closeTeamModal();    return; }
-  if (visible("revealModal"))  { closeReveal();       return; }
-  if (visible("registerModal")){ closeRegisterModal(); return; }
-  if (visible("forgotModal"))  { showLogin();         return; }
-  if (visible("loginModal"))   { closeLoginModal();   return; }
+  const modal = _getVisibleModal();
+  if (!modal) return;
+  const fnName = modal.dataset.close;
+  if (fnName && typeof window[fnName] === "function") window[fnName]();
 });
+
+// Minimal focus trap: while any modal is open, Tab cycles only within it.
+document.addEventListener("keydown", function(e) {
+  if (e.key !== "Tab") return;
+  const modal = _getVisibleModal();
+  if (!modal) return;
+  const focusables = _getFocusableIn(modal);
+  if (!focusables.length) return;
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault(); last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault(); first.focus();
+  }
+});
+
+// Move focus into a modal the moment it becomes visible (class/style toggles).
+(function () {
+  let _lastVisible = new Set();
+  const observer = new MutationObserver(() => {
+    const nowVisible = new Set(document.querySelectorAll(".modal-overlay, .reveal-overlay"));
+    nowVisible.forEach(el => {
+      if (_isModalVisible(el) && !_lastVisible.has(el)) {
+        const focusables = _getFocusableIn(el);
+        if (focusables.length) focusables[0].focus();
+      }
+      if (_isModalVisible(el)) _lastVisible.add(el); else _lastVisible.delete(el);
+    });
+  });
+  document.querySelectorAll(".modal-overlay, .reveal-overlay").forEach(el => {
+    observer.observe(el, { attributes: true, attributeFilter: ["class", "style"] });
+  });
+})();
 
 async function init() {
   await loadConfig();

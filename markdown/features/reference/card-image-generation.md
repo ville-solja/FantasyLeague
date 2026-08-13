@@ -113,7 +113,7 @@ Both are circle-cropped before compositing. If neither source is available, the 
 
 ### `GET /cards/{card_id}/image`
 
-Returns the composited card PNG for any card regardless of ownership. Response headers: `Content-Type: image/png`, `Cache-Control: no-cache`.
+Returns the composited card PNG for any card regardless of ownership. Response headers: `Content-Type: image/png`, `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`.
 
 - Returns **404** if the card does not exist.
 - Returns **503** if the Pillow library is not installed in the runtime environment.

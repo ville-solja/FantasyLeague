@@ -103,7 +103,7 @@ As an admin, I want to force a refresh of the season schedule from the Google Sh
 As an admin, I want visibility into actions that have taken place on the app.
 
 **Acceptance criteria**
-- Tracks (non-exhaustive, current server actions): `user_register`, `user_login`, `password_reset_requested`, `token_draw`, `reroll_modifiers`, `token_redeem`, `admin_ingest`, `admin_recalculate`, `admin_schedule_refresh`, `admin_grant_tokens`, `admin_toggle_tester`, `admin_enrich_profiles`, `admin_set_match_week`, `admin_sync_match_weeks`, `admin_sync_toornament`, `admin_code_create`, `admin_code_delete`, `twitch_mvp_set`, `twitch_token_drop`
+- Tracks (non-exhaustive, current server actions): `user_register`, `user_login`, `password_reset_requested`, `token_draw`, `reroll_modifiers`, `token_redeem`, `admin_ingest`, `admin_recalculate`, `admin_schedule_refresh`, `admin_grant_tokens`, `admin_toggle_tester`, `admin_toggle_admin`, `admin_enrich_profiles`, `admin_set_match_week`, `admin_sync_match_weeks`, `admin_sync_toornament`, `admin_code_create`, `admin_code_delete`, `twitch_mvp_set`, `twitch_token_drop`
 - Each entry includes timestamp, actor username, action type, and a detail string
 - Visible in the Admin tab with most recent entries first
 - Admin-only access
@@ -294,7 +294,7 @@ variables so that no real password is ever committed to the repository.
 
 **Acceptance criteria**
 - If `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` are all set,
-  a user with `is_admin=true` is created at startup if no user with that email already exists
+  a user with `is_admin=true` is created at startup if no user with that username already exists
 - If the env vars are absent or empty, no admin account is auto-created (no crash, no warning)
 - The `backend/seed/users.json` file is replaced with a safe, empty-array stub (`[]`) so
   the seeding code path remains exercisable in tests without committing real passwords
@@ -574,3 +574,44 @@ that a misconfigured deployment can't let a stranger rewrite the server's clock.
 - `.env.example` documents `DEMO_MODE` with an explicit "never set in production" note
 - The background ingest poll thread does not start when `DEMO_MODE=true`; the week
   auto-lock thread continues to run
+
+---
+
+## Multi-Admin Support
+
+### Seed Multiple Admin Accounts via Environment Variables
+**User story**
+As an operator deploying this app, I want to configure more than one admin account via
+environment variables so that I don't have to bootstrap a single admin and then manually
+promote everyone else via direct database access.
+
+**Acceptance criteria**
+- `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (unsuffixed) continue to
+  behave exactly as today — this remains "admin #1" with no breaking change for existing
+  deployments
+- Setting `SEED_ADMIN_USERNAME_2`/`SEED_ADMIN_EMAIL_2`/`SEED_ADMIN_PASSWORD_2` (and `_3`, `_4`,
+  ...) creates additional admin accounts at startup under the same rules as admin #1: all three
+  values in a numbered set must be present and non-empty, creation is skipped if a user with
+  that username already exists, and the step is idempotent across restarts
+- Seeding stops at the first numbered suffix where the set is incomplete or absent — there is
+  no need to declare a total admin count anywhere
+- Each created account logs at `INFO` level; each already-existing account is skipped at
+  `DEBUG` level, matching the existing single-admin behavior
+
+---
+
+### Promote or Demote a User's Admin Status In-App
+**User story**
+As an admin, I want to promote another user to admin (and demote them back) from the User
+Management tab so that I don't need direct database access to manage who else has admin rights.
+
+**Acceptance criteria**
+- The User Management table shows an "ADMIN" badge next to the username of any user with
+  `is_admin = true`, next to the existing "TESTER" badge pattern
+- Each row (except the acting admin's own row) has a "Promote to admin" / "Demote from admin"
+  toggle button, matching the existing "Mark tester" / "Unmark tester" button
+- An admin cannot toggle their own admin status — the button is not rendered on their own row,
+  and the backend independently rejects the attempt with 409 if it is somehow submitted anyway
+- Demoting the last remaining admin is rejected with 409 — the system can never end up with zero
+  admin accounts
+- The action is recorded in the audit log, following the existing `admin_toggle_tester` pattern

@@ -1,6 +1,6 @@
 ## Terminology
 
-**League** — A tournament in OpenDota. The ID that ties together all players, teams, and matches. Multiple leagues (divisions) can be ingested simultaneously — cards are generated per-league.
+**League** — A tournament in OpenDota. The ID that ties together all players, teams, and matches. Multiple leagues (divisions) can be ingested simultaneously; however cards themselves are **not** league-scoped — every card draw sets `Card.league_id = null` regardless of which league(s) are monitored, so ownership is per-player, not per-player-per-league.
 
 **Series** — A best-of-N between two teams on a given fixture date. One row in the schedule sheet; one or more individual matches in the database.
 
@@ -22,7 +22,9 @@
 
 **Fantasy Points** — Points earned by a player in a single match, calculated as the weighted sum of their performance stats.
 
-**Modifier** — Enchancements on a card that modifies the basis for counting the fantasy points.
+**Modifier** — Enhancements on a card that modify the basis for counting the fantasy points.
+
+**MVP** — The standout player for a single match, confirmed by a broadcaster via the Twitch extension (or by an admin as an alternative path) and stored as `player_match_stats.is_mvp`. Grants a configurable percentage bonus to that player's `fantasy_points` for the match — visible in match history and the player-performance leaderboard, but **not** in card/roster/weekly/season leaderboard totals, which recompute independently. See `reference/mvp-fantasy-bonus.md`.
 
 **Tab** — Technically the "pages" or "views" on the frontend are just tabs, but the terms can be used quite interchangeably.
 

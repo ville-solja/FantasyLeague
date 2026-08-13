@@ -117,7 +117,7 @@ The broadcaster adds the extension to their channel from the Twitch extension di
 Users link their Fantasy account to Twitch across two surfaces:
 
 1. **Fantasy site (Profile tab):** User clicks "Generate Twitch Code" → `POST /twitch/link-code` → a 6-character alphanumeric code appears with a 10-minute countdown.
-2. **Twitch extension panel:** User enters the code in the panel → `POST /twitch/link` → backend validates and stores `twitch_user_id` on the user record.
+2. **Twitch extension panel:** User enters the code in the panel → `POST /twitch/link` → backend validates and stores `twitch_user_id` on the user record. Returns 400 if the viewer's Twitch identity is anonymous (`opaque_user_id` starting with `A` — Twitch's convention for a not-logged-in viewer) — the viewer must be logged into Twitch to link.
 
 Once linked, the panel shows token balance and the viewer enters the drop pool.
 
@@ -166,7 +166,7 @@ On MVP confirmation the EBS calls:
 ```
 POST https://api.twitch.tv/helix/extensions/pubsub
 ```
-with a broadcaster-role JWT signed by `TWITCH_EXTENSION_SECRET`. When `TWITCH_LOCAL_DEV=true` the HTTP call is skipped and the message is printed to the server log.
+with an `external`-role JWT signed by `TWITCH_EXTENSION_SECRET` (same role as the chat announcement below — extensions never hold the `broadcaster` role, which is reserved for incoming JWTs Twitch issues to the broadcaster's own client). When `TWITCH_LOCAL_DEV=true` the HTTP call is skipped and the message is printed to the server log.
 
 ---
 
@@ -226,7 +226,7 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `twitch_link_codes` | Temporary 6-char codes with 10-min TTL |
 | `twitch_presence` | Viewer heartbeat timestamps for pool eligibility |
 | `twitch_mvp` | One MVP selection per match, broadcaster-updatable |
-| `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops |
+| `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. |
 
 `users.twitch_user_id` stores the Twitch opaque user ID once linked.
 
@@ -249,8 +249,12 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 - Twitch does not expose a live viewer list — the drop pool is built from heartbeat calls only.
 - PubSub is EBS→panel only; the extension cannot send messages to other viewers. The chat
   announcement is the one channel that reaches everyone watching, not just panel viewers.
-- MVP selection **does** have a scoring impact: the confirmed MVP's fantasy points for that
-  match are multiplied by `1 + mvp_bonus_pct / 100` (default 10%), affecting cards, rosters, and
-  leaderboards — not engagement/drops only. See `reference/mvp-fantasy-bonus.md`.
+- MVP selection **does** have a scoring impact — not engagement/drops only. The confirmed MVP's
+  `player_match_stats.fantasy_points` for that match is multiplied by `1 + mvp_bonus_pct / 100`
+  (default 10%), which is visible on the player's own match history and in the
+  player-performance leaderboard/Top Single-Match Performances. It does **not** currently reach
+  card, roster, weekly-leaderboard, or season-leaderboard totals — those recompute from raw
+  stats independently and have no MVP term. See `reference/mvp-fantasy-bonus.md`.
 - The extension must pass Twitch review before public release, or be used in developer test mode.
-- Token drop deduplication is keyed on match ID — once dropped for a match, it will not drop again even if the broadcaster re-confirms a different MVP.
+- Token drop deduplication is keyed on `(channel_id, match_id)` — once dropped for a match on a
+  given channel, it will not drop again even if the broadcaster re-confirms a different MVP.

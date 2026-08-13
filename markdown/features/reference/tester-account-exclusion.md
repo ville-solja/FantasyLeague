@@ -21,3 +21,7 @@ Excludes tester accounts via `WHERE u.is_tester = 0` added before `GROUP BY`.
 
 ### `GET /leaderboard/weekly` (updated)
 Excludes tester accounts via `WHERE u.is_tester = 0` added before `GROUP BY`.
+
+### `GET /leaderboard/roster` (updated)
+Excludes tester accounts via `WHERE u.is_tester = 0` before `GROUP BY`, same pattern as the
+season and weekly leaderboards.

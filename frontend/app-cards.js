@@ -79,7 +79,10 @@ function showCard(card, footer, opts = {}) {
   if (card.player_id && !drawFx) {
     const span = document.createElement("span");
     span.className = "entity-link";
+    span.tabIndex = 0;
+    span.setAttribute("role", "button");
     span.onclick = () => openPlayerModal(card.player_id);
+    span.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPlayerModal(card.player_id); } };
     span.textContent = card.player_name || "";
     revealPlayerEl.replaceChildren(span);
   } else {
@@ -378,6 +381,10 @@ function _updateBoosterBtn() {
   const btn = document.getElementById("boosterBtn");
   if (!btn) return;
   const cost = _teamBoosterCost ?? 3;
+  // Always show the real cost on the button itself — it differs from the
+  // 1-token standard draw, and #drawCounter/#deckStatus only reflect the
+  // standard-draw balance, not what a booster draw actually costs.
+  btn.textContent = `Draw Booster from Team (${cost} ${_tokenName})`;
   if (!activeUserId) {
     btn.disabled = true;
     btn.title = "Log in to draw";

@@ -1,6 +1,6 @@
 # Admin Features
 
-Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account is bootstrapped at startup via the `SEED_ADMIN_USERNAME`, `SEED_ADMIN_EMAIL`, and `SEED_ADMIN_PASSWORD` environment variables (see `reference/env-based-admin-seeding.md`). Additional admins require a direct DB update: `UPDATE users SET is_admin = 1 WHERE username = 'yourusername';` — there is no in-app admin promotion flow.
+Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account (and optionally further admins) is bootstrapped at startup via the `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` environment variables and their `_2`, `_3`, ... suffixed counterparts (see `reference/env-based-admin-seeding.md`). Additional admins can also be promoted in-app by an existing admin via the User Management tab's admin toggle, with no DB access required.
 
 All admin endpoints require an active admin session. Unauthorized requests receive a 403 response.
 
@@ -9,10 +9,24 @@ All admin endpoints require an active admin session. Unauthorized requests recei
 ## User Management
 
 ### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
+Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, `is_admin`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
 
 ### `POST /users/{user_id}/toggle-tester`
 Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
+
+### `POST /users/{user_id}/toggle-admin`
+Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_admin }`. Logged
+as `admin_toggle_admin`. Two guards prevent the app from ever ending up with zero admins: an
+admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
+the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
+`require_admin` (`backend/deps.py`) re-checks `is_admin` against the database on every
+admin-gated request rather than trusting the session's cached value, so a promotion or
+demotion takes effect on the very next request — not just at the next login. This closes what
+would otherwise be a real gap: without it, a demoted admin would keep destructive access
+(season reset, league purge, user management) for the rest of their existing session. One
+UI-only asymmetry remains: the frontend's Admin tab visibility (`activeIsAdmin`, populated from
+`GET /me`) is still session-cached and only refreshes at next login, so a freshly-promoted user
+can call admin endpoints directly before the Admin tab appears in their own browser.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.
@@ -97,7 +111,10 @@ Triggers a full ingest cycle for the specified OpenDota league ID:
 
 Note: card generation was removed from the ingest pipeline. Cards are now created dynamically at draw time.
 
-Ingest also runs automatically every 15 minutes in the background. The manual endpoint is useful immediately after new matches are played.
+Ingest also runs automatically every 15 minutes in the background (`INGEST_POLL_INTERVAL`), or
+every 2 minutes (`INGEST_LIVE_POLL_INTERVAL`) while any week is currently active, so live-series
+results land faster during play. The manual endpoint is useful immediately after new matches are
+played. See `reference/toornament.md`.
 
 ---
 
@@ -143,6 +160,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `weekly_token_grant` | Automatic token grant at week lock |
 | `admin_grant_tokens` | Admin granted tokens to a user |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
+| `admin_toggle_admin` | Admin toggled admin flag on a user |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
@@ -213,7 +231,7 @@ These features have dedicated reference documents:
 
 | Feature | Endpoints | Reference |
 |---|---|---|
-| Player Pool Management | `GET/POST/DELETE /admin/players/*` | `reference/admin-player-pool.md` |
+| Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
 | League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |

@@ -9,7 +9,7 @@ OpenDota API
     ↓  (match IDs + per-player stats)
 Kana Cards DB  ←──────────────────────────┐
     ↓  (resolve_series_result)               │
- series score (e.g. 2–1)                     │ poll every 15 min
+ series score (e.g. 2–1)                     │ poll every 15 min (2 min if a week is active)
     ↓                                        │
 toornament.com  ←── PATCH /matches/{id}  ────┘
 ```
@@ -18,7 +18,7 @@ The integration is one-directional: Kana Cards pushes results to toornament; it 
 
 ## How a Result Gets Pushed
 
-1. **Match ingestion** — The background ingest loop polls OpenDota every `INGEST_POLL_INTERVAL` seconds (default: 15 min) for new match IDs in the configured leagues. New matches are stored in the `matches` table.
+1. **Match ingestion** — The background ingest loop polls OpenDota every `INGEST_POLL_INTERVAL` seconds (default: 15 min) for new match IDs in the configured leagues — or every `INGEST_LIVE_POLL_INTERVAL` seconds (default: 2 min) while any week is currently active, so live-series results reach toornament faster. This is the same loop that runs the toornament sync described below, so the speedup applies to both. New matches are stored in the `matches` table.
 
 2. **Series resolution** — For each match entry in toornament, the app looks up both participant names (e.g. `"Team A"` and `"Team B"`) and resolves them to team IDs in the local DB using fuzzy name normalisation (lowercase, parentheticals stripped, substring fallback). It then counts wins across all stored matches between those two teams.
 
@@ -42,7 +42,7 @@ Exact match is tried first; if that fails, bidirectional substring containment i
 
 | Trigger | Behaviour |
 |---|---|
-| Background poll (every 15 min by default) | Ingest new OpenDota matches, then run toornament sync |
+| Background poll (every 15 min by default, 2 min while a week is active) | Ingest new OpenDota matches, then run toornament sync |
 | `POST /admin/sync-toornament` | Immediately run a toornament sync, returns `{pushed, skipped, errors}` |
 
 The manual endpoint is useful immediately after a series finishes, or to verify the integration is working correctly.
@@ -61,7 +61,8 @@ All four variables must be set for the integration to activate. If any is missin
 | `TOORNAMENT_CLIENT_SECRET` | OAuth2 client secret |
 | `TOORNAMENT_API_KEY` | `X-Api-Key` header value (separate from OAuth2) |
 | `TOORNAMENT_TOURNAMENT_ID` | UUID of the Kanaliiga tournament on toornament.com |
-| `INGEST_POLL_INTERVAL` | Seconds between poll cycles (default: `900`) |
+| `INGEST_POLL_INTERVAL` | Seconds between poll cycles when no week is active (default: `900`) |
+| `INGEST_LIVE_POLL_INTERVAL` | Seconds between poll cycles while a week is active (default: `120`) — see `reference/twitch-mvp-series-window.md` |
 
 ## Audit Trail
 

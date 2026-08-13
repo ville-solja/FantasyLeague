@@ -111,9 +111,7 @@ All three settings are configurable in the admin panel under Scoring Weights.
 
 ### Modifier visibility
 
-- Displayed as green pills on the card row in the My Team roster (active and bench).
-- Shown in the card reveal modal immediately after drawing.
-- Shown in the card detail popup when clicking a player name in the roster.
+Modifiers are rendered directly onto the card's PNG image (see `reference/card-image-generation.md`) — that is the only place they're shown. There is deliberately no separate text/pill rendering anywhere in the UI (My Team roster rows, the reveal modal, or the card detail popup); the values are already readable on the card image itself, so a second text rendering would be duplicate information.
 
 ### Modifier configuration (admin)
 
@@ -188,7 +186,8 @@ Returns the calling user's cards split into `active` and `bench` lists, with per
 }
 ```
 
-Requires authentication. Returns 401 if not logged in.
+Requires authentication. Returns 403 `"Cannot view another user's roster"` if `user_id` doesn't
+match the caller's own ID, unless the caller is an admin (admins can view any user's roster).
 
 ---
 
@@ -213,7 +212,9 @@ Returns `{ "status": "ok", "card_id": N }`.
 ### `POST /roster/reorder`
 
 Sets `slot_index` (drag-and-drop display position) for a list of the caller's own cards within
-their current zone (active or bench). Requires authentication. See
+their current zone (active or bench). Accepts `{"card_ids": [...]}` for sequential positions
+(index in the array = new `slot_index`), or `{"card_ids": [...], "slot_indexes": [...]}` to
+assign explicit positions instead. Requires authentication. See
 `reference/my-team-drag-and-drop.md`.
 
 ---

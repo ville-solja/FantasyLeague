@@ -165,21 +165,27 @@ function _cardSlotHTML(c, action) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
   const zone = action === "bench" ? "active" : "bench";
-  let actionBtn = "";
-  if (action === "bench") {
-    actionBtn = `<button class="secondary" style="font-size:0.7rem;padding:4px 8px;" onclick="deactivateCard(${c.id})">Bench</button>`;
-  } else if (action === "activate") {
-    actionBtn = `<button class="secondary" style="font-size:0.7rem;padding:4px 8px;" onclick="activateCard(${c.id})">Activate</button>`;
-  }
+  const isActiveCard = action === "bench";
   return `
     <div class="card-slot" data-rarity="${c.card_type}" data-card-id="${c.id}" data-zone="${zone}">
       <img class="card-img" src="${imgSrc}" alt="${c.player_name}"
-           draggable="false"
+           draggable="false" tabindex="0" role="button"
            onclick="if(!window._rosterDragging)showRosterCard(${c.id})"
+           onkeydown="if((event.key==='Enter'||event.key===' ')&&!window._rosterDragging&&!_rosterLocked){event.preventDefault();toggleCardZone(${c.id},${isActiveCard})}"
            onerror="this.outerHTML='<div class=\\'card-img-loading\\'>${c.card_type.toUpperCase()}<br><span style=\\'font-size:0.65rem;margin-top:4px;\\'>${c.player_name}</span></div>'" />
       <div class="card-slot-pts">${pts} pts</div>
-      <div class="card-slot-actions">${actionBtn}</div>
     </div>`;
+}
+
+/** Keyboard fallback for the removed Bench/Activate buttons: Enter/Space on a
+ * focused card image toggles it between active and bench, reusing the
+ * existing activate/deactivate machinery (and its error handling). */
+async function toggleCardZone(cardId, isActiveCard) {
+  if (isActiveCard) {
+    await deactivateCard(cardId);
+  } else {
+    await activateCard(cardId);
+  }
 }
 
 

@@ -112,10 +112,10 @@ function _escHtml(s) {
 }
 
 function playerLink(id, name) {
-  return `<span class="entity-link" onclick="openPlayerModal(${id})">${_escHtml(name)}</span>`;
+  return `<span class="entity-link" tabindex="0" role="button" onclick="openPlayerModal(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPlayerModal(${id})}">${_escHtml(name)}</span>`;
 }
 
 function teamLink(id, name) {
   if (!id) return _escHtml(name) || "—";
-  return `<span class="entity-link" onclick="openTeamModal(${id})">${_escHtml(name)}</span>`;
+  return `<span class="entity-link" tabindex="0" role="button" onclick="openTeamModal(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTeamModal(${id})}">${_escHtml(name)}</span>`;
 }

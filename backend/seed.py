@@ -44,45 +44,55 @@ def seed_users():
 
 
 def seed_admin_from_env():
-    """Create an admin user from env vars at startup if not already present.
+    """Create admin user(s) from env vars at startup if not already present.
 
-    Reads SEED_ADMIN_USERNAME, SEED_ADMIN_EMAIL, and SEED_ADMIN_PASSWORD.
-    If all three are set and non-empty, creates an admin user unless a user
-    with that email already exists. Safe to call multiple times (idempotent).
+    Reads SEED_ADMIN_USERNAME, SEED_ADMIN_EMAIL, and SEED_ADMIN_PASSWORD for
+    admin #1 (unsuffixed — fully backward compatible with single-admin
+    deployments). Additional admins can be configured with numbered
+    suffixes: SEED_ADMIN_USERNAME_2/_EMAIL_2/_PASSWORD_2, then _3, _4, ...
+    For each numbered set, all three values must be set and non-empty;
+    seeding stops at the first suffix where the set is incomplete or absent
+    — there is no need to declare a total admin count anywhere.
+
+    For each set, creates an admin user unless a user with that username
+    already exists (in which case it is skipped). Safe to call multiple
+    times (idempotent).
     """
-    username = os.environ.get("SEED_ADMIN_USERNAME", "").strip()
-    email    = os.environ.get("SEED_ADMIN_EMAIL",    "").strip()
-    password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
-
-    if not (username and email and password):
-        return  # env vars absent — skip silently
-
     db = SessionLocal()
     try:
-        existing = db.query(User).filter_by(username=username).first()
-        if not existing:
-            db.add(User(
-                username=username,
-                email=email,
-                password_hash=hash_password(password),
-                is_admin=True,
-                is_tester=False,
-            ))
-            try:
-                db.commit()
-                logger.info("Admin seed: created admin account %s", username)
-            except IntegrityError:
-                db.rollback()
-                logger.error(
-                    "Admin seed: cannot create %s — email %s is already in use by another account. "
-                    "Set SEED_ADMIN_EMAIL to an unused address.",
-                    username, email,
-                )
-        else:
-            existing.is_admin = True
-            existing.password_hash = hash_password(password)
-            db.commit()
-            logger.info("Admin seed: forced admin + password on %s", username)
+        i = 1
+        while True:
+            suffix = "" if i == 1 else f"_{i}"
+            username = os.environ.get(f"SEED_ADMIN_USERNAME{suffix}", "").strip()
+            email    = os.environ.get(f"SEED_ADMIN_EMAIL{suffix}",    "").strip()
+            password = os.environ.get(f"SEED_ADMIN_PASSWORD{suffix}", "").strip()
+
+            if not (username and email and password):
+                break  # env vars absent or incomplete — stop seeding here
+
+            existing = db.query(User).filter_by(username=username).first()
+            if not existing:
+                db.add(User(
+                    username=username,
+                    email=email,
+                    password_hash=hash_password(password),
+                    is_admin=True,
+                    is_tester=False,
+                ))
+                try:
+                    db.commit()
+                    logger.info("Admin seed: created admin account %s", username)
+                except IntegrityError:
+                    db.rollback()
+                    logger.error(
+                        "Admin seed: cannot create %s — email %s is already in use by another account. "
+                        "Set SEED_ADMIN_EMAIL%s to an unused address.",
+                        username, email, suffix,
+                    )
+            else:
+                logger.debug("Admin account %s already exists, skipping", username)
+
+            i += 1
     finally:
         db.close()
 

@@ -332,6 +332,15 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   font-size: var(--fs-xs);
 }
 .lb-chip-pts { font-weight: var(--w-bold); opacity: 0.9; }
+.lb-chip-rarity {
+  font-weight: var(--w-bold);
+  font-size: 0.68rem;
+  opacity: 0.85;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.3;
+}
 
 /* ============================================================
    DECK SUMMARY
@@ -741,7 +750,6 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
 }
-.card-slot-actions { display: flex; gap: 5px; justify-content: center; }
 .card-slot-pts { font-size: var(--fs-xs); color: var(--fg-dim); text-align: center; }
 
 /* Rarity glows on card slots */
