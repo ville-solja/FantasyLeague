@@ -1,29 +1,8 @@
-function switchHowToPlayTab(role) {
-  // Update button active states
-  document.querySelectorAll('.howtoplay-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === role);
-  });
-
-  // Show the matching panel; hide all others — pure client-side, no fetch
-  document.querySelectorAll('[data-howtoplay-tab]').forEach(el => {
-    el.style.display = el.dataset.howtoplayTab === role ? '' : 'none';
-  });
-}
-
-function initHowToPlayTabs() {
-  const tabBar = document.getElementById('howtoplay-tab-bar');
-  if (!tabBar) return;
-
-  tabBar.querySelectorAll('.howtoplay-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchHowToPlayTab(btn.dataset.tab));
-  });
-
-  // The How to Play tab always opens on the Users subtab
-  switchHowToPlayTab('users');
-}
+// How to Play subtab switching is handled declaratively by Alpine.js
+// (x-data/x-show/@click on the tab markup in index.html) — see
+// markdown/features/reference/frontend-framework-evaluation.md.
 
 async function loadHowToPlay() {
-  initHowToPlayTabs();
   const res = await fetch(`${API}/weights`);
   if (!res.ok) {
     ["howtoplay-stats-tbody", "howtoplay-rarity-tbody", "howtoplay-mods-tbody"].forEach(id => {

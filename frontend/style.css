@@ -1,6 +1,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { padding: 0; }
 
+/* Alpine.js spike (How to Play subtabs) — hides x-show elements until Alpine has
+   initialized, so they don't all flash visible on load before Alpine evaluates state. */
+[x-cloak] { display: none !important; }
+
 /* App-scale overrides — design system h1/h2 are display-sized; app needs compact variants */
 h1 {
   font-size: var(--fs-xl);

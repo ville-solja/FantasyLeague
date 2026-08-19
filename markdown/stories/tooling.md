@@ -121,3 +121,59 @@ prompts don't silently point at a file that no longer contains what they describ
 - Every agent definition that previously cited `backend/routers/admin.py` is corrected to
   reference the new module(s), with its version header incremented
 - `/agent-steward`'s final status table shows 0 stale/broken agents
+
+## Frontend Architecture
+
+### Produce a Framework Evaluation Document
+**User story**
+As the maintainer, I want a written comparison of staying vanilla-JS versus adopting a
+frontend framework (evaluated both as a full rewrite and as incremental/hybrid adoption),
+grounded in this codebase's actual architecture and recent pain points, so that I can decide
+whether migrating is worth the cost without having to research it myself.
+
+**Acceptance criteria**
+- The document lives at `markdown/features/reference/frontend-framework-evaluation.md`
+- It inventories the current frontend's actual shape: file count/split pattern, global state
+  management, build tooling (none), and how it's served (FastAPI `StaticFiles`, no bundler)
+- It evaluates at least: (a) staying vanilla JS with incremental structural improvements,
+  (b) a full-rewrite migration to one concrete framework, (c) incremental/hybrid adoption
+  (framework mounted alongside existing vanilla JS for new or rebuilt surfaces only)
+- Each option is scored against this codebase's actual constraints: no build step today (so
+  bundler/tooling cost is not zero for any framework option), FastAPI serving static files
+  directly (compatibility with each option), the existing 18+-file split-by-tab pattern
+  (compatibility or migration cost), and team size/velocity implications
+  (single/small-team maintenance)
+- It references the bracket-tree visualization complexity/scrap as a concrete worked example
+  of the current approach's ceiling, not just an abstract claim
+- It ends with a single clear recommendation (which option, and why) and, if the
+  recommendation is anything other than "stay vanilla JS," an explicit statement that no
+  migration work begins until the user reviews and approves this document
+- Does not modify any `frontend/*.js`, `frontend/index.html`, or `backend/` file — this story
+  is documentation-only
+
+### Validate the Recommendation with a Minimal Spike
+**User story**
+As a developer, I want a small, isolated, fully-reversible prototype of one real existing
+component rebuilt in the recommended framework (only if the evaluation recommends adoption),
+so that integration cost against this app's actual FastAPI-served, no-build-step setup is
+validated with working code before any full migration is committed to.
+
+**Implemented**: rebuilt the How to Play tab's subtab switching (previously
+`switchHowToPlayTab()`/`initHowToPlayTabs()` in `frontend/app-init.js`) using Alpine.js
+`x-data`/`x-show`/`@click`, loaded via CDN script tag alongside the untouched vanilla-JS admin
+and main-nav tab switching. See "Spike Results" in
+`markdown/features/reference/frontend-framework-evaluation.md` for the observed integration
+cost.
+
+**Acceptance criteria**
+- Only proceeds if `frontend-framework-evaluation.md`'s recommendation is not "stay vanilla
+  JS," and only after the user explicitly approves starting the spike
+- Rebuilds exactly one existing, bounded UI surface (not a new feature) — favors something
+  with contained blast radius (e.g. a single admin panel or the Players tab table, not the
+  auth flow or anything touching payments/tokens)
+- Runs alongside the existing vanilla-JS app without replacing or breaking any current page —
+  reversible by deleting the spike's files and one script-tag/mount-point change
+  in `index.html`
+- Documents the actual build-tooling and FastAPI-serving integration cost observed (not
+  estimated) from doing the spike, as a follow-up note to the evaluation doc
+- Intentionally deferred and separately gated — not implemented as part of the first story

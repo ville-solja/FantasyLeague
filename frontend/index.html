@@ -6,6 +6,9 @@
   <link rel="stylesheet" href="/colors_and_type.css">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+  <!-- Alpine.js spike — see markdown/features/reference/frontend-framework-evaluation.md.
+       Scoped to the How to Play subtabs only; the rest of the app stays vanilla JS. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
 
@@ -539,18 +542,19 @@
 </div>
 
 <!-- TAB: HOW TO PLAY -->
-<div id="tab-howtoplay" class="tab-content">
+<div id="tab-howtoplay" class="tab-content" x-data="{ howToPlayTab: 'users' }">
 
-  <!-- How to Play subtab bar -->
-  <div id="howtoplay-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
-    <button class="howtoplay-tab-btn" data-tab="users">Users</button>
-    <button class="howtoplay-tab-btn" data-tab="players">Players</button>
-    <button class="howtoplay-tab-btn" data-tab="streamers">Streamers</button>
-    <button class="howtoplay-tab-btn" data-tab="developers">Developers</button>
+  <!-- How to Play subtab bar — Alpine.js spike (declarative x-show/@click instead of
+       the imperative data-attribute matching used by the admin/schedule tab bars) -->
+  <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
+    <button class="howtoplay-tab-btn" data-tab="users" :class="{ active: howToPlayTab === 'users' }" @click="howToPlayTab = 'users'">Users</button>
+    <button class="howtoplay-tab-btn" data-tab="players" :class="{ active: howToPlayTab === 'players' }" @click="howToPlayTab = 'players'">Players</button>
+    <button class="howtoplay-tab-btn" data-tab="streamers" :class="{ active: howToPlayTab === 'streamers' }" @click="howToPlayTab = 'streamers'">Streamers</button>
+    <button class="howtoplay-tab-btn" data-tab="developers" :class="{ active: howToPlayTab === 'developers' }" @click="howToPlayTab = 'developers'">Developers</button>
   </div>
 
   <!-- Users subtab -->
-  <div id="howtoplay-panel-users" data-howtoplay-tab="users" class="grid">
+  <div id="howtoplay-panel-users" x-cloak x-show="howToPlayTab === 'users'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Getting Started</h2>
@@ -633,7 +637,7 @@
   </div>
 
   <!-- Players subtab -->
-  <div id="howtoplay-panel-players" data-howtoplay-tab="players" class="grid" style="display:none;">
+  <div id="howtoplay-panel-players" x-cloak x-show="howToPlayTab === 'players'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Linking Your Dota 2 Profile</h2>
@@ -658,7 +662,7 @@
   </div>
 
   <!-- Streamers subtab -->
-  <div id="howtoplay-panel-streamers" data-howtoplay-tab="streamers" class="grid" style="display:none;">
+  <div id="howtoplay-panel-streamers" x-cloak x-show="howToPlayTab === 'streamers'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Applying &amp; Installing</h2>
@@ -696,7 +700,7 @@
   </div>
 
   <!-- Developers subtab -->
-  <div id="howtoplay-panel-developers" data-howtoplay-tab="developers" class="grid" style="display:none;">
+  <div id="howtoplay-panel-developers" x-cloak x-show="howToPlayTab === 'developers'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Design Decisions</h2>

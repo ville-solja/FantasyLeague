@@ -70,3 +70,4 @@ Implementation details, integrations, and operator tooling.
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
+| [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
