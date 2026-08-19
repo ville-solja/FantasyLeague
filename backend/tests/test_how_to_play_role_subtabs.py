@@ -122,41 +122,39 @@ class TestRoleBasedHowToPlaySubtabs:
 
     def test_howtoplay_tab_shows_four_role_subtab_buttons(self):
         """The How to Play tab shows a row of four subtab buttons: Users, Players,
-        Streamers, Developers (e.g. `.howtoplay-tab-btn` elements in
-        frontend/index.html with data-tab values users/players/streamers/developers)."""
+        Streamers, Developers (`.howtoplay-tab-btn` elements in frontend/index.html
+        with data-tab values users/players/streamers/developers). As of the
+        Alpine.js spike (see markdown/features/reference/frontend-framework-evaluation.md),
+        the buttons also carry Alpine `:class`/`@click` bindings alongside data-tab."""
         html = _read(INDEX_HTML_PATH)
-        buttons = re.findall(r'<button class="howtoplay-tab-btn" data-tab="(\w+)">', html)
+        buttons = re.findall(r'<button class="howtoplay-tab-btn" data-tab="(\w+)"', html)
         assert len(buttons) == 4
         assert set(buttons) == set(ROLE_ORDER)
 
     def test_clicking_subtab_button_shows_only_that_panel(self):
         """Clicking a `.howtoplay-tab-btn` shows its matching `#howtoplay-panel-*`
-        panel and hides the other three — exactly one panel visible at a time,
-        mirroring switchAdminTab()'s [data-admin-tab] show/hide logic."""
+        panel and hides the other three — exactly one panel visible at a time.
+        As of the Alpine.js spike this is declarative: each button's @click sets
+        Alpine's single `howToPlayTab` state to its own role, and each panel's
+        x-show is keyed to that same state, so only one panel can ever match."""
         html = _read(INDEX_HTML_PATH)
-        panel_roles = re.findall(r'id="howtoplay-panel-(\w+)"\s+data-howtoplay-tab="(\w+)"', html)
-        assert len(panel_roles) == 4
-        for panel_id_role, data_role in panel_roles:
-            assert panel_id_role == data_role
-        assert sorted(r for r, _ in panel_roles) == sorted(ROLE_ORDER)
-
-        js = _read(APP_INIT_JS_PATH)
-        body = _extract_js_function(js, "switchHowToPlayTab")
-        # Toggles panels via the shared data-howtoplay-tab attribute and hides
-        # non-matching ones (mirrors switchAdminTab's data-admin-tab pattern)
-        assert "data-howtoplay-tab" in body
-        assert "'none'" in body
+        assert 'x-data="{ howToPlayTab: \'users\' }"' in html
+        for role in ROLE_ORDER:
+            assert f'id="howtoplay-panel-{role}"' in html
+            assert f"@click=\"howToPlayTab = '{role}'\"" in html
+            assert f"x-show=\"howToPlayTab === '{role}'\"" in html
 
     def test_users_subtab_shown_by_default_on_tab_open(self):
         """The Users subtab panel is visible by default the first time the How to
-        Play tab is opened (switchHowToPlayTab('users') called on tab init,
-        mirroring switchTab('howtoplay') always defaulting to the Users panel)."""
-        js = _read(APP_INIT_JS_PATH)
-        init_body = _extract_js_function(js, "initHowToPlayTabs")
-        assert "switchHowToPlayTab('users')" in init_body
+        Play tab is opened — Alpine's `x-data="{ howToPlayTab: 'users' }"` on the
+        tab wrapper sets the initial state, mirroring switchTab('howtoplay')
+        always defaulting to the Users panel under the prior vanilla-JS version."""
+        html = _read(INDEX_HTML_PATH)
+        assert 'x-data="{ howToPlayTab: \'users\' }"' in html
 
+        js = _read(APP_INIT_JS_PATH)
         load_body = _extract_js_function(js, "loadHowToPlay")
-        assert "initHowToPlayTabs()" in load_body
+        assert "howToPlayTab" not in load_body  # subtab state lives in the DOM, not JS
 
         globals_js = _read(APP_GLOBALS_JS_PATH)
         howtoplay_lines = [l for l in globals_js.splitlines() if '"howtoplay"' in l]
@@ -165,14 +163,13 @@ class TestRoleBasedHowToPlaySubtabs:
 
     def test_subtab_switching_is_client_side_only_no_network_request(self):
         """Switching between How to Play subtabs does not trigger any additional
-        fetch()/XHR call — subtab switching only toggles panel visibility and
-        button active state in frontend/app-init.js, it does not re-call
-        loadHowToPlay() or hit any endpoint."""
-        js = _read(APP_INIT_JS_PATH)
-        body = _extract_js_function(js, "switchHowToPlayTab")
-        assert "fetch(" not in body
-        assert "XMLHttpRequest" not in body
-        assert "loadHowToPlay(" not in body
+        fetch()/XHR call — each button's @click only assigns Alpine's local
+        `howToPlayTab` state, it never calls loadHowToPlay() or hits any endpoint."""
+        html = _read(INDEX_HTML_PATH)
+        for role in ROLE_ORDER:
+            assert f"@click=\"howToPlayTab = '{role}'\"" in html
+        assert "@click=\"loadHowToPlay" not in html
+        assert "@click=\"fetch(" not in html
 
     def test_all_four_subtabs_visible_regardless_of_login_state(self):
         """All four How to Play subtab buttons and panels render whether or not a
