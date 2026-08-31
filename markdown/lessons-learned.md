@@ -15,6 +15,45 @@ Format:
 
 ---
 
+### 2026-08-31 — developer — models
+**Problem:** `backend/routers/admin_demo.py`'s `set_demo_clock()` synchronously re-runs
+`auto_lock_weeks(db)` right after moving the clock override ("make the lock transition
+observable immediately"), but `plan-issue-51-weekly-summary` added a second `_week_maintenance_loop`
+step, `generate_weekly_summaries(db)`, without also adding it to `set_demo_clock()`. Result:
+manually demoing the feature (set clock past a week's end_time, log in as a demo user) granted
+the week-lock token immediately but the Weekly Report never appeared, because
+`generate_weekly_summaries` only ran on the background loop's real-wall-clock timer
+(`WEEK_CHECK_INTERVAL`, default 300s) — which the demo clock override does not speed up.
+**Solution:** Whenever a new step is added to `_week_maintenance_loop` in `backend/main.py`,
+also add it to `set_demo_clock()` in `backend/routers/admin_demo.py` (right after
+`auto_lock_weeks(db)`) — Demo Mode exists specifically so the season lifecycle can be
+demonstrated without waiting for real time to pass, so every "runs when a week's clock
+boundary passes" background step needs a synchronous counterpart there, not just the original
+one. When adding a similar background-loop step in the future, grep `set_demo_clock` and add
+the same call there in the same edit.
+
+---
+
+### 2026-08-31 — security-reviewer — endpoints
+**Problem:** Two findings from the 2026-08-12 security-reviewer entries below are still present
+in the current codebase, unfixed: (1) `GET /roster/{user_id}` (`backend/routers/cards.py:621`)
+still authorizes with the session-cached `current_user.get("is_admin")` instead of
+`Depends(require_admin)`/a fresh DB check — the exact gap that entry describes. (2) The
+2026-08-12 session-leak entry's stated **Solution** was "wrap `enrich_players()`'s body in
+try/finally, matching the sibling function `run_profile_enrichment()`" — but only
+`run_profile_enrichment()` (`backend/enrich.py`) actually has that wrapping today;
+`enrich_players()` (same file) still opens `db = SessionLocal()` with `db.close()`
+only on two normal-exit paths, no try/finally, and is still reachable synchronously from
+`POST /ingest/league/{league_id}` via `run_enrichment()`. The lessons-learned entry recorded a
+fix that was never actually applied to the code (or was applied and later reverted/lost).
+**Solution:** A lessons-learned "Solution" describes correct guidance, not confirmation the fix
+landed — don't treat a past entry as proof an issue is resolved. When a security-reviewer run
+finds a pattern that matches an existing entry, re-verify the actual current file content before
+marking it fixed/skip-worthy; grep for the exact flagged line/pattern first. Both findings are
+re-reported in this session's `/security-reviewer` output rather than assumed closed.
+
+---
+
 ### 2026-08-12 — security-reviewer — endpoints
 **Problem:** `GET /roster/{user_id}` (`backend/routers/cards.py`) authorizes cross-user access with
 its own inline `if user_id != current_user["user_id"] and not current_user.get("is_admin")` check

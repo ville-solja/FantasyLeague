@@ -20,6 +20,17 @@
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="weeklySummaryModal" role="dialog" aria-modal="true" data-close="closeWeeklySummary" onclick="if(event.target===this)closeWeeklySummary()">
+  <div class="modal" style="max-width:860px;width:95vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin-bottom:0;">Weekly Report</h2>
+      <button class="ghost" onclick="closeWeeklySummary()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="weeklySummaryTabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;"></div>
+    <div id="weeklySummaryContent" style="max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="loginModal" role="dialog" aria-modal="true" data-close="closeLoginModal" onclick="if(event.target===this)closeLoginModal()">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
@@ -255,6 +266,10 @@
       <span id="headerTokenNum" class="header-token-num"></span>
       <span class="header-token-label">Tokens</span>
     </div>
+    <button class="ghost" id="weeklyReportBtn" onclick="openWeeklySummary()" style="display:none;position:relative;">
+      Weekly Report
+      <span id="weeklyReportBadge" class="weekly-report-badge" style="display:none;"></span>
+    </button>
     <button id="headerUserLabel" class="secondary header-profile-btn" onclick="switchTab('profile')" style="display:none;"></button>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
@@ -979,8 +994,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="7" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="8" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>
@@ -1054,6 +1069,7 @@
 <script src="/app-admin-demo.js"></script>
 <script src="/app-admin.js"></script>
 <script src="/app-profile.js"></script>
+<script src="/app-weekly-summary.js"></script>
 <script src="/app-init.js"></script>
 </body>
 </html>

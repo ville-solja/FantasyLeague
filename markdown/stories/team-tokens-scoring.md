@@ -84,6 +84,96 @@ As an admin, I want to correct series timing when teams play out of the regular 
 
 ---
 
+## Weekly Summary Report
+
+### View the Weekly Report
+**User story**
+As a user, I want to open a "Weekly report" button and see a tab per finished week showing
+that week's matches, so I can review the tournament results at a glance.
+
+**Acceptance criteria**
+- A "Weekly report" button is shown in a fixed corner of the UI, visible whenever the user is
+  logged in
+- Clicking it opens a popup with one tab per week that has a generated summary, labeled by
+  week number/label, defaulting to the most recent week's tab
+- Weeks with no generated summary yet do not appear as tabs — tabs are populated as the
+  season progresses, not shown in advance
+- Each week's tab shows its matches grouped by series (matches between the same two teams
+  clustered together), each match's two team names and logos, and a VOD link where one has
+  been set — with the winning team visually highlighted
+- Before the user has revealed that week's results, no player names, points, or MVP
+  information are shown — only the fields above
+
+---
+
+### Reveal Full Match Results
+**User story**
+As a user, I want to click "Reveal results" on a week's tab to see the full player-level
+breakdown, so that I control when I see the outcome instead of it being shown immediately.
+
+**Acceptance criteria**
+- Each not-yet-revealed week tab shows a "Reveal results" button
+- Clicking it permanently reveals, for that week: every player in each match grouped under
+  their team, the match's MVP player with a highlighted portrait, and a points-earned number
+  under each player's portrait
+- The points-earned number is shown in a neutral/grey color for players not on the viewing
+  user's roster that week, and in an accent color for players who were on it
+- Reveal state is per-user and per-week: one user revealing a week does not reveal it for any
+  other user, and revealing one week does not reveal any other week
+- Reopening the popup later (same session or after logging back in) shows previously revealed
+  weeks already revealed, without needing to click "Reveal results" again
+
+---
+
+### New Report Highlight
+**User story**
+As a user, I want a visual cue on the Weekly report button when a new week's report becomes
+available, so I notice it without having to check manually.
+
+**Acceptance criteria**
+- The Weekly report button shows a highlight/badge once a new week's summary has been
+  generated and the current user has not yet opened the report popup since then
+- Opening the report popup clears the highlight, regardless of whether the user reveals any
+  week's results while it's open
+- The highlight reappears the next time a further week's summary is generated, following the
+  same per-user "not opened since" rule
+
+---
+
+### Automatic Weekly Summary Generation
+**User story**
+As the system, I want to mark a week's summary as available as soon as that week's scoring
+window has actually closed, so reports reflect complete results regardless of whether a week
+maps to a calendar week.
+
+**Acceptance criteria**
+- A week becomes available in the Weekly Report once `now >= week.end_time` — the same
+  boundary (including its grace period) used by `auto_lock_weeks` — not a fixed calendar
+  schedule
+- The check runs from the existing week-maintenance background loop, so it applies uniformly
+  to regular weeks and irregular ones (e.g. a finals week with a short window)
+- Re-running the check after a week is already marked available does not re-trigger or
+  duplicate anything (idempotent, matching the existing `auto_lock_weeks` pattern)
+- A week with zero matches still becomes available (shown as an empty-state tab) rather than
+  never appearing in the report
+
+---
+
+### Admin: Attach VOD Links to Matches
+**User story**
+As an admin, I want to attach a caster's VOD link to a match after the fact, so viewers can
+find the recording from the Weekly Report.
+
+**Acceptance criteria**
+- Admin can set, edit, or clear a VOD URL on any match from the existing admin match tooling
+- An invalid (non-URL) value is rejected with a clear error; clearing is always allowed
+- Once set, the VOD link appears next to that match in the Weekly Report for every user,
+  including weeks whose summary was generated before the link was added
+- Clearing the VOD URL removes the link from the report without affecting anything else in
+  that week's summary
+
+---
+
 ## Tokens
 
 ### Free Weekly Token

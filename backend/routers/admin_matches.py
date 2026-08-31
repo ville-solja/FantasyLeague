@@ -1,7 +1,7 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import get_db
 from deps import require_admin, _audit
@@ -17,6 +17,10 @@ router = APIRouter()
 
 class AdminMVPRequest(BaseModel):
     player_id: int
+
+
+class MatchVodBody(BaseModel):
+    vod_url: str | None = Field(None, max_length=500)
 
 
 @router.get("/admin/matches")
@@ -55,6 +59,7 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
             "start_time": m.start_time,
             "mvp_player_name": mvp_player.name if mvp_player else None,
             "mvp_player_id": mvp.player_id if mvp else None,
+            "vod_url": m.vod_url,
         })
     return result
 
@@ -111,3 +116,24 @@ def admin_set_mvp(
            detail=f"match {match_id} → player {body.player_id} ({player.name})")
     db.commit()
     return {"match_id": match_id, "player_id": body.player_id, "player_name": player.name}
+
+
+@router.patch("/admin/matches/{match_id}/vod")
+def set_match_vod(
+    match_id: int,
+    body: MatchVodBody,
+    db=Depends(get_db),
+    admin: dict = Depends(require_admin),
+):
+    match = db.query(Match).filter(Match.match_id == match_id).first()
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+    vod_url = body.vod_url.strip() if body.vod_url else None
+    if vod_url and not (vod_url.startswith("http://") or vod_url.startswith("https://")):
+        raise HTTPException(status_code=422, detail="vod_url must be a valid http(s) URL")
+
+    match.vod_url = vod_url
+    _audit(db, "admin_match_vod_set", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"match {match_id} vod_url={vod_url}")
+    db.commit()
+    return {"match_id": match_id, "vod_url": match.vod_url}

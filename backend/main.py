@@ -19,7 +19,7 @@ from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
-from weeks import auto_lock_weeks
+from weeks import auto_lock_weeks, generate_weekly_summaries
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
 from routers import players as players_router
@@ -37,6 +37,7 @@ from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
+from routers import weekly_summary as weekly_summary_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,9 @@ _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 
 def _week_maintenance_loop():
-    """Background thread: periodically lock weeks whose match window has opened.
+    """Background thread: periodically lock weeks whose match window has opened
+    and mark weeks whose scoring window has closed as available in the Weekly
+    Report.
 
     Weeks themselves are created manually by admins (Week Management tab) —
     this loop no longer auto-generates them.
@@ -66,6 +69,7 @@ def _week_maintenance_loop():
             db = SessionLocal()
             try:
                 auto_lock_weeks(db)
+                generate_weekly_summaries(db)
             finally:
                 db.close()
         except Exception:
@@ -259,6 +263,7 @@ app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
+app.include_router(weekly_summary_router.router)
 
 
 @app.get("/config")

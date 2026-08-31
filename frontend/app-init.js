@@ -82,7 +82,12 @@ function _isModalVisible(el) {
 }
 
 function _getVisibleModal() {
-  return [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].find(_isModalVisible) || null;
+  // When modals stack (e.g. a player/team modal opened from within the Weekly Report
+  // popup), the later element in the DOM paints on top (same z-index for all
+  // .modal-overlay elements) — so the *last* visible one, not the first, is the one
+  // Escape/focus-trapping should target, leaving the modal(s) underneath untouched.
+  const visible = [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].filter(_isModalVisible);
+  return visible[visible.length - 1] || null;
 }
 
 function _getFocusableIn(container) {
@@ -139,6 +144,7 @@ async function init() {
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();
+    checkWeeklySummaryHighlight();
     loadDeck();
     await loadWeeks();
     loadRoster(_rosterWeekId);

@@ -14,7 +14,7 @@ from card_utils import (
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
 )
 from database import get_db
-from deps import get_current_user, _audit
+from deps import get_current_user, is_admin_fresh, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from scoring import stat_dict_from_row
 from weeks import get_next_editable_week
@@ -619,6 +619,6 @@ def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(ge
 
 @router.get("/roster/{user_id}")
 def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
-    if user_id != current_user["user_id"] and not current_user.get("is_admin"):
+    if user_id != current_user["user_id"] and not is_admin_fresh(db, current_user["user_id"]):
         raise HTTPException(status_code=403, detail="Cannot view another user's roster")
     return _build_roster_response(db, user_id, week_id)
