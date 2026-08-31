@@ -187,7 +187,13 @@ async function loadFrame(frameId, htmlFile) {
 
         // Remove the Twitch CDN script — our stub replaces it entirely.
         // If left in, the CDN may load and overwrite window.Twitch before the stub.
-        html = html.replace(/<script[^>]*twitch-ext\.min\.js[^>]*><\/script>/gi, "");
+        // Looped until stable: a single pass can leave a reformed <script> tag behind
+        // if the input contains overlapping/nested tag fragments.
+        var prevHtml;
+        do {
+            prevHtml = html;
+            html = html.replace(/<script[^>]*twitch-ext\.min\.js[^>]*><\/script>/gi, "");
+        } while (html !== prevHtml);
 
         // Prepend a <base> tag (so relative CSS/JS paths resolve from /twitch-ext/)
         // and the stub script so window.Twitch (including configuration mock) exists

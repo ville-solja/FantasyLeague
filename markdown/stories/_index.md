@@ -14,3 +14,4 @@
 | [deployment.md](deployment.md) | DB sustainability, versioned migrations, pre-deploy backup, container health reporting |
 | [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams, admin router organization, frontend framework evaluation |
 | [tipping.md](tipping.md) | Demoinfo2 tipping service: demo parsing, tip event extraction, tipping leaderboard |
+| [shoutrrr-support.md](shoutrrr-support.md) | Outbound push notifications via a separately-hosted Shoutrrr instance; match-starting-soon reminder |

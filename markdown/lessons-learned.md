@@ -15,6 +15,58 @@ Format:
 
 ---
 
+### 2026-08-31 — security-reviewer — endpoints
+**Problem:** A version pin's upper bound can silently block a Dependabot fix from ever being
+picked up even by a routine `pip install --upgrade` within the declared constraint —
+`backend/requirements.txt` pins `pillow>=11.0,<12.0`, but all 12 currently-open Pillow
+Dependabot alerts (10 high, 2 medium; CVE-2026-59197 through -59205, -54058, -55379,
+-55798, -54060, -55380) are fixed only in `12.3.0`, which the `<12.0` ceiling excludes
+entirely. Likewise `backend/requirements-dev.txt`'s `pytest>=8.0,<9.0` excludes the
+`9.0.3` fix for the one open pytest alert. A quick glance at "is Pillow pinned" says yes;
+it takes actually cross-referencing each open alert's `first_patched_version` against the
+constraint to see the pin itself is the blocker.
+**Solution:** When auditing dependencies (now part of `/security-reviewer`'s scope, added this
+session), don't stop at "is there a pin" — fetch open Dependabot alerts
+(`gh api repos/{owner}/{repo}/dependabot/alerts --paginate`) and check whether each one's
+`first_patched_version` actually satisfies the current constraint's upper bound. A pin that
+looks conservative/reasonable can be the exact reason a fix never lands.
+
+---
+
+### 2026-08-31 — security-patcher — agent-config
+**Problem:** `actions/missing-workflow-permissions` (CWE-275) flagged
+`.github/workflows/unit-tests.yml` for having no explicit `permissions:` block, meaning it
+inherits the repository/org default `GITHUB_TOKEN` scope (often broader read-write) instead of
+declaring only what the job actually needs. This alert's flagged file
+(`.github/workflows/`) falls outside `/security-patcher`'s declared Scope section
+(`backend/` or `frontend/` only) — worth noting since a future run may want to either widen
+the declared scope to cover `.github/workflows/` explicitly, or route Actions-category alerts
+to a different process instead of this agent.
+**Solution:** Add a root-level `permissions:\n  contents: read` block — the job only checks
+out code, installs deps, and runs pytest; it never pushes, comments, or publishes anything, so
+read-only `contents` is the correct minimal grant (matches CodeQL's own suggested minimal
+starting point exactly). Two sibling workflows (`docker-publish.yml`, `ui-tests.yml`) have the
+same gap but were not touched here since they weren't the flagged file for this alert.
+
+---
+
+### 2026-08-31 — security-patcher — frontend
+**Problem:** `js/incomplete-multi-character-sanitization` (CWE-20/80/116) flagged
+`twitch-extension/dev-harness.html`'s single-pass `html.replace(/<script[^>]*twitch-ext\.min\.js[^>]*><\/script>/gi, "")` used to strip the Twitch CDN script tag from a
+fetched HTML file before injecting it into an iframe via `srcdoc`. A single substitution
+pass over a multi-character pattern can, for crafted/overlapping input, leave a still-matching
+tag behind rather than fully removing it — the classic "remove `<!--`, but `<!<!---->` only
+partially strips" class of bug. Low real-world risk here (the fetched file is a
+developer-controlled local dev-harness asset, not user input), but the pattern itself is what
+CodeQL flags regardless of actual exploitability in this call site.
+**Solution:** Wrap the `.replace()` call in a `do { prev = html; html = html.replace(...) }
+while (html !== prev)` loop so the substitution repeats until no further match is found,
+matching CodeQL's own documented fix for this rule. Verified behavior is unchanged for normal
+input (stabilizes after exactly one real removal + one no-op confirmation pass) and the loop
+cannot hang since each pass only ever shrinks or leaves the string unchanged, never grows it.
+
+---
+
 ### 2026-08-31 — developer — models
 **Problem:** `backend/routers/admin_demo.py`'s `set_demo_clock()` synchronously re-runs
 `auto_lock_weeks(db)` right after moving the clock override ("make the lock transition
