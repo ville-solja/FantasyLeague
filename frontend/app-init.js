@@ -1,29 +1,8 @@
-function switchHowToPlayTab(role) {
-  // Update button active states
-  document.querySelectorAll('.howtoplay-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === role);
-  });
-
-  // Show the matching panel; hide all others — pure client-side, no fetch
-  document.querySelectorAll('[data-howtoplay-tab]').forEach(el => {
-    el.style.display = el.dataset.howtoplayTab === role ? '' : 'none';
-  });
-}
-
-function initHowToPlayTabs() {
-  const tabBar = document.getElementById('howtoplay-tab-bar');
-  if (!tabBar) return;
-
-  tabBar.querySelectorAll('.howtoplay-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchHowToPlayTab(btn.dataset.tab));
-  });
-
-  // The How to Play tab always opens on the Users subtab
-  switchHowToPlayTab('users');
-}
+// How to Play subtab switching is handled declaratively by Alpine.js
+// (x-data/x-show/@click on the tab markup in index.html) — see
+// markdown/features/reference/frontend-framework-evaluation.md.
 
 async function loadHowToPlay() {
-  initHowToPlayTabs();
   const res = await fetch(`${API}/weights`);
   if (!res.ok) {
     ["howtoplay-stats-tbody", "howtoplay-rarity-tbody", "howtoplay-mods-tbody"].forEach(id => {
@@ -103,7 +82,12 @@ function _isModalVisible(el) {
 }
 
 function _getVisibleModal() {
-  return [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].find(_isModalVisible) || null;
+  // When modals stack (e.g. a player/team modal opened from within the Weekly Report
+  // popup), the later element in the DOM paints on top (same z-index for all
+  // .modal-overlay elements) — so the *last* visible one, not the first, is the one
+  // Escape/focus-trapping should target, leaving the modal(s) underneath untouched.
+  const visible = [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].filter(_isModalVisible);
+  return visible[visible.length - 1] || null;
 }
 
 function _getFocusableIn(container) {
@@ -160,6 +144,7 @@ async function init() {
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();
+    checkWeeklySummaryHighlight();
     loadDeck();
     await loadWeeks();
     loadRoster(_rosterWeekId);

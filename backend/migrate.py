@@ -340,6 +340,13 @@ def _m022_matches_duration(conn):
         conn.commit()
 
 
+def _m023_matches_vod_url(conn):
+    match_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(matches)")).fetchall()]
+    if "vod_url" not in match_cols:
+        conn.execute(text("ALTER TABLE matches ADD COLUMN vod_url TEXT"))
+        conn.commit()
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -386,6 +393,7 @@ MIGRATIONS = [
     ("020_temp_password_expiry",     _m020_temp_password_expiry),
     ("021_card_slot_index",          _m021_card_slot_index),
     ("022_matches_duration",         _m022_matches_duration),
+    ("023_matches_vod_url",          _m023_matches_vod_url),
 ]
 
 

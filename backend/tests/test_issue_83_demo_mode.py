@@ -15,7 +15,8 @@ Covers four user stories from markdown/plans/plan-issue-83-demo-mode.md:
     - GET/POST/DELETE /admin/demo/clock return 404 when DEMO_MODE is unset
     - POST /admin/demo/clock requires an admin session when DEMO_MODE=true
     - POST /admin/demo/clock sets DemoClock.override_timestamp and synchronously
-      re-runs auto_lock_weeks
+      re-runs auto_lock_weeks and generate_weekly_summaries (added for
+      plan-issue-51-weekly-summary — see markdown/lessons-learned.md)
     - GET /admin/demo/clock returns the override and the effective "now"
     - DELETE /admin/demo/clock clears the override; clock.now(db) falls back to
       real wall-clock time
@@ -92,6 +93,20 @@ class TestMoveTheDemoClock:
         set_demo_clock(DemoClockBody(timestamp=1_000_001), db=db, admin=_ADMIN)
         db.refresh(week)
         assert week.is_locked is True
+
+    def test_post_demo_clock_sets_override_and_reruns_generate_weekly_summaries(self, db, monkeypatch):
+        """Setting the clock past a week's end_time makes its Weekly Report available
+        synchronously, in-request — otherwise a demo operator would have to wait for the
+        real-wall-clock week-maintenance loop (up to WEEK_CHECK_INTERVAL, unaffected by the
+        demo clock override) before the report they just "ended" the week for shows up."""
+        monkeypatch.setenv("DEMO_MODE", "true")
+        from routers.admin_demo import set_demo_clock, DemoClockBody
+        from models import Week, WeeklySummary
+        week = Week(label="W1", start_time=1_000_000, end_time=1_600_000, is_locked=False)
+        db.add(week)
+        db.commit()
+        set_demo_clock(DemoClockBody(timestamp=1_600_001), db=db, admin=_ADMIN)
+        assert db.get(WeeklySummary, week.id) is not None
 
     def test_get_demo_clock_returns_override_and_effective_now(self, db, monkeypatch):
         """GET /admin/demo/clock reports both the stored override and clock.now(db)."""

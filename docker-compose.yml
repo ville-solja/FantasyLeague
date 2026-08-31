@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   backend:
     image: ghcr.io/${GITHUB_REPOSITORY:-local/dota-kanaliiga-fantasy}:latest
@@ -8,8 +6,11 @@ services:
     volumes:
       - ./data:/app/data
       - ./twitch-extension:/app/twitch-extension
+    # Matches backend/Dockerfile's own HEALTHCHECK — kept explicit here too since
+    # Compose's healthcheck: overrides the image's HEALTHCHECK when both are set.
+    # Python-based, not curl: curl is not installed in this image.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 5

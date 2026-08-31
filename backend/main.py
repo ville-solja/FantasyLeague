@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
@@ -19,7 +20,7 @@ from migrate import run_migrations
 from ingest import ingest_league
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
-from weeks import auto_lock_weeks
+from weeks import auto_lock_weeks, generate_weekly_summaries
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
 from routers import players as players_router
@@ -37,6 +38,7 @@ from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
+from routers import weekly_summary as weekly_summary_router
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,9 @@ _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
 
 def _week_maintenance_loop():
-    """Background thread: periodically lock weeks whose match window has opened.
+    """Background thread: periodically lock weeks whose match window has opened
+    and mark weeks whose scoring window has closed as available in the Weekly
+    Report.
 
     Weeks themselves are created manually by admins (Week Management tab) —
     this loop no longer auto-generates them.
@@ -66,6 +70,7 @@ def _week_maintenance_loop():
             db = SessionLocal()
             try:
                 auto_lock_weeks(db)
+                generate_weekly_summaries(db)
             finally:
                 db.close()
         except Exception:
@@ -259,6 +264,7 @@ app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
+app.include_router(weekly_summary_router.router)
 
 
 @app.get("/config")
@@ -293,7 +299,15 @@ def get_config(db=Depends(get_db)):
 
 
 @app.get("/health")
-def health():
+def health(db=Depends(get_db)):
+    """Readiness check, not just liveness — verifies the DB is actually reachable rather than
+    only that the ASGI process is accepting requests. See reference/container-health-check.md.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Health check DB connectivity failure")
+        return JSONResponse(status_code=503, content={"status": "error"})
     return {"status": "ok"}
 
 

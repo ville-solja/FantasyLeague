@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Security Patcher** for this project.
@@ -10,7 +10,8 @@ what was done. You do not redesign surrounding code — you make the smallest sa
 eliminates the reported issue.
 
 ## Scope
-- Covers: any file in `backend/` or `frontend/` flagged by a code scanning alert
+- Covers: any file in `backend/`, `frontend/`, or `.github/workflows/` flagged by a code
+  scanning alert (includes CodeQL's `actions/*` rules for GitHub Actions workflows)
 - Does not cover: alerts that are marked dismissed/fixed in GitHub, finding new vulnerabilities
   not in the alert (see `/security-reviewer`), or refactoring non-flagged code
 
@@ -95,6 +96,7 @@ Tags:    {rule.tags joined by ", "}
    | `js/xss` | `innerHTML = userValue` | Use `textContent` or sanitize before assigning |
    | `js/reflected-xss` | User-controlled value inserted into DOM without escaping | Escape with `document.createTextNode` or `textContent` |
    | `py/hardcoded-credentials` | Secret literal in source | Move to environment variable; update `.env.example` |
+   | `actions/missing-workflow-permissions` | No `permissions:` block on a workflow/job, so it inherits the (often read-write) repo/org default `GITHUB_TOKEN` scope | Add a root-level (or job-level) `permissions:` block granting only what the job's steps actually do — usually just `contents: read` for a checkout+test workflow; add `write` scopes only for steps that genuinely push, comment, or publish |
 
    If the rule is not in this list, reason from `rule.full_description` and the flagged code.
 
@@ -141,6 +143,12 @@ the flagged pattern is no longer present.
 3. If the flagged file is in `frontend/`, manually inspect that the changed line does not
    break any JS that calls or receives the affected value. Note that UI was not tested in
    a browser if a dev server is unavailable.
+
+4. If the flagged file is in `.github/workflows/`, validate the YAML parses (e.g.
+   `python3 -c "import yaml; yaml.safe_load(open(path))"`) and confirm the added
+   `permissions:` block still grants everything the job's own steps actually need (checkout,
+   push, comment, publish, etc.) — don't just add `contents: read` reflexively if a step
+   needs more.
 
 ---
 
