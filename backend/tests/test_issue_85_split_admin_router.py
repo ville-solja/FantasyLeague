@@ -191,7 +191,7 @@ class TestPreserveExistingTestCoverageThroughSplit:
         assert "routers.admin.backup_sqlite_db" not in source
 
     def test_full_suite_pass_skip_counts_match_pre_split_baseline(self):
-        """`cd backend && python -m pytest tests/ -v` reports the same 577 passed / 10 skipped as before the split.
+        """`cd backend && python -m pytest tests/ -v` reports the same 607 passed / 10 skipped as before the split.
 
         This baseline is a regression tripwire for the admin router split, not an
         eternal invariant — it is expected to be bumped upward whenever a later
@@ -208,15 +208,19 @@ class TestPreserveExistingTestCoverageThroughSplit:
         the require_admin session-freshness security fix's 4 new tests did after that,
         the MVP/card scoring parity fix's 5 new tests did after that,
         the cross-pipeline scoring parity guardrail's 2 new tests did after that,
-        plan-frontend-framework-evaluation's 9 new tests did after that, and the
-        Alpine.js How to Play spike's net 4 new tests did after that)."""
+        plan-frontend-framework-evaluation's 9 new tests did after that,
+        the Alpine.js How to Play spike's net 4 new tests did after that,
+        plan-issue-51-weekly-summary's 21 new tests did after that,
+        the get_roster/enrich_players security-review fixes' 6 new tests did after that, and
+        the demo-mode generate_weekly_summaries fix's 1 new test did after that, and
+        the weekly-summary team-logo-resolution fix's 2 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "577 passed" in output, output[-3000:]
+        assert "607 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

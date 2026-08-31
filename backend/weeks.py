@@ -1,7 +1,7 @@
 import logging
 
 import clock
-from models import AuditLog, Card, User, Week, WeeklyRosterEntry
+from models import AuditLog, Card, User, Week, WeeklyRosterEntry, WeeklySummary
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,25 @@ def auto_lock_weeks(db):
         ))
         logger.info("Granted 1 token to %d users (weeks: %s)", len(users), week_labels)
         db.commit()  # single commit: snapshot + lock flag + token grants
+
+
+def generate_weekly_summaries(db):
+    """Mark weeks whose scoring window has closed as available in the Weekly
+    Report. Idempotent and driven by end_time (same grace-period boundary
+    auto_lock_weeks uses), not a fixed calendar schedule — applies uniformly
+    to regular weeks and irregular ones (e.g. a compressed finals week).
+    """
+    now = clock.now(db)
+    already = {r[0] for r in db.query(WeeklySummary.week_id).all()}
+    query = db.query(Week).filter(Week.end_time <= now)
+    if already:
+        query = query.filter(~Week.id.in_(already))
+    newly_ready = query.all()
+    for week in newly_ready:
+        db.add(WeeklySummary(week_id=week.id, generated_at=int(now)))
+        logger.info("Weekly summary available for %s", week.label)
+    if newly_ready:
+        db.commit()
 
 
 def get_current_week(db):

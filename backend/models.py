@@ -23,6 +23,7 @@ class Match(Base):
     radiant_win = Column(Boolean)  # from OpenDota
     week_override_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)  # admin override: which week this match counts for
     duration = Column(Integer, nullable=True)  # seconds, from OpenDota match JSON
+    vod_url = Column(String, nullable=True)  # admin-set caster VOD link, shown in the Weekly Report
 
 
 class PlayerMatchStats(Base):
@@ -143,6 +144,37 @@ class WeeklyRosterEntry(Base):
     week_id = Column(Integer, ForeignKey("weeks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     card_id = Column(Integer, ForeignKey("cards.id"))
+
+
+class WeeklySummary(Base):
+    """Marks a week as available in the Weekly Report. Content itself is
+    computed live from Match/PlayerMatchStats/Team, the same way the weekly
+    leaderboard and card scoring already do — this table only gates tab
+    visibility and drives the "new report" highlight badge."""
+    __tablename__ = "weekly_summaries"
+
+    week_id      = Column(Integer, ForeignKey("weeks.id"), primary_key=True)
+    generated_at = Column(Integer)  # Unix timestamp
+
+
+class WeeklySummaryReveal(Base):
+    __tablename__ = "weekly_summary_reveals"
+    __table_args__ = (UniqueConstraint("week_id", "user_id",
+                                       name="uq_weekly_summary_reveal_week_user"),)
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    week_id     = Column(Integer, ForeignKey("weeks.id"))
+    user_id     = Column(Integer, ForeignKey("users.id"))
+    revealed_at = Column(Integer)  # Unix timestamp
+
+
+class WeeklySummarySeen(Base):
+    """One row per user: the most recent week_id they've opened the report
+    popup for. Used only to gate the highlight badge on the report button."""
+    __tablename__ = "weekly_summary_seen"
+
+    user_id           = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    last_seen_week_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)
 
 
 class SeasonArchive(Base):

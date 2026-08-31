@@ -13,6 +13,7 @@ These describe the primary user-visible surfaces of the app.
 | [Authentication & Accounts](core/auth.md) | Registration, login, sessions, profile management, forgot-password |
 | [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll |
 | [Weeks & Leaderboards](core/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
+| [Weekly Summary Report](core/weekly-summary.md) | Post-week recap popup: series-grouped matches, VOD links, and a per-user Reveal-results gate for MVP highlights and points earned |
 | [Players & Teams](core/players.md) | Player and team browse endpoints with match history |
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
 | [Twitch Extension](core/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |

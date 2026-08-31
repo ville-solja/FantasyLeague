@@ -9,6 +9,7 @@ function applyAuthState() {
 
   document.getElementById("tab-btn-team").style.display  = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display = (loggedIn && activeIsAdmin) ? "" : "none";
+  document.getElementById("weeklyReportBtn").style.display = loggedIn ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");
   if (tokenEl) tokenEl.style.display = loggedIn ? "flex" : "none";
@@ -123,6 +124,7 @@ async function login() {
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
+    checkWeeklySummaryHighlight();
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
     applyAuthState();
@@ -207,6 +209,7 @@ async function register() {
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
+    checkWeeklySummaryHighlight();
     document.getElementById("registerModal").classList.add("hidden");
     document.getElementById("regUsername").value = "";
     document.getElementById("regEmail").value    = "";
