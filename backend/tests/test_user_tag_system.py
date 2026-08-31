@@ -132,9 +132,9 @@ class TestCardStickers:
             pytest.skip("PIL not available")
         from PIL import Image
         base = Image.new("RGBA", (597, 845), (30, 30, 30, 255))
-        original_pixels = list(base.getdata())
+        original_pixels = list(base.get_flattened_data())
         result = _apply_stickers(base, [])
-        result_pixels = list(result.getdata())
+        result_pixels = list(result.get_flattened_data())
         assert original_pixels == result_pixels, "Image was modified even though no tags were given"
 
     def test_missing_sticker_file_is_silently_skipped(self, db):
