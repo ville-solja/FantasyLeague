@@ -222,7 +222,10 @@ Returns public configuration values used by the frontend. No authentication requ
 `demo_mode` is `true` only when the server has `DEMO_MODE=true` set. See `reference/demo-mode.md`.
 
 ### `GET /health`
-Returns `{"status": "ok"}`. No authentication required. Used by container health checks.
+No authentication required. Checks DB connectivity (`SELECT 1`), not just process liveness —
+returns `{"status": "ok"}` (200) normally, or `{"status": "error"}` (503) if the DB is
+unreachable. Used by `backend/Dockerfile`'s `HEALTHCHECK` instruction and by
+`docker-compose.yml`'s `healthcheck:` block. See `reference/container-health-check.md`.
 
 ---
 

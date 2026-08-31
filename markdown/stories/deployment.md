@@ -101,3 +101,45 @@ misread as an oversight.
 - `markdown/features/reference/security-headers.md` documents the CORS decision: why
   wildcard is used, why it is safe (`allow_credentials=False` + Twitch JWT auth), and what
   would need to change if the Twitch extension were removed
+
+## Container Health Reporting
+
+### Evaluate Container Health-Check Options
+**User story**
+As an operator/hoster, I want a documented comparison of container health-reporting approaches
+for this app, grounded in what's actually in the Docker/Compose setup today, so I can be
+confident the chosen approach actually detects failure rather than always reporting healthy.
+
+**Acceptance criteria**
+- Doc inventories the current state: `GET /health`'s actual behavior (unconditional
+  `{"status": "ok"}`, no dependency check), the existing `docker-compose.yml` `healthcheck:`
+  block (test command, interval, timeout, retries, start_period), and confirms whether
+  `docker-compose.dev.yml` inherits it via Compose file merge
+- Doc flags the concrete risk found in the current setup: the healthcheck's `test` command
+  depends on `curl`, which is not installed in the image built by `backend/Dockerfile`
+- Doc compares at least three concrete options: (a) status quo — compose-level healthcheck
+  only, orchestrator-dependent; (b) a `HEALTHCHECK` instruction baked into `backend/Dockerfile`
+  itself, so it works under any orchestrator and not only via this repo's Compose files; (c)
+  deepening `GET /health` to verify a real dependency (DB connectivity) instead of just
+  process liveness
+- Doc ends with one clear recommendation and explicitly states no Dockerfile/backend change
+  happens until the user reviews and approves it
+
+### Implement the Recommended Health Check
+**User story**
+As an operator, I want the recommended health-check approach actually implemented, so
+containers accurately report health to whatever monitoring or orchestration the hoster uses.
+
+**Acceptance criteria**
+- `GET /health` reflects real service health (e.g. a lightweight DB connectivity check)
+  without becoming a performance or availability risk (no heavy queries, fast timeout, a
+  dependency failure returns a non-2xx status rather than raising an unhandled exception)
+- A `HEALTHCHECK` instruction is added to `backend/Dockerfile` so the built image reports
+  health under any orchestrator, not only via this repo's `docker-compose.yml`
+- The healthcheck command does not depend on a binary absent from the image — either install
+  `curl` explicitly in the Dockerfile, or use a dependency-free Python-based check
+- `docker-compose.yml`'s existing `healthcheck:` block is updated to match (or removed if the
+  Dockerfile-level one alone is judged sufficient), so there is no conflicting or silently
+  broken duplicate definition
+- `markdown/features/reference/commands.md`'s Docker section documents how an operator checks
+  health status (`docker compose ps`, `docker inspect --format='{{json .State.Health}}'`)

@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
@@ -298,7 +299,15 @@ def get_config(db=Depends(get_db)):
 
 
 @app.get("/health")
-def health():
+def health(db=Depends(get_db)):
+    """Readiness check, not just liveness — verifies the DB is actually reachable rather than
+    only that the ASGI process is accepting requests. See reference/container-health-check.md.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Health check DB connectivity failure")
+        return JSONResponse(status_code=503, content={"status": "error"})
     return {"status": "ok"}
 
 
