@@ -14,6 +14,16 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
+### Check container health status
+`GET /health` checks DB connectivity, not just process liveness (see
+`reference/container-health-check.md`). The check runs automatically via `backend/Dockerfile`'s
+`HEALTHCHECK` instruction (works under any orchestrator) and is also declared explicitly in
+`docker-compose.yml`.
+```
+docker compose ps
+docker inspect --format='{{json .State.Health}}' <container-name-or-id>
+```
+
 ## Reset database
 Stops the container, deletes the database file, and restarts from scratch (re-runs migrations and seed on next startup):
 ```
