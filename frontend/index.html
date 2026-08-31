@@ -6,6 +6,9 @@
   <link rel="stylesheet" href="/colors_and_type.css">
   <link rel="stylesheet" href="/style.css">
   <script src="https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js"></script>
+  <!-- Alpine.js spike — see markdown/features/reference/frontend-framework-evaluation.md.
+       Scoped to the How to Play subtabs only; the rest of the app stays vanilla JS. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
 
@@ -14,6 +17,17 @@
   <div class="modal" style="max-width:480px;">
     <p id="notifMessage" style="margin-bottom:20px;line-height:1.5;"></p>
     <button id="notifDismissBtn" style="width:100%;">Dismiss</button>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="weeklySummaryModal" role="dialog" aria-modal="true" data-close="closeWeeklySummary" onclick="if(event.target===this)closeWeeklySummary()">
+  <div class="modal" style="max-width:860px;width:95vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin-bottom:0;">Weekly Report</h2>
+      <button class="ghost" onclick="closeWeeklySummary()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <div id="weeklySummaryTabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;"></div>
+    <div id="weeklySummaryContent" style="max-height:60vh;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -252,6 +266,10 @@
       <span id="headerTokenNum" class="header-token-num"></span>
       <span class="header-token-label">Tokens</span>
     </div>
+    <button class="ghost" id="weeklyReportBtn" onclick="openWeeklySummary()" style="display:none;position:relative;">
+      Weekly Report
+      <span id="weeklyReportBadge" class="weekly-report-badge" style="display:none;"></span>
+    </button>
     <button id="headerUserLabel" class="secondary header-profile-btn" onclick="switchTab('profile')" style="display:none;"></button>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
@@ -539,18 +557,19 @@
 </div>
 
 <!-- TAB: HOW TO PLAY -->
-<div id="tab-howtoplay" class="tab-content">
+<div id="tab-howtoplay" class="tab-content" x-data="{ howToPlayTab: 'users' }">
 
-  <!-- How to Play subtab bar -->
-  <div id="howtoplay-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
-    <button class="howtoplay-tab-btn" data-tab="users">Users</button>
-    <button class="howtoplay-tab-btn" data-tab="players">Players</button>
-    <button class="howtoplay-tab-btn" data-tab="streamers">Streamers</button>
-    <button class="howtoplay-tab-btn" data-tab="developers">Developers</button>
+  <!-- How to Play subtab bar — Alpine.js spike (declarative x-show/@click instead of
+       the imperative data-attribute matching used by the admin/schedule tab bars) -->
+  <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
+    <button class="howtoplay-tab-btn" data-tab="users" :class="{ active: howToPlayTab === 'users' }" @click="howToPlayTab = 'users'">Users</button>
+    <button class="howtoplay-tab-btn" data-tab="players" :class="{ active: howToPlayTab === 'players' }" @click="howToPlayTab = 'players'">Players</button>
+    <button class="howtoplay-tab-btn" data-tab="streamers" :class="{ active: howToPlayTab === 'streamers' }" @click="howToPlayTab = 'streamers'">Streamers</button>
+    <button class="howtoplay-tab-btn" data-tab="developers" :class="{ active: howToPlayTab === 'developers' }" @click="howToPlayTab = 'developers'">Developers</button>
   </div>
 
   <!-- Users subtab -->
-  <div id="howtoplay-panel-users" data-howtoplay-tab="users" class="grid">
+  <div id="howtoplay-panel-users" x-cloak x-show="howToPlayTab === 'users'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Getting Started</h2>
@@ -633,7 +652,7 @@
   </div>
 
   <!-- Players subtab -->
-  <div id="howtoplay-panel-players" data-howtoplay-tab="players" class="grid" style="display:none;">
+  <div id="howtoplay-panel-players" x-cloak x-show="howToPlayTab === 'players'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Linking Your Dota 2 Profile</h2>
@@ -658,7 +677,7 @@
   </div>
 
   <!-- Streamers subtab -->
-  <div id="howtoplay-panel-streamers" data-howtoplay-tab="streamers" class="grid" style="display:none;">
+  <div id="howtoplay-panel-streamers" x-cloak x-show="howToPlayTab === 'streamers'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Applying &amp; Installing</h2>
@@ -696,7 +715,7 @@
   </div>
 
   <!-- Developers subtab -->
-  <div id="howtoplay-panel-developers" data-howtoplay-tab="developers" class="grid" style="display:none;">
+  <div id="howtoplay-panel-developers" x-cloak x-show="howToPlayTab === 'developers'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
       <h2>Design Decisions</h2>
@@ -975,8 +994,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="7" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="8" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>
@@ -1050,6 +1069,7 @@
 <script src="/app-admin-demo.js"></script>
 <script src="/app-admin.js"></script>
 <script src="/app-profile.js"></script>
+<script src="/app-weekly-summary.js"></script>
 <script src="/app-init.js"></script>
 </body>
 </html>

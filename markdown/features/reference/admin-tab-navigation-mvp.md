@@ -41,12 +41,13 @@ Returns all ingested matches ordered by start time descending. Admin-only.
     "team2": "Team Beta",
     "start_time": 1700000000,
     "mvp_player_name": "SomePlayer",
-    "mvp_player_id": 42
+    "mvp_player_id": 42,
+    "vod_url": null
   }
 ]
 ```
 
-`team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set.
+`team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set. `vod_url` is `null` until an admin sets one via `PATCH /admin/matches/{match_id}/vod` (see below) — it is also surfaced to every user in the Weekly Report, see `core/weekly-summary.md`.
 
 Note: `Match.duration` exists on the model (added by `reference/schedule-series-game-breakdown.md`,
 migration `022_matches_duration`) but this endpoint's response does not include it. `series_id`
@@ -86,6 +87,20 @@ those are viewer-engagement mechanics specific to the Twitch extension.
 Returns `{ match_id, player_id, player_name }`.
 Logged as `admin_set_mvp`.
 
+### `PATCH /admin/matches/{match_id}/vod`
+
+Sets, edits, or clears a match's caster VOD link, shown next to that match in every user's
+Weekly Report (`core/weekly-summary.md`) — including weeks whose summary was generated before
+the link was added, since report content is computed live rather than snapshotted.
+
+```json
+{ "vod_url": "https://youtube.com/watch?v=..." }
+```
+
+`vod_url: null` clears the link. A non-null value must start with `http://` or `https://`, or
+the request is rejected with 422. Returns `{ match_id, vod_url }`. Logged as
+`admin_match_vod_set`.
+
 ---
 
 ## Audit Log Entry
@@ -93,4 +108,5 @@ Logged as `admin_set_mvp`.
 | Action | Trigger |
 |---|---|
 | `admin_set_mvp` | Admin set MVP for a match via the Matches tab |
+| `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
 

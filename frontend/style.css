@@ -1,6 +1,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { padding: 0; }
 
+/* Alpine.js spike (How to Play subtabs) — hides x-show elements until Alpine has
+   initialized, so they don't all flash visible on load before Alpine evaluates state. */
+[x-cloak] { display: none !important; }
+
 /* App-scale overrides — design system h1/h2 are display-sized; app needs compact variants */
 h1 {
   font-size: var(--fs-xl);
@@ -209,7 +213,8 @@ button.danger {
 button.danger:hover { background: #c83838; }
 
 .admin-tab-btn,
-.howtoplay-tab-btn {
+.howtoplay-tab-btn,
+.weekly-summary-tab-btn {
   background: none;
   color: var(--fg-muted);
   border: none;
@@ -218,9 +223,11 @@ button.danger:hover { background: #c83838; }
   padding: 8px 14px;
 }
 .admin-tab-btn:hover,
-.howtoplay-tab-btn:hover { background: none; color: var(--fg); }
+.howtoplay-tab-btn:hover,
+.weekly-summary-tab-btn:hover { background: none; color: var(--fg); }
 .admin-tab-btn.active,
-.howtoplay-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.howtoplay-tab-btn.active,
+.weekly-summary-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 button:disabled {
   opacity: 0.35;
@@ -1086,3 +1093,111 @@ body.roster-dragging * { cursor: grabbing !important; }
 .date-picker-day.selected { background: var(--accent); color: var(--accent-fg); }
 .date-picker-day.empty { cursor: default; }
 .date-picker-day.empty:hover { background: none; }
+
+/* ============================================================
+   WEEKLY SUMMARY REPORT
+   ============================================================ */
+.weekly-report-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.weekly-summary-series {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.weekly-summary-series:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.weekly-summary-match { padding: 10px 0; }
+.weekly-summary-match-row {
+  display: grid;
+  /* minmax(0, 1fr), not bare 1fr — a bare 1fr track won't shrink below its
+     content's min-content width, so a long team name or a wide player group
+     forces the whole grid (and the page) wider instead of wrapping/shrinking. */
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.weekly-summary-match-team-col {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  /* justify-self defaults to stretch, so this box fills its grid column's
+     full width on both sides — centering the label/name inside it keeps
+     team2 clear of the popup's scrollbar instead of hugging the edge. */
+}
+.weekly-summary-match-team-col.right { grid-column: 3; }
+.weekly-summary-match-team-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.weekly-summary-match-team-inner > .entity-link {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.weekly-summary-winner {
+  border: 2px solid var(--accent);
+  border-radius: var(--r-md);
+  padding: 4px 8px;
+}
+.weekly-summary-winner-label {
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: var(--w-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.weekly-summary-match-vs-cell {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--fg-dim);
+}
+.weekly-summary-match-players-col {
+  grid-column: 1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.weekly-summary-match-players-col.right { grid-column: 3; justify-content: flex-end; }
+.weekly-summary-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 60px;
+  font-size: 0.68rem;
+  text-align: center;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.weekly-summary-mvp {
+  outline: 2px solid var(--accent);
+  border-radius: 8px;
+  padding-top: 4px;
+}
+.weekly-summary-mvp-label {
+  color: var(--accent);
+  font-size: 0.55rem;
+  font-weight: var(--w-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+.weekly-summary-points-neutral { color: var(--fg-dim); }
+.weekly-summary-points-rostered { color: var(--accent); font-weight: var(--w-bold); }

@@ -15,6 +15,97 @@ Format:
 
 ---
 
+### 2026-08-31 — security-reviewer — endpoints
+**Problem:** A version pin's upper bound can silently block a Dependabot fix from ever being
+picked up even by a routine `pip install --upgrade` within the declared constraint —
+`backend/requirements.txt` pins `pillow>=11.0,<12.0`, but all 12 currently-open Pillow
+Dependabot alerts (10 high, 2 medium; CVE-2026-59197 through -59205, -54058, -55379,
+-55798, -54060, -55380) are fixed only in `12.3.0`, which the `<12.0` ceiling excludes
+entirely. Likewise `backend/requirements-dev.txt`'s `pytest>=8.0,<9.0` excludes the
+`9.0.3` fix for the one open pytest alert. A quick glance at "is Pillow pinned" says yes;
+it takes actually cross-referencing each open alert's `first_patched_version` against the
+constraint to see the pin itself is the blocker.
+**Solution:** When auditing dependencies (now part of `/security-reviewer`'s scope, added this
+session), don't stop at "is there a pin" — fetch open Dependabot alerts
+(`gh api repos/{owner}/{repo}/dependabot/alerts --paginate`) and check whether each one's
+`first_patched_version` actually satisfies the current constraint's upper bound. A pin that
+looks conservative/reasonable can be the exact reason a fix never lands.
+
+---
+
+### 2026-08-31 — security-patcher — agent-config
+**Problem:** `actions/missing-workflow-permissions` (CWE-275) flagged
+`.github/workflows/unit-tests.yml` for having no explicit `permissions:` block, meaning it
+inherits the repository/org default `GITHUB_TOKEN` scope (often broader read-write) instead of
+declaring only what the job actually needs. This alert's flagged file
+(`.github/workflows/`) falls outside `/security-patcher`'s declared Scope section
+(`backend/` or `frontend/` only) — worth noting since a future run may want to either widen
+the declared scope to cover `.github/workflows/` explicitly, or route Actions-category alerts
+to a different process instead of this agent.
+**Solution:** Add a root-level `permissions:\n  contents: read` block — the job only checks
+out code, installs deps, and runs pytest; it never pushes, comments, or publishes anything, so
+read-only `contents` is the correct minimal grant (matches CodeQL's own suggested minimal
+starting point exactly). Two sibling workflows (`docker-publish.yml`, `ui-tests.yml`) have the
+same gap but were not touched here since they weren't the flagged file for this alert.
+
+---
+
+### 2026-08-31 — security-patcher — frontend
+**Problem:** `js/incomplete-multi-character-sanitization` (CWE-20/80/116) flagged
+`twitch-extension/dev-harness.html`'s single-pass `html.replace(/<script[^>]*twitch-ext\.min\.js[^>]*><\/script>/gi, "")` used to strip the Twitch CDN script tag from a
+fetched HTML file before injecting it into an iframe via `srcdoc`. A single substitution
+pass over a multi-character pattern can, for crafted/overlapping input, leave a still-matching
+tag behind rather than fully removing it — the classic "remove `<!--`, but `<!<!---->` only
+partially strips" class of bug. Low real-world risk here (the fetched file is a
+developer-controlled local dev-harness asset, not user input), but the pattern itself is what
+CodeQL flags regardless of actual exploitability in this call site.
+**Solution:** Wrap the `.replace()` call in a `do { prev = html; html = html.replace(...) }
+while (html !== prev)` loop so the substitution repeats until no further match is found,
+matching CodeQL's own documented fix for this rule. Verified behavior is unchanged for normal
+input (stabilizes after exactly one real removal + one no-op confirmation pass) and the loop
+cannot hang since each pass only ever shrinks or leaves the string unchanged, never grows it.
+
+---
+
+### 2026-08-31 — developer — models
+**Problem:** `backend/routers/admin_demo.py`'s `set_demo_clock()` synchronously re-runs
+`auto_lock_weeks(db)` right after moving the clock override ("make the lock transition
+observable immediately"), but `plan-issue-51-weekly-summary` added a second `_week_maintenance_loop`
+step, `generate_weekly_summaries(db)`, without also adding it to `set_demo_clock()`. Result:
+manually demoing the feature (set clock past a week's end_time, log in as a demo user) granted
+the week-lock token immediately but the Weekly Report never appeared, because
+`generate_weekly_summaries` only ran on the background loop's real-wall-clock timer
+(`WEEK_CHECK_INTERVAL`, default 300s) — which the demo clock override does not speed up.
+**Solution:** Whenever a new step is added to `_week_maintenance_loop` in `backend/main.py`,
+also add it to `set_demo_clock()` in `backend/routers/admin_demo.py` (right after
+`auto_lock_weeks(db)`) — Demo Mode exists specifically so the season lifecycle can be
+demonstrated without waiting for real time to pass, so every "runs when a week's clock
+boundary passes" background step needs a synchronous counterpart there, not just the original
+one. When adding a similar background-loop step in the future, grep `set_demo_clock` and add
+the same call there in the same edit.
+
+---
+
+### 2026-08-31 — security-reviewer — endpoints
+**Problem:** Two findings from the 2026-08-12 security-reviewer entries below are still present
+in the current codebase, unfixed: (1) `GET /roster/{user_id}` (`backend/routers/cards.py:621`)
+still authorizes with the session-cached `current_user.get("is_admin")` instead of
+`Depends(require_admin)`/a fresh DB check — the exact gap that entry describes. (2) The
+2026-08-12 session-leak entry's stated **Solution** was "wrap `enrich_players()`'s body in
+try/finally, matching the sibling function `run_profile_enrichment()`" — but only
+`run_profile_enrichment()` (`backend/enrich.py`) actually has that wrapping today;
+`enrich_players()` (same file) still opens `db = SessionLocal()` with `db.close()`
+only on two normal-exit paths, no try/finally, and is still reachable synchronously from
+`POST /ingest/league/{league_id}` via `run_enrichment()`. The lessons-learned entry recorded a
+fix that was never actually applied to the code (or was applied and later reverted/lost).
+**Solution:** A lessons-learned "Solution" describes correct guidance, not confirmation the fix
+landed — don't treat a past entry as proof an issue is resolved. When a security-reviewer run
+finds a pattern that matches an existing entry, re-verify the actual current file content before
+marking it fixed/skip-worthy; grep for the exact flagged line/pattern first. Both findings are
+re-reported in this session's `/security-reviewer` output rather than assumed closed.
+
+---
+
 ### 2026-08-12 — security-reviewer — endpoints
 **Problem:** `GET /roster/{user_id}` (`backend/routers/cards.py`) authorizes cross-user access with
 its own inline `if user_id != current_user["user_id"] and not current_user.get("is_admin")` check

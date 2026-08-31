@@ -189,6 +189,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_tag_grant` | Admin granted a tag to a user |
 | `admin_tag_revoke` | Admin revoked a tag from a user |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
+| `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
 | `twitch_mvp_set` | Broadcaster set match MVP via the Twitch extension |
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
@@ -221,7 +222,10 @@ Returns public configuration values used by the frontend. No authentication requ
 `demo_mode` is `true` only when the server has `DEMO_MODE=true` set. See `reference/demo-mode.md`.
 
 ### `GET /health`
-Returns `{"status": "ok"}`. No authentication required. Used by container health checks.
+No authentication required. Checks DB connectivity (`SELECT 1`), not just process liveness —
+returns `{"status": "ok"}` (200) normally, or `{"status": "error"}` (503) if the DB is
+unreachable. Used by `backend/Dockerfile`'s `HEALTHCHECK` instruction and by
+`docker-compose.yml`'s `healthcheck:` block. See `reference/container-health-check.md`.
 
 ---
 
@@ -237,6 +241,7 @@ These features have dedicated reference documents:
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
-| Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp` | `reference/admin-tab-navigation-mvp.md` |
+| Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
+| Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/seen` | `core/weekly-summary.md` |

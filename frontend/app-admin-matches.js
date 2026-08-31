@@ -7,7 +7,7 @@ async function loadAdminMatches() {
 
     const tbody = document.getElementById('adminMatchesBody');
     if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='7' style='color:#444'>No matches</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='8' style='color:#444'>No matches</td></tr>";
       setStatus('adminMatchesStatus', '');
       return;
     }
@@ -22,6 +22,7 @@ async function loadAdminMatches() {
         <td style="font-size:0.85rem;">${teamLink(m.dire_team_id, m.team2)}</td>
         <td style="font-size:0.8rem;">${start}</td>
         <td class="mvp-cell">${m.mvp_player_name || '—'}</td>
+        <td></td>
         <td></td>`;
       const setMvpBtn = document.createElement('button');
       setMvpBtn.className = 'secondary';
@@ -29,8 +30,52 @@ async function loadAdminMatches() {
       setMvpBtn.textContent = 'Set MVP';
       setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
       tr.cells[6].appendChild(setMvpBtn);
+      tr.cells[7].appendChild(_buildVodCell(m.match_id, m.vod_url));
       tbody.appendChild(tr);
     });
+    setStatus('adminMatchesStatus', '');
+  } catch (e) {
+    setStatus('adminMatchesStatus', e.message, false);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VOD link inline editing
+// ---------------------------------------------------------------------------
+
+function _buildVodCell(matchId, vodUrl) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'https://…';
+  input.value = vodUrl || '';
+  input.style.cssText = 'width:120px;font-size:0.8rem;padding:2px 4px;';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'secondary';
+  saveBtn.style.cssText = 'padding:2px 7px;';
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', () => saveMatchVod(matchId, input.value.trim(), wrap));
+
+  wrap.appendChild(input);
+  wrap.appendChild(saveBtn);
+  return wrap;
+}
+
+async function saveMatchVod(matchId, vodUrl, cellWrap) {
+  try {
+    const res = await fetch(`${API}/admin/matches/${matchId}/vod`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vod_url: vodUrl || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus('adminMatchesStatus', data.detail, false);
+      return;
+    }
     setStatus('adminMatchesStatus', '');
   } catch (e) {
     setStatus('adminMatchesStatus', e.message, false);
