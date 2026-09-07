@@ -78,6 +78,7 @@ def get_json(
     *,
     retries: int = 5,
     base_backoff: float = 10.0,
+    timeout: float = 30,
     label: str = "",
 ) -> dict | list | None:
     """GET + parse JSON with exponential back-off + jitter on 429/5xx.
@@ -88,7 +89,7 @@ def get_json(
     tag_label = label or url
     for attempt in range(retries):
         try:
-            res = get(url, timeout=30)
+            res = get(url, timeout=timeout)
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
             wait = base_backoff * (2 ** attempt) + random.uniform(0, 3)
             logger.warning("get_json %s network error (%s), retry in %.1fs", tag_label, e.__class__.__name__, wait)

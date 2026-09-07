@@ -87,7 +87,7 @@ Manually assigns a match to a specific fantasy week, overriding the week derived
 Set `week_id` to `null` to clear the override.
 
 ### `POST /admin/sync-match-weeks`
-Automatically bulk-assigns `week_override_id` for all matches based on the Google Sheets schedule. Uses a ±3-day proximity window to map each scheduled series to the closest actual matches played between those two teams. Clears overrides for matches already in the correct week. Returns a summary of changes and errors.
+Automatically bulk-assigns `week_override_id` for all matches based on the configured schedule source. Uses a ±3-day proximity window to map each scheduled series to the closest actual matches played between those two teams. Clears overrides for matches already in the correct week. Returns a summary of changes and errors.
 
 ---
 
@@ -120,14 +120,16 @@ played. See `reference/toornament.md`.
 
 ## Schedule
 
+The fixture list has two possible sources: a structured JSON feed (`SCHEDULE_FIXTURES_URL`, preferred when set) or the legacy Google Sheets CSV (`SCHEDULE_SHEET_URL`, the fallback). Both are parsed into the same shape, so everything downstream is source-agnostic. See [Schedule Fixtures API Source](../reference/schedule-fixtures-api.md).
+
 ### `GET /schedule`
-Returns the current season fixture list parsed from the Google Sheets source (cached for 1 hour). No authentication required. Used by the frontend to display upcoming and past series.
+Returns the current season fixture list from the active source (cached for 1 hour). No authentication required. Used by the frontend to display upcoming and past series. The response includes a top-level `source` field (`"fixtures_json"` | `"sheet_csv"`); JSON-sourced series also carry a `scheduled` boolean.
 
 ### `POST /schedule/refresh`
-Clears the 1-hour schedule cache, forcing the next `GET /schedule` request to re-fetch from the Google Sheets source.
+Clears the 1-hour schedule cache, forcing the next `GET /schedule` request to re-fetch from the active source.
 
 ### `GET /schedule/debug`
-Returns detailed schedule parsing information for troubleshooting team name mapping or CSV parsing issues.
+Returns detailed schedule parsing information for troubleshooting. Reports the active `source`. For the CSV source: team-name mapping and row parsing details. For the JSON feed: HTTP `status_code`/`content_type`, the feed's `season`/`count`, `weeks_parsed`, and `fixtures_dropped` (fixtures with a missing/unknown `week` or `division`), or a clear `error` string on a bad response.
 
 ---
 

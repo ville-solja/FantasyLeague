@@ -108,6 +108,71 @@ played — are still shown.
 
 ---
 
+### Configure a JSON Schedule Source
+**User story**
+As an operator, I want to point the app at a JSON fixtures endpoint via an environment
+variable instead of a Google Sheet CSV, so the Schedule tab is populated from a structured,
+less fragile source.
+
+**Acceptance criteria**
+- `SCHEDULE_FIXTURES_URL` environment variable configures a JSON fixtures endpoint
+- When `SCHEDULE_FIXTURES_URL` is set, `GET /schedule` sources its `weeks[]` from that JSON
+  and does not fetch the CSV sheet
+- When `SCHEDULE_FIXTURES_URL` is unset, behaviour is exactly as today — the CSV sheet
+  (`SCHEDULE_SHEET_URL`) is used, or the tab is empty if neither is set
+- The `/schedule` JSON response keeps the same shape (`weeks[]` with `label`, `div1`, `div2`;
+  each series with `team1`, `team2`, `datetime_iso`, `stream_url`, `series_result`, …), so no
+  frontend or downstream change is required for sheet-parity fields
+- `.env.example` and `markdown/features/reference/commands.md` document the new variable and
+  its precedence over `SCHEDULE_SHEET_URL`
+
+### Fixtures Map to the Same Week/Division Structure
+**User story**
+As a user, I want fixtures from the JSON feed grouped into the same weeks and divisions as the
+sheet-sourced schedule, so the Schedule tab looks and behaves identically regardless of source.
+
+**Acceptance criteria**
+- Each feed fixture's `division` (`upper`/`lower`) maps to `div1`/`div2` respectively
+- Fixtures are grouped by their `week` integer into weeks labelled `"Week {n}"`, ordered
+  ascending
+- `team1`/`team2`, and `stream` (as `stream_url` when it is an `http(s)` URL, else
+  `stream_label`) carry across
+- A fixture with a missing/unrecognised `week` or `division` is skipped, not allowed to crash
+  the parse
+- Team-name → `team_id` resolution, `series_result` cross-referencing, and independently-derived
+  `extra_results` all work identically to the sheet path
+
+### Unscheduled Fixtures Still Appear
+**User story**
+As a user, I want fixtures that don't yet have a confirmed date/time to still show up under the
+right week in the Schedule tab, so I can see the full season plan before matches are scheduled.
+
+**Acceptance criteria**
+- A fixture with `starts_at: null` and empty `date`/`time` is given an approximate
+  `datetime_iso` of its `week_start` date at 00:00, so it is not filtered out of the Upcoming
+  list
+- Such a series is marked `scheduled: false` in the `/schedule` response
+- The Schedule tab shows "Time TBD" instead of a specific time for a `scheduled: false`
+  series, and still shows team names, division badge, and week grouping
+- A fixture with a real `starts_at` (ISO datetime) uses that as its `datetime_iso`, converted
+  to local time, and is marked `scheduled: true`
+- When both `starts_at` and `date`/`time` are present, `starts_at` wins
+
+### Diagnose the Active Schedule Source
+**User story**
+As an operator, I want the schedule debug endpoint to tell me which source is active and
+whether the JSON feed parsed cleanly, so I can troubleshoot a misconfigured or malformed feed.
+
+**Acceptance criteria**
+- `GET /schedule/debug` reports which source is in use (`fixtures_json` vs `sheet_csv`) and the
+  configured URL (prefix only)
+- For the JSON source it reports HTTP status, the feed's `season` and `count`, the number of
+  weeks parsed, and the number of fixtures dropped for a missing/unknown `week` or `division`
+- A fetch failure or non-JSON / schema-mismatched response is reported as a clear error string,
+  not an unhandled exception
+
+---
+
 ## Layout
 
 ### Roster-first My Team Layout

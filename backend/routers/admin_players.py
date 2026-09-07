@@ -1,6 +1,8 @@
+import json
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 
@@ -15,6 +17,16 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Player Pool Management
 # ---------------------------------------------------------------------------
+
+# Admin-triggered OpenDota lookups fail fast instead of using the long
+# exponential backoff shared with background jobs (enrichment, ingest poll) —
+# those jobs' retries alone can exhaust the app's rate-limit budget, so a
+# slow/unresponsive ID must not stall the admin UI for minutes. A short
+# timeout is enough for a healthy OpenDota response; on failure the ID is
+# just reported as an error and the admin can retry it manually.
+_INTERACTIVE_RETRIES = 2
+_INTERACTIVE_BACKOFF = 2.0
+_INTERACTIVE_TIMEOUT = 6.0
 
 class AddPlayerBody(BaseModel):
     player_id: int
@@ -71,7 +83,9 @@ def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_ad
     if existing and existing.is_active:
         raise HTTPException(status_code=409, detail="Player already exists in pool")
     result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{body.player_id}",
-                               label=f"player {body.player_id}")
+                               label=f"player {body.player_id}",
+                               retries=_INTERACTIVE_RETRIES, base_backoff=_INTERACTIVE_BACKOFF,
+                               timeout=_INTERACTIVE_TIMEOUT)
     if not result or not result.get("profile"):
         raise HTTPException(status_code=422, detail="Player not found on OpenDota")
     data = result["profile"]
@@ -94,23 +108,39 @@ def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_ad
     return {"id": p.id, "name": p.name}
 
 
-@router.post("/admin/players/bulk")
-def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
-                     admin=Depends(require_admin)):
-    raw_ids = [s.strip() for s in body.player_ids.split(",") if s.strip()]
+def _bulk_add_stream(raw_ids, db, admin):
+    """Yields one NDJSON line per processed ID, then a final summary line.
+
+    Performs the same per-ID logic as before (integer parsing, existing-ID
+    dedupe, OpenDota lookup, Player insert) but streams a result after each
+    ID resolves instead of buffering the whole batch. Each successful insert
+    is committed immediately (not batched to the end) so that if the admin
+    closes the tab/loses connection mid-batch, players already added stay
+    saved — only the unprocessed tail of the batch is lost, not everything
+    already reported as "added".
+    """
     added, skipped = [], []
-    for raw in raw_ids:
+    total = len(raw_ids)
+    for i, raw in enumerate(raw_ids, start=1):
         try:
             pid = int(raw)
         except ValueError:
             skipped.append({"id": raw, "reason": "not an integer"})
+            yield json.dumps({"id": raw, "status": "error",
+                               "reason": "not an integer", "index": i, "total": total}) + "\n"
             continue
         if db.get(Player, pid):
             skipped.append({"id": pid, "reason": "already exists"})
+            yield json.dumps({"id": pid, "status": "skipped",
+                               "reason": "already exists", "index": i, "total": total}) + "\n"
             continue
-        result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{pid}", label=f"player {pid}")
+        result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{pid}", label=f"player {pid}",
+                                   retries=_INTERACTIVE_RETRIES, base_backoff=_INTERACTIVE_BACKOFF,
+                                   timeout=_INTERACTIVE_TIMEOUT)
         if not result or not result.get("profile"):
             skipped.append({"id": pid, "reason": "not found on OpenDota"})
+            yield json.dumps({"id": pid, "status": "error",
+                               "reason": "not found on OpenDota", "index": i, "total": total}) + "\n"
             continue
         data = result["profile"]
         db.add(Player(
@@ -119,12 +149,23 @@ def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
             avatar_url=data.get("avatarfull", ""),
             is_active=True,
         ))
+        db.commit()
         added.append(pid)
+        yield json.dumps({"id": pid, "status": "added", "index": i, "total": total}) + "\n"
+
     if added:
         _audit(db, "admin_player_bulk_added", actor_id=admin["user_id"],
                actor_username=admin["username"], detail=f"added={len(added)}")
-    db.commit()
-    return {"added": len(added), "skipped": skipped}
+        db.commit()
+    yield json.dumps({"done": True, "added": len(added), "skipped": skipped}) + "\n"
+
+
+@router.post("/admin/players/bulk")
+def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
+                     admin=Depends(require_admin)):
+    raw_ids = [s.strip() for s in body.player_ids.split(",") if s.strip()]
+    return StreamingResponse(_bulk_add_stream(raw_ids, db, admin),
+                              media_type="application/x-ndjson")
 
 
 @router.post("/admin/players/remove")

@@ -8,7 +8,10 @@ import requests
 from sqlalchemy import bindparam, text
 
 SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
+SCHEDULE_FIXTURES_URL = os.getenv("SCHEDULE_FIXTURES_URL", "")
 CACHE_TTL = 3600
+
+_DIVISION_MAP = {"upper": "div1", "lower": "div2"}
 
 _cache = {"data": None, "fetched_at": None}
 
@@ -34,6 +37,23 @@ def fetch_csv_text():
         return res.content.decode("utf-8")
     except Exception as e:
         print(f"[SCHEDULE] Fetch error: {e}")
+        return None
+
+
+def fetch_fixtures_json():
+    """Fetch the Kanaliiga fixtures JSON feed. Returns the parsed payload dict,
+    or None on any failure (mirrors fetch_csv_text's contract)."""
+    if not SCHEDULE_FIXTURES_URL:
+        print("[SCHEDULE] SCHEDULE_FIXTURES_URL is not set")
+        return None
+    try:
+        res = requests.get(SCHEDULE_FIXTURES_URL, timeout=15, allow_redirects=True)
+        print(f"[SCHEDULE] Fixtures fetch status={res.status_code}")
+        if res.status_code != 200:
+            return None
+        return res.json()
+    except Exception as e:
+        print(f"[SCHEDULE] Fixtures fetch error: {e}")
         return None
 
 
@@ -153,6 +173,98 @@ def parse_schedule(csv_text):
         weeks.append(current_week)
 
     return weeks
+
+
+# -----------------------
+# JSON FIXTURES PARSER
+# -----------------------
+
+def _parse_iso_date(iso_date, time_str=""):
+    """'2026-09-14' (+ optional 'HH:MM') -> naive ISO datetime string, or None.
+    Distinct from parse_date_time(), which expects Finnish d.m.y order."""
+    if not iso_date:
+        return None
+    try:
+        y, m, d = (int(p) for p in str(iso_date).strip().split("-")[:3])
+    except (ValueError, TypeError):
+        return None
+    tc = (time_str or "").strip().replace(".", ":")
+    h, mi = 0, 0
+    if ":" in tc:
+        try:
+            h, mi = int(tc.split(":")[0]), int(tc.split(":")[1])
+        except (ValueError, IndexError):
+            h, mi = 0, 0
+    try:
+        return datetime(y, m, d, h, mi).isoformat()
+    except ValueError:
+        return None
+
+
+def _fixture_to_series(f):
+    """One feed fixture -> the same series dict parse_match_row() emits (plus a
+    `scheduled` bool)."""
+    starts_at = f.get("starts_at")
+    date_str = (f.get("date") or "").strip()
+    time_str = (f.get("time") or "").strip()
+
+    dt_iso, scheduled = None, bool(f.get("scheduled"))
+    if starts_at:
+        try:
+            dt_iso = (datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
+                      .astimezone().replace(tzinfo=None).isoformat())
+            scheduled = True
+        except ValueError:
+            dt_iso = None
+    if dt_iso is None and date_str:
+        dt_iso = parse_date_time(date_str, time_str)
+        if dt_iso:
+            scheduled = True
+    # Unscheduled: fall back to the Monday of the fixture's week so the series
+    # still lands in Upcoming instead of being filtered out by the frontend.
+    if dt_iso is None:
+        dt_iso = _parse_iso_date(f.get("week_start"))
+        scheduled = False
+
+    stream = (f.get("stream") or "").strip()
+    stream_url = stream if stream.startswith(("http://", "https://")) else None
+    stream_label = None if stream_url else (stream or None)
+
+    status = "unknown"
+    if dt_iso:
+        try:
+            status = "past" if datetime.fromisoformat(dt_iso) < datetime.now() else "upcoming"
+        except ValueError:
+            pass
+
+    return {
+        "team1": f.get("team1") or None,
+        "team2": f.get("team2") or None,
+        "date": date_str or f.get("week_start") or None,
+        "time": time_str or None,
+        "stream_label": stream_label,
+        "stream_url": stream_url,
+        "datetime_iso": dt_iso,
+        "match_status": status,
+        "scheduled": scheduled,
+    }
+
+
+def parse_fixtures_json(payload):
+    """Convert a fixtures.json payload into the weeks[] structure parse_schedule()
+    produces: [{label, div1: [...], div2: [...]}, ...] ordered by week number.
+    Returns (weeks, dropped_count)."""
+    fixtures = (payload or {}).get("fixtures") or []
+    by_week, dropped = {}, 0
+    for f in fixtures:
+        wk = f.get("week")
+        bucket = _DIVISION_MAP.get((f.get("division") or "").strip().lower())
+        if wk is None or bucket is None:
+            dropped += 1
+            continue
+        node = by_week.setdefault(wk, {"label": f"Week {wk}", "div1": [], "div2": []})
+        node[bucket].append(_fixture_to_series(f))
+    return [by_week[k] for k in sorted(by_week)], dropped
 
 
 # -----------------------
@@ -427,12 +539,19 @@ def get_schedule(db):
         if age < CACHE_TTL:
             return _cache["data"]
 
-    csv_text = fetch_csv_text()
+    if SCHEDULE_FIXTURES_URL:
+        source = "fixtures_json"
+        payload = fetch_fixtures_json()
+        weeks = None if payload is None else parse_fixtures_json(payload)[0]
+    else:
+        source = "sheet_csv"
+        csv_text = fetch_csv_text()
+        weeks = None if csv_text is None else parse_schedule(csv_text)
 
-    if csv_text is None:
+    if weeks is None:
         # Return stale cache if available; otherwise fall through so Results
         # still populate from the DB below — only Upcoming has no fallback
-        # when the sheet is unset/unreachable.
+        # when the source is unset/unreachable.
         if _cache["data"] is not None:
             stale = dict(_cache["data"])
             stale["stale"] = True
@@ -440,7 +559,6 @@ def get_schedule(db):
         weeks = []
         error = "Schedule unavailable"
     else:
-        weeks = parse_schedule(csv_text)
         error = None
 
     team_lookup = build_team_lookup(db)
@@ -486,6 +604,7 @@ def get_schedule(db):
         "cached_at": now.isoformat(),
         "stale": False,
         "error": error,
+        "source": source,
         "extra_results": extra_results,
     }
 

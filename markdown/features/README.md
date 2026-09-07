@@ -14,6 +14,7 @@ These describe the primary user-visible surfaces of the app.
 | [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll |
 | [Weeks & Leaderboards](core/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
 | [Weekly Summary Report](core/weekly-summary.md) | Post-week recap popup: series-grouped matches, VOD links, and a per-user Reveal-results gate for MVP highlights and points earned |
+| [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, and match date display for the Weekly Summary Report |
 | [Players & Teams](core/players.md) | Player and team browse endpoints with match history |
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
 | [Twitch Extension](core/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |
@@ -61,10 +62,12 @@ Implementation details, integrations, and operator tooling.
 | [Security Headers](reference/security-headers.md) | Starlette middleware that adds X-Content-Type-Options, Referrer-Policy, CSP frame-ancestors, and conditional HSTS to every response |
 | [DB Volume Persistence](reference/db-volume-persistence.md) | Bind-mount persistence strategy for SQLite; explains why bind mount over named volume, `--volumes` safety, and reset procedure |
 | [Admin Player Pool](reference/admin-player-pool.md) | Admin CRUD for the known player pool; soft-delete with automatic token refunds to card holders |
+| [Admin Player Add Progress](reference/admin-player-add-progress.md) | Streamed per-ID progress for bulk player add; pending-state indicator for single add |
 | [Draw Panel Redesign](reference/draw-panel-redesign.md) | Renames "Deck" to "Draw" and replaces card counts with normalised drop percentages from live weights |
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |
 | [SMTP Password Recovery](reference/smtp-password-recovery.md) | Forgot-password flow: temporary password delivery via SMTP with stdout fallback for local dev |
 | [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons; results also derive directly from ingested matches when the schedule sheet has no row for them |
+| [Schedule Fixtures API Source](reference/schedule-fixtures-api.md) | Structured JSON fixtures feed (`SCHEDULE_FIXTURES_URL`) as a preferred alternative to the Google Sheet CSV; same parsed shape downstream, "Time TBD" for unscheduled fixtures |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
 | [Shoutrrr Support](reference/shoutrrr-support.md) | Outbound push notifications via a separately-hosted Shoutrrr instance; first notification type is a match-starting-soon reminder |
