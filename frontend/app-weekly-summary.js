@@ -35,6 +35,7 @@ async function loadWeeklySummaryList() {
     } else {
       document.getElementById('weeklySummaryTabs').innerHTML = '';
       content.innerHTML = '<p style="color:#888;">No weekly reports available yet.</p>';
+      _updateWeeklySummaryRevealFooter();
     }
   } catch (e) {
     content.innerHTML = `<p style="color:#e05;">${e.message}</p>`;
@@ -52,6 +53,7 @@ function renderWeeklySummaryTabs() {
     btn.onclick = () => selectWeeklySummaryTab(w.week_id);
     bar.appendChild(btn);
   });
+  _updateWeeklySummaryRevealFooter();
 }
 
 function _markActiveWeeklySummaryTab(weekId) {
@@ -113,6 +115,11 @@ function _weeklySummaryPlayerHtml(p) {
 function _weeklySummaryMatchHtml(m, revealed) {
   const winnerRadiant = !!m.winner_team_id && m.winner_team_id === m.radiant_team_id;
   const winnerDire = !!m.winner_team_id && m.winner_team_id === m.dire_team_id;
+  // Played-on date — shown regardless of reveal state, like the team names and
+  // VOD link. Same format the player profile match history uses (app-players.js).
+  const playedOn = m.start_time
+    ? new Date(m.start_time * 1000).toLocaleDateString("fi-FI", {day: "numeric", month: "numeric", year: "2-digit"})
+    : '';
   // Team names and the two player groups below them share the same
   // .weekly-summary-match-row grid (col 1 / col 3), so they line up in width
   // instead of the team names spanning the full row edge-to-edge.
@@ -122,6 +129,7 @@ function _weeklySummaryMatchHtml(m, revealed) {
         ${_weeklySummaryTeamColHtml(m.radiant_team, winnerRadiant, false)}
         <div class="weekly-summary-match-vs-cell">
           <span>vs</span>
+          ${playedOn ? `<span class="weekly-summary-match-date">${playedOn}</span>` : ''}
           ${m.vod_url ? `<a class="stream-link" style="font-size:0.75rem;" href="${_escHtml(m.vod_url)}" target="_blank" rel="noopener noreferrer">VOD ↗</a>` : ''}
         </div>
         ${_weeklySummaryTeamColHtml(m.dire_team, winnerDire, true)}
@@ -150,22 +158,28 @@ function renderWeeklySummaryContent(data) {
         ${s.matches.map(m => _weeklySummaryMatchHtml(m, data.revealed)).join('')}
       </div>`).join('');
   }
-  if (!data.revealed) {
-    html += `<div style="margin-top:16px;text-align:center;">
-      <button onclick="revealWeeklySummary(${data.week_id})">Reveal results</button>
-    </div>`;
-  }
   content.innerHTML = html;
 }
 
-async function revealWeeklySummary(weekId) {
+// Shows the docked reveal footer whenever at least one currently-listed week is
+// not yet revealed; hides it once everything listed has been revealed. Called
+// from renderWeeklySummaryTabs() and after a reveal-all completes.
+function _updateWeeklySummaryRevealFooter() {
+  const footer = document.getElementById('weeklySummaryRevealFooter');
+  if (!footer) return;
+  const anyUnrevealed = _weeklySummaryWeeks.some(w => w.revealed === false);
+  footer.classList.toggle('hidden', !anyUnrevealed);
+}
+
+async function revealAllWeeklySummaries() {
   try {
-    const res = await fetch(`${API}/weekly-summary/${weekId}/reveal`, { method: 'POST' });
-    const data = await res.json();
+    const res = await fetch(`${API}/weekly-summary/reveal-all`, { method: 'POST' });
     if (!res.ok) return;
-    renderWeeklySummaryContent(data);
-    const week = _weeklySummaryWeeks.find(w => w.week_id === weekId);
-    if (week) week.revealed = true;
+    _weeklySummaryWeeks.forEach(w => { w.revealed = true; });
+    _updateWeeklySummaryRevealFooter();
+    if (_weeklySummaryActiveWeekId != null) {
+      await selectWeeklySummaryTab(_weeklySummaryActiveWeekId);
+    }
   } catch (_) {}
 }
 

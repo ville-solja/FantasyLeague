@@ -552,6 +552,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .stream-link { color: var(--k-rarity-rare); text-decoration: none; }
 .stream-link:hover { text-decoration: underline; }
 .series-time { color: var(--fg-dim); white-space: nowrap; }
+.series-time.tbd { font-style: italic; opacity: 0.7; }
 .schedule-section {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
@@ -1168,6 +1169,20 @@ body.roster-dragging * { cursor: grabbing !important; }
   gap: 2px;
   color: var(--fg-dim);
 }
+.weekly-summary-match-date {
+  font-size: 0.7rem;
+  color: var(--fg-dim);
+  letter-spacing: 0.03em;
+}
+/* Docked outside the scrollable #weeklySummaryContent, so it stays visible
+   regardless of how many matches a week lists or the scroll position. */
+.weekly-summary-reveal-footer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: var(--bw-hair) solid var(--border-soft);
+  text-align: center;
+}
+.weekly-summary-reveal-footer.hidden { display: none; }
 .weekly-summary-match-players-col {
   grid-column: 1;
   display: flex;

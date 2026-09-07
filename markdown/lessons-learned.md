@@ -15,6 +15,46 @@ Format:
 
 ---
 
+### 2026-09-07 — security-patcher — security
+**Problem:** CodeQL `py/incomplete-url-substring-sanitization` (CWE-20) flags any
+`str.startswith("https://host…")` / `"host" in url` / `url.endswith("host")` check against a
+URL-shaped literal as a bypassable sanitizer — including plain **test assertions** that only
+verify a value was echoed back (CodeQL still reports it, tagged `["test"]`).
+**Solution:** In tests, assert exact equality (`result["url_prefix"] == "https://feed.test/api/fixtures.json"`)
+instead of a `startswith` prefix check — stronger assertion, no sink. In real guards, parse
+with `urllib.parse.urlparse` and check `hostname` against an allowlist / `.endswith(".example.com")`.
+
+---
+
+### 2026-09-07 — developer — testing
+**Problem:** A test that only does `import schedule` and uses the `conftest.py` `db` fixture
+hits `sqlite3.OperationalError: no such table: matches` from `get_schedule()` /
+`_build_unscheduled_results()` — `backend/schedule.py` has no ORM model imports, so
+`Base.metadata.create_all()` in the fixture registers nothing.
+**Solution:** Add `from models import Match, Team  # noqa: F401` (or the specific models the
+code path touches) at the top of the test module so the tables are registered on `Base` before
+the fixture creates them — this is what `test_schedule_independent_results.py` already does.
+
+---
+
+### 2026-09-07 — test-planner — testing
+**Problem:** `test_issue_99_admin_player_add_progress.py`'s docstring claims "FastAPI is not
+importable in the local test environment," which reads as a standing environment fact and
+could steer a future agent into unconditionally using the replicated-logic-helper pattern
+(re-implementing endpoint bodies as plain functions in the test file). In the environment used
+for `plan-issue-100-weekly-report-fixes.md`'s test stubs, `import fastapi` and
+`from routers.weekly_summary import get_weekly_summary` both worked fine, and
+`test_issue_51_weekly_summary.py` (the direct predecessor plan for the same router) already
+imports router functions straight from `routers.weekly_summary` and passes the full existing
+suite (642 passed) that way.
+**Solution:** Don't treat "FastAPI is not importable" as a fixed property of this repo's test
+environment — verify it fresh each session (`python3 -c "import fastapi"` and a direct import
+of the target router) before choosing between the two established patterns: direct router-
+function imports (test_issue_51_weekly_summary.py) when imports succeed, or replicated pure-
+logic helpers (test_issue_99_admin_player_add_progress.py) only when they genuinely don't.
+
+---
+
 ### 2026-08-31 — security-reviewer — endpoints
 **Problem:** A version pin's upper bound can silently block a Dependabot fix from ever being
 picked up even by a routine `pip install --upgrade` within the declared constraint —
