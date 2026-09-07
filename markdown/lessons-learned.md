@@ -15,6 +15,17 @@ Format:
 
 ---
 
+### 2026-09-07 — security-patcher — security
+**Problem:** CodeQL `py/incomplete-url-substring-sanitization` (CWE-20) flags any
+`str.startswith("https://host…")` / `"host" in url` / `url.endswith("host")` check against a
+URL-shaped literal as a bypassable sanitizer — including plain **test assertions** that only
+verify a value was echoed back (CodeQL still reports it, tagged `["test"]`).
+**Solution:** In tests, assert exact equality (`result["url_prefix"] == "https://feed.test/api/fixtures.json"`)
+instead of a `startswith` prefix check — stronger assertion, no sink. In real guards, parse
+with `urllib.parse.urlparse` and check `hostname` against an allowlist / `.endswith(".example.com")`.
+
+---
+
 ### 2026-09-07 — developer — testing
 **Problem:** A test that only does `import schedule` and uses the `conftest.py` `db` fixture
 hits `sqlite3.OperationalError: no such table: matches` from `get_schedule()` /
