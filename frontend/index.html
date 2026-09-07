@@ -28,6 +28,9 @@
     </div>
     <div id="weeklySummaryTabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;"></div>
     <div id="weeklySummaryContent" style="max-height:60vh;overflow-y:auto;"></div>
+    <div id="weeklySummaryRevealFooter" class="weekly-summary-reveal-footer hidden">
+      <button onclick="revealAllWeeklySummaries()">Reveal results</button>
+    </div>
   </div>
 </div>
 
@@ -164,8 +167,8 @@
     </div>
     <input id="addPlayerIdInput" type="number" placeholder="OpenDota account ID" style="width:100%;margin-bottom:12px;" />
     <div style="display:flex;gap:8px;">
-      <button style="flex:1;" onclick="addPlayer()">Confirm</button>
-      <button class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
+      <button id="addPlayerConfirmBtn" style="flex:1;" onclick="addPlayer()">Confirm</button>
+      <button id="addPlayerCloseBtn" class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
     </div>
     <div class="status" id="addPlayerStatus"></div>
   </div>
@@ -181,10 +184,14 @@
     <p style="font-size:0.8rem;color:#888;margin-bottom:10px;">Paste a comma-separated list of OpenDota account IDs.</p>
     <input id="bulkAddIdsInput" type="text" placeholder="12345,67890,..." style="width:100%;margin-bottom:12px;" />
     <div style="display:flex;gap:8px;">
-      <button style="flex:1;" onclick="bulkAddPlayers()">Confirm</button>
+      <button id="bulkAddConfirmBtn" style="flex:1;" onclick="bulkAddPlayers()">Confirm</button>
       <button class="secondary" onclick="closeBulkAddPlayersPopup()">Cancel</button>
     </div>
     <div class="status" id="bulkAddPlayersStatus"></div>
+    <div id="bulkAddProgressPanel" class="hidden" style="margin-top:12px;">
+      <div id="bulkAddProgressCounter" style="font-size:0.8rem;color:#888;margin-bottom:6px;"></div>
+      <ul id="bulkAddProgressList" style="list-style:none;padding:0;margin:0;max-height:200px;overflow-y:auto;font-size:0.85rem;"></ul>
+    </div>
   </div>
 </div>
 

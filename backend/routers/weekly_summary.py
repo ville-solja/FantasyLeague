@@ -120,7 +120,7 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
             "dire_team_id": r.dire_team_id,
             "radiant_team": _team_dict(teams_by_id.get(r.radiant_team_id)),
             "dire_team": _team_dict(teams_by_id.get(r.dire_team_id)),
-            "winner_team_id": winner_team_id,
+            "winner_team_id": winner_team_id if revealed else None,
             "vod_url": r.vod_url,
             "start_time": r.start_time,
         }
@@ -187,6 +187,30 @@ def reveal_weekly_summary(week_id: int, db=Depends(get_db),
                                    revealed_at=int(time.time())))
         db.commit()
     return _build_week_summary(db, week, True, current_user["user_id"])
+
+
+@router.post("/weekly-summary/reveal-all")
+def reveal_all_weekly_summaries(db=Depends(get_db),
+                                current_user: dict = Depends(get_current_user)):
+    """Reveal every currently-available week for the current user in one call.
+    Idempotent — weeks the user has already revealed are left untouched (no
+    duplicate row, no revealed_at overwrite). A week whose WeeklySummary row is
+    created later, by the generate_weekly_summaries background pass, is untouched
+    by past calls and stays unrevealed until this is called again."""
+    week_ids = [row[0] for row in db.query(WeeklySummary.week_id).all()]
+    already = {
+        row[0] for row in
+        db.query(WeeklySummaryReveal.week_id)
+          .filter(WeeklySummaryReveal.user_id == current_user["user_id"],
+                  WeeklySummaryReveal.week_id.in_(week_ids)).all()
+    }
+    now = int(time.time())
+    for week_id in week_ids:
+        if week_id not in already:
+            db.add(WeeklySummaryReveal(week_id=week_id, user_id=current_user["user_id"],
+                                       revealed_at=now))
+    db.commit()
+    return {"revealed_week_ids": week_ids}
 
 
 @router.post("/weekly-summary/seen")

@@ -63,6 +63,12 @@ async function addPlayer() {
   if (!idVal) return setStatus("addPlayerStatus", "Enter an OpenDota account ID", false);
   const player_id = parseInt(idVal, 10);
   if (isNaN(player_id)) return setStatus("addPlayerStatus", "ID must be an integer", false);
+  const confirmBtn = document.getElementById("addPlayerConfirmBtn");
+  const closeBtn = document.getElementById("addPlayerCloseBtn");
+  const input = document.getElementById("addPlayerIdInput");
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "Adding…"; }
+  if (closeBtn) closeBtn.disabled = true;
+  if (input) input.disabled = true;
   try {
     const res = await fetch(`${API}/admin/players`, {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -75,6 +81,10 @@ async function addPlayer() {
     loadPlayerPool();
   } catch (e) {
     setStatus("addPlayerStatus", e.message, false);
+  } finally {
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = "Confirm"; }
+    if (closeBtn) closeBtn.disabled = false;
+    if (input) input.disabled = false;
   }
 }
 
@@ -82,27 +92,89 @@ function openBulkAddPlayersPopup() {
   document.getElementById("bulkAddPlayersModal").classList.remove("hidden");
   setStatus("bulkAddPlayersStatus", "");
   document.getElementById("bulkAddIdsInput").value = "";
+  _resetBulkAddProgress();
 }
 
 function closeBulkAddPlayersPopup() {
   document.getElementById("bulkAddPlayersModal").classList.add("hidden");
 }
 
+function _resetBulkAddProgress() {
+  const panel = document.getElementById("bulkAddProgressPanel");
+  const list = document.getElementById("bulkAddProgressList");
+  const counter = document.getElementById("bulkAddProgressCounter");
+  if (panel) panel.classList.add("hidden");
+  if (list) list.innerHTML = "";
+  if (counter) counter.textContent = "";
+}
+
+const _bulkAddStatusLabel = { added: "Added", skipped: "Skipped", error: "Failed", pending: "Pending" };
+
+function renderBulkAddProgress(evt) {
+  const list = document.getElementById("bulkAddProgressList");
+  if (!list) return;
+  const label = _bulkAddStatusLabel[evt.status] || evt.status;
+  const reason = evt.reason ? ` — ${_escHtml(evt.reason)}` : "";
+  let row = list.querySelector(`li[data-progress-id="${evt.id}"]`);
+  if (!row) {
+    row = document.createElement("li");
+    row.dataset.progressId = evt.id;
+    list.appendChild(row);
+  }
+  row.textContent = "";
+  row.innerHTML = `${_escHtml(String(evt.id))}: <span class="bulk-add-status-${evt.status}">${label}</span>${reason}`;
+  const counter = document.getElementById("bulkAddProgressCounter");
+  if (counter) counter.textContent = `${evt.index} of ${evt.total} processed`;
+}
+
 async function bulkAddPlayers() {
   const csv = document.getElementById("bulkAddIdsInput").value.trim();
   if (!csv) return setStatus("bulkAddPlayersStatus", "Enter at least one ID", false);
+  const confirmBtn = document.getElementById("bulkAddConfirmBtn");
+  const input = document.getElementById("bulkAddIdsInput");
+  // Guards against a second overlapping stream writing into the same progress
+  // panel — the Cancel button stays enabled since hiding the popup does not
+  // abort the in-flight request; it keeps streaming and refreshes the table
+  // when done regardless of whether the modal is visible.
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = "Adding…"; }
+  if (input) input.disabled = true;
+  _resetBulkAddProgress();
+  const panel = document.getElementById("bulkAddProgressPanel");
+  if (panel) panel.classList.remove("hidden");
   try {
     const res = await fetch(`${API}/admin/players/bulk`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({player_ids: csv}),
     });
-    const data = await res.json();
-    if (!res.ok) return setStatus("bulkAddPlayersStatus", data.detail, false);
-    const msg = `Added: ${data.added}. Skipped: ${data.skipped.length}.`;
+    if (!res.ok) {
+      const data = await res.json();
+      return setStatus("bulkAddPlayersStatus", data.detail, false);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let summary = null;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // last (possibly incomplete) line stays in buffer
+      for (const line of lines) {
+        if (!line) continue;
+        const evt = JSON.parse(line);
+        if (evt.done) { summary = evt; } else { renderBulkAddProgress(evt); }
+      }
+    }
+    if (!summary) return setStatus("bulkAddPlayersStatus", "Stream ended unexpectedly", false);
+    const msg = `Added: ${summary.added}. Skipped: ${summary.skipped.length}.`;
     setStatus("bulkAddPlayersStatus", msg);
-    if (data.added > 0) loadPlayerPool();
+    if (summary.added > 0) loadPlayerPool();
   } catch (e) {
     setStatus("bulkAddPlayersStatus", e.message, false);
+  } finally {
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = "Confirm"; }
+    if (input) input.disabled = false;
   }
 }
 

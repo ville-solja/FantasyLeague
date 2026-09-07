@@ -63,8 +63,38 @@ def schedule_refresh(db=Depends(get_db), admin: dict = Depends(require_admin)):
 
 @router.get("/schedule/debug")
 def schedule_debug(_: dict = Depends(require_admin)):
+    from schedule import SCHEDULE_FIXTURES_URL, parse_fixtures_json
+
+    if SCHEDULE_FIXTURES_URL:
+        url = SCHEDULE_FIXTURES_URL
+        result = {
+            "source": "fixtures_json",
+            "url_set": True,
+            "url_prefix": url[:60] + "..." if len(url) > 60 else url,
+        }
+        try:
+            import requests as req
+            res = req.get(url, timeout=15, allow_redirects=True)
+            result["status_code"] = res.status_code
+            result["content_type"] = res.headers.get("content-type", "")
+            payload = res.json() if res.status_code == 200 else None
+        except Exception as e:
+            logger.exception("schedule_debug: fixtures fetch failed for %s", url)
+            result["error"] = type(e).__name__
+            return result
+        if not isinstance(payload, dict) or "fixtures" not in payload:
+            result["error"] = "response is not a fixtures.json payload"
+            return result
+        weeks, dropped = parse_fixtures_json(payload)
+        result["season"] = payload.get("season")
+        result["count"] = payload.get("count")
+        result["weeks_parsed"] = len(weeks)
+        result["fixtures_dropped"] = dropped
+        return result
+
     url = os.getenv("SCHEDULE_SHEET_URL", SCHEDULE_SHEET_URL)
-    result = {"url_set": bool(url), "url_prefix": url[:60] + "..." if len(url) > 60 else url}
+    result = {"source": "sheet_csv", "url_set": bool(url),
+              "url_prefix": url[:60] + "..." if len(url) > 60 else url}
 
     if not url:
         result["error"] = "SCHEDULE_SHEET_URL is not set"

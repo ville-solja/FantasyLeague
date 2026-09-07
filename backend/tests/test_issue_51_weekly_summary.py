@@ -215,7 +215,10 @@ class TestViewWeeklyReport:
         assert result["weeks"][0]["label"] == "Generated"
 
     def test_unrevealed_week_shows_matches_teams_vod_only_grouped_by_series(self, db):
-        """Before reveal, a week's tab shows only series-grouped matches, team names/logos (winner highlighted), and VOD links where set — no player names, points, or MVP info."""
+        """Before reveal, a week's tab shows only series-grouped matches, team names/logos, and
+        VOD links where set — no player names, points, or MVP info. The winner is also hidden
+        pre-reveal (see plan-issue-100-weekly-report-fixes.md — `winner_team_id` is `None`
+        until the week is revealed)."""
         user = _make_user(db)
         week = _make_week(db)
         _make_team(db, 1, "Radiant Squad")
@@ -232,7 +235,7 @@ class TestViewWeeklyReport:
         match = result["series"][0]["matches"][0]
         assert match["radiant_team"]["name"] == "Radiant Squad"
         assert match["dire_team"]["name"] == "Dire Squad"
-        assert match["winner_team_id"] == 1
+        assert match["winner_team_id"] is None
         assert match["vod_url"] == "https://youtube.com/watch?v=abc"
         assert "players" not in match
 
@@ -243,10 +246,14 @@ class TestViewWeeklyReport:
 
 class TestRevealWeeklyResults:
     def test_unrevealed_week_shows_reveal_button(self):
-        """Each not-yet-revealed week tab shows a "Reveal results" button."""
+        """A "Reveal results" control is shown while any listed week is unrevealed. Since
+        plan-issue-100-weekly-report-fixes.md this is a single docked footer control
+        (`#weeklySummaryRevealFooter`) rather than a per-tab inline button."""
+        html = _read(_INDEX_HTML_PATH)
+        assert 'id="weeklySummaryRevealFooter"' in html
+        assert "Reveal results" in html
         js = _read(_APP_WEEKLY_SUMMARY_JS_PATH)
-        assert "if (!data.revealed) {" in js
-        assert "Reveal results" in js
+        assert "_updateWeeklySummaryRevealFooter" in js
 
     def test_reveal_unlocks_players_mvp_and_points(self, db):
         """Clicking "Reveal results" reveals every player per match grouped under their team, the MVP-highlighted player, and a points-earned number per player."""
