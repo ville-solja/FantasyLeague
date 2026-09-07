@@ -263,7 +263,7 @@ class TestDiagnoseTheActiveScheduleSource:
         result = schedule_debug()
 
         assert result["source"] == "fixtures_json"
-        assert result["url_prefix"].startswith("https://feed.test")
+        assert result["url_prefix"] == "https://feed.test/api/fixtures.json"
         assert result["status_code"] == 200
         assert result["season"] == "2026"
         assert result["count"] == 3
