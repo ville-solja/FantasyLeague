@@ -99,10 +99,10 @@ that week's matches, so I can review the tournament results at a glance.
 - Weeks with no generated summary yet do not appear as tabs — tabs are populated as the
   season progresses, not shown in advance
 - Each week's tab shows its matches grouped by series (matches between the same two teams
-  clustered together), each match's two team names and logos, and a VOD link where one has
-  been set — with the winning team visually highlighted
-- Before the user has revealed that week's results, no player names, points, or MVP
-  information are shown — only the fields above
+  clustered together), each match's two team names and logos, a VOD link where one has been
+  set, and the date each match was played
+- Before the user has revealed that week's results, no player names, points, MVP information,
+  or winning-team highlight are shown — only the fields above
 
 ---
 
@@ -112,10 +112,12 @@ As a user, I want to click "Reveal results" on a week's tab to see the full play
 breakdown, so that I control when I see the outcome instead of it being shown immediately.
 
 **Acceptance criteria**
-- Each not-yet-revealed week tab shows a "Reveal results" button
-- Clicking it permanently reveals, for that week: every player in each match grouped under
-  their team, the match's MVP player with a highlighted portrait, and a points-earned number
-  under each player's portrait
+- A "Reveal results" control is shown while any listed week is not yet revealed (see "Reveal
+  Button Stays Visible While Scrolling" and "Reveal All Currently Available Results at Once")
+- Using it permanently reveals, for each not-yet-revealed week: the winning team (now visually
+  highlighted),
+  every player in each match grouped under their team, the match's MVP player with a
+  highlighted portrait, and a points-earned number under each player's portrait
 - The points-earned number is shown in a neutral/grey color for players not on the viewing
   user's roster that week, and in an accent color for players who were on it
 - Reveal state is per-user and per-week: one user revealing a week does not reveal it for any
@@ -171,6 +173,64 @@ find the recording from the Weekly Report.
   including weeks whose summary was generated before the link was added
 - Clearing the VOD URL removes the link from the report without affecting anything else in
   that week's summary
+
+---
+
+### Reveal Button Stays Visible While Scrolling
+**User story**
+As a user, I want the "Reveal results" control to stay visible at the bottom of the Weekly
+Report popup regardless of how many matches are listed, so I don't have to scroll to find it.
+
+**Acceptance criteria**
+- The reveal control is docked to the bottom of the popup (not inside the scrollable match
+  list) and remains visible while scrolling through a week's matches
+- It is shown whenever at least one currently-listed week is not yet revealed, and hidden once
+  everything currently listed has been revealed
+- Scrolling the match list does not move, hide, or duplicate the docked control
+
+---
+
+### Reveal All Currently Available Results at Once
+**User story**
+As a user, I want a single "Reveal results" action to reveal every week currently shown in the
+report, so I don't have to click reveal separately for each week tab.
+
+**Acceptance criteria**
+- Clicking the reveal control reveals every week currently listed in the popup that the user
+  has not yet revealed, not just the currently active tab
+- Weeks already revealed before the click are unaffected (idempotent — clicking again changes
+  nothing for them)
+- After the click, the active tab's content updates immediately to show the revealed state;
+  switching to any other previously-unrevealed tab also shows it already revealed
+- A week that becomes available (gets listed) after a previous "reveal all" click starts
+  unrevealed, requiring the reveal control to be used again to reveal it
+
+---
+
+### Hide Match Outcome Until Revealed
+**User story**
+As a user, I want the winning team, MVP, and points breakdown all hidden until I reveal a
+week's results, so glancing at the report can't spoil the outcome before I'm ready to see it.
+
+**Acceptance criteria**
+- Before a week is revealed, no team is visually marked as the winner and no "Winner" label is
+  shown for either team in that week's matches
+- MVP highlighting and per-player points remain hidden before reveal (existing behaviour,
+  confirmed unaffected by this fix)
+- After reveal, the winning team is visually highlighted exactly as before, alongside the
+  existing MVP and points breakdown
+
+---
+
+### Match Date Displayed
+**User story**
+As a user, I want to see the date each match was played, so I can place the result in time
+without cross-referencing the schedule tab.
+
+**Acceptance criteria**
+- Each match in the Weekly Report shows the date it was played
+- The date is shown for every match regardless of reveal state, consistent with the other
+  always-visible match fields (teams, VOD link)
 
 ---
 

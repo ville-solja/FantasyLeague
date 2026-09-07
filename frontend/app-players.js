@@ -370,7 +370,9 @@ async function loadSchedule() {
           linksContent = `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
         }
       } else if (!isPast) {
-        const time = s.time ? `<span class="series-time">${s.time}</span>` : "";
+        const time = s.time
+          ? `<span class="series-time">${s.time}</span>`
+          : (s.scheduled === false ? `<span class="series-time tbd">Time TBD</span>` : "");
         const watch = s.stream_url
           ? `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Watch"} ↗</a>`
           : (s.stream_label ? `<span style="color:#555">${s.stream_label}</span>` : "");

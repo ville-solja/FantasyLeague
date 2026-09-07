@@ -378,6 +378,60 @@ automatically compensated.
 
 ---
 
+### Live Progress for Bulk Player Add
+**User story**
+As an admin, I want to see real-time progress when bulk-adding players by OpenDota ID, so
+that I can confirm the button is working and monitor which IDs succeed or fail as OpenDota
+is queried.
+
+**Acceptance criteria**
+- The Bulk Add popup shows a progress panel immediately after Confirm is clicked, before any
+  ID has finished processing
+- The panel lists each submitted ID with a status indicator: pending, added, skipped, or failed
+- A running counter shows "X of N processed"
+- The panel updates incrementally as each ID's OpenDota lookup and DB write completes, not all
+  at once after the whole batch finishes
+- If OpenDota throttles or errors on a request, that ID is marked failed with the error reason
+  shown, and processing continues with the next ID
+- Closing the popup after completion returns the player pool table already refreshed with the
+  newly added players
+
+---
+
+### Endpoint Streams Per-ID Results
+**User story**
+As a backend maintainer, I want the bulk-add endpoint to stream a result line per processed
+player ID rather than buffering the full response, so that the frontend can render progress
+live and admins can diagnose failures such as OpenDota rate limiting mid-batch.
+
+**Acceptance criteria**
+- `POST /admin/players/bulk` responds with a stream of newline-delimited JSON objects: one
+  line per input ID, followed by a final summary line
+- Each per-ID line includes the ID, the resulting status (`added`/`skipped`/`error`), and a
+  reason for any non-added outcome
+- The final line includes the total added count and the full skipped list, preserving today's
+  `{"added": N, "skipped": [...]}` shape for anything relying on the summary
+- The `admin_player_bulk_added` audit event is still recorded exactly once per batch, not once
+  per ID
+- Existing behaviour (dedupe against existing player IDs, OpenDota validation, invalid-integer
+  handling, 2000-char CSV limit) is unchanged
+
+---
+
+### Add Player Button Shows Pending State
+**User story**
+As an admin, I want the "Add Player" confirm button to show a pending/loading state while the
+OpenDota lookup for a single ID is in flight, so that I know my click registered even though
+there is only one item to process.
+
+**Acceptance criteria**
+- Clicking Confirm on the single Add Player popup disables the button and Close action and
+  shows a loading indicator until the response returns
+- The button, input, and Close action are re-enabled after success or error
+- The underlying `POST /admin/players` request/response contract is unchanged
+
+---
+
 ### Receive a Refund Token
 **User story**
 As a player, I want to automatically receive a token when an admin removes a player whose
