@@ -9,6 +9,23 @@ Format:
 
 ---
 
+### 2026-09-13 — claude — security
+**Problem:** `twitch-extension/live_config.js` built HTML by string-concatenating team/player
+names straight into `.innerHTML`. Those names originate from OpenDota/Steam data ingested
+verbatim with no server-side sanitization (`backend/ingest.py`) — a real stored-XSS vector inside
+a Twitch-hosted iframe, and a direct violation of Twitch's extension-review "DOM injection
+security" requirement. `twitch-extension/` is a separate JS bundle from `frontend/` (uploaded to
+Twitch's CDN independently) so it doesn't share `frontend/app-globals.js`'s existing `_escHtml()`
+helper — the rest of the extension's own files (`panel.js`, `extension.js`) already used
+`.textContent` correctly for the same class of data; only `live_config.js` used raw `innerHTML`.
+**Solution:** Added an equivalent `_escHtml()` helper directly to `twitch-extension/extension.js`
+(shared across panel/config/live_config) and applied it at every `innerHTML` site interpolating
+untrusted names. When adding new UI to `twitch-extension/*`, treat every OpenDota/Steam-sourced
+name field as untrusted the same way `frontend/` does — never assume a separate bundle inherits
+sibling-bundle sanitization helpers.
+
+---
+
 ### YYYY-MM-DD — [agent-name] — [category]
 **Problem:** One-sentence description of the pitfall or recurring issue.
 **Solution:** What to do instead, or the correct approach.

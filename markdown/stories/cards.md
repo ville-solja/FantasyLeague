@@ -61,8 +61,29 @@ As a user, I want each card to display the player's name, team name, photo, and 
 - Team name is printed below the player name on the card image
 - Player avatar (from OpenDota) is composited as a circular portrait on the card image
 - Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
-- If avatar or logo is unavailable, the card still renders correctly with the slot left empty
+- If the avatar is unavailable, the card still renders correctly with that slot left empty
+  (team logo unavailability is covered separately below)
 - During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
+
+---
+
+### Blank Placeholder for Missing Team Logo
+**User story**
+As a user, I want a card's team logo slot to show a clean placeholder instead of looking broken
+when no team logo is available yet (e.g. before a team has played its first match), so the card
+still looks polished pre-season.
+
+**Acceptance criteria**
+- When neither the local Dotabuff PNG cache nor the team's HTTP `logo_url` resolves to a usable
+  image, the team logo slot is filled with a solid black circular placeholder instead of being
+  left unpainted
+- The placeholder uses the same circular crop, size, and position as a real team logo, so the
+  card layout is identical either way
+- Once a team logo becomes available (local cache populated via ingest, or `logo_url` set), it
+  replaces the placeholder on the next card image request — no cache to invalidate, since the
+  image is generated fresh on every request
+- Player avatar behaviour is unchanged — only the team logo slot gets the new placeholder
+  treatment
 
 ---
 

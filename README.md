@@ -1,6 +1,7 @@
-# Kana Cards
+# Fantasy League
+League agnostic tool that is meant to be easily set up for any Dota 2 amateur tournaments.
 
-A fan-made fantasy sports web app built around match data from [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league. Not officially affiliated with Kanaliiga.
+A prototype production running for [Kanaliiga](https://kanaliiga.fi), a Finnish amateur Dota 2 league. Not officially affiliated with Kanaliiga.
 
 ## What is a fantasy league?
 

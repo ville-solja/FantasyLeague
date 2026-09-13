@@ -146,6 +146,13 @@ def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None, d
     return _fetch_team_logo_image(team_logo_url, diameter)
 
 
+def _blank_logo_placeholder(diameter: int):
+    """Solid black circular placeholder for a card's team-logo slot when no logo
+    can be resolved yet (e.g. before a team's local Dotabuff PNG has been scraped
+    or logo_url populated) — cleaner than leaving the slot unpainted."""
+    return Image.new("RGBA", (diameter, diameter), (0, 0, 0, 255))
+
+
 def _normalize_image_url(url: str | None) -> str | None:
     if not url or not str(url).strip():
         return None
@@ -265,9 +272,8 @@ def generate_card_image(
     # ── Team logo (small circle) ────────────────────────────────────────────
     scx, scy, sr = _SMALL_CIRCLE
     scy += y_off
-    logo = _load_team_logo_for_card(team_name, team_logo_url, sr * 2)
-    if logo:
-        base.paste(_circle_crop(logo), (scx - sr, scy - sr), _circle_crop(logo))
+    logo = _load_team_logo_for_card(team_name, team_logo_url, sr * 2) or _blank_logo_placeholder(sr * 2)
+    base.paste(_circle_crop(logo), (scx - sr, scy - sr), _circle_crop(logo))
 
     # ── Composite frame on top ──────────────────────────────────────────────
     base.alpha_composite(template)
