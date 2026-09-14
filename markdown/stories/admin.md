@@ -302,6 +302,30 @@ that depends on "the current week" doesn't silently pick the wrong one during th
   grace window (previous week's `end_time` vs. the next week's `start_time`) resolves to the
   newly-starting week during that window, not the ending one
 
+### Monday-Start, Sunday-End Weeks Never Overlap by Default
+**User story**
+As an admin, I want a normal week I create by picking a Monday start date and a Sunday end date
+to never collide with the next Monday-starting week, so I don't have to fight the overlap guard
+or compute a raw timestamp for routine weekly scheduling.
+
+**Acceptance criteria**
+- Selecting a Monday as `start_date` stores `start_time` = that Monday at `03:00:00 UTC` (not
+  `00:00:00 UTC`)
+- Selecting a Sunday as `end_date` stores `end_time` = the *following* Monday at `02:59:59 UTC`
+  (not `03:00:00 UTC`) — one second before the next Monday-start week's `start_time`, so the two
+  ranges are contiguous with no gap and no overlap
+- A week created this way for a normal Monday–Sunday span, immediately followed by another
+  Monday-start week, is accepted by `POST /admin/weeks` without triggering the overlap guard —
+  no manual raw-timestamp workaround needed
+- A match starting any time up to `02:59:59 UTC` the Monday after the nominal end date (i.e. one
+  that runs past midnight from a Sunday-night start) still falls inside the ending week's range,
+  preserving the existing grace-period intent
+- Non-Monday/non-Sunday selections still work exactly as before — this is a formula change, not
+  a restriction on which days can be chosen
+- Already-existing weeks (created under the old formula, including any currently locked) are
+  unaffected — this only changes how *new* `start_date`/`end_date` input is converted going
+  forward
+
 ## Env-Based Admin Seeding
 
 ### Configure the Admin Account via Environment Variables
@@ -563,8 +587,9 @@ quick and the end time automatically accounts for matches running past midnight.
 
 **Acceptance criteria**
 - Week Management create/edit forms use date inputs (no time component)
-- `start_time` derives to 00:00:00 UTC on the start date
-- `end_time` derives to 03:00:00 UTC on the day after the end date
+- `start_time` derives to 03:00:00 UTC on the start date, and `end_time` derives to 02:59:59
+  UTC on the day after the end date — see "Monday-Start, Sunday-End Weeks Never Overlap by
+  Default" below for why both ends carry the same offset
 - Weeks are no longer generated automatically — the background loop only auto-locks
 
 ---

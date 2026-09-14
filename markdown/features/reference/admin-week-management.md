@@ -13,12 +13,20 @@ start date and an end date (no time component) via a calendar-picker date input 
 to open, or type a `d.m.yyyy`-style date directly — see
 `reference/admin-week-management.md#date-entry` below). The backend derives full timestamps:
 
-- `start_time` = start date, 00:00:00 UTC
-- `end_time` = the day **after** the end date, 03:00:00 UTC
+- `start_time` = start date, **03:00:00 UTC**
+- `end_time` = the day **after** the end date, **02:59:59 UTC**
 
-The 03:00 UTC buffer means a match starting late on the chosen end date and running past
-midnight still counts toward that week — useful for LAN finals or irregular schedules (e.g.
-a finals week spanning a single Saturday).
+The same 3-hour grace period is applied symmetrically to both ends, not just the end: it means
+a match starting late on the chosen end date and running past midnight still counts toward that
+week — useful for LAN finals or irregular schedules (e.g. a finals week spanning a single
+Saturday) — while also keeping a normal Monday-start/Sunday-end week from ever colliding with
+the next Monday-start week by default. For example, a week with `start_date=2026-09-14`
+(Monday) and `end_date=2026-09-20` (Sunday) stores `start_time` = 2026-09-14 03:00:00 UTC and
+`end_time` = 2026-09-21 02:59:59 UTC — one second before the following week's
+`start_date=2026-09-21` would store its own `start_time` (2026-09-21 03:00:00 UTC). The two
+ranges are contiguous with no gap and no overlap, so no admin raw-timestamp workaround is needed
+for routine weekly scheduling *(resolves GitHub issue #111, see
+`plan-issue-111-week-boundary-formula.md`)*.
 
 Locked weeks are read-only: they cannot be edited or deleted. Unlocked weeks with
 no roster snapshots can be freely managed. Editing happens directly in the weeks

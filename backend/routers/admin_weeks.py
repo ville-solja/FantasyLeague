@@ -30,21 +30,28 @@ class WeekEditBody(BaseModel):
 def _derive_week_times(start_date: str | None, end_date: str | None) -> tuple[int | None, int | None]:
     """Derive week timestamps from date-only inputs.
 
-    start_time = start_date 00:00:00 UTC
-    end_time   = (end_date + 1 day) 03:00:00 UTC — matches running past
-                 midnight still count toward the week.
+    start_time = start_date 03:00:00 UTC
+    end_time   = (end_date + 1 day) 02:59:59 UTC
+
+    The 3-hour offset on both ends is the grace period that lets a match starting
+    late on the chosen end date and running past midnight still count toward that
+    week. Applying the same offset to start_time (rather than leaving it at
+    midnight) means a normal Monday-start/Sunday-end week's end_time
+    (following Monday 02:59:59 UTC) lands exactly one second before the next
+    Monday-start week's start_time (that Monday 03:00:00 UTC) — contiguous, no
+    gap, no overlap, with no admin workaround required for the standard cadence.
     """
     start_time = end_time = None
     try:
         if start_date:
             d = datetime.date.fromisoformat(start_date)
             start_time = int(datetime.datetime(
-                d.year, d.month, d.day, 0, 0, 0,
+                d.year, d.month, d.day, 3, 0, 0,
                 tzinfo=datetime.timezone.utc).timestamp())
         if end_date:
             d = datetime.date.fromisoformat(end_date) + datetime.timedelta(days=1)
             end_time = int(datetime.datetime(
-                d.year, d.month, d.day, 3, 0, 0,
+                d.year, d.month, d.day, 2, 59, 59,
                 tzinfo=datetime.timezone.utc).timestamp())
     except ValueError:
         raise HTTPException(status_code=422,
