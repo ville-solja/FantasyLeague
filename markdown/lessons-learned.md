@@ -9,6 +9,90 @@ Format:
 
 ---
 
+### 2026-09-14 — developer — testing
+**Problem:** Implementing `plan-issue-111-week-boundary-formula.md`'s `_derive_week_times`
+change (start_time 00:00→03:00 UTC, end_time 03:00→02:59:59 UTC) made the new
+`test_issue_111_week_boundary_formula.py` stubs pass immediately, but broke three *pre-existing*
+tests in `test_issue_81_season_lifecycle.py`
+(`test_create_week_derives_start_time_midnight_utc`,
+`test_create_week_derives_end_time_3am_day_after_end_date`,
+`test_patch_week_accepts_date_only_inputs`) that hardcoded the exact old-formula timestamps as
+their expected values — a full-suite run is required to catch this, since the new test file's
+own green run gives no signal about collateral breakage in unrelated older files that encode the
+same function's prior behavior as literal assertions.
+**Solution:** When a plan explicitly changes a function's documented output (not just adds new
+behavior), grep the whole `backend/tests/` tree for other direct/indirect callers of that
+function before declaring done, not just the plan's own new test file — `grep -rn
+"_derive_week_times\|start_date=\|end_date="` (adjust per feature) found the three
+`test_issue_81_season_lifecycle.py` stubs here. Update their expected values to match the new,
+intentionally-changed formula (renaming the test itself if the old name encodes the old
+behavior, e.g. `..._midnight_utc` → `..._three_am_utc`) rather than treating the failure as a
+regression to revert.
+
+---
+
+### 2026-09-14 — test-planner — file-paths
+**Problem:** `plan-issue-84-week-management-editing.md`'s Critical Files table (and Step 2)
+cites `frontend/app-admin.js` as the file to rewrite for inline week-table editing
+(`loadAdminWeeks`, `openWeekEdit`/`saveWeekEdit`/`cancelWeekEdit`, the new
+`saveWeekChanges()`). That file now only owns the admin tab bar (`initAdminTabs`,
+`switchAdminTab`) — its own header comment says so — because it was already split into
+sibling `app-admin-*.js` files, one per `backend/routers/admin_*.py` module, before this plan
+was written. The actual week-management logic (including the Nordic date-picker helpers
+`dateInputIso`/`setDateInputIso`/`_openDatePicker`/`_initNordicDateInput` referenced by this
+plan's Story 1) lives in `frontend/app-admin-weeks.js`. Same class of drift the plan already
+self-corrects for the backend (`admin.py` -> `admin_weeks.py`), just not caught for the
+frontend half.
+**Solution:** When a plan's Critical Files table names `frontend/app-admin.js` for anything
+beyond the tab bar itself, check the actual `app-admin-*.js` split first (grep the target
+function/identifier across `frontend/app-admin-*.js`) rather than trusting the plan's path —
+write tests/implementation against whichever sibling file actually contains the logic.
+
+---
+
+### 2026-09-14 — developer — testing
+**Problem:** Adding an unconditional real network call (`get_live_match_league_ids()`, a `GET
+{OPEN_DOTA_URL}/live` request) inside `backend/main.py::_ingest_poll_loop` — run every cycle
+regardless of whether any league is monitored — made the full `backend/tests/` suite
+intermittently flaky (1-in-a-few runs, different unrelated test failing/erroring each time:
+`test_security_headers.py`, `test_draw_panel_redesign.py`). Root cause: many tests instantiate
+`TestClient(app)` without `DEMO_MODE=true`, which starts the real `_ingest_poll_loop` daemon
+thread against the real dev DB/network on app startup; a real, possibly slow/rate-limited
+OpenDota HTTP call on that background thread introduced timing variance that occasionally
+collided with other tests' shared/global state. Confirmed via a 5-run comparison: baseline
+(no live-match call) was 5/5 clean; with the unconditional call, failures/errors appeared in
+~1 of 5 full-suite runs even though the new feature's own test file passed every time in
+isolation.
+**Solution:** Guard the network call behind the condition it actually needs
+(`if monitored: get_live_match_league_ids() & set(monitored)`), so it's skipped entirely when
+no league is monitored — which is the state of any fresh test DB. This restores the pre-change
+no-network-calls-in-tests behavior while still meeting the feature's actual acceptance criterion
+("one OpenDota request per poll cycle regardless of how many leagues are monitored" — zero
+monitored leagues means nothing to protect, so zero requests is consistent with that). When a
+background poll loop's new step makes a real external call, verify full-suite stability with a
+multi-run comparison (`for i in 1..5; do pytest tests/ -q; done`) before and after, not just a
+single green run — single-run flakiness in this suite is otherwise silent because the
+background thread is a daemon and doesn't fail the test that started it.
+
+---
+
+### 2026-09-13 — claude — security
+**Problem:** `twitch-extension/live_config.js` built HTML by string-concatenating team/player
+names straight into `.innerHTML`. Those names originate from OpenDota/Steam data ingested
+verbatim with no server-side sanitization (`backend/ingest.py`) — a real stored-XSS vector inside
+a Twitch-hosted iframe, and a direct violation of Twitch's extension-review "DOM injection
+security" requirement. `twitch-extension/` is a separate JS bundle from `frontend/` (uploaded to
+Twitch's CDN independently) so it doesn't share `frontend/app-globals.js`'s existing `_escHtml()`
+helper — the rest of the extension's own files (`panel.js`, `extension.js`) already used
+`.textContent` correctly for the same class of data; only `live_config.js` used raw `innerHTML`.
+**Solution:** Added an equivalent `_escHtml()` helper directly to `twitch-extension/extension.js`
+(shared across panel/config/live_config) and applied it at every `innerHTML` site interpolating
+untrusted names. When adding new UI to `twitch-extension/*`, treat every OpenDota/Steam-sourced
+name field as untrusted the same way `frontend/` does — never assume a separate bundle inherits
+sibling-bundle sanitization helpers.
+
+---
+
 ### YYYY-MM-DD — [agent-name] — [category]
 **Problem:** One-sentence description of the pitfall or recurring issue.
 **Solution:** What to do instead, or the correct approach.

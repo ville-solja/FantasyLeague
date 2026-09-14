@@ -29,7 +29,9 @@ Implementation details, integrations, and operator tooling.
 |---|---|
 | [Terminology](reference/terminology.md) | Definitions for all domain concepts (League, Card, Deck, Roster, Week, etc.) |
 | [Data Ingest](reference/ingest.md) | How match data flows from OpenDota into the app |
+| [OpenDota Query Prioritization](reference/opendota-query-prioritization.md) | Live-match-aware gating: skips low-priority enrichment and tightens the poll interval while a monitored league has a match in progress |
 | [Card Image Generation](reference/card-image-generation.md) | Pillow-based PNG card rendering pipeline |
+| [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
@@ -43,9 +45,11 @@ Implementation details, integrations, and operator tooling.
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
+| [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
+| [Week Boundary Formula Fix](reference/week-boundary-formula-fix.md) | Applies the grace-period offset to both week-boundary ends so a normal Monday-start/Sunday-end week never overlaps the next by default |
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
 | [Table Element Sortability](reference/table-element-sortability.md) | Client-side sortable column headers for the Players tab table |
 | [Card Draw Modal UX](reference/card-draw-modal-ux.md) | Enter-key support, dynamic button label, and backdrop-click dismiss for the draw modal |
@@ -67,6 +71,7 @@ Implementation details, integrations, and operator tooling.
 | [Monitored Leagues Admin](reference/monitored-leagues-admin.md) | Runtime add/remove of monitored leagues; purge path for rolling back wrong ingests |
 | [SMTP Password Recovery](reference/smtp-password-recovery.md) | Forgot-password flow: temporary password delivery via SMTP with stdout fallback for local dev |
 | [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons; results also derive directly from ingested matches when the schedule sheet has no row for them |
+| [MVP Schedule Cache Bust](reference/mvp-schedule-cache-bust.md) | Admin and Twitch MVP-setting endpoints bust the schedule cache so a new MVP shows on the Schedule tab immediately instead of after up to an hour |
 | [Schedule Fixtures API Source](reference/schedule-fixtures-api.md) | Structured JSON fixtures feed (`SCHEDULE_FIXTURES_URL`) as a preferred alternative to the Google Sheet CSV; same parsed shape downstream, "Time TBD" for unscheduled fixtures |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |

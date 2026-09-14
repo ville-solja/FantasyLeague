@@ -17,7 +17,7 @@ from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db
 from models import League, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league
+from ingest import ingest_league, get_live_match_league_ids
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, generate_weekly_summaries
@@ -53,6 +53,7 @@ _DEMO_MODE     = os.getenv("DEMO_MODE", "").lower() == "true"
 _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
 _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
+_INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 
@@ -97,12 +98,16 @@ def _profile_enrichment_loop():
         _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
 
 
-def _auto_ingest(league_ids: list[int]):
+def _auto_ingest(league_ids: list[int], live_league_ids: set[int]):
     for league_id in league_ids:
         try:
             logger.info("Auto-ingest: league %d starting", league_id)
             ingest_league(league_id)
-            run_enrichment()
+            if league_id in live_league_ids:
+                logger.info("Auto-ingest: league %d has a live match — skipping enrichment this cycle", league_id)
+            else:
+                logger.info("Auto-ingest: league %d has no live match — running enrichment", league_id)
+                run_enrichment()
             logger.info("Auto-ingest: league %d done", league_id)
         except Exception:
             logger.exception("Auto-ingest: league %d failed", league_id)
@@ -143,9 +148,20 @@ def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
     while not _stop_event.is_set():
         try:
-            _auto_ingest(_get_monitored_league_ids())
+            monitored = _get_monitored_league_ids()
+            live = get_live_match_league_ids() & set(monitored) if monitored else set()
+            if live:
+                logger.info("Ingest poll: monitored league(s) with a live match: %s", sorted(live))
+            else:
+                logger.info("Ingest poll: no monitored league has a live match")
+            _auto_ingest(monitored, live)
             _run_toornament_sync()
-            interval = _INGEST_LIVE_POLL_INTERVAL if _has_active_week() else _INGEST_POLL_INTERVAL
+            if live:
+                interval = _INGEST_LIVE_MATCH_POLL_INTERVAL
+            elif _has_active_week():
+                interval = _INGEST_LIVE_POLL_INTERVAL
+            else:
+                interval = _INGEST_POLL_INTERVAL
         except Exception:
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL

@@ -110,6 +110,8 @@ bash twitch-extension/set-ebs-url.sh --debug https://your-domain.example.com
 
 The broadcaster adds the extension to their channel from the Twitch extension directory or via a developer test install link. Once installed, the Quick Actions (Live Config view) appear automatically in Twitch Stream Manager. No further configuration is needed on the broadcaster's side.
 
+**After uploading a new version for a Hosted Test / invite-only release:** a fresh upload does not appear in "My Extensions" and is not what testers are already running — it lands in the dev console's **Invite Only** tab and each invited broadcaster must explicitly (re)install it from there. There is no propagation delay to wait out; "uploaded but not visible" almost always means it hasn't been installed on that surface yet, not that Twitch is still processing it.
+
 ---
 
 ## Account Linking (story 13.3)
@@ -215,7 +217,7 @@ data, regardless of week boundaries, with per-match player lists. See
 `reference/twitch-mvp-series-window.md`.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
 ---
 

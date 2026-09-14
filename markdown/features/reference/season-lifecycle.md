@@ -71,9 +71,11 @@ season the user appears in, most recent first.
 ### `POST /admin/weeks` and `PATCH /admin/weeks/{week_id}` (extended)
 Accept `start_date` / `end_date` (ISO `YYYY-MM-DD`) alongside the existing `start_time`/
 `end_time` integer fields (still accepted for backward compatibility; date fields take
-precedence when both are present). Derivation: `start_time` = start date 00:00:00 UTC;
-`end_time` = 03:00:00 UTC on the day **after** the end date, so matches running past
-midnight still count toward the week. Existing validation (end after start, locked weeks
+precedence when both are present). Derivation: `start_time` = start date 03:00:00 UTC;
+`end_time` = 02:59:59 UTC on the day **after** the end date — the same 3-hour grace period
+applied to both ends, so matches running past midnight still count toward the week and a
+normal Monday-to-Sunday week never overlaps the next Monday-start week by default (see
+`reference/week-boundary-formula-fix.md`). Existing validation (end after start, locked weeks
 cannot be edited/deleted) is unchanged.
 
 ## Database

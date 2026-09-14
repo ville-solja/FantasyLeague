@@ -6,11 +6,12 @@
 "use strict";
 
 var ext = {
-    token:     null,
-    userId:    null,
-    channelId: null,
-    role:      null,
-    ebsUrl:    null,
+    token:      null,
+    tokenSetAt: null,
+    userId:     null,
+    channelId:  null,
+    role:       null,
+    ebsUrl:     null,
 };
 
 // ── Readiness gate ──────────────────────────────────────────────────────────
@@ -38,10 +39,11 @@ function _onCfgChanged() {
 }
 
 function _onAuth(auth) {
-    ext.token     = auth.token;
-    ext.userId    = auth.userId;
-    ext.channelId = auth.channelId;
-    _authReady    = true;
+    ext.token      = auth.token;
+    ext.tokenSetAt = Date.now();
+    ext.userId     = auth.userId;
+    ext.channelId  = auth.channelId;
+    _authReady     = true;
     if (_cfgReady && typeof onReady === "function") onReady();
 }
 
@@ -85,18 +87,52 @@ function init() {
 
 // ── EBS helpers ─────────────────────────────────────────────────────────────
 
-function ebsGet(path) {
-    return fetch(ext.ebsUrl + path, {
-        headers: { "Authorization": "Bearer " + ext.token },
-    }).then(function (r) {
-        return r.json().then(function (data) {
-            if (!r.ok) { data._status = r.status; }
-            return data;
-        });
+// Reads the response body as text and only then attempts JSON.parse, so a
+// non-JSON error body (e.g. an HTML error page from a proxy/gateway in front
+// of the EBS, rather than our own FastAPI JSON error) can't reject the promise
+// chain with an uncaught SyntaxError — callers always get a plain object back,
+// with _status set on any non-2xx response.
+function _parseResponse(r) {
+    return r.text().then(function (text) {
+        var data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (e) {
+            data = { detail: "Server returned a non-JSON response (status " + r.status + ")." };
+        }
+        if (!r.ok) {
+            data._status = r.status;
+            if (ext.tokenSetAt) {
+                console.warn("[ext] EBS call failed with status " + r.status +
+                    " — token age " + Math.round((Date.now() - ext.tokenSetAt) / 1000) + "s");
+            }
+        }
+        return data;
     });
 }
 
+// Twitch.ext.configuration.global hasn't delivered ebs_url yet (most commonly:
+// right after our own location.reload() in panel.js's 401 recovery, before the
+// fresh frame has re-negotiated with Twitch's parent page). Without this guard,
+// fetch(ext.ebsUrl + path) becomes fetch("null" + path) / fetch("undefined" + path),
+// which the browser resolves *relative to the extension's own CDN origin* —
+// sending a bogus request there instead of failing cleanly.
+function _notConfiguredYet() {
+    return Promise.resolve({
+        detail: "Still connecting — please wait a moment and try again.",
+        _status: 0,
+    });
+}
+
+function ebsGet(path) {
+    if (!ext.ebsUrl) return _notConfiguredYet();
+    return fetch(ext.ebsUrl + path, {
+        headers: { "Authorization": "Bearer " + ext.token },
+    }).then(_parseResponse);
+}
+
 function ebsPost(path, body) {
+    if (!ext.ebsUrl) return _notConfiguredYet();
     return fetch(ext.ebsUrl + path, {
         method: "POST",
         headers: {
@@ -104,12 +140,7 @@ function ebsPost(path, body) {
             "Content-Type": "application/json",
         },
         body: body ? JSON.stringify(body) : undefined,
-    }).then(function (r) {
-        return r.json().then(function (data) {
-            if (!r.ok) { data._status = r.status; }
-            return data;
-        });
-    });
+    }).then(_parseResponse);
 }
 
 // ── Heartbeat ────────────────────────────────────────────────────────────────
@@ -137,3 +168,12 @@ function showBanner(bannerEl, msg, isError) {
 }
 
 function el(id) { return document.getElementById(id); }
+
+// Escapes untrusted text before it's concatenated into an innerHTML string.
+// Team/player names come from OpenDota/Steam data ingested verbatim (see
+// backend/ingest.py) and are not sanitized server-side, so any HTML built from
+// them client-side must escape here — same helper/behaviour as frontend/app-globals.js.
+function _escHtml(s) {
+    return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}

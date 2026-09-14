@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from database import get_db
 from deps import require_admin, _audit
 from models import Match, Player, PlayerMatchStats, Team, TwitchMVP, Weight
+from schedule import bust_cache
 from twitch import _apply_mvp_bonus
 
 router = APIRouter()
@@ -115,6 +116,7 @@ def admin_set_mvp(
     _audit(db, "admin_set_mvp", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"match {match_id} → player {body.player_id} ({player.name})")
     db.commit()
+    bust_cache()
     return {"match_id": match_id, "player_id": body.player_id, "player_name": player.name}
 
 

@@ -13,32 +13,47 @@ async function loadAdminWeeks() {
     rows.forEach(w => {
       const tr = document.createElement("tr");
       tr.dataset.weekId = w.id;
-      const start = new Date(w.start_time * 1000).toLocaleString();
-      const end   = new Date(w.end_time   * 1000).toLocaleString();
+      if (w.is_locked) {
+        const start = new Date(w.start_time * 1000).toLocaleString();
+        const end   = new Date(w.end_time   * 1000).toLocaleString();
+        tr.innerHTML = `
+          <td></td>
+          <td style="font-size:0.8rem;">${start}</td>
+          <td style="font-size:0.8rem;">${end}</td>
+          <td><span style='color:#888;font-size:0.75rem;'>LOCKED</span></td>
+          <td>${w.roster_count}</td>
+          <td>—</td>`;
+        tr.cells[0].textContent = w.label;
+        tbody.appendChild(tr);
+        return;
+      }
       tr.innerHTML = `
+        <td><input type="text" class="week-edit-label" id="weekEditLabel_${w.id}" style="max-width:130px;" /></td>
+        <td><input type="text" class="week-edit-start" id="weekEditStart_${w.id}" placeholder="pp.kk.vvvv" autocomplete="off" title="Start date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick" style="max-width:110px;" /></td>
+        <td><input type="text" class="week-edit-end"   id="weekEditEnd_${w.id}"   placeholder="pp.kk.vvvv" autocomplete="off" title="End date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick. Games past midnight still count — ends 02:59:59 UTC the next day." style="max-width:110px;" /></td>
         <td></td>
-        <td style="font-size:0.8rem;">${start}</td>
-        <td style="font-size:0.8rem;">${end}</td>
-        <td>${w.is_locked ? "<span style='color:#888;font-size:0.75rem;'>LOCKED</span>" : ""}</td>
         <td>${w.roster_count}</td>
         <td></td>`;
-      tr.cells[0].textContent = w.label;
-      if (!w.is_locked) {
-        const editBtn = document.createElement("button");
-        editBtn.className = "secondary";
-        editBtn.style.cssText = "padding:2px 7px;margin-right:4px;";
-        editBtn.textContent = "Edit";
-        editBtn.addEventListener("click", () => openWeekEdit(w.id, w.label, w.start_time, w.end_time));
-        const delBtn = document.createElement("button");
-        delBtn.className = "danger";
-        delBtn.style.cssText = "padding:2px 7px;";
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener("click", () => deleteAdminWeek(w.id));
-        tr.cells[5].appendChild(editBtn);
-        tr.cells[5].appendChild(delBtn);
-      } else {
-        tr.cells[5].textContent = "—";
-      }
+      const labelEl = tr.querySelector(".week-edit-label");
+      const startEl = tr.querySelector(".week-edit-start");
+      const endEl   = tr.querySelector(".week-edit-end");
+      labelEl.value = w.label;
+      setDateInputIso(startEl, _utcDateStr(w.start_time));
+      // end_time is stored as (end_date + 1 day) 02:59:59 UTC — subtract a day to
+      // show the date the admin originally picked.
+      setDateInputIso(endEl, _utcDateStr(w.end_time - 24 * 3600));
+      _initNordicDateInput(startEl.id);
+      _initNordicDateInput(endEl.id);
+      [labelEl, startEl, endEl].forEach(el => {
+        el.addEventListener("input", () => _markWeekRowDirty(w.id));
+        el.addEventListener("change", () => _markWeekRowDirty(w.id));
+      });
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger";
+      delBtn.style.cssText = "padding:2px 7px;";
+      delBtn.textContent = "Delete";
+      delBtn.addEventListener("click", () => deleteAdminWeek(w.id));
+      tr.cells[5].appendChild(delBtn);
       tbody.appendChild(tr);
     });
     setStatus("weeksAdminStatus", "");
@@ -77,42 +92,52 @@ function _utcDateStr(ts) {
   return new Date(ts * 1000).toISOString().slice(0, 10);
 }
 
-function openWeekEdit(id, label, startTs, endTs) {
-  document.getElementById("editWeekId").value    = id;
-  document.getElementById("editWeekLabel").value = label;
-  setDateInputIso(document.getElementById("editWeekStart"), _utcDateStr(startTs));
-  // end_time is stored as (end_date + 1 day) 03:00 UTC — subtract a day to
-  // show the date the admin originally picked.
-  setDateInputIso(document.getElementById("editWeekEnd"), _utcDateStr(endTs - 24 * 3600));
-  document.getElementById("weekEditForm").classList.remove("hidden");
+// Marks a week row's inputs as edited (dirty) so saveWeekChanges() submits it.
+function _markWeekRowDirty(weekId) {
+  const tr = document.querySelector(`#adminWeeksBody tr[data-week-id="${weekId}"]`);
+  if (!tr) return;
+  tr.dataset.dirty = "1";
+  tr.classList.add("week-row-dirty");
 }
 
-function cancelWeekEdit() {
-  document.getElementById("weekEditForm").classList.add("hidden");
-}
-
-async function saveWeekEdit() {
-  const id        = parseInt(document.getElementById("editWeekId").value, 10);
-  const label     = document.getElementById("editWeekLabel").value.trim() || undefined;
-  const start_date = dateInputIso(document.getElementById("editWeekStart")) || undefined;
-  const end_date   = dateInputIso(document.getElementById("editWeekEnd")) || undefined;
-  const body = {};
-  if (label)     body.label      = label;
-  if (start_date) body.start_date = start_date;
-  if (end_date)   body.end_date   = end_date;
-  try {
-    const res = await fetch(`${API}/admin/weeks/${id}`, {
-      method: "PATCH", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) return setStatus("weeksAdminStatus", data.detail, false);
-    setStatus("weeksAdminStatus", "Week updated");
-    cancelWeekEdit();
-    loadAdminWeeks();
-  } catch (e) {
-    setStatus("weeksAdminStatus", e.message, false);
+// Submits every dirty (edited) row in the weeks table, one PATCH request per
+// row, so one row's rejection (e.g. an overlap) doesn't block the others.
+async function saveWeekChanges() {
+  const dirtyRows = Array.from(document.querySelectorAll('#adminWeeksBody tr[data-dirty="1"]'));
+  if (!dirtyRows.length) return setStatus("weeksAdminStatus", "No changes to save", false);
+  let updated = 0;
+  const failures = [];
+  for (const tr of dirtyRows) {
+    const id = parseInt(tr.dataset.weekId, 10);
+    const labelEl = tr.querySelector(".week-edit-label");
+    const startEl = tr.querySelector(".week-edit-start");
+    const endEl   = tr.querySelector(".week-edit-end");
+    const label = labelEl.value.trim();
+    const start_date = dateInputIso(startEl);
+    const end_date   = dateInputIso(endEl);
+    if (startEl.value && !start_date) { failures.push(`${label || id}: invalid start date`); continue; }
+    if (endEl.value && !end_date)     { failures.push(`${label || id}: invalid end date`); continue; }
+    const body = {};
+    if (label)      body.label      = label;
+    if (start_date) body.start_date = start_date;
+    if (end_date)   body.end_date   = end_date;
+    try {
+      const res = await fetch(`${API}/admin/weeks/${id}`, {
+        method: "PATCH", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { failures.push(`${label || id}: ${data.detail}`); continue; }
+      updated++;
+    } catch (e) {
+      failures.push(`${label || id}: ${e.message}`);
+    }
   }
+  const summary = failures.length
+    ? `${updated} updated, ${failures.length} failed: ${failures.join("; ")}`
+    : `${updated} updated`;
+  setStatus("weeksAdminStatus", summary, failures.length === 0);
+  loadAdminWeeks();
 }
 
 function deleteAdminWeek(weekId) {
@@ -282,5 +307,7 @@ function _initNordicDateInput(id) {
 }
 
 function initWeekDateInputs() {
-  ["weekStart", "weekEnd", "editWeekStart", "editWeekEnd"].forEach(_initNordicDateInput);
+  // Inline per-row edit date inputs (weekEditStart_<id>/weekEditEnd_<id>) are
+  // initialized individually in loadAdminWeeks() as each row is rendered.
+  ["weekStart", "weekEnd"].forEach(_initNordicDateInput);
 }

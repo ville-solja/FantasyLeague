@@ -36,6 +36,54 @@ As an operator, I want the server to automatically fetch fresh match data for ad
 
 ---
 
+### Defer Low-Priority Enrichment While a Monitored Match Is Live
+**User story**
+As an operator, I want low-priority background work (player name/avatar backfill) to pause
+automatically while a monitored league has a match in progress, so OpenDota's rate limit isn't
+spent on non-urgent work exactly when a broadcaster is waiting to select an MVP.
+
+**Acceptance criteria**
+- A single `GET /live` call, filtered to leagues currently marked `is_monitored`, determines
+  whether any monitored league has a match in progress this poll cycle
+- While at least one monitored league has a live match, `run_enrichment()` is skipped for that
+  cycle — ingestion of new match data for monitored leagues is never paused, only enrichment
+- Once no monitored league has a live match, enrichment resumes on its normal cadence the next
+  cycle
+- The live-match check costs exactly one OpenDota request per poll cycle regardless of how many
+  leagues are monitored, so it never meaningfully competes for rate-limit budget itself
+
+---
+
+### Poll Faster While a Monitored Match Is Live
+**User story**
+As a broadcaster, I want the app to notice quickly once a match I just finished has been
+processed, so I'm not stuck waiting on the standard poll interval before I can select the MVP.
+
+**Acceptance criteria**
+- While the live-match check finds a monitored league's match in progress, the ingest poll loop
+  uses a shorter interval than the existing `INGEST_LIVE_POLL_INTERVAL` "active week" cadence —
+  a match actively being played is a stronger, more specific signal than "some week is open"
+- As soon as the live match disappears from `GET /live` (i.e. has ended), the next poll's normal
+  match-ingest step picks it up, subject only to OpenDota having finished processing it
+- `GET /twitch/matches/current` reflects the newly-ingested match (with player stats) as soon as
+  ingestion completes, so `live_config.js`'s MVP flow lists it without a manual "Ingest Now" click
+
+---
+
+### Operator Visibility into Prioritization State
+**User story**
+As an operator, I want to see whether the live-match priority gate is currently active, so I can
+confirm the feature is engaged during a live event instead of guessing from ingest duration alone.
+
+**Acceptance criteria**
+- Log lines clearly state when enrichment is skipped for a cycle because a monitored league has
+  a live match, and when it resumes because none do
+- The existing `/schedule/debug`-style admin debug tooling pattern is followed: a lightweight
+  field or log line reports the outcome of the most recent live-match check and its timestamp,
+  so an operator mid-event doesn't have to guess whether the gate fired
+
+---
+
 ## Player Profiles
 
 ### View Player Stats and Bio

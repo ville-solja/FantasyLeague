@@ -1,5 +1,12 @@
 # Plan: Admin Week Management
 
+> **Superseded:** this is the original implementation plan, written before the admin router
+> split (`plan-issue-85-split-admin-router.md`) and the frontend per-tab split. Its file paths
+> (`backend/routers/admin.py`, `frontend/app-admin.js`) and the standalone edit-form UI it
+> describes no longer match the current code — see `plan-issue-84-week-management-editing.md`
+> for the current inline-editing/overlap-guard implementation. Kept as a historical record of
+> the feature's original design.
+
 ## Context
 Weeks are currently generated automatically from a fixed Sunday anchor date, with lock
 times hardcoded at Sunday 23:59:59 UTC. Tournament schedules do not always align — the

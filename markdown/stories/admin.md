@@ -225,7 +225,8 @@ unlocked week so that the lock deadline matches the actual tournament schedule.
 - Editing is only allowed when `is_locked = false`
 - Admin can update label, start\_time, and/or end\_time
 - `end_time` must remain strictly after `start_time` after the edit
-- Changes are saved immediately and logged to the audit log
+- The edit is submitted via the "Save Changes" flow described in "Inline Week List Editing"
+  below (not saved per-field as it's typed) and is logged to the audit log once it commits
 
 ### Delete an Unlocked Week
 **User story**
@@ -284,6 +285,46 @@ belong to two weeks at once so that scoring windows never conflict.
 - The overlap check runs against all weeks regardless of locked status
 - Existing non-overlapping create/edit flows are unaffected — a week that exactly abuts another
   (its `end_time` equals the other's `start_time`) is not treated as an overlap
+
+### Deterministic Current-Week Resolution During Legacy Overlaps
+**User story**
+As an operator, I want "the current week" to resolve deterministically even if an already-existing
+week record overlaps another (e.g. one created before the overlap guard existed), so any feature
+that depends on "the current week" doesn't silently pick the wrong one during the overlap window.
+
+**Acceptance criteria**
+- `weeks.py::get_current_week()` orders candidates so that, if more than one week's
+  `[start_time, end_time]` range contains the current moment, the week with the latest
+  `start_time` (the one that most recently started) is returned
+- This is a defensive fallback for weeks that already overlap, not a substitute for the overlap
+  guard above, which is what actually stops new overlaps from being created
+- Verified against the real issue #104 data: a week pair overlapping by the 3-hour end-of-week
+  grace window (previous week's `end_time` vs. the next week's `start_time`) resolves to the
+  newly-starting week during that window, not the ending one
+
+### Monday-Start, Sunday-End Weeks Never Overlap by Default
+**User story**
+As an admin, I want a normal week I create by picking a Monday start date and a Sunday end date
+to never collide with the next Monday-starting week, so I don't have to fight the overlap guard
+or compute a raw timestamp for routine weekly scheduling.
+
+**Acceptance criteria**
+- Selecting a Monday as `start_date` stores `start_time` = that Monday at `03:00:00 UTC` (not
+  `00:00:00 UTC`)
+- Selecting a Sunday as `end_date` stores `end_time` = the *following* Monday at `02:59:59 UTC`
+  (not `03:00:00 UTC`) — one second before the next Monday-start week's `start_time`, so the two
+  ranges are contiguous with no gap and no overlap
+- A week created this way for a normal Monday–Sunday span, immediately followed by another
+  Monday-start week, is accepted by `POST /admin/weeks` without triggering the overlap guard —
+  no manual raw-timestamp workaround needed
+- A match starting any time up to `02:59:59 UTC` the Monday after the nominal end date (i.e. one
+  that runs past midnight from a Sunday-night start) still falls inside the ending week's range,
+  preserving the existing grace-period intent
+- Non-Monday/non-Sunday selections still work exactly as before — this is a formula change, not
+  a restriction on which days can be chosen
+- Already-existing weeks (created under the old formula, including any currently locked) are
+  unaffected — this only changes how *new* `start_date`/`end_date` input is converted going
+  forward
 
 ## Env-Based Admin Seeding
 
@@ -546,8 +587,9 @@ quick and the end time automatically accounts for matches running past midnight.
 
 **Acceptance criteria**
 - Week Management create/edit forms use date inputs (no time component)
-- `start_time` derives to 00:00:00 UTC on the start date
-- `end_time` derives to 03:00:00 UTC on the day after the end date
+- `start_time` derives to 03:00:00 UTC on the start date, and `end_time` derives to 02:59:59
+  UTC on the day after the end date — see "Monday-Start, Sunday-End Weeks Never Overlap by
+  Default" below for why both ends carry the same offset
 - Weeks are no longer generated automatically — the background loop only auto-locks
 
 ---

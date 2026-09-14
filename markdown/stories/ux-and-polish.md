@@ -173,6 +173,26 @@ whether the JSON feed parsed cleanly, so I can troubleshoot a misconfigured or m
 
 ---
 
+### MVP Selection Immediately Reflects on the Schedule Tab
+**User story**
+As a user, I want a match's MVP to show up on the Schedule tab right after the broadcaster or
+an admin sets it, so I don't have to wait up to an hour for the cached schedule to catch up.
+
+**Acceptance criteria**
+- `POST /admin/matches/{match_id}/mvp` busts the schedule cache after successfully setting the
+  MVP, so the next `GET /schedule` call recomputes fresh data instead of serving a stale cached
+  response
+- `POST /twitch/mvp` (the streamer-facing MVP flow) does the same
+- A `GET /schedule` call made immediately after either endpoint succeeds shows the new MVP on
+  the corresponding game row, with no waiting period
+- Setting/changing the MVP for a match that isn't part of any currently-cached schedule response
+  doesn't error — busting an already-clear cache is a no-op, matching `bust_cache()`'s existing
+  behaviour used elsewhere (`POST /schedule/refresh`)
+- No change to how the MVP itself is selected, stored, or scored — this only fixes how promptly
+  the Schedule tab's read-side cache reflects it
+
+---
+
 ## Layout
 
 ### Roster-first My Team Layout
