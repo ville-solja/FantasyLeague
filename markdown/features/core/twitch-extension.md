@@ -217,7 +217,7 @@ data, regardless of week boundaries, with per-match player lists. See
 `reference/twitch-mvp-series-window.md`.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
 ---
 

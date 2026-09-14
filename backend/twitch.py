@@ -28,6 +28,7 @@ from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
+from schedule import bust_cache
 from scoring import apply_mvp_bonus_to_row
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
@@ -527,6 +528,7 @@ def set_mvp(
         detail=f"channel={channel_id} match={body.match_id} player={player.name} re_select={bool(existing)}",
     ))
     db.commit()
+    bust_cache()
     _pubsub_broadcast(channel_id, {
         "type": "mvp",
         "player_name": player.name,

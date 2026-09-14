@@ -77,8 +77,10 @@ previous MVP if the match already had one and a different player is now selected
 both to the new player's `player_match_stats` row. This is what makes the admin-set MVP show up
 correctly in `mvp_count` (`GET /players`), match history's MVP column (`GET /players/{id}`), and
 the Schedule tab's per-game MVP link (`GET /schedule`) — all of which read `is_mvp` directly, not
-the `twitch_mvp` table. No token drop or Twitch PubSub/chat announcement fires from this path —
-those are viewer-engagement mechanics specific to the Twitch extension.
+the `twitch_mvp` table. It also busts the schedule cache so that Schedule tab update is immediate
+rather than waiting out `GET /schedule`'s cache TTL — see `reference/mvp-schedule-cache-bust.md`.
+No token drop or Twitch PubSub/chat announcement fires from this path — those are
+viewer-engagement mechanics specific to the Twitch extension.
 
 ```json
 { "player_id": 42 }
