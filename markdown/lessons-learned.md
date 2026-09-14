@@ -9,6 +9,25 @@ Format:
 
 ---
 
+### 2026-09-14 — test-planner — file-paths
+**Problem:** `plan-issue-84-week-management-editing.md`'s Critical Files table (and Step 2)
+cites `frontend/app-admin.js` as the file to rewrite for inline week-table editing
+(`loadAdminWeeks`, `openWeekEdit`/`saveWeekEdit`/`cancelWeekEdit`, the new
+`saveWeekChanges()`). That file now only owns the admin tab bar (`initAdminTabs`,
+`switchAdminTab`) — its own header comment says so — because it was already split into
+sibling `app-admin-*.js` files, one per `backend/routers/admin_*.py` module, before this plan
+was written. The actual week-management logic (including the Nordic date-picker helpers
+`dateInputIso`/`setDateInputIso`/`_openDatePicker`/`_initNordicDateInput` referenced by this
+plan's Story 1) lives in `frontend/app-admin-weeks.js`. Same class of drift the plan already
+self-corrects for the backend (`admin.py` -> `admin_weeks.py`), just not caught for the
+frontend half.
+**Solution:** When a plan's Critical Files table names `frontend/app-admin.js` for anything
+beyond the tab bar itself, check the actual `app-admin-*.js` split first (grep the target
+function/identifier across `frontend/app-admin-*.js`) rather than trusting the plan's path —
+write tests/implementation against whichever sibling file actually contains the logic.
+
+---
+
 ### 2026-09-14 — developer — testing
 **Problem:** Adding an unconditional real network call (`get_live_match_league_ids()`, a `GET
 {OPEN_DOTA_URL}/live` request) inside `backend/main.py::_ingest_poll_loop` — run every cycle

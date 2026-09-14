@@ -21,10 +21,11 @@ midnight still counts toward that week — useful for LAN finals or irregular sc
 a finals week spanning a single Saturday).
 
 Locked weeks are read-only: they cannot be edited or deleted. Unlocked weeks with
-no roster snapshots can be freely managed. *(planned)* Editing happens directly in the weeks
-table — each unlocked row exposes editable label/start/end fields, and a single "Save Changes"
-button below the table submits every changed row individually, so one row's rejection doesn't
-block the others. There is no longer a separate edit form.
+no roster snapshots can be freely managed. Editing happens directly in the weeks
+table — each unlocked row exposes editable label/start/end fields (rows with unsaved edits are
+visually flagged), and a single "Save Changes" button below the table submits every changed row
+individually, so one row's rejection doesn't block the others and per-row success/failure is
+reported after saving. There is no longer a separate edit form.
 
 ### Date entry
 
@@ -35,12 +36,24 @@ receives (and only ever requires) strict ISO `YYYY-MM-DD`. An unparseable typed 
 field invalid locally rather than reaching the backend's
 `"Dates must be ISO format (YYYY-MM-DD)"` error.
 
-### Overlap prevention *(planned)*
+### Overlap prevention
 
 A week's `[start_time, end_time)` range may not overlap any other week's range, regardless of
 lock status — otherwise a calendar day could belong to two weeks and be double-counted (or
 missed) for scoring. Weeks that exactly abut (one's `end_time` equals the other's `start_time`)
-are not considered overlapping.
+are not considered overlapping. `POST /admin/weeks` and `PATCH /admin/weeks/{id}` both run this
+check (`_check_week_overlap()` in `backend/routers/admin_weeks.py`) after resolving the final
+`start_time`/`end_time` and before committing; a conflict raises `409` with
+`detail: 'Overlaps existing week "<label>"'` naming the conflicting week. `PATCH` excludes the
+week being edited from the check, so an unchanged (or abutting) edit of its own range is not a
+false positive.
+
+As a defensive fallback for weeks that already overlap (e.g. any created before this guard
+existed), `weeks.py::get_current_week()` orders candidates by `start_time` descending before
+picking one, so the most-recently-started week wins if more than one candidate's range contains
+the current moment. This does not fix an existing overlap — only editing the affected weeks
+(which the guard above will now enforce) does — it just keeps "the current week" deterministic
+in the meantime.
 
 ---
 
@@ -54,14 +67,14 @@ of weekly roster entry snapshots taken for that week.
 Body: `{ label: str, start_date: str, end_date: str }` (ISO `YYYY-MM-DD`). Admin only.
 Creates a new unlocked week with timestamps derived per the rule above. The legacy
 `start_time`/`end_time` integer fields are still accepted directly if dates are omitted.
-Validates the derived `end_time > start_time`. *(planned)* Rejects with 409 if the range
-overlaps an existing week, naming the conflicting week's label.
+Validates the derived `end_time > start_time`. Rejects with 409 if the range overlaps an
+existing week (regardless of lock status), naming the conflicting week's label.
 
 ### `PATCH /admin/weeks/{id}`
 Body: `{ label?, start_date?, end_date? }` (or legacy `start_time?`/`end_time?`). Admin only.
 Updates any subset of fields on an unlocked week. Returns 409 if the week is locked.
-Validates that the resulting `end_time > start_time`. *(planned)* Rejects with 409 if the
-resulting range overlaps any other week's range.
+Validates that the resulting `end_time > start_time`. Rejects with 409 if the resulting range
+overlaps any other week's range (the week being edited itself is excluded from the check).
 
 ### `DELETE /admin/weeks/{id}`
 Admin only. Deletes an unlocked week with zero roster entries. Returns 409 if locked or
