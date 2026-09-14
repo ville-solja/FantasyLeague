@@ -30,7 +30,7 @@ async function loadAdminWeeks() {
       tr.innerHTML = `
         <td><input type="text" class="week-edit-label" id="weekEditLabel_${w.id}" style="max-width:130px;" /></td>
         <td><input type="text" class="week-edit-start" id="weekEditStart_${w.id}" placeholder="pp.kk.vvvv" autocomplete="off" title="Start date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick" style="max-width:110px;" /></td>
-        <td><input type="text" class="week-edit-end"   id="weekEditEnd_${w.id}"   placeholder="pp.kk.vvvv" autocomplete="off" title="End date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick. Games past midnight still count — ends 03:00 UTC the next day." style="max-width:110px;" /></td>
+        <td><input type="text" class="week-edit-end"   id="weekEditEnd_${w.id}"   placeholder="pp.kk.vvvv" autocomplete="off" title="End date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick. Games past midnight still count — ends 02:59:59 UTC the next day." style="max-width:110px;" /></td>
         <td></td>
         <td>${w.roster_count}</td>
         <td></td>`;
@@ -39,7 +39,7 @@ async function loadAdminWeeks() {
       const endEl   = tr.querySelector(".week-edit-end");
       labelEl.value = w.label;
       setDateInputIso(startEl, _utcDateStr(w.start_time));
-      // end_time is stored as (end_date + 1 day) 03:00 UTC — subtract a day to
+      // end_time is stored as (end_date + 1 day) 02:59:59 UTC — subtract a day to
       // show the date the admin originally picked.
       setDateInputIso(endEl, _utcDateStr(w.end_time - 24 * 3600));
       _initNordicDateInput(startEl.id);

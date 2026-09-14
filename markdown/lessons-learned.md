@@ -9,6 +9,28 @@ Format:
 
 ---
 
+### 2026-09-14 — developer — testing
+**Problem:** Implementing `plan-issue-111-week-boundary-formula.md`'s `_derive_week_times`
+change (start_time 00:00→03:00 UTC, end_time 03:00→02:59:59 UTC) made the new
+`test_issue_111_week_boundary_formula.py` stubs pass immediately, but broke three *pre-existing*
+tests in `test_issue_81_season_lifecycle.py`
+(`test_create_week_derives_start_time_midnight_utc`,
+`test_create_week_derives_end_time_3am_day_after_end_date`,
+`test_patch_week_accepts_date_only_inputs`) that hardcoded the exact old-formula timestamps as
+their expected values — a full-suite run is required to catch this, since the new test file's
+own green run gives no signal about collateral breakage in unrelated older files that encode the
+same function's prior behavior as literal assertions.
+**Solution:** When a plan explicitly changes a function's documented output (not just adds new
+behavior), grep the whole `backend/tests/` tree for other direct/indirect callers of that
+function before declaring done, not just the plan's own new test file — `grep -rn
+"_derive_week_times\|start_date=\|end_date="` (adjust per feature) found the three
+`test_issue_81_season_lifecycle.py` stubs here. Update their expected values to match the new,
+intentionally-changed formula (renaming the test itself if the old name encodes the old
+behavior, e.g. `..._midnight_utc` → `..._three_am_utc`) rather than treating the failure as a
+regression to revert.
+
+---
+
 ### 2026-09-14 — test-planner — file-paths
 **Problem:** `plan-issue-84-week-management-editing.md`'s Critical Files table (and Step 2)
 cites `frontend/app-admin.js` as the file to rewrite for inline week-table editing
