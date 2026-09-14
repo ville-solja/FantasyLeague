@@ -75,11 +75,14 @@ def generate_weekly_summaries(db):
 
 
 def get_current_week(db):
-    """Return the Week whose match window contains the current moment, or None."""
+    """Return the Week whose match window contains the current moment, or None.
+    If more than one week's range contains it (a legacy overlap predating the
+    overlap guard — see plan-issue-84's Story 4), the most recently started wins."""
     now = clock.now(db)
     return (
         db.query(Week)
         .filter(Week.start_time <= now, Week.end_time >= now)
+        .order_by(Week.start_time.desc())
         .first()
     )
 

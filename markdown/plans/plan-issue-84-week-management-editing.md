@@ -10,9 +10,29 @@ stops an admin from creating or editing a week so its date range overlaps anothe
 which would let a single calendar day belong to two weeks at once and double-count (or
 mis-count) scoring.
 
+**Addendum (issue #104):** issue #104 independently reported the exact overlap this plan's third
+story was written to prevent, observed live in the season's actual week data — e.g. Week 1
+(`start_date`/`end_date` inputs producing `start_time` = 9/14 00:00 UTC, `end_time` = 9/21 03:00
+UTC) and Week 2 (`start_time` = 9/21 00:00 UTC) share a genuine 3-hour overlap,
+`[9/21 00:00 UTC, 9/21 03:00 UTC)`. Root cause, confirmed against `_derive_week_times`
+(`backend/routers/admin_weeks.py`): `end_time` gets a `+1 day, 03:00 UTC` grace period so a match
+running past midnight on the chosen end date still counts, but the *following* week's
+`start_time` — the very next day at `00:00 UTC` — gets no corresponding adjustment, so every
+consecutive week pair created this way overlaps by exactly that 3-hour grace window. This plan's
+overlap guard (Story 3, below) prevents this from happening to any *new* or *edited* week, which
+is the actual fix. It does not retroactively correct week rows already created before the guard
+existed — those still exist with a real overlap until an admin edits one, which the guard would
+then reject as-is (correctly, since the edit itself doesn't need to also fix the other week). To
+avoid depending on any ambiguous week ever being deterministically resolved in the meantime, a
+fourth story below hardens `get_current_week()`'s tie-break for exactly that transitional case.
+Also note: this plan's original Critical Files table referenced `backend/routers/admin.py`,
+which no longer exists — it was split into `backend/routers/admin_weeks.py` (and nine other
+modules) by `plan-issue-85-split-admin-router.md`, landed after this plan was written. The table
+below is corrected to the current path.
+
 The date-entry problem is largely already addressed by work done earlier in this session: the
 Week Management create/edit date fields were rebuilt as a self-contained calendar-picker
-component (`frontend/app-admin.js`: `dateInputIso()` / `setDateInputIso()` / `_openDatePicker()`
+component (`frontend/app-admin-weeks.js`: `dateInputIso()` / `setDateInputIso()` / `_openDatePicker()`
 et al.) that displays and accepts the Nordic `d.m.yyyy` format (e.g. `15.5.2026`) and always
 converts to strict ISO `yyyy-mm-dd` before the request leaves the browser — so the raw backend
 error text should no longer reach the admin in the normal flow. This plan's first story
@@ -29,11 +49,12 @@ Assumptions (flagged for review):
 - Overlap is checked as a half-open interval `[start_time, end_time)` against every other week
   regardless of lock status: a locked week's dates are historical fact and must still be
   respected by new/edited unlocked weeks.
-- The picker/format work already in `app-admin.js` is left as-is; only the parts needed to make
+- The picker/format work already in `app-admin-weeks.js` is left as-is; only the parts needed to make
   it verifiably error-free (client-side validation before submit, invalid-input styling) are
   called out as acceptance criteria.
 
-Resolves GitHub issue #84.
+Resolves GitHub issue #84. Also resolves GitHub issue #104 (overlap root-cause investigation),
+via the addendum above and Story 4.
 
 ---
 
@@ -86,6 +107,22 @@ belong to two weeks at once so that scoring windows never conflict.
 - Existing non-overlapping create/edit flows are unaffected — a week that exactly abuts another
   (its `end_time` equals the other's `start_time`) is not treated as an overlap
 
+### Deterministic Current-Week Resolution During Legacy Overlaps
+**User story**
+As an operator, I want "the current week" to resolve deterministically even if an already-existing
+week record overlaps another (e.g. one created before the overlap guard existed), so any feature
+that depends on "the current week" doesn't silently pick the wrong one during the overlap window.
+
+**Acceptance criteria**
+- `weeks.py::get_current_week()` orders candidates so that, if more than one week's
+  `[start_time, end_time]` range contains the current moment, the week with the latest
+  `start_time` (the one that most recently started) is returned
+- This is a defensive fallback for weeks that already overlap, not a substitute for the overlap
+  guard above, which is what actually stops new overlaps from being created
+- Verified against the real issue #104 data: a week pair overlapping by the 3-hour end-of-week
+  grace window (previous week's `end_time` vs. the next week's `start_time`, per the root-cause
+  note above) resolves to the newly-starting week during that window, not the ending one
+
 ---
 
 ## Implementation
@@ -93,10 +130,11 @@ belong to two weeks at once so that scoring windows never conflict.
 ### Critical Files
 | File | Change |
 |---|---|
-| `backend/routers/admin.py` | Add `_check_week_overlap(db, start_time, end_time, exclude_week_id=None)` helper; call it from `create_week` and `edit_week` after deriving/resolving the final `start_time`/`end_time`, before commit |
+| `backend/routers/admin_weeks.py` | Add `_check_week_overlap(db, start_time, end_time, exclude_week_id=None)` helper; call it from `create_week` and `edit_week` after deriving/resolving the final `start_time`/`end_time`, before commit. (Corrected from this plan's original `backend/routers/admin.py` reference — that module was split into `admin_weeks.py` and nine others by `plan-issue-85-split-admin-router.md`, landed after this plan was written.) |
+| `backend/weeks.py` | `get_current_week()`: add `.order_by(Week.start_time.desc())` before `.first()` so an overlap resolves to the more-recently-started week rather than depending on row insertion order |
 | `frontend/index.html` | Remove the `#weekEditForm` panel; make each unlocked row in the admin weeks table (`#adminWeeksBody`) render editable label/start/end inputs; add a "Save Changes" button and status area below the table |
-| `frontend/app-admin.js` | Rewrite `loadAdminWeeks()` to render inline-editable rows for unlocked weeks (reusing `_initNordicDateInput`, `dateInputIso`, `setDateInputIso` already built for the create form); track dirty rows; replace `openWeekEdit` / `saveWeekEdit` / `cancelWeekEdit` with a `saveWeekChanges()` that loops dirty rows and `PATCH`es each individually |
-| `markdown/features/reference/admin-week-management.md` | Document the inline-edit UX and the overlap error shape |
+| `frontend/app-admin-weeks.js` | Rewrite `loadAdminWeeks()` to render inline-editable rows for unlocked weeks (reusing `_initNordicDateInput`, `dateInputIso`, `setDateInputIso` already built for the create form); track dirty rows; replace `openWeekEdit` / `saveWeekEdit` / `cancelWeekEdit` with a `saveWeekChanges()` that loops dirty rows and `PATCH`es each individually. (Corrected from this plan's original `frontend/app-admin.js` reference — the admin frontend was split into per-tab files since this plan was written; the week-editing logic lives in `app-admin-weeks.js`.) |
+| `markdown/features/reference/admin-week-management.md` | Document the inline-edit UX and the overlap error shape; remove `*(planned)*` markers once implemented |
 
 ### Step 1 — Backend: overlap guard
 
@@ -125,7 +163,7 @@ applying whichever of `date_start`/`body.start_time` etc. won).
 - In `index.html`, drop the `#weekEditForm` block entirely. Add editable `label`, start-date,
   and end-date inputs to each unlocked row rendered in `#adminWeeksBody` (locked rows keep their
   current read-only rendering). Add a "Save Changes" button and a status line below the table.
-- In `app-admin.js`, `loadAdminWeeks()` renders those inputs per unlocked row instead of plain
+- In `app-admin-weeks.js`, `loadAdminWeeks()` renders those inputs per unlocked row instead of plain
   text, wiring each date input through `_initNordicDateInput`/`dateInputIso`/`setDateInputIso` so
   it gets the same picker and validation as the create-week fields. Track which rows have been
   changed (e.g. a `data-dirty` flag set on input) so `saveWeekChanges()` only submits rows the
@@ -142,6 +180,25 @@ Update `markdown/features/reference/admin-week-management.md`'s Overview to desc
 table editing (replacing the "adjust unlocked weeks" phrasing that implied a separate form) and
 add the overlap-rejection behaviour to the `POST`/`PATCH /admin/weeks` endpoint descriptions.
 
+### Step 4 — Deterministic current-week tie-break
+
+In `backend/weeks.py::get_current_week()`, add an explicit order so a legacy overlap (any week
+row created before Step 1 landed) resolves predictably instead of depending on SQLite's default
+row order:
+```python
+def get_current_week(db):
+    """Return the Week whose match window contains the current moment, or None.
+    If more than one week's range contains it (a legacy overlap predating the
+    overlap guard — see plan-issue-84's Story 4), the most recently started wins."""
+    now = clock.now(db)
+    return (
+        db.query(Week)
+        .filter(Week.start_time <= now, Week.end_time >= now)
+        .order_by(Week.start_time.desc())
+        .first()
+    )
+```
+
 ---
 
 ## Verification
@@ -157,3 +214,11 @@ add the overlap-rejection behaviour to the `POST`/`PATCH /admin/weeks` endpoint 
   one edited row is deliberately made to overlap another.
 - Confirm no code path can still surface the raw
   `"Dates must be ISO format (YYYY-MM-DD)"` string to the admin through the UI.
+- `get_current_week()`: with two overlapping week rows constructed the same way issue #104's
+  real data was (seed both via raw `start_time`/`end_time`, bypassing the new overlap guard, to
+  simulate a pre-existing legacy overlap), confirm it returns the week with the later
+  `start_time` during the overlap window, and confirm normal non-overlapping weeks are
+  unaffected (still returns the one week whose range actually contains `now`).
+- Manual follow-up (not a code fix, do only if desired): the specific weeks already in prod from
+  issue #104 can be corrected by editing each week's end date to the day before the next week's
+  start date, once the overlap guard is live to confirm the edit is now accepted cleanly.

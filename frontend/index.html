@@ -793,15 +793,8 @@
         <thead><tr><th>Label</th><th>Start</th><th>End</th><th>Locked</th><th>Rosters</th><th></th></tr></thead>
         <tbody id="adminWeeksBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
       </table>
-      <div id="weekEditForm" class="hidden" style="margin-top:12px;padding:12px;background:#1a1a1a;border-radius:4px;">
-        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <input id="editWeekLabel" type="text" placeholder="Label" style="max-width:140px;" />
-          <input id="editWeekStart" type="text" placeholder="pp.kk.vvvv" autocomplete="off" title="Start date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick" style="max-width:110px;" />
-          <input id="editWeekEnd"   type="text" placeholder="pp.kk.vvvv" autocomplete="off" title="End date (pp.kk.vvvv, e.g. 15.5.2026) — click to pick. Games past midnight still count — ends 03:00 UTC the next day." style="max-width:110px;" />
-          <button onclick="saveWeekEdit()">Save</button>
-          <button class="ghost" onclick="cancelWeekEdit()">Cancel</button>
-        </div>
-        <input id="editWeekId" type="hidden" />
+      <div style="margin-top:12px;">
+        <button id="saveWeekChangesBtn" onclick="saveWeekChanges()">Save Changes</button>
       </div>
       <div class="status" id="weeksAdminStatus"></div>
     </div>

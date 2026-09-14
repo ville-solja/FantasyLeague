@@ -52,6 +52,21 @@ def _derive_week_times(start_date: str | None, end_date: str | None) -> tuple[in
     return start_time, end_time
 
 
+def _check_week_overlap(db, start_time: int, end_time: int, exclude_week_id: int | None = None):
+    """Reject a [start_time, end_time) range that overlaps any other week's range,
+    regardless of lock status. Exactly-abutting ranges (one's end_time equals the
+    other's start_time) are not an overlap."""
+    q = db.query(Week).filter(Week.start_time < end_time, Week.end_time > start_time)
+    if exclude_week_id is not None:
+        q = q.filter(Week.id != exclude_week_id)
+    conflict = q.first()
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f'Overlaps existing week "{conflict.label}"',
+        )
+
+
 @router.get("/admin/weeks")
 def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
     weeks = db.query(Week).order_by(Week.start_time).all()
@@ -81,6 +96,7 @@ def create_week(body: WeekCreateBody, db=Depends(get_db),
                             detail="Provide start/end as dates or timestamps")
     if end_time <= start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
+    _check_week_overlap(db, start_time, end_time)
     w = Week(label=body.label, start_time=start_time,
              end_time=end_time, is_locked=False)
     db.add(w)
@@ -114,6 +130,7 @@ def edit_week(week_id: int, body: WeekEditBody, db=Depends(get_db),
         w.end_time = body.end_time
     if w.end_time <= w.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
+    _check_week_overlap(db, w.start_time, w.end_time, exclude_week_id=w.id)
     _audit(db, "admin_week_edited", actor_id=admin["user_id"],
            actor_username=admin["username"],
            detail=f"id={w.id} label={w.label} end_time={w.end_time}")
