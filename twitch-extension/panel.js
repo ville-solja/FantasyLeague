@@ -46,6 +46,17 @@ function doLink() {
     ebsPost("/twitch/link", { code: code }).then(function(data) {
         if (data.linked) {
             loadStatus();
+        } else if (data._status === 401) {
+            // Do NOT call location.reload() here: Twitch assigns this iframe a new
+            // random sandboxed origin on every document reload. Reloading only the
+            // child iframe leaves the parent "supervisor" frame still expecting the
+            // *original* origin, so its postMessage calls to the reloaded child are
+            // silently rejected from then on — permanently killing onAuthorized/
+            // configuration delivery for the rest of this panel instance, not just
+            // delaying it. Only a real top-level page refresh re-syncs parent and
+            // child on the new origin together, so that's what we ask the viewer to
+            // do instead of attempting to recover in-place.
+            el("link-status").textContent = "Your Twitch session expired — please refresh this page (F5) and click Link again.";
         } else {
             el("link-status").textContent = data.detail || "Linking failed. Check your code and try again.";
         }

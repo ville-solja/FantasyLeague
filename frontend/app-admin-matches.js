@@ -29,8 +29,8 @@ async function loadAdminMatches() {
       setMvpBtn.style.cssText = 'padding:2px 7px;';
       setMvpBtn.textContent = 'Set MVP';
       setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
-      tr.cells[6].appendChild(setMvpBtn);
-      tr.cells[7].appendChild(_buildVodCell(m.match_id, m.vod_url));
+      tr.cells[6].appendChild(_buildVodCell(m.match_id, m.vod_url));
+      tr.cells[7].appendChild(setMvpBtn);
       tbody.appendChild(tr);
     });
     setStatus('adminMatchesStatus', '');

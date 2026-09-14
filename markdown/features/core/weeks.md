@@ -9,11 +9,14 @@ automatic week generation. An admin picks a start date and an end date; the back
 
 | Boundary | Derivation |
 |---|---|
-| Start (`start_time`) | Start date, 00:00:00 UTC |
-| End (`end_time`) | The day **after** the end date, 03:00:00 UTC |
+| Start (`start_time`) | Start date, 03:00:00 UTC |
+| End (`end_time`) | The day **after** the end date, 02:59:59 UTC |
 
-The 03:00 UTC end buffer means games starting late in the evening on the chosen end date and
-running past midnight still count toward that week. See `reference/admin-week-management.md`
+The same 3-hour grace period is applied to both ends (not just the end): it means games starting
+late in the evening on the chosen end date and running past midnight still count toward that
+week, and — since a normal Monday-start week's `start_time` gets the same offset — a
+Monday-to-Sunday week immediately followed by another Monday-start week never overlaps by
+default. See `reference/admin-week-management.md`, `reference/week-boundary-formula-fix.md`,
 and `reference/season-lifecycle.md`.
 
 The background maintenance thread (runs every 5 minutes by default, configurable via

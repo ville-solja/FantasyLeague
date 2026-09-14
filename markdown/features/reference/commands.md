@@ -113,6 +113,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `GITHUB_REPOSITORY` | *(required for prod compose)* | `owner/repo` used by `docker-compose.yml` to resolve the GHCR image (`ghcr.io/${GITHUB_REPOSITORY}:...`) |
 | `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles (off-season) |
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
+| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Seconds between ingest cycles when a monitored league has a match currently in progress (per `GET /live`) — takes priority over `INGEST_LIVE_POLL_INTERVAL` |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week auto-lock maintenance checks (weeks themselves are admin-created, see `reference/season-lifecycle.md`) |
 | `SCHEDULE_FIXTURES_URL` | *(empty)* | Structured JSON fixtures feed URL for the match schedule. Preferred over `SCHEDULE_SHEET_URL` when both are set; unset falls back to the CSV sheet. See `reference/schedule-fixtures-api.md` |
 | `SCHEDULE_SHEET_URL` | *(empty)* | Google Sheets CSV export URL for the match schedule. Fallback when `SCHEDULE_FIXTURES_URL` is unset. No built-in default — leave both empty to disable the schedule tab (e.g. a fresh instance for another league); Kanaliiga deployments must set one explicitly |

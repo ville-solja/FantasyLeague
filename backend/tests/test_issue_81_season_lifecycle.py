@@ -413,7 +413,10 @@ class TestPastSeasonsVisibility:
 # ---------------------------------------------------------------------------
 
 class TestManualWeekCreationDateOnly:
-    def test_create_week_derives_start_time_midnight_utc(self, db):
+    def test_create_week_derives_start_time_three_am_utc(self, db):
+        # Per plan-issue-111-week-boundary-formula.md (resolves GitHub issue #111),
+        # start_time is start_date at 03:00:00 UTC, not 00:00:00 UTC -- see
+        # test_issue_111_week_boundary_formula.py for full coverage of the formula.
         from routers.admin_weeks import create_week, WeekCreateBody
 
         result = create_week(
@@ -421,11 +424,14 @@ class TestManualWeekCreationDateOnly:
             db=db, admin=_ADMIN,
         )
 
-        expected_start = int(datetime.datetime(2026, 4, 6, 0, 0, 0,
+        expected_start = int(datetime.datetime(2026, 4, 6, 3, 0, 0,
                                                 tzinfo=datetime.timezone.utc).timestamp())
         assert result["start_time"] == expected_start
 
-    def test_create_week_derives_end_time_3am_day_after_end_date(self, db):
+    def test_create_week_derives_end_time_two_fifty_nine_fifty_nine_day_after_end_date(self, db):
+        # Per plan-issue-111-week-boundary-formula.md (resolves GitHub issue #111),
+        # end_time is (end_date + 1 day) at 02:59:59 UTC, not 03:00:00 UTC -- see
+        # test_issue_111_week_boundary_formula.py for full coverage of the formula.
         from routers.admin_weeks import create_week, WeekCreateBody
 
         result = create_week(
@@ -433,7 +439,7 @@ class TestManualWeekCreationDateOnly:
             db=db, admin=_ADMIN,
         )
 
-        expected_end = int(datetime.datetime(2026, 4, 13, 3, 0, 0,
+        expected_end = int(datetime.datetime(2026, 4, 13, 2, 59, 59,
                                               tzinfo=datetime.timezone.utc).timestamp())
         assert result["end_time"] == expected_end
 
@@ -451,9 +457,9 @@ class TestManualWeekCreationDateOnly:
             db=db, admin=_ADMIN,
         )
 
-        expected_start = int(datetime.datetime(2026, 5, 5, 0, 0, 0,
+        expected_start = int(datetime.datetime(2026, 5, 5, 3, 0, 0,
                                                 tzinfo=datetime.timezone.utc).timestamp())
-        expected_end = int(datetime.datetime(2026, 5, 12, 3, 0, 0,
+        expected_end = int(datetime.datetime(2026, 5, 12, 2, 59, 59,
                                               tzinfo=datetime.timezone.utc).timestamp())
         assert result["start_time"] == expected_start
         assert result["end_time"] == expected_end

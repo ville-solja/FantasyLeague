@@ -44,7 +44,7 @@ function loadSeries() {
             var matchCount = series.matches.length;
             var mvpCount   = series.matches.filter(function(m) { return m.mvp_player_id; }).length;
             div.innerHTML =
-                '<div class="versus">' + series.team1_name + " vs " + series.team2_name + "</div>" +
+                '<div class="versus">' + _escHtml(series.team1_name) + " vs " + _escHtml(series.team2_name) + "</div>" +
                 '<div class="meta">' + matchCount + " match" + (matchCount !== 1 ? "es" : "") +
                 (mvpCount > 0 ? " · " + mvpCount + " MVP set" : "") + "</div>";
             div.addEventListener("click", function() { selectSeries(idx); });
@@ -69,7 +69,7 @@ function selectSeries(idx) {
         var date = new Date(match.start_time * 1000).toLocaleString([], {
             month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
         });
-        var mvpNote = match.mvp_player_name ? " · MVP: " + match.mvp_player_name : "";
+        var mvpNote = match.mvp_player_name ? " · MVP: " + _escHtml(match.mvp_player_name) : "";
         div.innerHTML =
             '<div style="font-weight:600">Match ' + match.match_number + "</div>" +
             '<div class="meta">' + date + mvpNote + "</div>";
@@ -107,8 +107,8 @@ function selectMatch(match) {
             var div = document.createElement("div");
             div.className = "player-item" + (match.mvp_player_id === p.player_id ? " selected" : "");
             div.innerHTML =
-                '<div class="pname">' + p.player_name + "</div>" +
-                '<div class="ptag">' + teamName + " · " + p.fantasy_points + " pts</div>";
+                '<div class="pname">' + _escHtml(p.player_name) + "</div>" +
+                '<div class="ptag">' + _escHtml(teamName) + " · " + p.fantasy_points + " pts</div>";
             div.addEventListener("click", function() { pickPlayer(p, div); });
             grid.appendChild(div);
         });
