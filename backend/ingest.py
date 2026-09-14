@@ -37,6 +37,13 @@ def get_league_info(league_id: int):
     return opendota_get_json(url, label=f"league {league_id} info")
 
 
+def get_live_match_league_ids() -> set[int]:
+    """League IDs with a match currently in progress, per OpenDota's live endpoint.
+    One request regardless of how many leagues are monitored."""
+    data = opendota_get_json(f"{OPEN_DOTA_URL}/live", label="live matches") or []
+    return {m.get("league_id") for m in data if m.get("league_id")}
+
+
 # -----------------------
 # INGESTION ENTRYPOINT
 # -----------------------

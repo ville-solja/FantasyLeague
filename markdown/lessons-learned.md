@@ -9,6 +9,32 @@ Format:
 
 ---
 
+### 2026-09-14 — developer — testing
+**Problem:** Adding an unconditional real network call (`get_live_match_league_ids()`, a `GET
+{OPEN_DOTA_URL}/live` request) inside `backend/main.py::_ingest_poll_loop` — run every cycle
+regardless of whether any league is monitored — made the full `backend/tests/` suite
+intermittently flaky (1-in-a-few runs, different unrelated test failing/erroring each time:
+`test_security_headers.py`, `test_draw_panel_redesign.py`). Root cause: many tests instantiate
+`TestClient(app)` without `DEMO_MODE=true`, which starts the real `_ingest_poll_loop` daemon
+thread against the real dev DB/network on app startup; a real, possibly slow/rate-limited
+OpenDota HTTP call on that background thread introduced timing variance that occasionally
+collided with other tests' shared/global state. Confirmed via a 5-run comparison: baseline
+(no live-match call) was 5/5 clean; with the unconditional call, failures/errors appeared in
+~1 of 5 full-suite runs even though the new feature's own test file passed every time in
+isolation.
+**Solution:** Guard the network call behind the condition it actually needs
+(`if monitored: get_live_match_league_ids() & set(monitored)`), so it's skipped entirely when
+no league is monitored — which is the state of any fresh test DB. This restores the pre-change
+no-network-calls-in-tests behavior while still meeting the feature's actual acceptance criterion
+("one OpenDota request per poll cycle regardless of how many leagues are monitored" — zero
+monitored leagues means nothing to protect, so zero requests is consistent with that). When a
+background poll loop's new step makes a real external call, verify full-suite stability with a
+multi-run comparison (`for i in 1..5; do pytest tests/ -q; done`) before and after, not just a
+single green run — single-run flakiness in this suite is otherwise silent because the
+background thread is a daemon and doesn't fail the test that started it.
+
+---
+
 ### 2026-09-13 — claude — security
 **Problem:** `twitch-extension/live_config.js` built HTML by string-concatenating team/player
 names straight into `.innerHTML`. Those names originate from OpenDota/Steam data ingested

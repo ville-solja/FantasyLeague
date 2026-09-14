@@ -34,13 +34,27 @@ Configure which Dotabuff pages to scrape via `DOTABUFF_LEAGUE_LOGO_PAGES` (comma
 
 ## Automatic Polling
 
-The ingest pipeline runs in a background daemon thread on a configurable interval:
+The ingest pipeline runs in a background daemon thread on a configurable, three-tier interval:
 
-- **Default interval:** 900 seconds (15 minutes)
-- **Configured via:** `INGEST_POLL_INTERVAL` environment variable
+- **Default interval:** 900 seconds (15 minutes) — `INGEST_POLL_INTERVAL`
+- **Active-week interval:** 120 seconds (2 minutes) — `INGEST_LIVE_POLL_INTERVAL`, used whenever an unlocked week's match window is currently open
+- **Live-match interval:** 30 seconds — `INGEST_LIVE_MATCH_POLL_INTERVAL`, used whenever any monitored league has a match currently in progress (see below); takes priority over the active-week interval since it's a stronger, more specific signal
 - **Leagues polled:** whichever leagues are marked `is_monitored=true`, managed at runtime via the admin League Management panel (see `reference/monitored-leagues-admin.md`) — no env var or restart needed
 
-Each cycle runs all three stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
+Each cycle runs all three ingest stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
+
+### Live-match enrichment gate
+
+See `reference/opendota-query-prioritization.md` for the full mechanism. Each poll cycle, if any
+monitored league has a currently-live match, `_ingest_poll_loop` makes one `GET /live` call
+(`ingest.py::get_live_match_league_ids()`) to find out. Match ingestion always runs regardless,
+but low-priority player name/avatar enrichment (`run_enrichment()`) is skipped for that cycle so
+it doesn't compete with match ingestion for OpenDota's shared rate limit exactly when a
+broadcaster is waiting on a finished match. The check itself is skipped entirely when no league
+is currently monitored, so it costs nothing outside of an active broadcast. Enrichment resumes,
+and the interval falls back to the active-week/default tiers, on the first cycle where no
+monitored league is live. A failed or unreachable `GET /live` call degrades to "nothing live"
+rather than crashing the poll loop.
 
 ## Manual Ingest
 
