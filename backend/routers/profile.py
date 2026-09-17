@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
 from deps import get_current_user
@@ -11,6 +11,13 @@ router = APIRouter()
 
 class UpdateUsernameBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
+
+    @field_validator("username")
+    @classmethod
+    def no_html_significant_chars(cls, v: str) -> str:
+        if any(c in v for c in '<>"\''):
+            raise ValueError("Username cannot contain < > \" '")
+        return v
 
 
 class UpdatePlayerIdBody(BaseModel):

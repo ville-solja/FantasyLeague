@@ -98,6 +98,45 @@ As an admin, I want to force a refresh of the season schedule from the Google Sh
 
 ---
 
+### Usernames Cannot Execute Script in Admin Views
+**User story**
+As an admin, I want usernames to always render as plain text in every admin panel view, so a
+malicious username can never execute JavaScript in my session or change another account's
+privileges without my explicit action.
+
+**Acceptance criteria**
+- `frontend/app-admin-users.js::_renderUsers` HTML-escapes `u.username` before it's concatenated
+  into the users table's `innerHTML`, using the same `_escHtml()` helper already used correctly
+  in `frontend/app-leaderboard.js`
+- `frontend/app-admin-ingest.js`'s Audit Log rendering escapes `r.actor_username` the same way
+- `frontend/app-admin-demo.js`'s seeded-accounts display escapes `a.username` the same way
+- A username containing HTML/script markup (e.g. an `<img onerror=...>` payload) renders as
+  inert plain text in all three views — no request fires, no DOM element with a broken `src` is
+  created, and no admin action (promote/demote, token grant, etc.) is ever triggered by simply
+  viewing a page
+- No change to how usernames are stored, validated at registration, or displayed anywhere that
+  already escapes correctly (e.g. the leaderboard) — this only closes the three missed spots
+
+---
+
+### Reject Usernames Containing HTML-Significant Characters at Registration
+**User story**
+As an operator, I want the registration and username-change endpoints to reject usernames
+containing characters that have no legitimate use in a display name, so this class of payload
+can't be stored in the first place — defense in depth alongside the display-side fix.
+
+**Acceptance criteria**
+- `POST /register` and `PUT /profile/username` (or wherever username changes are accepted)
+  reject a username containing `<`, `>`, `"`, or `'` with a clear 422 error, in addition to the
+  existing length constraint
+- This is a second, independent layer — the display-side escaping fix above is the actual fix
+  for any username already stored before this validation existed, and must not be treated as
+  optional just because this validation also landed
+- Existing valid usernames (already stored) are unaffected — this only constrains new
+  registrations/renames going forward, no retroactive rename of existing accounts
+
+---
+
 ### Audit Logs
 **User story**
 As an admin, I want visibility into actions that have taken place on the app.

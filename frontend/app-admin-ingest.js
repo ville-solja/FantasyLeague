@@ -45,7 +45,7 @@ async function loadAuditLog() {
       const dt = new Date(r.timestamp * 1000).toLocaleString();
       return `<tr>
         <td style="white-space:nowrap;font-size:0.8rem;color:#888;">${dt}</td>
-        <td>${r.actor_username || "<em style='color:#555'>system</em>"}</td>
+        <td>${r.actor_username ? _escHtml(r.actor_username) : "<em style='color:#555'>system</em>"}</td>
         <td><code style="font-size:0.8rem;">${r.action}</code></td>
         <td style="font-size:0.8rem;color:#888;">${r.detail || ""}</td>
       </tr>`;

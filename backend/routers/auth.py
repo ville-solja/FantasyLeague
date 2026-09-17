@@ -5,7 +5,7 @@ import secrets
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
 from deps import _audit, get_current_user
@@ -27,6 +27,13 @@ class RegisterBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     email:    str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=6, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def no_html_significant_chars(cls, v: str) -> str:
+        if any(c in v for c in '<>"\''):
+            raise ValueError("Username cannot contain < > \" '")
+        return v
 
 
 class ForgotPasswordBody(BaseModel):
