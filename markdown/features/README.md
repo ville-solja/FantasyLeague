@@ -64,6 +64,7 @@ Implementation details, integrations, and operator tooling.
 | [Team Booster Draws](reference/team-booster-draws.md) | Team-specific booster packs: 3-Token draw restricted to a chosen team's player roster; configurable cost |
 | [Gmail SMTP Integration](reference/gmail-smtp-integration.md) | Operator guide for using Gmail or Google Workspace as the SMTP relay; adds SSL mode (port 465) alongside existing STARTTLS |
 | [Security Headers](reference/security-headers.md) | Starlette middleware that adds X-Content-Type-Options, Referrer-Policy, CSP frame-ancestors, and conditional HSTS to every response |
+| [Username XSS Fix](reference/username-xss-fix.md) | Fixes a stored-XSS privilege-escalation vulnerability where an unescaped username could execute script (e.g. calling `toggleAdmin`) in an admin's session |
 | [DB Volume Persistence](reference/db-volume-persistence.md) | Bind-mount persistence strategy for SQLite; explains why bind mount over named volume, `--volumes` safety, and reset procedure |
 | [Admin Player Pool](reference/admin-player-pool.md) | Admin CRUD for the known player pool; soft-delete with automatic token refunds to card holders |
 | [Admin Player Add Progress](reference/admin-player-add-progress.md) | Streamed per-ID progress for bulk player add; pending-state indicator for single add |

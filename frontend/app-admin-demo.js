@@ -116,7 +116,7 @@ async function seedDemoAccounts() {
     tbody.innerHTML = "";
     data.accounts.forEach(a => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${a.username}</td><td style="font-family:monospace;">${a.password}</td>`;
+      tr.innerHTML = `<td>${_escHtml(a.username)}</td><td style="font-family:monospace;">${_escHtml(a.password)}</td>`;
       tbody.appendChild(tr);
     });
     setStatus("demoModeStatus", `Created ${data.accounts.length} account(s)`);
