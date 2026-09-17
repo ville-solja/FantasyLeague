@@ -30,7 +30,7 @@ function _renderUsers(rows) {
     const adminToggleBtn = u.id === activeUserId ? "" :
       `<button class="ghost" style="font-size:0.8rem;" onclick="toggleAdmin(${u.id})">${u.is_admin ? "Demote from admin" : "Promote to admin"}</button>`;
     return `<tr data-user-id="${u.id}">
-      <td>${u.username}${testerBadge}${adminBadge}</td>
+      <td>${_escHtml(u.username)}${testerBadge}${adminBadge}</td>
       <td>${tagChips || '<span style="color:#555;font-size:0.8rem;">—</span>'}</td>
       <td>${u.tokens}</td>
       <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">

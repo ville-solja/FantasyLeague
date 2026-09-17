@@ -20,7 +20,7 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 
 | Field | Rule | Error |
 |---|---|---|
-| `username` | Required. 1–64 characters. | 422 if missing or exceeds limit. 409 if already taken. |
+| `username` | Required. 1–64 characters. May not contain `<`, `>`, `"`, or `'` (see `reference/username-xss-fix.md`). | 422 if missing, exceeds limit, or contains a rejected character. 409 if already taken. |
 | `email` | Required. 3–254 characters. Must match `user@domain.tld` format. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
 | `password` | Required. 6–128 characters. | 422 if missing or outside length bounds. |
 
@@ -112,7 +112,8 @@ Changes the authenticated user's display name. Requires login.
 
 - Leading/trailing whitespace is stripped.
 - Returns 409 if the username is already taken by another account.
-- Returns 422 if the stripped value is empty.
+- Returns 422 if the stripped value is empty, or if it contains `<`, `>`, `"`, or `'`
+  (see `reference/username-xss-fix.md`).
 
 ---
 
