@@ -88,3 +88,4 @@ Implementation details, integrations, and operator tooling.
 | [Roster Limit Race Fix](reference/roster-limit-race-fix.md) | Atomic conditional-UPDATE fix for a race condition that let concurrent requests exceed the active-roster limit |
 | [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
+| [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |

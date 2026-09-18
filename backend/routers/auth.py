@@ -49,6 +49,27 @@ def _clear_failed_logins(username: str):
     _failed_login_attempts.pop(username, None)
 
 
+# Per-username cooldown on POST /forgot-password, independent of source IP —
+# closes the remaining gap left by RATE_LIMIT_FORGOT_PASSWORD (per-IP, issue
+# #121): an attacker spread across multiple IPs, or simply waiting out the
+# per-IP window, could otherwise still repeatedly trigger reset emails
+# against one specific account. Unlike the login lockout (a threshold over a
+# window), this is a simple cooldown: at most one reset email per account per
+# FORGOT_PASSWORD_COOLDOWN_SECONDS. In-memory only, same reasoning as the
+# lockout state above.
+FORGOT_PASSWORD_COOLDOWN_SECONDS = int(os.getenv("FORGOT_PASSWORD_COOLDOWN_SECONDS", "300"))
+_last_forgot_password_request: dict[str, float] = {}
+
+
+def _forgot_password_in_cooldown(username: str) -> bool:
+    last = _last_forgot_password_request.get(username)
+    return last is not None and (time.time() - last) < FORGOT_PASSWORD_COOLDOWN_SECONDS
+
+
+def _record_forgot_password_request(username: str):
+    _last_forgot_password_request[username] = time.time()
+
+
 class LoginBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=128)
@@ -148,6 +169,17 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
     if not user or not user.email:
         verify_password("dummy-timing-equalizer", _DUMMY_HASH)  # equalize bcrypt timing
         return {"status": "ok"}
+
+    if _forgot_password_in_cooldown(body.username):
+        # Same shape as the nonexistent-username fast-exit above — a
+        # cooldown-suppressed request must be indistinguishable from it, so
+        # the cooldown never becomes a new username-enumeration side channel.
+        verify_password("dummy-timing-equalizer", _DUMMY_HASH)  # equalize bcrypt timing
+        return {"status": "ok"}
+
+    # Record before attempting the send — a slow/failing SMTP send must not
+    # let a rapid retry bypass the cooldown.
+    _record_forgot_password_request(body.username)
 
     user_email    = user.email
     user_username = user.username

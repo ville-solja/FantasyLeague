@@ -201,3 +201,28 @@ requests from one source.
 - Per-account cooldown independent of source IP, and the password-overwrite-before-verification
   issue, are explicitly out of scope here — see GitHub issues #122 and #123
 - If the user did not request the reset, the email advises them to contact support immediately
+
+---
+
+### Per-Account Cooldown on Forgot Password
+**User story**
+As an operator, I want `POST /forgot-password` to allow at most one password-reset email per
+account within a cooldown window, independent of source IP, so that an attacker spread across
+multiple IPs (or simply patient) can't repeatedly spam a target's inbox once the per-IP limit
+resets.
+
+**Acceptance criteria**
+- A second `/forgot-password` request for the same username within
+  `FORGOT_PASSWORD_COOLDOWN_SECONDS` (default `300`) of the first does not send another email
+  or issue another temporary password, even from a different source IP
+- The suppressed request still returns `{"status": "ok"}` — identical to both the "username
+  doesn't exist" and "email successfully sent" responses, so no new information about account
+  existence or cooldown state is exposed by the response body
+- The cooldown is keyed by the submitted username string, populated only when the username
+  resolves to a real account (the existing nonexistent-username fast-exit path is unchanged)
+- The cooldown is configurable via `FORGOT_PASSWORD_COOLDOWN_SECONDS` and is independent of,
+  and stacks with, the existing per-IP `RATE_LIMIT_FORGOT_PASSWORD` limit from issue #121 —
+  either one suppressing a request is sufficient, neither depends on the other
+- A legitimate user who didn't receive the first email (e.g. spam filter, typo'd address they
+  then fixed via support) is not permanently blocked — the cooldown expires on its own after
+  the configured window, no admin action needed

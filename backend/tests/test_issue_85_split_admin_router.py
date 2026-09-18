@@ -230,14 +230,15 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-121-rate-limiting's 14 new tests did after that, and
         plan-issue-125-roster-limit-race-fix's 13 new tests did after that, and
         plan-issue-124-roster-mutation-rate-limiting's 8 new tests did after that, and
-        plan-issue-130-assists-scoring-fix's 11 new tests did after that)."""
+        plan-issue-130-assists-scoring-fix's 11 new tests did after that, and
+        plan-issue-122-forgot-password-cooldown's 11 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "744 passed" in output, output[-3000:]
+        assert "755 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

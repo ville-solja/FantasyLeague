@@ -13,6 +13,7 @@ Story 2 — Accurate Password Reset Email
   AC: email advises user to contact support if they did not request the reset
 """
 
+import importlib
 import os
 import sys
 import time
@@ -76,6 +77,17 @@ def _make_app(engine):
     # for the app under test here.
     import rate_limit
     rate_limit.limiter.enabled = False
+
+    # routers/auth.py also carries a module-level, process-wide
+    # `_last_forgot_password_request` dict backing the per-username
+    # /forgot-password cooldown (issue #122). Several tests below call
+    # /forgot-password against the same username ("alice") repeatedly across
+    # separate test functions; without reloading routers.auth to reset that
+    # dict, the second and later calls within the process would be suppressed
+    # by the cooldown and never actually send an email — unrelated to what
+    # this file is testing. Reload it fresh for every app under test, mirroring
+    # test_issue_121_rate_limiting.py and test_issue_122_forgot_password_cooldown.py.
+    importlib.reload(auth_router)
 
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key-123")
