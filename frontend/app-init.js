@@ -42,7 +42,7 @@ async function loadHowToPlay() {
     });
     const pool = byKey['death_pool']?.value ?? 3.0;
     const ded  = byKey['death_deduction']?.value ?? 0.3;
-    rows.push(`<tr><td>Deaths (survival bonus)</td><td>+${pool} at 0 deaths, −${ded} per death (min 0)</td></tr>`);
+    rows.push(`<tr><td>Deaths (survival bonus)</td><td>+${pool} per game at 0 deaths, −${ded} per death (min 0)</td></tr>`);
     tbody.innerHTML = rows.join('');
   }
 

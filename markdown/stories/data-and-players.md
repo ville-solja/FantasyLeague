@@ -156,3 +156,59 @@ As an admin, I want to purge all match data ingested for a specific league so th
 - The purge returns counts of deleted rows so the admin can confirm scope
 - After purge, the admin is reminded to use the existing Recalculate endpoint to refresh fantasy scores
 - A confirmation modal is shown before the purge executes
+
+---
+
+## OpenDota Parse Retry
+
+### Unparsed Matches Are Re-fetched Until Parsed
+**User story**
+As a player, I want a match that was ingested before OpenDota parsed it to be re-fetched and
+re-scored once the parse is available, so that my cards get full fantasy points instead of the
+partial ones a first-pass ingest produced.
+
+**Acceptance criteria**
+- Each ingest poll cycle re-checks every match whose `start_time` is within the last
+  `INGEST_PARSE_RETRY_HOURS` hours (default `48`) and whose `player_match_stats` rows sum to 0 for
+  `teamfight_participation`, `stuns` and `obs_placed`
+- If `GET /matches/{match_id}` now returns a non-null `version`, the match's existing
+  `player_match_stats` rows are deleted and re-inserted from the fresh payload, `fantasy_points`
+  is recomputed with the current weights, and a previously confirmed Twitch MVP for that match
+  keeps its `is_mvp` flag and bonus
+- If the payload still has `version: null`, the stored rows are left untouched
+- Matches older than the retry window are never re-fetched, so the extra OpenDota traffic is
+  bounded by the number of recent unparsed matches, not the size of the database
+- The re-check runs under `ingest.INGEST_LOCK` like the rest of the cycle and a failure on one
+  match is logged and does not abort the cycle or the other matches
+
+### A Parse Is Requested From OpenDota
+**User story**
+As an operator, I want the app to ask OpenDota to parse a match it has ingested unparsed, so
+that the full stats become available without waiting for OpenDota to get to it on its own.
+
+**Acceptance criteria**
+- When first-pass ingest stores a match whose payload has `version: null`, it immediately submits
+  `POST /request/{match_id}` and logs the returned job id
+- The re-check step submits a parse request for any match that is still unparsed and has not
+  been requested within the last `INGEST_PARSE_REREQUEST_HOURS` (default `6`); a match is
+  requested at most once per cooldown so a parse job OpenDota dropped (replay unavailable) is
+  retried without a restart
+- The request goes through `opendota_client` with the same `api_key` handling and throttle as
+  every other OpenDota call, and is counted as 10 requests against the local RPM cap to mirror
+  OpenDota's own accounting
+- A failed request (non-2xx, timeout) is logged as a warning and does not raise; the match stays
+  eligible for the next cycle's re-check
+
+### Admin Can Trigger a Backfill On Demand
+**User story**
+As an admin, I want to trigger the unparsed-match re-check manually with a wider window, so that
+matches ingested wrong before this feature was deployed can be repaired without waiting for the
+next poll or changing environment variables.
+
+**Acceptance criteria**
+- `POST /ingest/retry-unparsed` (admin only) runs the re-check in a background thread and returns
+  `{"status": "started"}` immediately, or 409 if an ingest is already running, mirroring
+  `POST /ingest/league/{league_id}`
+- An optional `max_age_hours` query parameter overrides `INGEST_PARSE_RETRY_HOURS` for that run
+- The action is written to the audit log with the window used
+- The completed run logs how many matches were checked, refreshed, requested and still unparsed

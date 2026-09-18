@@ -20,6 +20,21 @@ Note: the `assists`, `sen_placed`, and `tower_damage` columns are retained in th
 
 Rate limit handling: 429 responses trigger exponential backoff before retrying. Server errors (5xx) are retried up to 3 times.
 
+If the match payload has `"version": null` (OpenDota has not parsed the replay yet, so the
+parse-only stats are still zero), the rows are stored as-is and a replay parse is requested via
+`POST /request/{match_id}` — see the next stage.
+
+### 1b. Parse Retry (OpenDota)
+
+After the per-league loop, `ingest.retry_unparsed_matches()` re-checks every match from the last
+`INGEST_PARSE_RETRY_HOURS` hours (default 48, `0` disables) whose stat rows sum to zero on
+`teamfight_participation`, `stuns` and `obs_placed`. A match that now has a parsed payload gets
+its `player_match_stats` rows replaced and `fantasy_points` recomputed (Twitch MVP bonus
+preserved); one still reporting `version: null` gets a parse request, at most once per match per
+`INGEST_PARSE_REREQUEST_HOURS` (default 6).
+Skipped when no league is monitored. Admins can run it on demand with a wider window via
+`POST /ingest/retry-unparsed`. Full details: `reference/opendota-parse-retry.md`.
+
 ### 2. Name & Avatar Backfill (OpenDota)
 
 After ingest, any player who is still missing a display name or avatar is enriched via `GET /api/players/{account_id}`. Players are processed in batches of 50 until all have names. Enrichment runs up to 20 rounds per cycle to avoid blocking indefinitely.
@@ -41,7 +56,10 @@ The ingest pipeline runs in a background daemon thread on a configurable, three-
 - **Live-match interval:** 30 seconds — `INGEST_LIVE_MATCH_POLL_INTERVAL`, used whenever any monitored league has a match currently in progress (see below); takes priority over the active-week interval since it's a stronger, more specific signal
 - **Leagues polled:** whichever leagues are marked `is_monitored=true`, managed at runtime via the admin League Management panel (see `reference/monitored-leagues-admin.md`) — no env var or restart needed
 
-Each cycle runs all three ingest stages in sequence, then triggers a toornament sync. The first cycle runs immediately on startup — there is no initial delay.
+Each cycle runs all ingest stages in sequence (match ingest per league, then the parse retry
+pass, with logo scrape and name/avatar backfill in between per league), then triggers a
+toornament sync. The first cycle runs immediately on startup — there is no initial delay, so
+deploying the parse-retry step backfills any recent unparsed matches without further action.
 
 ### Live-match enrichment gate
 

@@ -2,14 +2,14 @@ import logging
 import os
 import threading
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 
 from database import get_db, SessionLocal
 from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
-from ingest import ingest_league, INGEST_LOCK
+from ingest import ingest_league, retry_unparsed_matches, INGEST_LOCK
 from models import Match, PlayerMatchStats, Week, Weight
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score, stat_dict_from_row
@@ -60,6 +60,56 @@ def ingest_league_endpoint(league_id: int, admin: dict = Depends(require_admin))
         daemon=True,
     ).start()
     return {"status": "started", "league_id": league_id}
+
+
+def _default_parse_retry_hours() -> int:
+    """Read at request time (not import time) so a changed env var is honoured without
+    a restart; mirrors main.py's _INGEST_PARSE_RETRY_HOURS."""
+    return int(os.getenv("INGEST_PARSE_RETRY_HOURS", "48"))
+
+
+def _run_parse_retry(max_age_hours: int):
+    """Runs in a background thread — see retry_unparsed_endpoint below."""
+    try:
+        summary = retry_unparsed_matches(max_age_hours)
+        logger.info(
+            "Parse retry complete (max_age_hours=%d): checked=%d refreshed=%d requested=%d still_unparsed=%d",
+            max_age_hours, summary["checked"], summary["refreshed"],
+            summary["requested"], summary["still_unparsed"],
+        )
+    except Exception:
+        logger.exception("Parse retry failed (max_age_hours=%d)", max_age_hours)
+    finally:
+        INGEST_LOCK.release()
+
+
+@router.post("/ingest/retry-unparsed")
+def retry_unparsed_endpoint(
+    max_age_hours: int | None = Query(default=None, ge=1, le=24 * 365),
+    db=Depends(get_db),
+    admin: dict = Depends(require_admin),
+):
+    """Re-check recently ingested matches that still look unparsed (see
+    ingest.retry_unparsed_matches) in a background thread and return immediately.
+
+    `max_age_hours` widens the window for a one-off backfill; without it the
+    INGEST_PARSE_RETRY_HOURS default applies. Shares INGEST_LOCK with the poll loop
+    and the manual league ingest, so it returns 409 while either is running. The
+    audit row is written at trigger time (the run's counts go to the server log).
+    """
+    window = max_age_hours if max_age_hours is not None else _default_parse_retry_hours()
+    if not INGEST_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409,
+                            detail="An ingest is already in progress — try again shortly")
+    try:
+        _audit(db, "parse_retry_triggered", actor_id=admin["user_id"], actor_username=admin["username"],
+               detail=f"max_age_hours={window}")
+        db.commit()
+        threading.Thread(target=_run_parse_retry, args=(window,), daemon=True).start()
+    except Exception:
+        INGEST_LOCK.release()
+        raise
+    return {"status": "started", "max_age_hours": window}
 
 
 @router.post("/recalculate")

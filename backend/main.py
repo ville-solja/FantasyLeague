@@ -20,7 +20,7 @@ from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sq
 from rate_limit import limiter
 from models import League, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league, get_live_match_league_ids, INGEST_LOCK
+from ingest import ingest_league, get_live_match_league_ids, retry_unparsed_matches, INGEST_LOCK
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, generate_weekly_summaries
@@ -57,6 +57,7 @@ _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
 _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
 _INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
+_INGEST_PARSE_RETRY_HOURS  = int(os.getenv("INGEST_PARSE_RETRY_HOURS",   "48"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 _DB_BACKUP_INTERVAL_HOURS  = int(os.getenv("DB_BACKUP_INTERVAL_HOURS",   "24"))
@@ -116,6 +117,15 @@ def _auto_ingest(league_ids: list[int], live_league_ids: set[int]):
             logger.info("Auto-ingest: league %d done", league_id)
         except Exception:
             logger.exception("Auto-ingest: league %d failed", league_id)
+
+    # Re-check recent matches that were ingested before OpenDota parsed the replay.
+    # Skipped when nothing is monitored so a fresh/test DB never makes OpenDota calls.
+    if league_ids and _INGEST_PARSE_RETRY_HOURS > 0:
+        try:
+            summary = retry_unparsed_matches(_INGEST_PARSE_RETRY_HOURS)
+            logger.info("Parse retry: %s", summary)
+        except Exception:
+            logger.exception("Parse retry step failed")
 
 
 def _run_toornament_sync():

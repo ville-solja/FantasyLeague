@@ -167,7 +167,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             continue
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
         c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods,
-                                                   mvp_bonus_map.get(c["id"], 0.0))
+                                                   mvp_bonus_map.get(c["id"], 0.0),
+                                                   match_count=c.get("match_count", 1) or 1)
 
     active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
     bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
@@ -177,6 +178,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
     season_pts_rows = db.execute(text("""
         SELECT c.id as card_id, c.card_type,
+               COUNT(DISTINCT m.match_id)                    as match_count,
                COALESCE(SUM(s.deaths), 0)                    as deaths,
                COALESCE(SUM(s.kills), 0)                     as kills,
                COALESCE(SUM(s.last_hits), 0)                 as last_hits,
@@ -220,7 +222,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     season_points = sum(
         _compute_card_points(stat_dict_from_row(row), row.card_type, weights, rarity,
                              season_mods.get(row.card_id, {}),
-                             season_mvp_bonus_map.get(row.card_id, 0.0))
+                             season_mvp_bonus_map.get(row.card_id, 0.0),
+                             match_count=row.match_count or 1)
         for row in season_pts_rows
     )
 

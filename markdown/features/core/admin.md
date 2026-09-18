@@ -124,6 +124,16 @@ every 2 minutes (`INGEST_LIVE_POLL_INTERVAL`) while any week is currently active
 results land faster during play. The manual endpoint is useful immediately after new matches are
 played. See `reference/toornament.md`.
 
+### `POST /ingest/retry-unparsed?max_age_hours=<int>`
+Re-checks recently ingested matches whose stats were stored before OpenDota parsed the replay
+(all-zero teamfight/stun/ward stats), replaces their stat rows once a parsed version exists, and
+asks OpenDota to parse the rest. Runs in a background thread and returns
+`{"status": "started", "max_age_hours": ...}` immediately; 409 if any ingest is already
+running (same `ingest.INGEST_LOCK`). The optional `max_age_hours` (1–8760) widens the default
+`INGEST_PARSE_RETRY_HOURS` window for a one-off backfill. The `parse_retry_triggered` audit row
+is written at trigger time; the run's counts go to the server log. See
+`reference/opendota-parse-retry.md`.
+
 ---
 
 ## Schedule
@@ -175,6 +185,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
+| `parse_retry_triggered` | Manual unparsed-match re-check triggered (`detail` holds the window used) |
 | `admin_recalculate` | Fantasy points recalculated |
 | `admin_schedule_refresh` | Schedule cache busted via `POST /schedule/refresh` |
 | `admin_set_match_week` | Admin manually assigned a match to a week |
