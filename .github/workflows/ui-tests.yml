@@ -32,6 +32,9 @@ jobs:
         run: |
           cp .env.example .env
           printf '\nSECRET_KEY=ci-test-secret-key-not-for-production\nDEBUG=true\nAUTO_INGEST_LEAGUES=\n' >> .env
+          # Every UI test registers and logs in a fresh user from the runner's single IP, which
+          # blows through the production-oriented 5/minute login/register limits (issue #121).
+          printf 'RATE_LIMIT_LOGIN=1000/minute\nRATE_LIMIT_REGISTER=1000/minute\n' >> .env
           GITHUB_REPOSITORY=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]') \
             docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 

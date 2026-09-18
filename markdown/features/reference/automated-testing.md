@@ -48,9 +48,19 @@ npm test
 
 Override the target URL with `TEST_BASE_URL=http://your-host:port npm test`.
 
+Every spec registers and logs in a fresh user, all from one IP, so the production-oriented
+per-IP limits (`RATE_LIMIT_LOGIN` / `RATE_LIMIT_REGISTER`, default `5/minute`) make most of the
+suite fail with `Rate limit exceeded: 5 per 1 minute`. Raise them in the `.env` of the instance
+you test against, then restart it:
+
+```
+RATE_LIMIT_LOGIN=1000/minute
+RATE_LIMIT_REGISTER=1000/minute
+```
+
 ### CI
 
-`.github/workflows/ui-tests.yml` starts the app via `docker compose`, waits for it to be ready, then runs the Playwright suite against `http://localhost:8000`. The workflow uses `.env.example` defaults and injects `SECRET_KEY` and `DEBUG=true` for the CI environment.
+`.github/workflows/ui-tests.yml` starts the app via `docker compose`, waits for it to be ready, then runs the Playwright suite against `http://localhost:8000`. The workflow uses `.env.example` defaults and injects `SECRET_KEY`, `DEBUG=true` and the raised `RATE_LIMIT_LOGIN` / `RATE_LIMIT_REGISTER` values for the CI environment.
 
 ---
 
