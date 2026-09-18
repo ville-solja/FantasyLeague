@@ -1,14 +1,15 @@
 import logging
 import os
+import threading
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from database import get_db
+from database import get_db, SessionLocal
 from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
-from ingest import ingest_league
+from ingest import ingest_league, INGEST_LOCK
 from models import Match, PlayerMatchStats, Week, Weight
 from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score, stat_dict_from_row
@@ -22,14 +23,43 @@ class MatchWeekBody(BaseModel):
     week_id: int | None = None
 
 
+def _run_manual_ingest(league_id: int, actor_id: int, actor_username: str):
+    """Runs in a background thread — see ingest_league_endpoint below for why."""
+    try:
+        ingest_league(league_id)
+        run_enrichment()
+        db = SessionLocal()
+        try:
+            _audit(db, "admin_ingest", actor_id=actor_id, actor_username=actor_username,
+                   detail=f"league_id={league_id}")
+            db.commit()
+        finally:
+            db.close()
+        logger.info("Manual ingest complete for league %d", league_id)
+    except Exception:
+        logger.exception("Manual ingest failed for league %d", league_id)
+    finally:
+        INGEST_LOCK.release()
+
+
 @router.post("/ingest/league/{league_id}")
-def ingest_league_endpoint(league_id: int, db=Depends(get_db), admin: dict = Depends(require_admin)):
-    ingest_league(league_id)
-    run_enrichment()
-    _audit(db, "admin_ingest", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"league_id={league_id}")
-    db.commit()
-    return {"status": "ok", "league_id": league_id}
+def ingest_league_endpoint(league_id: int, admin: dict = Depends(require_admin)):
+    """Starts an ingest cycle in the background and returns immediately.
+
+    A full league ingest can take minutes (OpenDota throttled to ~55 req/min),
+    which used to block the admin's HTTP request for that long. INGEST_LOCK is
+    shared with the background poll loop (main.py::_ingest_poll_loop) so a
+    manual trigger can never run concurrently with the automatic one.
+    """
+    if not INGEST_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=409,
+                            detail="An ingest is already in progress — try again shortly")
+    threading.Thread(
+        target=_run_manual_ingest,
+        args=(league_id, admin["user_id"], admin["username"]),
+        daemon=True,
+    ).start()
+    return {"status": "started", "league_id": league_id}
 
 
 @router.post("/recalculate")

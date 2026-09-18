@@ -14,10 +14,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
-from database import SessionLocal, engine, Base, DATABASE_URL, get_db
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups
 from models import League, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league, get_live_match_league_ids
+from ingest import ingest_league, get_live_match_league_ids, INGEST_LOCK
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, generate_weekly_summaries
@@ -56,6 +56,8 @@ _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
 _INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
+_DB_BACKUP_INTERVAL_HOURS  = int(os.getenv("DB_BACKUP_INTERVAL_HOURS",   "24"))
+_DB_BACKUP_RETENTION_DAYS  = int(os.getenv("DB_BACKUP_RETENTION_DAYS",   "14"))
 
 
 def _week_maintenance_loop():
@@ -154,8 +156,11 @@ def _ingest_poll_loop():
                 logger.info("Ingest poll: monitored league(s) with a live match: %s", sorted(live))
             else:
                 logger.info("Ingest poll: no monitored league has a live match")
-            _auto_ingest(monitored, live)
-            _run_toornament_sync()
+            # Shared with the admin-triggered manual ingest endpoint so the two
+            # never write the same league's data concurrently.
+            with INGEST_LOCK:
+                _auto_ingest(monitored, live)
+                _run_toornament_sync()
             if live:
                 interval = _INGEST_LIVE_MATCH_POLL_INTERVAL
             elif _has_active_week():
@@ -166,6 +171,26 @@ def _ingest_poll_loop():
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL
         _stop_event.wait(timeout=interval)
+
+
+def _backup_loop():
+    """Background thread: periodically snapshot the SQLite DB and prune old backups.
+
+    Runs regardless of DEMO_MODE (like week maintenance) since it's the only
+    thing standing between a crashed/corrupted volume and total data loss —
+    scripts/backup-db.sh and the season-reset backup are both manual/one-off.
+    """
+    while not _stop_event.is_set():
+        try:
+            path = backup_sqlite_db()
+            if path:
+                logger.info("Automatic DB backup created: %s", path)
+                deleted = cleanup_old_backups(_DB_BACKUP_RETENTION_DAYS)
+                if deleted:
+                    logger.info("Pruned %d backup(s) older than %d day(s)", deleted, _DB_BACKUP_RETENTION_DAYS)
+        except Exception:
+            logger.exception("Automatic DB backup failed")
+        _stop_event.wait(timeout=_DB_BACKUP_INTERVAL_HOURS * 3600)
 
 
 @asynccontextmanager
@@ -201,6 +226,9 @@ async def lifespan(app: FastAPI):
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
+    threading.Thread(target=_backup_loop, daemon=True).start()
+    logger.info("DB backup thread started (interval=%dh, retention=%dd)",
+                _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
     yield
     _stop_event.set()
 

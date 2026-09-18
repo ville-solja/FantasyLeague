@@ -207,6 +207,7 @@ class PromoCode(Base):
 
 class CodeRedemption(Base):
     __tablename__ = "code_redemptions"
+    __table_args__ = (UniqueConstraint("code_id", "user_id", name="uq_code_redemption_code_user"),)
 
     id          = Column(Integer, primary_key=True, autoincrement=True)
     code_id     = Column(Integer, ForeignKey("promo_codes.id"))

@@ -13,7 +13,7 @@ from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _compute_card_points, _mvp_bonus_delta,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
 )
-from database import get_db
+from database import get_db, spend_tokens
 from deps import get_current_user, is_admin_fresh, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from scoring import stat_dict_from_row
@@ -279,7 +279,10 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": player.id}).first()
 
-    user.tokens = (user.tokens or 0) - 1
+    if not spend_tokens(db, user_id, 1):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card.id} player={player.name} rarity={rarity}")
     db.commit()
@@ -393,7 +396,10 @@ def draw_booster(team_id: int, db=Depends(get_db),
         WHERE s.player_id = :pid ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": player.id}).first()
 
-    user.tokens = (user.tokens or 0) - cost
+    if not spend_tokens(db, user_id, cost):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "token_booster_draw", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card.id} player={player.name} rarity={rarity} "
                   f"team_id={team_id} cost={cost}")
@@ -521,7 +527,10 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     weights = {w.key: w.value for w in db.query(Weight).all()}
     _assign_modifiers(db, card, weights)
 
-    user.tokens = (user.tokens or 0) - 1
+    if not spend_tokens(db, user_id, 1):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "reroll_modifiers", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card_id} rarity={card.card_type}")
     db.commit()

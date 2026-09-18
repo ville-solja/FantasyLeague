@@ -101,13 +101,21 @@ Triggers a synchronous enrichment batch for players whose profile facts are miss
 ## Data Ingest
 
 ### `POST /ingest/league/{league_id}`
-Triggers a full ingest cycle for the specified OpenDota league ID:
+Starts a full ingest cycle for the specified OpenDota league ID in a background thread and
+returns immediately with `{"status": "started", "league_id": ...}` — a full ingest can take
+minutes under OpenDota's rate limit, so the request no longer blocks for that long. The
+background job:
 1. Fetches all match IDs from OpenDota
 2. Ingests new matches and player stats
 3. Refreshes Dotabuff team logos
 4. Runs `run_enrichment()` — a name/avatar backfill only, not the AI-driven profile enrichment
    (facts + bio). That separate pass (`run_profile_enrichment()`) only runs via
    `POST /admin/enrich-profiles` or the background loop — see `reference/player-profile-enrichment.md`.
+
+The `admin_ingest` audit log entry is written once the background job finishes, not when the
+endpoint returns. A shared lock (`ingest.INGEST_LOCK`) prevents this from ever running
+concurrently with the automatic ingest poll loop; calling it while a run (manual or automatic)
+is already in progress returns 409.
 
 Note: card generation was removed from the ingest pipeline. Cards are now created dynamically at draw time.
 

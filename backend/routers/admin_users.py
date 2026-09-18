@@ -3,6 +3,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 
 from database import get_db
 from deps import get_current_user, require_admin, _audit
@@ -158,7 +159,14 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
     db.add(CodeRedemption(code_id=promo.id, user_id=user_id, redeemed_at=int(time.time())))
     _audit(db, "token_redeem", actor_id=user_id, actor_username=user.username,
            detail=f"code={promo.code} granted={promo.token_amount}")
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two concurrent redeems of the same code by the same user both passed
+        # the `already` check above — the unique(code_id, user_id) index is
+        # the actual guard against double-granting.
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Code already redeemed")
     return {"tokens": user.tokens, "granted": promo.token_amount}
 
 

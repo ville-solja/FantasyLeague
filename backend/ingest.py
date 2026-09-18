@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from database import SessionLocal
 from models import Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
@@ -7,6 +8,12 @@ from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
 
 logger = logging.getLogger(__name__)
+
+# Shared between the background poll loop (main.py::_ingest_poll_loop) and the
+# admin-triggered manual ingest endpoint (routers/admin_ingest.py) so the two
+# can never run ingest_league()/run_enrichment() concurrently against the
+# same league data.
+INGEST_LOCK = threading.Lock()
 
 
 def _match_logo_url(val) -> str | None:

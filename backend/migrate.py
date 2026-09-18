@@ -347,6 +347,23 @@ def _m023_matches_vod_url(conn):
         conn.commit()
 
 
+def _m024_code_redemption_unique(conn):
+    # Dedupe any pre-existing double-redemptions (from before this constraint
+    # existed) before adding the unique index, keeping the earliest row.
+    conn.execute(text("""
+        DELETE FROM code_redemptions
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM code_redemptions GROUP BY code_id, user_id
+        )
+    """))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_code_redemptions_code_user "
+        "ON code_redemptions(code_id, user_id)"
+    ))
+    conn.commit()
+    logger.info("Migration: code_redemptions — deduped and added unique(code_id, user_id) index")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -394,6 +411,7 @@ MIGRATIONS = [
     ("021_card_slot_index",          _m021_card_slot_index),
     ("022_matches_duration",         _m022_matches_duration),
     ("023_matches_vod_url",          _m023_matches_vod_url),
+    ("024_code_redemption_unique",   _m024_code_redemption_unique),
 ]
 
 

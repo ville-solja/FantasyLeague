@@ -5,6 +5,7 @@ __pycache__/
 data/fantasy.db
 data/fantasy.db-shm
 data/fantasy.db-wal
+data/*.backup-*
 
 # Local card preview scratch files (repo root)
 /tmp.png

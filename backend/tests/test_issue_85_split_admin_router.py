@@ -225,14 +225,15 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-84-week-management-editing's 8 new tests did after that, and
         plan-issue-111-week-boundary-formula's 7 new tests did after that, and
         plan-issue-113-mvp-schedule-cache-bust's 7 new tests did after that, and
-        plan-issue-115-username-xss-fix's 12 new tests did after that)."""
+        plan-issue-115-username-xss-fix's 12 new tests did after that, and
+        plan-issue-126-db-backup-leak-fix's 9 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "689 passed" in output, output[-3000:]
+        assert "698 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):
