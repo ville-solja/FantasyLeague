@@ -15,12 +15,13 @@ async function loadHowToPlay() {
   const byKey = Object.fromEntries(weights.map(w => [w.key, w]));
 
   const statsKeys = [
-    'kills', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
+    'kills', 'assists', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
     'towers_killed', 'roshan_kills', 'teamfight_participation',
     'camps_stacked', 'rune_pickups', 'firstblood_claimed', 'stuns',
   ];
   const statsLabels = {
     kills:                   'Kills',
+    assists:                 'Assists',
     last_hits:               'Last hits',
     denies:                  'Denies',
     gold_per_min:            'Gold per minute',

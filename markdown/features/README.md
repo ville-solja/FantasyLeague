@@ -85,3 +85,6 @@ Implementation details, integrations, and operator tooling.
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
 | [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
 | [Rate Limiting](reference/rate-limiting.md) | Per-IP request-rate limits app-wide, with stricter limits on login/register/forgot-password and a per-username failed-login lockout |
+| [Roster Limit Race Fix](reference/roster-limit-race-fix.md) | Atomic conditional-UPDATE fix for a race condition that let concurrent requests exceed the active-roster limit |
+| [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
+| [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |

@@ -47,6 +47,78 @@ As a user, I want to assign cards to the upcoming week's roster.
 
 ---
 
+### Atomic Roster Activation Limit Enforcement
+**User story**
+As a player, I want the active-roster limit to be enforced correctly even under concurrent
+activation requests, so that I can never end up with more active cards than the game intends
+(and no one can exploit this for an unfair scoring advantage).
+
+**Acceptance criteria**
+- Firing many concurrent `POST /roster/{card_id}/activate` requests for the same user against
+  distinct bench cards never results in more than `ROSTER_LIMIT` active cards, regardless of
+  how many requests race
+- A single, sequential activation request still behaves exactly as before: success when under
+  the limit, 404 for a missing/foreign card, 409 "Card already active", 409 "Roster full ({N}
+  cards max)" at the limit, 409 duplicate-player guard when another active card already has
+  the same player
+- The fix does not change the existing successful-path response shape
+  (`{"status": "ok", "card_id": ...}`)
+
+---
+
+### Atomic Duplicate-Player Guard on Roster Swap
+**User story**
+As a player, I want `POST /roster/swap`'s duplicate-player guard to hold up under concurrent
+swap requests, so that I can never end up with two active cards for the same player even if
+overlapping swap requests race.
+
+**Acceptance criteria**
+- Firing concurrent `POST /roster/swap` requests that could both pass a naive read-then-write
+  duplicate-player check never results in two active cards for the same player
+- A single, sequential swap request still behaves exactly as before: 404 for missing cards, 409
+  duplicate-player guard, and the existing bench↔active flip with `slot_index` handling
+  unchanged
+
+---
+
+### Per-User Rate Limiting on Roster Mutations
+**User story**
+As an operator, I want the roster activate/deactivate/swap/reorder endpoints to enforce a
+per-user rate limit so that rapid toggling — accidental or deliberate — can't meaningfully
+load the backend.
+
+**Acceptance criteria**
+- `POST /roster/{card_id}/activate`, `/roster/{card_id}/deactivate`, `/roster/swap`, and
+  `/roster/reorder` each enforce a per-user limit, configurable via
+  `RATE_LIMIT_ROSTER_MUTATION` (default `30/minute`)
+- The limit is keyed by the authenticated user's session `user_id`, not source IP, so it
+  follows the account regardless of network; an unauthenticated caller falls back to being
+  keyed by IP
+- Exceeding the limit returns HTTP 429 with the same `{"detail": "Rate limit exceeded: ..."}`
+  shape already established by issue #121
+- The default is generous enough that normal roster-building activity (a handful of swaps
+  while setting up a 5-card active roster) is never blocked
+
+---
+
+### Prevent Rapid Re-Fire from the Roster UI
+**User story**
+As a player, I want the roster UI to ignore extra activate/deactivate/swap clicks or drops
+while a previous one is still in flight, so that impatient clicking can't queue up more
+requests than the app can usefully process (and so I don't see a confusing partial-update
+state from overlapping requests).
+
+**Acceptance criteria**
+- While an activate, deactivate, swap, or reorder request is in flight, a new interaction of
+  the same kind (click, Enter/Space keyboard toggle, or drag-drop) for the same user is
+  ignored rather than firing another request
+- The guard clears once the in-flight request resolves (success or failure), so normal
+  sequential use is unaffected
+- No new UI affordance is required — existing interactions (card-image click/keyboard
+  toggle, HTML5 drag-and-drop) are unchanged in appearance, only guarded against overlap
+
+---
+
 ### Weekly Lock
 **User story**
 As a user, I want cards to lock once a week's match window begins.
@@ -289,9 +361,44 @@ As a user, I want to spend a token to re-roll a card's stat modifiers so that I 
 - Uses Dota 2 match data from OpenDota
 - Only active (locked) cards score
 - No double counting of matches
-- Scored stats (weight × value loop): `kills`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
+- Scored stats (weight × value loop): `kills`, `assists`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
 - Death scoring: separate clamped pool contribution (defaults: `death_pool = 3.0`, `death_deduction = 0.3`, floored at 0 — i.e. 0 deaths = 3.0 pts, then −0.3 per death)
 - Death formula params (`death_pool`, `death_deduction`) and all stat weights are configurable via the `weights` table (defaults/overrides from `backend/seed.py` + optional `WEIGHTS_JSON` on startup)
+
+---
+
+### Include Assists in Fantasy Scoring
+**User story**
+As a league participant, I want assists to actually contribute to my fantasy score — matching
+what's already captured, ingested, and shown to me — so that a strong assist-heavy performance
+is reflected in my points instead of silently contributing nothing.
+
+**Acceptance criteria**
+- `assists` is added to `SCORING_STATS` in `backend/scoring.py`, flowing through the same
+  weight × value loop as every other captured stat
+- A new `assists` weight is added to `DEFAULT_WEIGHTS` in `backend/seed.py` (provisional
+  default `0.15`), so it auto-seeds on next startup for both fresh and already-existing
+  databases via `seed_weights()`'s existing idempotent upsert logic
+- `card_modifiers`'s DB-level `CHECK` constraint is updated via a new migration (rebuilding
+  the table the same way migration `008_card_modifiers_constraint` did) to allow `assists` as
+  a valid `stat_key`, so card modifier rolls that land on it don't fail
+- Card, roster, and leaderboard scores (recomputed live from raw stat sums + current weights
+  on every read) reflect the new weight immediately after the weight is seeded, with no extra
+  step needed
+- Running `POST /recalculate` after the fix retroactively updates every already-ingested
+  match's stored `player_match_stats.fantasy_points` (used by the Players tab match history
+  and `/top`) to include assists, not just newly-ingested matches going forward
+
+---
+
+### Public Scoring Explanation Includes Assists
+**User story**
+As a player, I want the public "How to Play" scoring table to list Assists alongside every
+other scored stat, so I understand what actually earns me points without needing to guess.
+
+**Acceptance criteria**
+- `frontend/app-init.js::loadHowToPlay()`'s stat list includes `assists` / `"Assists"`, so the
+  rendered table shows its current weight value the same way every other stat already does
 
 ---
 

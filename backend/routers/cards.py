@@ -12,16 +12,32 @@ from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _compute_card_points, _mvp_bonus_delta,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
+    _activate_card_atomic, _swap_roster_atomic,
 )
 from database import get_db, spend_tokens
 from deps import get_current_user, is_admin_fresh, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
+from rate_limit import limiter, key_by_user_or_ip
 from scoring import stat_dict_from_row
 from weeks import get_next_editable_week
 
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
+# Per-user limit on roster activate/deactivate/swap/reorder (issue #124). Keyed by
+# session user_id (falls back to source IP if somehow unauthenticated — see
+# key_by_user_or_ip in rate_limit.py). These four routes are split into a plain,
+# undecorated business-logic function (activate_card, deactivate_card,
+# reorder_roster, swap_roster — same signature as before, still directly
+# importable/callable by tests, e.g. backend/tests/test_issue_125_roster_limit_race_fix.py
+# and backend/tests/test_issue_40_my_team_drag_and_drop.py which call them as plain
+# Python functions with positional args) and a thin `*_route` wrapper that FastAPI
+# actually registers, carrying the new `request: Request` parameter slowapi's
+# @limiter.limit(...) decorator requires. Adding `request` directly to the business
+# functions would have shifted those tests' existing positional arguments into the
+# wrong parameters.
+RATE_LIMIT_ROSTER_MUTATION = os.getenv("RATE_LIMIT_ROSTER_MUTATION", "30/minute")
 
 
 class ReorderRequest(BaseModel):
@@ -543,7 +559,6 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     }
 
 
-@router.post("/roster/{card_id}/activate")
 def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     card = db.get(Card, card_id)
@@ -567,12 +582,20 @@ def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends
     if duplicate:
         raise HTTPException(status_code=409, detail="A card for this player is already active")
 
-    card.is_active = True
+    if not _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT):
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
     db.commit()
     return {"status": "ok", "card_id": card_id}
 
 
-@router.post("/roster/{card_id}/deactivate")
+@router.post("/roster/{card_id}/activate")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def activate_card_route(request: Request, card_id: int, db=Depends(get_db),
+                         current_user: dict = Depends(get_current_user)):
+    return activate_card(card_id, db, current_user)
+
+
 def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     card = db.get(Card, card_id)
@@ -583,7 +606,13 @@ def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depen
     return {"status": "ok", "card_id": card_id}
 
 
-@router.post("/roster/reorder")
+@router.post("/roster/{card_id}/deactivate")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def deactivate_card_route(request: Request, card_id: int, db=Depends(get_db),
+                           current_user: dict = Depends(get_current_user)):
+    return deactivate_card(card_id, db, current_user)
+
+
 def reorder_roster(body: ReorderRequest, user=Depends(get_current_user), db=Depends(get_db)):
     """Assign slot_index to each card in the ordered list. Zone (active/bench) is
     determined by each card's current is_active state; the caller should only mix
@@ -598,7 +627,13 @@ def reorder_roster(body: ReorderRequest, user=Depends(get_current_user), db=Depe
     return {"ok": True}
 
 
-@router.post("/roster/swap")
+@router.post("/roster/reorder")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def reorder_roster_route(request: Request, body: ReorderRequest,
+                          user=Depends(get_current_user), db=Depends(get_db)):
+    return reorder_roster(body, user, db)
+
+
 def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(get_db)):
     """Atomically move a bench card to the active roster and an active card to the
     bench. Applies the duplicate-player guard before committing."""
@@ -618,12 +653,19 @@ def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(ge
     if duplicate:
         raise HTTPException(status_code=409, detail="A card for this player is already active")
 
-    active_card.is_active = False
-    active_card.slot_index = None
-    bench_card.is_active = True
-    bench_card.slot_index = body.slot_index
+    if not _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
+                                bench_card.player_id, body.slot_index):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A card for this player is already active")
     db.commit()
     return {"ok": True}
+
+
+@router.post("/roster/swap")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def swap_roster_route(request: Request, body: SwapRequest,
+                       user=Depends(get_current_user), db=Depends(get_db)):
+    return swap_roster(body, user, db)
 
 
 @router.get("/roster/{user_id}")

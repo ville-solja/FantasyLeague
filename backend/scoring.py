@@ -5,6 +5,7 @@ from __future__ import annotations
 # Deaths is excluded — it uses a clamped pool formula handled separately.
 SCORING_STATS = [
     "kills",
+    "assists",
     "last_hits",
     "denies",
     "gold_per_min",

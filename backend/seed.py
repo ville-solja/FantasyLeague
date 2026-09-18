@@ -142,6 +142,7 @@ def seed_cards(league_id: int, generation: int = 1):
 DEFAULT_WEIGHTS = [
     # --- Scoring stat weights ---
     {"key": "kills",                    "label": "Kills",                          "value": 0.3},
+    {"key": "assists",                  "label": "Assists",                        "value": 0.15},
     {"key": "last_hits",                "label": "Last hits",                      "value": 0.003},
     {"key": "denies",                   "label": "Denies",                         "value": 0.0003},
     {"key": "gold_per_min",             "label": "Gold per minute",                "value": 0.002},

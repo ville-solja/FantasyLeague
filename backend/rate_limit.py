@@ -14,7 +14,16 @@ import os
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from starlette.requests import Request
 
 RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/minute")
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_GLOBAL])
+
+
+def key_by_user_or_ip(request: Request) -> str:
+    """Rate-limit key for authenticated routes: the session's user_id if present,
+    otherwise fall back to source IP (defensive — these routes require login, so this
+    branch should not normally be reached)."""
+    user_id = request.session.get("user_id")
+    return f"user:{user_id}" if user_id else get_remote_address(request)
