@@ -3,6 +3,7 @@ import os
 import re as _re
 import secrets
 import time
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
@@ -12,10 +13,40 @@ from deps import _audit, get_current_user
 from models import User, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
 from auth import hash_password, verify_password
 from email_utils import send_email
+from rate_limit import limiter
 
 router = APIRouter()
 
 INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
+
+RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
+RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "5/minute")
+RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "3/minute")
+
+# Per-username failed-login lockout, independent of source IP — catches an
+# attacker rotating IPs against one account, which the per-IP RATE_LIMIT_LOGIN
+# limiter alone would not. In-memory only (same reasoning as the slowapi
+# limiter itself: single-process deployment, no shared-state backend needed;
+# lockout state resetting on restart is an acceptable tradeoff).
+_LOGIN_LOCKOUT_THRESHOLD = int(os.getenv("LOGIN_LOCKOUT_THRESHOLD", "10"))
+_LOGIN_LOCKOUT_WINDOW_SECONDS = int(os.getenv("LOGIN_LOCKOUT_WINDOW_SECONDS", "300"))
+_LOGIN_LOCKOUT_MESSAGE = "Too many failed login attempts. Please try again later."
+_failed_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_locked_out(username: str) -> bool:
+    now = time.time()
+    attempts = _failed_login_attempts[username]
+    attempts[:] = [t for t in attempts if now - t < _LOGIN_LOCKOUT_WINDOW_SECONDS]
+    return len(attempts) >= _LOGIN_LOCKOUT_THRESHOLD
+
+
+def _record_failed_login(username: str):
+    _failed_login_attempts[username].append(time.time())
+
+
+def _clear_failed_logins(username: str):
+    _failed_login_attempts.pop(username, None)
 
 
 class LoginBody(BaseModel):
@@ -41,9 +72,19 @@ class ForgotPasswordBody(BaseModel):
 
 
 @router.post("/login")
+@limiter.limit(RATE_LIMIT_LOGIN)
 def login(request: Request, body: LoginBody, db=Depends(get_db)):
+    # Check the per-username lockout first, before touching the DB or bcrypt
+    # at all — same fast-exit spirit as the /forgot-password timing
+    # equalization below. The message is identical whether or not the
+    # username exists in the DB (the lockout counter itself is keyed by the
+    # submitted username string, existing or not), so this never reveals
+    # username existence.
+    if _is_locked_out(body.username):
+        raise HTTPException(status_code=429, detail=_LOGIN_LOCKOUT_MESSAGE)
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
+        _record_failed_login(body.username)
         raise HTTPException(status_code=401, detail="Invalid username or password")
     if user.must_change_password and user.temp_password_expires_at:
         if int(time.time()) > user.temp_password_expires_at:
@@ -54,6 +95,7 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
     request.session["user_id"]  = user.id
     request.session["username"] = user.username
     request.session["is_admin"] = user.is_admin
+    _clear_failed_logins(user.username)
     _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
     db.commit()
     return {"username": user.username, "is_admin": user.is_admin,
@@ -61,6 +103,7 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
 
 
 @router.post("/register")
+@limiter.limit(RATE_LIMIT_REGISTER)
 def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     _e = body.email.strip()
     _at = _e.find("@")
@@ -99,7 +142,8 @@ _DUMMY_HASH = hash_password("dummy-timing-equalizer")
 
 
 @router.post("/forgot-password")
-def forgot_password(body: ForgotPasswordBody, db=Depends(get_db)):
+@limiter.limit(RATE_LIMIT_FORGOT_PASSWORD)
+def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_db)):
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not user.email:
         verify_password("dummy-timing-equalizer", _DUMMY_HASH)  # equalize bcrypt timing

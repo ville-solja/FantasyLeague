@@ -9,12 +9,15 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups
+from rate_limit import limiter
 from models import League, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league, get_live_match_league_ids, INGEST_LOCK
@@ -284,6 +287,23 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    # Must be a plain (sync) function, not `async def`: SlowAPIMiddleware's
+    # global baseline check runs inside a synchronous code path
+    # (slowapi.middleware.sync_check_limits) and cannot await a coroutine
+    # handler — it silently falls back to slowapi's own {"error": ...} shape
+    # for any exception_handler where inspect.iscoroutinefunction() is True.
+    # Route-level @limiter.limit(...) violations go through FastAPI's normal
+    # (async-aware) exception handling and would work with either, but this
+    # handler must stay sync so the app-wide middleware path also gets this
+    # app's {"detail": ...} shape instead.
+    return JSONResponse(status_code=429, content={"detail": f"Rate limit exceeded: {exc.detail}"})
 
 
 @app.exception_handler(Exception)

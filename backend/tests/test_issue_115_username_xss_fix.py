@@ -122,6 +122,16 @@ def _make_app(engine):
         finally:
             db.close()
 
+    # This test file's /register and /login calls exercise username
+    # validation, not rate limiting — but routers/auth.py's routes carry a
+    # @limiter.limit(...) decorator bound to a *shared, process-wide*
+    # `rate_limit.limiter` singleton (see backend/rate_limit.py and
+    # test_issue_121_rate_limiting.py's module docstring). Disable it here so
+    # this file's request volume never interacts with rate-limit state left
+    # over from — or shared with — other test files/runs.
+    import rate_limit
+    rate_limit.limiter.enabled = False
+
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key-123")
     app.include_router(auth_router.router)

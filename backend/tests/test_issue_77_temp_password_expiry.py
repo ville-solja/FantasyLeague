@@ -63,6 +63,20 @@ def _make_app(engine):
         finally:
             db.close()
 
+    # This test's /login and /forgot-password calls exercise temp-password
+    # expiry, not rate limiting — but routers/auth.py's routes carry a
+    # @limiter.limit(...) decorator bound to a *shared, process-wide*
+    # `rate_limit.limiter` singleton (see backend/rate_limit.py and
+    # test_issue_121_rate_limiting.py's module docstring). Without disabling
+    # it here, repeated /forgot-password calls across this file's many test
+    # functions (well over RATE_LIMIT_FORGOT_PASSWORD's default 3/minute, all
+    # from TestClient's identical default source IP) would eventually start
+    # returning 429 instead of the {"status": "ok"} these tests expect —
+    # rate-limiting is out of scope for this test file, so it's turned off
+    # for the app under test here.
+    import rate_limit
+    rate_limit.limiter.enabled = False
+
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key-123")
     app.include_router(auth_router.router)
