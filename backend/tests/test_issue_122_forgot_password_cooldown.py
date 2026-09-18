@@ -75,6 +75,19 @@ STATUS: implemented -- all 11 stubs have real assertions against the
 _forgot_password_in_cooldown()/_record_forgot_password_request() wiring in
 backend/routers/auth.py.
 
+UPDATED (issue #123, password-reset-token-flow redesign): forgot_password() no
+longer mutates user.password_hash at all -- see
+plan-issue-123-password-reset-token-flow.md and
+tests/test_issue_123_password_reset_token_flow.py. Most tests below use
+password_hash equality across a *suppressed* request only as a "nothing
+happened" proxy, which is still trivially true post-redesign (password_hash was
+never touched either way) and needed no change. One test,
+test_forgot_password_cooldown_expires_after_window_allows_new_email, asserted
+password_hash *inequality* across two *non-suppressed* requests as proof a new
+temp password was issued -- that assertion would now be permanently false, so
+it was rewritten to check the PasswordResetToken row instead (still proving
+"not suppressed, a new artifact was issued", just the new artifact).
+
 Run with: cd backend && python -m pytest tests/test_issue_122_forgot_password_cooldown.py -v
 """
 
@@ -95,7 +108,7 @@ from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
 from database import Base, get_db
-from models import User
+from models import User, PasswordResetToken
 from auth import hash_password
 import rate_limit
 import routers.auth as auth_router_module
@@ -435,9 +448,15 @@ def test_forgot_password_per_ip_rate_limit_triggers_independent_of_cooldown(clie
 def test_forgot_password_cooldown_expires_after_window_allows_new_email(monkeypatch, engine):
     """AC: once FORGOT_PASSWORD_COOLDOWN_SECONDS has fully elapsed since the
     first request, a follow-up request for the same username is no longer
-    suppressed -- it sends a new email and issues a new temp password,
+    suppressed -- it sends a new email and issues a new PasswordResetToken,
     proving the cooldown expires on its own rather than being a permanent
-    lockout."""
+    lockout.
+
+    NOTE (issue #123): forgot_password() no longer mutates user.password_hash
+    at all (see plan-issue-123-password-reset-token-flow.md) -- it creates a
+    single-use PasswordResetToken instead, invalidating any prior one for the
+    user. "a new temp password issued" is now proven by the token value
+    changing between the two non-suppressed calls, not by password_hash."""
     monkeypatch.setenv("FORGOT_PASSWORD_COOLDOWN_SECONDS", "1")
     app = _make_app(engine)
     short_client = TestClient(app, raise_server_exceptions=True)
@@ -449,16 +468,19 @@ def test_forgot_password_cooldown_expires_after_window_allows_new_email(monkeypa
     resp1, count1 = _do_forgot_password(short_client, "alice")
     assert resp1.status_code == 200
     assert count1 == 1
-    db.refresh(user)
-    hash_after_first = user.password_hash
+    token_after_first = db.query(PasswordResetToken).filter_by(user_id=user.id).first()
+    assert token_after_first is not None
+    token_value_after_first = token_after_first.token
 
     time.sleep(1.5)  # fully exceeds the 1s cooldown window
 
     resp2, count2 = _do_forgot_password(short_client, "alice")
     assert resp2.status_code == 200
     assert count2 == 1  # new email actually sent, not suppressed
-    db.refresh(user)
-    assert user.password_hash != hash_after_first  # new temp password issued
+
+    tokens = db.query(PasswordResetToken).filter_by(user_id=user.id).all()
+    assert len(tokens) == 1  # prior token invalidated, only the new one remains
+    assert tokens[0].token != token_value_after_first  # new reset token issued
     db.close()
 
 

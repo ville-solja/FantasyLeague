@@ -176,6 +176,43 @@ recur via a pattern nobody thought to exclude.
   `scripts/backup-db.sh /custom/path` (a non-default argument) writes outside the
   gitignored `data/` directory and is not covered by this fix
 
+---
+
+## HTTPS Enforcement
+
+### Fail Loudly at Startup if HTTPS Isn't Enforced
+**User story**
+As an operator, I want the app to refuse to start in a production-like configuration if
+`HTTPS_ONLY` isn't set, so that a misconfigured deployment can't silently serve session cookies
+over unencrypted connections.
+
+**Acceptance criteria**
+- On startup, if `HTTPS_ONLY` is not `"true"` and neither `DEBUG=true` nor
+  `TWITCH_LOCAL_DEV=true` is set, the app raises a clear `RuntimeError` and refuses to start —
+  mirroring the existing `SECRET_KEY` check's exact structure and message style
+- Setting `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the same existing local-dev bypasses) skips
+  this check, so local development is unaffected
+- The error message states what to do: set `HTTPS_ONLY=true` once behind a TLS-terminating
+  reverse proxy, or use one of the local-dev bypasses
+- The existing test suite (which imports `main.py` with `DEBUG=true` set) is unaffected by this
+  new check
+
+---
+
+### Prominent Deployment Documentation
+**User story**
+As an operator setting up a new deployment, I want the README to clearly state upfront that
+production requires a TLS-terminating reverse proxy and `HTTPS_ONLY=true`, so I don't discover
+this requirement only when the app refuses to start.
+
+**Acceptance criteria**
+- `README.md`'s Deployment section explicitly states the TLS/reverse-proxy requirement for
+  production, not just a passing mention
+- `.env.example`'s `HTTPS_ONLY` comment is strengthened to match `SECRET_KEY`'s existing
+  "must be set in production" framing, rather than reading as one optional setting among many
+- A new reference doc explains the vulnerability this closes and the startup-check mechanics
+  for anyone debugging why their deployment won't start
+
 ### Rotate Exposed Admin Credentials and Decide on History Purge *(not yet implemented)*
 **User story**
 As an operator, I want the exposed admin account's password rotated and a recorded decision

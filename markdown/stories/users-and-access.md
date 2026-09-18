@@ -25,13 +25,18 @@ As a registered user, I want to log in securely so that I can access my cards, t
 
 ---
 
-### Temporary Password
+### Password Reset Request
 **User story**
-As a user, I want to have the ability to receive a new password in case I've forgotten the current one.
+As a user, I want to request a password reset link if I've forgotten my current password,
+without that request alone being able to change or invalidate my actual password.
 
 **Acceptance criteria**
-- User that does not remember their password has the option to send a temporary password to the email listed on their profile
-- If the user does not have an email, an error is given informing them of the inability to reset
+- User that does not remember their password can request a reset via their username; a
+  single-use reset link/code is sent to the email listed on their profile
+- Requesting a reset does **not** change the account's actual password — the real password
+  remains valid and usable until the reset is completed via the emailed link/code
+- If no account matches, or the matched account has no email, the endpoint still returns
+  success (no enumeration signal) and no email is sent
 
 ---
 
@@ -75,6 +80,21 @@ As a logged-in user, I want a profile page where I can update my account details
 - User can change their password via a current password + new password form
 - User can optionally link their account to an OpenDota player ID
 - When a valid player ID is saved and the player exists in league data, the player's name and avatar are shown as a preview
+
+---
+
+### Require Login to View a Profile
+**User story**
+As an operator, I want `GET /profile/{user_id}` to require an authenticated session so that
+the user base can't be enumerated anonymously by iterating IDs.
+
+**Acceptance criteria**
+- `GET /profile/{user_id}` returns 401 for an unauthenticated request, for any `user_id`
+- Any logged-in user (not just the profile's owner) can still view any other user's profile —
+  this is not restricted to "view your own profile only"
+- The response shape and content for an authenticated request are completely unchanged
+- No frontend changes are needed — the only existing call site always runs within an
+  authenticated session already
 
 ---
 
@@ -226,3 +246,63 @@ resets.
 - A legitimate user who didn't receive the first email (e.g. spam filter, typo'd address they
   then fixed via support) is not permanently blocked — the cooldown expires on its own after
   the configured window, no admin action needed
+
+---
+
+## Password Reset Token Flow
+
+### Request a Password Reset Without Touching the Real Password
+**User story**
+As a user, I want requesting a password reset to leave my actual password untouched until I
+complete the reset myself, so that no one else can lock me out of my account just by knowing my
+username.
+
+**Acceptance criteria**
+- `POST /forgot-password` no longer sets `user.password_hash`, `must_change_password`, or
+  `temp_password_expires_at` — the account's real credentials are completely unaffected by the
+  request itself
+- A single-use `PasswordResetToken` is created for the account, invalidating any prior unused
+  token for that same user
+- The token's validity window is configurable via `PASSWORD_RESET_TOKEN_TTL_HOURS` (default
+  `1`)
+- An email is sent containing both a clickable link (if `APP_BASE_URL` is configured) and the
+  raw token as a manual-entry fallback (always included)
+- The email wording reflects that the current password remains valid and nothing changes until
+  the reset is completed
+- The endpoint's existing behavior is otherwise unchanged: always returns `{"status": "ok"}`
+  regardless of username/email existence, the bcrypt timing-equalization fast-exit is
+  preserved, and the existing per-IP limit (issue #121) and per-username cooldown (issue #122)
+  both continue to apply
+
+---
+
+### Complete a Password Reset with a Valid Token
+**User story**
+As a user, I want to actually set a new password using the link or code I was emailed, so that
+I can recover my account without anyone else being able to trigger the change on my behalf.
+
+**Acceptance criteria**
+- A new `POST /reset-password` endpoint accepts a token and a new password (same
+  `min_length=6, max_length=128` constraint used elsewhere)
+- A valid, unexpired token sets the new password, clears any legacy
+  `must_change_password`/`temp_password_expires_at` state on the account, deletes the token
+  (single-use), and returns `{"status": "ok"}`
+- An invalid, already-used, or expired token returns 400 with a clear error and makes no
+  change to any account
+- The action is recorded in the audit log (`password_reset_completed`)
+
+---
+
+### Reset Password UI
+**User story**
+As a user who clicked the reset link in my email, I want the app to recognize it and let me set
+a new password directly, so I don't have to manually construct any requests myself.
+
+**Acceptance criteria**
+- Loading the app with a `?reset_token=...` query parameter automatically opens a "Set new
+  password" modal with the token pre-filled, and the URL parameter is cleared from the visible
+  address bar
+- The same modal also accepts manual token entry, for the `APP_BASE_URL`-unset fallback case
+  where the email only contains a raw code
+- The existing "Forgot password" modal's copy is updated to describe a reset link/code being
+  sent, not a temporary password

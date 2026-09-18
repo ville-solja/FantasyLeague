@@ -161,7 +161,8 @@ Returns the most recent audit log entries, newest first. All significant admin a
 |---|---|
 | `user_register` | New user registration |
 | `user_login` | Successful user login |
-| `password_reset_requested` | Forgot-password flow issued a temporary password |
+| `password_reset_requested` | Forgot-password flow issued a single-use password-reset token |
+| `password_reset_completed` | User completed a password reset via `POST /reset-password` |
 | `token_draw` | Card drawn |
 | `token_booster_draw` | Team booster pack drawn |
 | `reroll_modifiers` | User spent a token to reroll card modifiers |

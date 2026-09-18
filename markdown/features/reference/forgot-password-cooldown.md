@@ -34,11 +34,12 @@ password/email work:
   `FORGOT_PASSWORD_COOLDOWN_SECONDS` → the *same* fast-exit call and `{"status": "ok"}` response
   as the nonexistent-username case, so a cooldown-suppressed request is indistinguishable from
   one against an unknown username, both in response body and in rough timing. No email is sent
-  and no temp password is issued.
-- Otherwise → `_record_forgot_password_request(username)` is called **before** the temp-password
+  and no reset token is issued.
+- Otherwise → `_record_forgot_password_request(username)` is called **before** the reset-token
   issuance and `send_email` call (not after), so a slow or failing SMTP send can't be exploited
-  via rapid retry to bypass the cooldown. The existing temp-password issuance + email logic then
-  proceeds unchanged.
+  via rapid retry to bypass the cooldown. The token issuance + email logic then proceeds
+  unchanged (see `reference/password-reset-token-flow.md` for what that now does — issue #123
+  replaced the original temp-password issuance this cooldown was originally written against).
 
 The cooldown is only ever recorded for usernames that resolve to a real account — the existing
 nonexistent-username fast-exit path is untouched and never populates the tracker.

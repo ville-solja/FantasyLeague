@@ -287,9 +287,18 @@ class TestRejectUsernamesContainingHtmlSignificantCharactersAtRegistration:
         """An account whose username already contains HTML-significant
         characters (stored before this validation existed) is unaffected by
         the new validator on read — GET /profile/{user_id} still returns the
-        legacy value unchanged, with no retroactive rename forced."""
+        legacy value unchanged, with no retroactive rename forced.
+
+        GET /profile/{user_id} requires login (issue #120,
+        markdown/features/reference/profile-requires-login.md) — any
+        authenticated account can view any profile, so a second normal
+        account logs in here purely to satisfy that auth gate; it is not
+        the profile being viewed."""
         legacy_username = '<img src=x alt="Eul" onerror="toggleAdmin(69)">'
         user = _create_user(db_session, username=legacy_username, email="legacy@example.com")
+        _create_user(db_session, username="viewer", email="viewer@example.com")
+        login_resp = client.post("/login", json={"username": "viewer", "password": "secret123"})
+        assert login_resp.status_code == 200
         resp = client.get(f"/profile/{user.id}")
         assert resp.status_code == 200
         assert resp.json()["username"] == legacy_username

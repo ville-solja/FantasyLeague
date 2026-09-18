@@ -138,10 +138,21 @@ document.addEventListener("keydown", function(e) {
   });
 })();
 
+function _handleResetTokenParam() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("reset_token");
+  if (!token) return;
+  // Strip the token from the visible address bar so it doesn't linger in
+  // browser history, then open the reset-password modal pre-filled with it.
+  history.replaceState(null, "", window.location.pathname);
+  showResetPassword(token);
+}
+
 async function init() {
   await loadConfig();
   await loadMe();
   applyAuthState();
+  _handleResetTokenParam();
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();

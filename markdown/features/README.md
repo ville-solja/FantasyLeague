@@ -89,3 +89,6 @@ Implementation details, integrations, and operator tooling.
 | [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
+| [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |
+| [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
+| [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |

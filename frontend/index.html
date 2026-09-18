@@ -58,10 +58,31 @@
       <h2 style="margin-bottom:0;">Reset password</h2>
       <button class="ghost" onclick="showLogin()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <p style="font-size:0.85rem;color:#888;margin-bottom:16px;">Enter your username. A temporary password will be sent to the email address on your account.</p>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:16px;">Enter your username. A password reset link (and code) will be sent to the email address on your account. Your current password stays valid until you complete the reset.</p>
     <input id="forgotUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') submitForgotPassword()" />
-    <button style="width:100%;" onclick="submitForgotPassword()">Send temporary password</button>
+    <button style="width:100%;" onclick="submitForgotPassword()">Send reset link</button>
     <div class="status" id="forgotStatus"></div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="ghost" style="font-size:0.8rem;" onclick="showResetPassword()">Already have a reset code?</button>
+    </div>
+    <div style="text-align:center;margin-top:4px;">
+      <button class="ghost" style="font-size:0.8rem;" onclick="showLogin()">Back to login</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div class="modal-overlay hidden" id="resetPasswordModal" role="dialog" aria-modal="true" data-close="showLogin" onclick="if(event.target===this)showLogin()">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 style="margin-bottom:0;">Set new password</h2>
+      <button class="ghost" onclick="showLogin()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+    </div>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:16px;">Paste the reset code from your email (or follow the link directly) and choose a new password.</p>
+    <input id="resetToken" type="text" placeholder="Reset code" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') submitResetPassword()" />
+    <input id="resetNewPassword" type="password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') submitResetPassword()" />
+    <button style="width:100%;" onclick="submitResetPassword()">Set new password</button>
+    <div class="status" id="resetPasswordStatus"></div>
     <div style="text-align:center;margin-top:12px;">
       <button class="ghost" style="font-size:0.8rem;" onclick="showLogin()">Back to login</button>
     </div>

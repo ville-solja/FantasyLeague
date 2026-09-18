@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
 from deps import _audit, get_current_user
-from models import User, TokenGrantEvent, TokenGrantClaim, Notification, NotificationDismissal
+from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
+                    NotificationDismissal, PasswordResetToken)
 from auth import hash_password, verify_password
 from email_utils import send_email
 from rate_limit import limiter
@@ -90,6 +91,11 @@ class RegisterBody(BaseModel):
 
 class ForgotPasswordBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
+
+
+class ResetPasswordBody(BaseModel):
+    token: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)
 
 
 @router.post("/login")
@@ -185,36 +191,63 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
     user_username = user.username
     user_id       = user.id
 
-    temp_password = secrets.token_urlsafe(9)
-    ttl_hours = int(os.getenv("TEMP_PASSWORD_TTL_HOURS", "24"))
-    user.password_hash = hash_password(temp_password)
-    user.must_change_password = True
-    user.temp_password_expires_at = int(time.time()) + ttl_hours * 3600
+    # Invalidate any prior unused token for this account before issuing a new one —
+    # only one live reset token per user at a time (mirrors TwitchLinkCode's
+    # invalidate-on-regenerate pattern in twitch.py's generate_link_code()).
+    db.query(PasswordResetToken).filter_by(user_id=user_id).delete()
+    token = secrets.token_urlsafe(32)
+    ttl_hours = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_HOURS", "1"))
+    db.add(PasswordResetToken(token=token, user_id=user_id,
+                              expires_at=int(time.time()) + ttl_hours * 3600))
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
 
     app_name = os.getenv("APP_NAME", "Kana Cards")
+    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+    link_block = f"    {base_url}/?reset_token={token}\n\n" if base_url else ""
     try:
         send_email(
             to_address=user_email,
-            subject=f"[{app_name}] Your temporary password",
+            subject=f"[{app_name}] Password reset requested",
             body=(
                 f"Hi {user_username},\n\n"
-                f"A temporary password has been issued for your account:\n\n"
-                f"    {temp_password}\n\n"
-                f"Your previous password is no longer valid.\n"
-                f"This temporary password expires in {ttl_hours} hour(s). "
-                f"Log in and go to your Profile to set a permanent password.\n\n"
-                f"If you did not request this, act quickly — your previous password has already been replaced by the temporary one above. "
-                f"Log in and change it immediately, or contact support.\n"
+                f"A password reset was requested for your account.\n\n"
+                f"{link_block}"
+                f"    Reset code: {token}\n\n"
+                f"Enter this code on the login screen's 'Reset password' form if you don't use "
+                f"the link above. This code expires in {ttl_hours} hour(s).\n\n"
+                f"Your current password has not been changed and remains valid — nothing happens "
+                f"to your account until you complete this step. If you did not request this, you "
+                f"can safely ignore this email.\n"
             ),
         )
     except Exception:
         logging.getLogger(__name__).exception(
-            "forgot_password: email send failed for user %s — aborting password change", user_username
+            "forgot_password: email send failed for user %s — aborting", user_username
         )
         db.rollback()
         raise HTTPException(status_code=503, detail="Failed to send reset email; please try again later")
 
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordBody, db=Depends(get_db)):
+    token_row = db.get(PasswordResetToken, body.token)
+    if not token_row or token_row.expires_at < int(time.time()):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user = db.get(User, token_row.user_id)
+    if not user:
+        db.delete(token_row)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user.password_hash = hash_password(body.new_password)
+    # Cleanup: clear any legacy pre-fix temp-password state (matches what
+    # PUT /profile/password already does), since this reset supersedes it.
+    user.must_change_password = False
+    user.temp_password_expires_at = None
+    db.delete(token_row)
+    _audit(db, "password_reset_completed", actor_id=user.id, actor_username=user.username)
     db.commit()
     return {"status": "ok"}
 

@@ -383,7 +383,10 @@ class TestPastSeasonsVisibility:
         db.commit()
         end_season(SeasonEndBody(season_label="Season D"), db=db, admin=_ADMIN)
 
-        profile = get_profile(user.id, db=db)
+        profile = get_profile(
+            user.id, db=db,
+            current_user={"user_id": user.id, "username": user.username, "is_admin": False},
+        )
 
         assert "past_seasons" in profile
         assert len(profile["past_seasons"]) == 1

@@ -234,6 +234,18 @@ class TwitchLinkCode(Base):
     expires_at = Column(Integer)                         # Unix timestamp
 
 
+class PasswordResetToken(Base):
+    """Single-use, expiring token for POST /reset-password (issue #123). Created by
+    POST /forgot-password, which never touches user.password_hash itself — only a
+    valid, unexpired token consumed via POST /reset-password can change the real
+    password. Same shape/precedent as TwitchLinkCode above."""
+    __tablename__ = "password_reset_tokens"
+
+    token      = Column(String, primary_key=True)
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    expires_at = Column(Integer)                         # Unix timestamp
+
+
 class TwitchPresence(Base):
     __tablename__ = "twitch_presence"
 
