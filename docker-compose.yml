@@ -1,6 +1,7 @@
 services:
   backend:
     image: ghcr.io/${GITHUB_REPOSITORY:-local/dota-kanaliiga-fantasy}:latest
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:

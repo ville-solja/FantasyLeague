@@ -207,6 +207,7 @@ class PromoCode(Base):
 
 class CodeRedemption(Base):
     __tablename__ = "code_redemptions"
+    __table_args__ = (UniqueConstraint("code_id", "user_id", name="uq_code_redemption_code_user"),)
 
     id          = Column(Integer, primary_key=True, autoincrement=True)
     code_id     = Column(Integer, ForeignKey("promo_codes.id"))
@@ -229,6 +230,18 @@ class TwitchLinkCode(Base):
     __tablename__ = "twitch_link_codes"
 
     code       = Column(String, primary_key=True)        # 6-char alphanumeric
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    expires_at = Column(Integer)                         # Unix timestamp
+
+
+class PasswordResetToken(Base):
+    """Single-use, expiring token for POST /reset-password (issue #123). Created by
+    POST /forgot-password, which never touches user.password_hash itself — only a
+    valid, unexpired token consumed via POST /reset-password can change the real
+    password. Same shape/precedent as TwitchLinkCode above."""
+    __tablename__ = "password_reset_tokens"
+
+    token      = Column(String, primary_key=True)
     user_id    = Column(Integer, ForeignKey("users.id"))
     expires_at = Column(Integer)                         # Unix timestamp
 

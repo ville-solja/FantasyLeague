@@ -63,6 +63,8 @@ points = kills                   × kill_weight
 
 The death contribution awards `death_pool` points (default 3.0) for surviving with 0 deaths, deducting `death_deduction` (default 0.3) per death, floored at 0. A player with 10 or more deaths scores 0 from this component.
 
+When a card's points are aggregated over several games (weekly and season totals), the pool is credited per game: `max(0, death_pool × games − total_deaths × death_deduction)`. A card with two games therefore has a 6.0-point pool and only zeroes out at 20 total deaths, so the death term scales with games played the same way every other stat does.
+
 All weights are configured by the admin under **Scoring Weights** in the admin panel. Changes apply to future recalculations only.
 
 ## Card Modifiers
@@ -79,7 +81,7 @@ The modifier always benefits the card owner:
 - For **standard stats** (all except deaths):  
   `contribution = stat_value × weight × (1 + bonus_pct / 100)`
 - For **deaths**:  
-  `contribution = max(0, death_pool − deaths × death_deduction) × (1 + bonus_pct / 100)` — the survival bonus is amplified. This modifier is most valuable on players who rarely die; it has no effect when the death contribution is already 0.
+  `contribution = max(0, death_pool × games − deaths × death_deduction) × (1 + bonus_pct / 100)` — the survival bonus is amplified. This modifier is most valuable on players who rarely die; it has no effect when the death contribution is already 0.
 
 ### Full scoring formula with modifiers
 
@@ -90,8 +92,8 @@ For each standard stat (kills, last_hits, denies, gpm, obs, towers, roshan,
   points += base × (1 + modifier_bonus_pct / 100)   if modifier present
   points += base                                      if no modifier
 
-For deaths:
-  base = max(0, death_pool − deaths × death_deduction)
+For deaths (games = matches aggregated into the card's window):
+  base = max(0, death_pool × games − deaths × death_deduction)
   points += base × (1 + modifier_bonus_pct / 100)   if modifier present
   points += base                                      if no modifier
 

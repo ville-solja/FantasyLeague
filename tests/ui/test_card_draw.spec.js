@@ -63,8 +63,13 @@ test("draw opens reveal modal and decrements token balance", async ({ page, requ
   // Rarity label is always set regardless of draw animation
   await expect(page.locator("#revealRarity")).not.toBeEmpty();
 
-  // Close reveal
-  await page.click("#revealActionBtn");
+  // Close reveal via Escape, not #revealActionBtn — that button is documented
+  // (reference/card-draw-modal-ux.md) to draw *another* card whenever tokens
+  // remain after the current draw, only actually closing once the balance
+  // hits zero. With the default INITIAL_TOKENS, a fresh test user always has
+  // tokens left post-draw, so clicking it here would trigger a second draw
+  // instead of closing. Escape always closes regardless of balance.
+  await page.keyboard.press("Escape");
   await expect(page.locator("#revealModal")).toBeHidden();
 
   // Token balance must have decremented by 1

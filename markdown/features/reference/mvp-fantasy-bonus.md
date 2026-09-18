@@ -22,12 +22,10 @@ computed by `card_fantasy_score()`/`_compute_card_points()` (`backend/card_utils
 `backend/scoring.py`), which aggregate raw per-stat columns (`kills`, `last_hits`, etc.) with
 `SUM(...)` across every match in a card's scoring window *before* computing points — a
 structurally different path from the player-level pipeline, which computes points per match
-and then multiplies. The two paths can't simply be unified: the death-survival term
-(`max(0, death_pool - deaths * death_deduction)`) is a clamped, non-linear formula, so summing
-per-match death contributions is not equivalent to computing the same formula on the summed
-death count across matches. Restructuring the SQL to group by match instead of by card would
-silently change the death-bonus term for every card with more than one match in its window, not
-just MVP cases.
+and then multiplies. The card path scales the death pool by the number of games in the window
+(`max(0, death_pool × match_count - deaths × death_deduction)`), which matches the sum of
+per-match death terms except when a single game floors out at 0; the MVP bonus is kept as a
+separate per-match term so it reflects only the MVP game.
 
 Instead, `_compute_card_points()` takes an `mvp_bonus` parameter: a flat point value computed by
 `card_utils._mvp_bonus_delta()` from the single MVP match's own `fantasy_score()` (still

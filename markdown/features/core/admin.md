@@ -101,7 +101,10 @@ Triggers a synchronous enrichment batch for players whose profile facts are miss
 ## Data Ingest
 
 ### `POST /ingest/league/{league_id}`
-Triggers a full ingest cycle for the specified OpenDota league ID:
+Starts a full ingest cycle for the specified OpenDota league ID in a background thread and
+returns immediately with `{"status": "started", "league_id": ...}` — a full ingest can take
+minutes under OpenDota's rate limit, so the request no longer blocks for that long. The
+background job:
 1. Fetches all match IDs from OpenDota
 2. Ingests new matches and player stats
 3. Refreshes Dotabuff team logos
@@ -109,12 +112,27 @@ Triggers a full ingest cycle for the specified OpenDota league ID:
    (facts + bio). That separate pass (`run_profile_enrichment()`) only runs via
    `POST /admin/enrich-profiles` or the background loop — see `reference/player-profile-enrichment.md`.
 
+The `admin_ingest` audit log entry is written once the background job finishes, not when the
+endpoint returns. A shared lock (`ingest.INGEST_LOCK`) prevents this from ever running
+concurrently with the automatic ingest poll loop; calling it while a run (manual or automatic)
+is already in progress returns 409.
+
 Note: card generation was removed from the ingest pipeline. Cards are now created dynamically at draw time.
 
 Ingest also runs automatically every 15 minutes in the background (`INGEST_POLL_INTERVAL`), or
 every 2 minutes (`INGEST_LIVE_POLL_INTERVAL`) while any week is currently active, so live-series
 results land faster during play. The manual endpoint is useful immediately after new matches are
 played. See `reference/toornament.md`.
+
+### `POST /ingest/retry-unparsed?max_age_hours=<int>`
+Re-checks recently ingested matches whose stats were stored before OpenDota parsed the replay
+(all-zero teamfight/stun/ward stats), replaces their stat rows once a parsed version exists, and
+asks OpenDota to parse the rest. Runs in a background thread and returns
+`{"status": "started", "max_age_hours": ...}` immediately; 409 if any ingest is already
+running (same `ingest.INGEST_LOCK`). The optional `max_age_hours` (1–8760) widens the default
+`INGEST_PARSE_RETRY_HOURS` window for a one-off backfill. The `parse_retry_triggered` audit row
+is written at trigger time; the run's counts go to the server log. See
+`reference/opendota-parse-retry.md`.
 
 ---
 
@@ -153,7 +171,8 @@ Returns the most recent audit log entries, newest first. All significant admin a
 |---|---|
 | `user_register` | New user registration |
 | `user_login` | Successful user login |
-| `password_reset_requested` | Forgot-password flow issued a temporary password |
+| `password_reset_requested` | Forgot-password flow issued a single-use password-reset token |
+| `password_reset_completed` | User completed a password reset via `POST /reset-password` |
 | `token_draw` | Card drawn |
 | `token_booster_draw` | Team booster pack drawn |
 | `reroll_modifiers` | User spent a token to reroll card modifiers |
@@ -166,6 +185,7 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
+| `parse_retry_triggered` | Manual unparsed-match re-check triggered (`detail` holds the window used) |
 | `admin_recalculate` | Fantasy points recalculated |
 | `admin_schedule_refresh` | Schedule cache busted via `POST /schedule/refresh` |
 | `admin_set_match_week` | Admin manually assigned a match to a week |

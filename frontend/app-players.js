@@ -355,7 +355,7 @@ async function loadSchedule() {
         ? `<span class="badge badge-division div1">Div 1</span>`
         : s.division === "div2"
         ? `<span class="badge badge-division div2">Div 2</span>`
-        : "";
+        : `<span class="badge-division"></span>`;
 
       const r = s.series_result;
       const scoreHtml = r

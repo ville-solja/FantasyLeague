@@ -48,10 +48,42 @@ bash scripts/backup-db.sh /path/to/other.db   # custom path
 
 Run before every deploy.
 
+**Custom-path caveat:** `.gitignore`'s `data/*.backup-*` entry (see
+`reference/db-backup-leak-fix.md`) only covers backups written at the default path,
+under `data/`. Running
+`scripts/backup-db.sh /custom/path` writes the timestamped copy next to
+`/custom/path` instead — outside the gitignored `data/` directory — so a backup taken
+this way is **not** protected by that pattern and could be committed by an unrelated
+`git add -A` if the custom path happens to live inside the repo. Prefer the default
+(no-argument) invocation unless there's a specific reason to write elsewhere.
+
 This is separate from the automatic in-app backup `backup_sqlite_db()` (also in
 `backend/database.py`, same online-backup mechanism) takes immediately before
 `POST /admin/season/reset` deletes any data — see `reference/season-lifecycle.md`. That backup
 runs unconditionally on every reset; `scripts/backup-db.sh` is the manual pre-deploy step.
+
+## Automatic scheduled backups
+
+A background thread (`_backup_loop` in `backend/main.py`, started unconditionally at startup
+alongside week maintenance) calls `backup_sqlite_db()` on a timer and prunes old backup files with
+`cleanup_old_backups()` (both in `backend/database.py`). This is the only unattended safety net for
+the bind-mounted `data/fantasy.db` — `scripts/backup-db.sh` and the season-reset backup are both
+one-off/manual.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups |
+| `DB_BACKUP_RETENTION_DAYS` | `14` | Age (by file mtime) at which an automatic backup is deleted |
+
+Backups land next to the live DB as `data/fantasy.db.backup-YYYYMMDD-HHmmss`, same naming
+convention as the manual script, so both are pruned/restorable the same way. Retention only
+touches files matching that pattern — it never deletes the live database.
+
+## Container restart policy
+
+`docker-compose.yml`'s `backend` service sets `restart: unless-stopped`, so the container
+restarts automatically after a crash, an OOM kill, or a host/Docker-daemon reboot, rather than
+staying down until someone notices and runs `docker compose up` by hand.
 
 ---
 

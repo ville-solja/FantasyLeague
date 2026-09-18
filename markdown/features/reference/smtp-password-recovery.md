@@ -1,24 +1,31 @@
 # SMTP Password Recovery
 
-The forgot-password flow generates a temporary password and delivers it to the user's
-registered email address via SMTP. When no SMTP provider is configured (`SMTP_HOST` unset),
-the email is silently skipped — the password change is committed but the temporary password
-is not visible anywhere. A real SMTP relay is required to use this flow in local development.
+The forgot-password flow creates a single-use reset token and delivers a link/code containing
+it to the user's registered email address via SMTP (see `password-reset-token-flow.md` for the
+full design — this replaced an earlier design that emailed a working temporary password). When
+no SMTP provider is configured (`SMTP_HOST` unset), the email is silently skipped — the token
+row is still created, but it is not visible anywhere. A real SMTP relay is required to use this
+flow end-to-end in local development.
 
 ---
 
 ## Flow
 
-1. User submits `POST /forgot-password` with their username.
-2. A random 12-character temporary password is generated.
-3. The user's password is replaced with the temporary one and `must_change_password` is set to `true`.
-4. The temporary password is emailed to the address on file. If SMTP is not configured (`SMTP_HOST` unset), the email is silently skipped — the password change is committed but the temporary password is not logged or otherwise visible.
-5. A `password_reset_requested` audit log entry is written.
-6. The endpoint always returns `{"status": "ok"}` regardless of username or email existence, preventing account enumeration.
-
-On next login the app detects `must_change_password=true` and redirects to the Profile tab's
-password form before granting access to any other tab. The flag is cleared by
-`PUT /profile/password`.
+1. User submits `POST /forgot-password` with their username. This never changes the account's
+   real password — it remains valid and usable throughout.
+2. Any existing `PasswordResetToken` for the account is invalidated (deleted), then a new
+   single-use token is created with an expiry of `PASSWORD_RESET_TOKEN_TTL_HOURS` hours
+   (default `1`).
+3. A `password_reset_requested` audit log entry is written.
+4. An email is sent to the address on file containing a clickable link
+   (`{APP_BASE_URL}/?reset_token={token}`, if configured) and the raw token as a manual-entry
+   fallback (always included). If SMTP is not configured (`SMTP_HOST` unset), the email step is
+   silently skipped — the token row still exists but is not logged or otherwise visible.
+5. The endpoint always returns `{"status": "ok"}` regardless of username or email existence,
+   preventing account enumeration.
+6. The user completes the reset via `POST /reset-password` with the token and a new password —
+   this is the only step that actually changes `user.password_hash`. See the full endpoint
+   contract in [Auth & Accounts](../core/auth.md).
 
 ---
 
@@ -26,8 +33,15 @@ password form before granting access to any other tab. The flag is cleared by
 
 ### `POST /forgot-password`
 
-No authentication required. Accepts `{ "username": "..." }`. See
-[Auth & Accounts](../core/auth.md) for the full schema and flow description.
+No authentication required. Accepts `{ "username": "..." }`. Always returns `{"status": "ok"}`
+and never mutates the account's password. See [Auth & Accounts](../core/auth.md) for the full
+schema and flow description.
+
+### `POST /reset-password`
+
+No authentication required (the token is the credential). Accepts
+`{ "token": "...", "new_password": "..." }`. Valid token → password changed, token consumed.
+Invalid/expired/reused token → 400, no side effects. See [Auth & Accounts](../core/auth.md).
 
 ---
 

@@ -11,8 +11,35 @@ Story 2 — Accurate Password Reset Email
   AC: email body states previous password is no longer valid and includes the TTL
   AC: email does not contain the incorrect deferred-change statement
   AC: email advises user to contact support if they did not request the reset
+
+NOTE (issue #123, password-reset-token-flow redesign): POST /forgot-password no
+longer generates or issues a temp password at all, and never touches
+password_hash / must_change_password / temp_password_expires_at itself — it now
+only creates a PasswordResetToken and emails a link/code (see
+tests/test_issue_123_password_reset_token_flow.py and
+markdown/features/reference/password-reset-token-flow.md). The following tests
+were REMOVED because they exercised that now-fully-removed mechanism and have no
+possible passing form under the new design (there is no remaining code path that
+computes/sets temp_password_expires_at from forgot_password(), and the reset
+email's wording is now the deliberate inverse of what these tests asserted):
+  - test_temp_password_expires_at_is_set_when_forgot_password_called
+  - test_temp_password_expires_at_equals_now_plus_ttl_hours
+  - test_temp_password_ttl_defaults_to_24_hours
+  - test_login_with_valid_temp_password_within_ttl_succeeds
+  - test_reset_email_body_states_previous_password_no_longer_valid
+  - test_reset_email_body_includes_expiry_duration
+  - test_reset_email_body_advises_contact_support_if_not_requested
+The remaining tests below are unaffected: the login-side expiry check
+(POST /login rejecting/accepting based on a manually-seeded
+temp_password_expires_at) and PUT /profile/password's clearing of that legacy
+state are both still fully live code paths, untouched by issue #123 — those
+tests seed the field directly rather than deriving it from forgot_password(),
+so their coverage remains valid as-is. The migration/schema tests and the
+"does not contain deferred-change statement" trivial-negative test are also
+unaffected.
 """
 
+import importlib
 import os
 import sys
 import time
@@ -62,6 +89,31 @@ def _make_app(engine):
             yield db
         finally:
             db.close()
+
+    # This test's /login and /forgot-password calls exercise temp-password
+    # expiry, not rate limiting — but routers/auth.py's routes carry a
+    # @limiter.limit(...) decorator bound to a *shared, process-wide*
+    # `rate_limit.limiter` singleton (see backend/rate_limit.py and
+    # test_issue_121_rate_limiting.py's module docstring). Without disabling
+    # it here, repeated /forgot-password calls across this file's many test
+    # functions (well over RATE_LIMIT_FORGOT_PASSWORD's default 3/minute, all
+    # from TestClient's identical default source IP) would eventually start
+    # returning 429 instead of the {"status": "ok"} these tests expect —
+    # rate-limiting is out of scope for this test file, so it's turned off
+    # for the app under test here.
+    import rate_limit
+    rate_limit.limiter.enabled = False
+
+    # routers/auth.py also carries a module-level, process-wide
+    # `_last_forgot_password_request` dict backing the per-username
+    # /forgot-password cooldown (issue #122). Several tests below call
+    # /forgot-password against the same username ("alice") repeatedly across
+    # separate test functions; without reloading routers.auth to reset that
+    # dict, the second and later calls within the process would be suppressed
+    # by the cooldown and never actually send an email — unrelated to what
+    # this file is testing. Reload it fresh for every app under test, mirroring
+    # test_issue_121_rate_limiting.py and test_issue_122_forgot_password_cooldown.py.
+    importlib.reload(auth_router)
 
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key-123")
@@ -138,115 +190,6 @@ def _do_forgot_password(client, username, monkeypatch=None, ttl_hours=None):
 # ---------------------------------------------------------------------------
 # Story 1 — Temporary Password Expiry
 # ---------------------------------------------------------------------------
-
-
-def test_temp_password_expires_at_is_set_when_forgot_password_called(client, db_session):
-    """forgot_password() stores a non-null temp_password_expires_at on the user."""
-    user = _create_user(db_session)
-
-    resp, _ = _do_forgot_password(client, "alice")
-
-    assert resp.status_code == 200
-    db_session.refresh(user)
-    assert user.temp_password_expires_at is not None
-
-
-def test_temp_password_expires_at_equals_now_plus_ttl_hours(client, db_session):
-    """The stored expiry timestamp equals the request time plus TEMP_PASSWORD_TTL_HOURS * 3600."""
-    user = _create_user(db_session)
-    ttl_hours = 6
-
-    before = int(time.time())
-    resp, _ = _do_forgot_password(client, "alice", ttl_hours=ttl_hours)
-    after = int(time.time())
-
-    assert resp.status_code == 200
-    db_session.refresh(user)
-    expires_at = user.temp_password_expires_at
-    assert expires_at is not None
-    assert before + ttl_hours * 3600 <= expires_at <= after + ttl_hours * 3600
-
-
-def test_temp_password_ttl_defaults_to_24_hours(client, db_session):
-    """When TEMP_PASSWORD_TTL_HOURS is unset, the expiry window defaults to 24 hours."""
-    user = _create_user(db_session)
-
-    before = int(time.time())
-    with patch("routers.auth.send_email", return_value=True), \
-         patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("TEMP_PASSWORD_TTL_HOURS", None)
-        resp = client.post("/forgot-password", json={"username": "alice"})
-    after = int(time.time())
-
-    assert resp.status_code == 200
-    db_session.refresh(user)
-    expires_at = user.temp_password_expires_at
-    assert expires_at is not None
-    expected_min = before + 24 * 3600
-    expected_max = after + 24 * 3600
-    assert expected_min <= expires_at <= expected_max
-
-
-def test_login_with_valid_temp_password_within_ttl_succeeds(client, db_session):
-    """A temporary password used before expiry grants a successful login."""
-    user = _create_user(db_session, password="old-password")
-
-    resp, _ = _do_forgot_password(client, "alice")
-    assert resp.status_code == 200
-
-    # Pull the new password from the database — we know it's set; extract via hash
-    # Actually we need to get the temp password. Let's capture it from email body.
-    # Re-do with body capture to get temp password.
-
-    # Reset user state and redo to capture the temp password from email body
-    user2 = _create_user(db_session, username="bob", email="bob@example.com")
-
-    captured = {}
-
-    def capture_send(to_address, subject, body):
-        captured["body"] = body
-        return True
-
-    with patch("routers.auth.send_email", side_effect=capture_send):
-        resp2 = client.post("/forgot-password", json={"username": "bob"})
-
-    assert resp2.status_code == 200
-
-    # Extract temp password from email body
-    body_text = captured["body"]
-    # The temp password is on an indented line: "    {temp_password}"
-    temp_pw = None
-    for line in body_text.splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("Hi ") and not stripped.startswith("A temp") \
-                and not stripped.startswith("Your") and not stripped.startswith("This temp") \
-                and not stripped.startswith("Log in") and not stripped.startswith("If you"):
-            # Check it looks like a token (no spaces, alphanumeric + URL-safe chars)
-            if len(stripped) > 6 and " " not in stripped and stripped[0] not in "HALY":
-                temp_pw = stripped
-                break
-
-    # Simpler: split on the known markers
-    parts = body_text.split("    ")
-    # The temp password line has 4-space indent
-    for part in parts:
-        candidate = part.strip().split("\n")[0].strip()
-        if candidate and len(candidate) >= 8 and not any(
-            w in candidate for w in ["Hi ", "A ", "Your", "This", "Log ", "If "]
-        ):
-            temp_pw = candidate
-            break
-
-    assert temp_pw is not None, f"Could not extract temp password from email body:\n{body_text}"
-
-    db_session.refresh(user2)
-    # Set expiry in the future
-    user2.temp_password_expires_at = int(time.time()) + 3600
-    user2.must_change_password = True
-    db_session.commit()
-
-    login_resp = client.post("/login", json={"username": "bob", "password": temp_pw})
-    assert login_resp.status_code == 200
 
 
 def test_login_with_expired_temp_password_returns_401(client, db_session):
@@ -410,28 +353,8 @@ def _get_reset_email_body(client, db_session, ttl_hours=None):
     return body
 
 
-def test_reset_email_body_states_previous_password_no_longer_valid(client, db_session):
-    """The password reset email body explicitly states the previous password is no longer valid."""
-    body = _get_reset_email_body(client, db_session)
-    assert "no longer valid" in body.lower()
-
-
-def test_reset_email_body_includes_expiry_duration(client, db_session):
-    """The email body mentions the number of hours until the temporary password expires."""
-    ttl_hours = 48
-    body = _get_reset_email_body(client, db_session, ttl_hours=ttl_hours)
-    assert str(ttl_hours) in body
-    assert "hour" in body.lower()
-
-
 def test_reset_email_body_does_not_contain_deferred_change_statement(client, db_session):
     """The email does not say the password change is deferred until the user logs in."""
     body = _get_reset_email_body(client, db_session)
     # The old incorrect statement said the password was not changed until login
     assert "was not changed until you log in" not in body
-
-
-def test_reset_email_body_advises_contact_support_if_not_requested(client, db_session):
-    """The email tells users who did not request the reset to contact support immediately."""
-    body = _get_reset_email_body(client, db_session)
-    assert "contact support" in body.lower()

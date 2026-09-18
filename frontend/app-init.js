@@ -15,12 +15,13 @@ async function loadHowToPlay() {
   const byKey = Object.fromEntries(weights.map(w => [w.key, w]));
 
   const statsKeys = [
-    'kills', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
+    'kills', 'assists', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
     'towers_killed', 'roshan_kills', 'teamfight_participation',
     'camps_stacked', 'rune_pickups', 'firstblood_claimed', 'stuns',
   ];
   const statsLabels = {
     kills:                   'Kills',
+    assists:                 'Assists',
     last_hits:               'Last hits',
     denies:                  'Denies',
     gold_per_min:            'Gold per minute',
@@ -41,7 +42,7 @@ async function loadHowToPlay() {
     });
     const pool = byKey['death_pool']?.value ?? 3.0;
     const ded  = byKey['death_deduction']?.value ?? 0.3;
-    rows.push(`<tr><td>Deaths (survival bonus)</td><td>+${pool} at 0 deaths, −${ded} per death (min 0)</td></tr>`);
+    rows.push(`<tr><td>Deaths (survival bonus)</td><td>+${pool} per game at 0 deaths, −${ded} per death (min 0)</td></tr>`);
     tbody.innerHTML = rows.join('');
   }
 
@@ -137,10 +138,21 @@ document.addEventListener("keydown", function(e) {
   });
 })();
 
+function _handleResetTokenParam() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("reset_token");
+  if (!token) return;
+  // Strip the token from the visible address bar so it doesn't linger in
+  // browser history, then open the reset-password modal pre-filled with it.
+  history.replaceState(null, "", window.location.pathname);
+  showResetPassword(token);
+}
+
 async function init() {
   await loadConfig();
   await loadMe();
   applyAuthState();
+  _handleResetTokenParam();
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 import sqlite3
@@ -42,6 +42,48 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def spend_tokens(db, user_id: int, amount: int) -> bool:
+    """Atomically decrement a user's token balance if they have enough.
+
+    Uses a single conditional UPDATE instead of read-check-write, so two
+    concurrent requests from the same user (double-click, two tabs) cannot
+    both pass a token check against a stale in-memory value and both spend
+    the same tokens. Returns True if the balance was decremented, False if
+    the user doesn't have enough tokens (or doesn't exist).
+
+    Callers that already hold an ORM-loaded User object must db.refresh(user)
+    afterward — this bypasses the ORM identity map via a raw UPDATE.
+    """
+    result = db.execute(
+        text("UPDATE users SET tokens = tokens - :amt "
+             "WHERE id = :uid AND COALESCE(tokens, 0) >= :amt"),
+        {"amt": amount, "uid": user_id},
+    )
+    return result.rowcount > 0
+
+
+def cleanup_old_backups(retention_days: int) -> int:
+    """Delete local SQLite backup files (from backup_sqlite_db()) older than
+    retention_days. Returns the number of files deleted. No-op for non-SQLite
+    DATABASE_URLs or if the DB directory can't be found."""
+    prefix = "sqlite:///"
+    if not DATABASE_URL.startswith(prefix):
+        return 0
+    db_path = Path(DATABASE_URL[len(prefix):])
+    if not db_path.parent.is_dir():
+        return 0
+    cutoff = time.time() - retention_days * 86400
+    deleted = 0
+    for f in db_path.parent.glob(f"{db_path.name}.backup-*"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    return deleted
 
 
 def backup_sqlite_db() -> str | None:

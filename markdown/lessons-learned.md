@@ -9,6 +9,27 @@ Format:
 
 ---
 
+### 2026-09-18 — developer — testing
+**Problem:** `plan-opendota-parse-retry`'s endpoint stubs assumed the background thread spawned
+by `POST /ingest/retry-unparsed` could write its audit row through a monkeypatched
+`admin_ingest.SessionLocal = lambda: db` (the conftest in-memory fixture). It cannot: SQLAlchemy
+gives `sqlite:///:memory:` a `SingletonThreadPool`, so a second thread checks out a *different*
+connection — an empty database (`no such table: audit_logs`) — and if the main thread already
+holds the session's connection the worker instead hits pysqlite's
+`check_same_thread` error. Separately, SQLite (no `AUTOINCREMENT`) reuses freed rowids, so
+"delete rows then re-insert" tests cannot prove replacement by comparing primary-key id sets,
+and a bulk `query.delete()` followed by inserts that land on the same ids raises
+`SAWarning: Identity map already had an identity`.
+**Solution:** Keep every DB write that a test must observe on the request thread — the
+endpoint writes `parse_retry_triggered` via `db=Depends(get_db)` before spawning the thread,
+which also satisfies the "never use raw `SessionLocal()` in endpoints" rule — and have tests
+verify the thread only through a patched pure-function recorder plus polling
+`INGEST_LOCK.acquire(blocking=False)` (release in `finally`). For replace-rows logic, delete
+ORM-style (`db.delete(row)` + `db.flush()`) before re-inserting, and assert on replaced column
+values / row count instead of id sets.
+
+---
+
 ### 2026-09-14 — developer — testing
 **Problem:** Implementing `plan-issue-111-week-boundary-formula.md`'s `_derive_week_times`
 change (start_time 00:00→03:00 UTC, end_time 03:00→02:59:59 UTC) made the new

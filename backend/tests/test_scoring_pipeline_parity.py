@@ -5,11 +5,10 @@ Player-level scoring (scoring.fantasy_score() + scoring.apply_mvp_bonus_to_row()
 written to PlayerMatchStats.fantasy_points) and card-level scoring
 (card_utils.card_fantasy_score()/_compute_card_points(), recomputed from raw
 per-stat aggregates via _build_roster_response()/leaderboard queries) are two
-structurally independent pipelines. They can't simply be merged: the
-death-survival term is a clamped, non-linear formula
-(max(0, pool - deaths*deduction)), so summing per-match contributions is not
-the same as computing it on aggregated deaths across a card's whole scoring
-window — see markdown/features/reference/mvp-fantasy-bonus.md.
+structurally independent pipelines. The card path scales the death pool by
+match_count (max(0, pool*games - deaths*deduction)), which equals the sum of
+per-match death terms unless a single game floors out at 0 — see
+markdown/features/reference/mvp-fantasy-bonus.md.
 
 For the one case where they must always agree exactly — a card backed by a
 single match, common rarity (0% bonus), no card modifiers, so the aggregate

@@ -40,7 +40,8 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/profile/{user_id}")
-def get_profile(user_id: int, db=Depends(get_db)):
+def get_profile(user_id: int, db=Depends(get_db),
+                 current_user: dict = Depends(get_current_user)):
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")

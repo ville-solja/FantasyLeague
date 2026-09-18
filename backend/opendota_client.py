@@ -36,9 +36,14 @@ def _max_rpm() -> int:
         return 55
 
 
-def throttle() -> None:
-    """Block until another request fits under the per-minute cap (rolling 60s window)."""
+def throttle(cost: int = 1) -> None:
+    """Block until `cost` more requests fit under the per-minute cap (rolling 60s window).
+
+    OpenDota bills some calls as more than one request (POST /request/{match_id}
+    counts as 10), so `cost` timestamps are appended to mirror its accounting.
+    """
     window = 60.0
+    cost = max(1, int(cost))
     while True:
         wait_s = 0.0
         with _lock:
@@ -47,8 +52,10 @@ def throttle() -> None:
             while _req_times and _req_times[0] < cutoff:
                 _req_times.pop(0)
             limit = _max_rpm()
-            if len(_req_times) < limit:
-                _req_times.append(now)
+            # An empty window always admits the call, even if cost > limit —
+            # otherwise a single expensive call could never proceed.
+            if len(_req_times) + cost <= limit or not _req_times:
+                _req_times.extend([now] * cost)
                 return
             wait_s = _req_times[0] + window - now + 0.05
         time.sleep(max(wait_s, 0.05))
@@ -114,6 +121,35 @@ def get_json(
         return None
     logger.error("get_json %s gave up after %d retries", tag_label, retries)
     return None
+
+
+def post_json(
+    url: str,
+    *,
+    timeout: float = 30,
+    label: str = "",
+    cost: int = 1,
+) -> dict | None:
+    """POST with throttle, api_key query param and default headers; returns the decoded
+    JSON object (``{}`` for an empty/non-object 2xx body) or None on any failure.
+
+    No retries — callers (parse requests) re-check on the next poll cycle anyway.
+    """
+    tag_label = label or url
+    throttle(cost=cost)
+    try:
+        res = requests.post(url, params=_api_key_params(), headers=DEFAULT_HEADERS, timeout=timeout)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+        logger.warning("post_json %s network error (%s)", tag_label, e.__class__.__name__)
+        return None
+    if not 200 <= res.status_code < 300:
+        logger.warning("post_json %s HTTP %d", tag_label, res.status_code)
+        return None
+    try:
+        data = res.json()
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def parse_json_object(res: requests.Response, *, context: str = "") -> dict | None:
