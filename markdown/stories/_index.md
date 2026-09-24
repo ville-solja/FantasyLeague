@@ -9,7 +9,7 @@
 | [data-and-players.md](data-and-players.md) | Dota data ingestion, live-match-aware OpenDota query prioritization, OpenDota parse retry for unparsed matches, player profile enrichment, AI bios |
 | [leaderboard.md](leaderboard.md) | Season/weekly leaderboard, player/team browser, MVP visibility, weight simulation |
 | [admin.md](admin.md) | User management, promo codes, scoring config, audit logs, version badge, env-based admin seeding, player pool management and card refunds, live progress for bulk player add, admin tab navigation and MVP selection, season lifecycle, demo mode, inline week editing and overlap prevention |
-| [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling |
+| [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling, review resubmission (asset hosting, fetch allowlist, chat disclosure) |
 | [ux-and-polish.md](ux-and-polish.md) | Schedule tab, JSON fixtures API source, MVP schedule cache invalidation, scoring explanation, My Team layout, CI testing, How to Play tab, drag-and-drop roster ordering, card viewer backdrop dismiss |
 | [deployment.md](deployment.md) | DB sustainability, versioned migrations, pre-deploy backup, container health reporting, DB backup leak prevention, HTTPS enforcement |
 | [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams, admin router organization, frontend framework evaluation |

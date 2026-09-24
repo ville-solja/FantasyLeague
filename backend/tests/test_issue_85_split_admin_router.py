@@ -240,14 +240,15 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-120-profile-requires-login's 3 new tests did after that, and
         the death-pool-scales-with-games scoring fix's 9 new tests did after that, and
         plan-opendota-parse-retry's 21 new tests did after that, and
-        the parse re-request cooldown's 1 new test did after that)."""
+        the parse re-request cooldown's 1 new test did after that, and
+        plan-twitch-review-resubmission's 21 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "802 passed" in output, output[-3000:]
+        assert "823 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):
