@@ -20,12 +20,14 @@ function applyAuthState() {
 function showLogin() {
   document.getElementById("registerModal").classList.add("hidden");
   document.getElementById("forgotModal").classList.add("hidden");
+  document.getElementById("resetPasswordModal").classList.add("hidden");
   document.getElementById("loginModal").classList.remove("hidden");
   document.getElementById("loginStatus").textContent = "";
 }
 
 function showForgotPassword() {
   document.getElementById("loginModal").classList.add("hidden");
+  document.getElementById("resetPasswordModal").classList.add("hidden");
   document.getElementById("forgotModal").classList.remove("hidden");
   document.getElementById("forgotStatus").textContent = "";
   document.getElementById("forgotUsername").value = "";
@@ -40,7 +42,7 @@ async function submitForgotPassword() {
       body: JSON.stringify({username})
     });
     if (res.ok) {
-      setStatus("forgotStatus", "If an account with that username exists, a temporary password has been sent to its registered email.");
+      setStatus("forgotStatus", "If an account with that username exists, a password reset link/code has been sent to its registered email. Your current password stays valid until you complete the reset.");
       document.getElementById("forgotUsername").value = "";
     } else {
       const data = await res.json();
@@ -48,6 +50,40 @@ async function submitForgotPassword() {
     }
   } catch (e) {
     setStatus("forgotStatus", e.message, false);
+  }
+}
+
+function showResetPassword(prefillToken) {
+  document.getElementById("loginModal").classList.add("hidden");
+  document.getElementById("forgotModal").classList.add("hidden");
+  document.getElementById("resetPasswordModal").classList.remove("hidden");
+  document.getElementById("resetPasswordStatus").textContent = "";
+  document.getElementById("resetToken").value = prefillToken || "";
+  document.getElementById("resetNewPassword").value = "";
+}
+
+async function submitResetPassword() {
+  const token = document.getElementById("resetToken").value.trim();
+  const new_password = document.getElementById("resetNewPassword").value;
+  if (!token) return setStatus("resetPasswordStatus", "Enter your reset code", false);
+  if (!new_password || new_password.length < 6) {
+    return setStatus("resetPasswordStatus", "New password must be at least 6 characters", false);
+  }
+  try {
+    const res = await fetch(`${API}/reset-password`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({token, new_password})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setStatus("resetPasswordStatus", "Password updated. You can now log in with your new password.");
+      document.getElementById("resetToken").value = "";
+      document.getElementById("resetNewPassword").value = "";
+    } else {
+      setStatus("resetPasswordStatus", data.detail, false);
+    }
+  } catch (e) {
+    setStatus("resetPasswordStatus", e.message, false);
   }
 }
 

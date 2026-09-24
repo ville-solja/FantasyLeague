@@ -46,11 +46,13 @@ Implementation details, integrations, and operator tooling.
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
+| [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
 | [Week Boundary Formula Fix](reference/week-boundary-formula-fix.md) | Applies the grace-period offset to both week-boundary ends so a normal Monday-start/Sunday-end week never overlaps the next by default |
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
+| [Admin DB Backup](reference/admin-db-backup.md) | Admin-panel database backups: create on demand with a cooldown, list existing backups, and download a copy off the server |
 | [Table Element Sortability](reference/table-element-sortability.md) | Client-side sortable column headers for the Players tab table |
 | [Card Draw Modal UX](reference/card-draw-modal-ux.md) | Enter-key support, dynamic button label, and backdrop-click dismiss for the draw modal |
 | [Prevent Common Card Reroll](reference/prevent-common-card-reroll.md) | Backend 400 guard and hidden Reroll button for common-rarity cards |
@@ -83,3 +85,13 @@ Implementation details, integrations, and operator tooling.
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
+| [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
+| [Rate Limiting](reference/rate-limiting.md) | Per-IP request-rate limits app-wide, with stricter limits on login/register/forgot-password and a per-username failed-login lockout |
+| [Roster Limit Race Fix](reference/roster-limit-race-fix.md) | Atomic conditional-UPDATE fix for a race condition that let concurrent requests exceed the active-roster limit |
+| [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
+| [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
+| [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
+| [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |
+| [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
+| [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
+| [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |

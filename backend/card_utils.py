@@ -31,12 +31,7 @@ def _mvp_bonus_delta(row, weights: dict) -> float:
     Mirrors the player-level bonus applied by scoring.apply_mvp_bonus_to_row(): the
     match's own fantasy_score() (deaths included) times mvp_bonus_pct,
     computed on that single match rather than on a card's multi-match
-    aggregate. The death-survival term is a clamped, non-linear formula
-    (max(0, pool - deaths*deduction)), so summing per-match contributions is
-    not the same as computing it on aggregated deaths — keeping this
-    per-match and adding the result as a flat bonus avoids distorting that
-    term for every card, which is what a naive per-match SQL restructure
-    would otherwise do.
+    aggregate, so the bonus only reflects the MVP game itself.
     """
     stats = stat_dict_from_row(row)
     base = fantasy_score(stats, weights)
@@ -45,14 +40,15 @@ def _mvp_bonus_delta(row, weights: dict) -> float:
 
 
 def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity: dict, mods: dict,
-                          mvp_bonus: float = 0.0) -> float:
+                          mvp_bonus: float = 0.0, match_count: int = 1) -> float:
     """Apply card_fantasy_score + rarity multiplier for one card.
 
     mvp_bonus is the sum of _mvp_bonus_delta() across any MVP-flagged matches
     in the card's scoring window — added before the rarity multiplier so an
     MVP bonus scales with card rarity the same way every other stat does.
+    match_count is the number of games in stat_sums (scales the death pool).
     """
-    base = card_fantasy_score(stat_sums, weights, mods) + mvp_bonus
+    base = card_fantasy_score(stat_sums, weights, mods, match_count) + mvp_bonus
     rarity_mod = 1 + rarity.get(f"mod_{card_type}", 0)
     return base * rarity_mod
 
@@ -96,3 +92,63 @@ def _card_modifiers_dict_for_image(db, card_id: int) -> dict:
 def _format_modifiers(mods: dict) -> list[dict]:
     """Convert {stat_key: bonus_pct} to sorted list for API response."""
     return [{"stat": k, "bonus_pct": v} for k, v in sorted(mods.items())]
+
+
+def _activate_card_atomic(db, card_id: int, user_id: int, player_id: int, roster_limit: int) -> bool:
+    """Atomically activate a card if the user still has room and no duplicate-player
+    conflict exists. Returns True if activated, False if any condition failed.
+
+    A single UPDATE...WHERE (not a separate SELECT COUNT then UPDATE) closes the race
+    where concurrent requests all read the same pre-activation count and all pass —
+    SQLite serializes writers, so the WHERE clause's subqueries and the row mutation
+    are evaluated atomically with respect to any other in-flight transaction.
+    """
+    result = db.execute(text("""
+        UPDATE cards
+        SET is_active = 1
+        WHERE id = :card_id
+          AND owner_id = :user_id
+          AND is_active = 0
+          AND (
+              SELECT COUNT(*) FROM cards
+              WHERE owner_id = :user_id AND is_active = 1
+          ) < :roster_limit
+          AND NOT EXISTS (
+              SELECT 1 FROM cards c2
+              WHERE c2.owner_id = :user_id
+                AND c2.player_id = :player_id
+                AND c2.is_active = 1
+                AND c2.id != :card_id
+          )
+    """), {"card_id": card_id, "user_id": user_id, "player_id": player_id,
+           "roster_limit": roster_limit})
+    return result.rowcount > 0
+
+
+def _swap_roster_atomic(db, bench_card_id: int, active_card_id: int, user_id: int,
+                         bench_player_id: int, slot_index) -> bool:
+    """Atomically flip bench_card active and active_card inactive, only if bench_card's
+    player has no other active card. Returns True if the swap happened."""
+    result = db.execute(text("""
+        UPDATE cards
+        SET is_active = 1, slot_index = :slot_index
+        WHERE id = :bench_card_id
+          AND owner_id = :user_id
+          AND is_active = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM cards c2
+              WHERE c2.owner_id = :user_id
+                AND c2.player_id = :bench_player_id
+                AND c2.is_active = 1
+                AND c2.id != :active_card_id
+          )
+    """), {"bench_card_id": bench_card_id, "user_id": user_id,
+           "bench_player_id": bench_player_id, "active_card_id": active_card_id,
+           "slot_index": slot_index})
+    if result.rowcount == 0:
+        return False
+    db.execute(text("""
+        UPDATE cards SET is_active = 0, slot_index = NULL
+        WHERE id = :active_card_id AND owner_id = :user_id AND is_active = 1
+    """), {"active_card_id": active_card_id, "user_id": user_id})
+    return True

@@ -750,3 +750,46 @@ Management tab so that I don't need direct database access to manage who else ha
 - Demoting the last remaining admin is rejected with 409 — the system can never end up with zero
   admin accounts
 - The action is recorded in the audit log, following the existing `admin_toggle_tester` pattern
+
+---
+
+## Database Backups
+
+### Create a Backup On Demand
+**User story**
+As an admin, I want to create a database backup from the admin panel so that I can safely deploy a new version mid-season without shell access to the server.
+
+**Acceptance criteria**
+- The admin Settings tab has a "Database Backups" panel with a "Create backup now" button
+- Clicking it calls `POST /admin/backups`, which uses `backup_sqlite_db()` and returns the new backup's filename, size in bytes, and creation time
+- The new file follows the existing naming pattern `{db}.backup-YYYYMMDD-HHmmss` in the same directory as the live database
+- The action is written to the audit log as `admin_db_backup` with the filename
+- A request within 60 seconds of the newest existing backup file returns 429 and creates no file
+- When the database is not a local SQLite file, the endpoint returns 409 with a clear message and creates no file
+- Non-admin users get 403, and logged-out users get 401
+
+---
+
+### See Which Backups Exist
+**User story**
+As an admin, I want to see a list of existing backups so that I can confirm a recent backup exists before deploying.
+
+**Acceptance criteria**
+- `GET /admin/backups` returns every file matching `{db}.backup-*` in the database directory, newest first, with filename, size in bytes, and modification time
+- The response never includes the live database file or its `-wal`/`-shm` files
+- The panel shows the list as a table with filename, created time in local time, and a human-readable size, plus a Refresh button
+- The panel shows the retention period from `DB_BACKUP_RETENTION_DAYS`, so admins know when backups are deleted automatically
+- An empty list shows "No backups yet"
+
+---
+
+### Download a Backup
+**User story**
+As an admin, I want to download a backup file so that I can keep a copy off the server in case the server's disk is lost.
+
+**Acceptance criteria**
+- Each row in the backup table has a Download link that calls `GET /admin/backups/{filename}`
+- The response is the file as an attachment, with `Content-Disposition` set to the backup's filename
+- The filename must exactly match a file returned by the backup listing. Any other value, including path traversal attempts such as `../fantasy.db` or the live database's own name, returns 404
+- Each download is written to the audit log as `admin_db_backup_download` with the filename
+- Non-admin users get 403, and logged-out users get 401

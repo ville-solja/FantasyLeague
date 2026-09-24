@@ -49,7 +49,7 @@ def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
 def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
     """Compute leaderboard totals using per-stat card_fantasy_score().
 
-    rows must have: user_id, username, card_id, card_type, player_name,
+    rows must have: user_id, username, card_id, card_type, player_name, match_count,
                     deaths, kills, last_hits, denies, gold_per_min, obs_placed,
                     towers_killed, roshan_kills, teamfight_participation,
                     camps_stacked, rune_pickups, firstblood_claimed, stuns
@@ -83,7 +83,8 @@ def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
         stat_sums = stat_dict_from_row(r)
         mods = mods_map.get(r.card_id, {})
         card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods,
-                                         mvp_bonus_map.get(r.card_id, 0.0))
+                                         mvp_bonus_map.get(r.card_id, 0.0),
+                                         match_count=getattr(r, 'match_count', 1) or 1)
         totals[uid] += card_pts
         cards_by_user[uid].append({
             "card_id": r.card_id,

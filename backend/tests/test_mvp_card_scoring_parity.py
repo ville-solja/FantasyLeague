@@ -9,11 +9,10 @@ compute_season_standings()).
 
 The fix (card_utils._mvp_bonus_delta() / _mvp_bonus_map()) adds the bonus as a flat,
 additive term computed from each MVP match's own fantasy_score() (not the card's
-aggregate), because the death-survival term (max(0, death_pool - deaths*death_deduction))
-is a clamped, non-linear formula: summing per-match death contributions is not the same as
-computing the formula on the aggregated death count. These tests lock in both halves of
-that behavior — the MVP bonus reaching every card-based total, and the existing aggregate
-death-term math staying untouched for the rest of a card's stats.
+aggregate), so the bonus reflects only the MVP game. These tests lock in both halves of
+that behavior — the MVP bonus reaching every card-based total, and the card's aggregate
+death term (death_pool × match_count − deaths × death_deduction, floored at 0) being
+computed on the whole window.
 """
 
 import os
@@ -53,9 +52,8 @@ def _seed(db):
                              kills=5, deaths=2, is_mvp=True))
 
     # Non-MVP match in the same window: kills=0, deaths=5. Aggregated with the MVP match,
-    # total deaths=7 -> aggregate death term = max(0, 3-7*0.3) = 0.9, NOT
-    # max(0,3-2*.3) + max(0,3-5*.3) = 2.4+1.5 = 3.9 (what a naive per-match-then-sum
-    # restructure would produce). This is the regression guard for the death-pool claim.
+    # total deaths=7 over 2 games -> death term = max(0, 3*2 - 7*0.3) = 3.9 (the pool
+    # scales per game; a single shared pool would have given only 0.9).
     db.add(Match(match_id=5002, radiant_team_id=1, dire_team_id=2, start_time=600, radiant_win=True))
     db.add(PlayerMatchStats(player_id=101, match_id=5002, team_id=1, fantasy_points=1.5,
                              kills=0, deaths=5, is_mvp=False))
@@ -66,11 +64,11 @@ def _seed(db):
     return week
 
 
-# aggregate stat_sums across both matches: kills=5, deaths=7
-# base = 5*0.3 + max(0, 3 - 7*0.3) = 1.5 + 0.9 = 2.4
+# aggregate stat_sums across both matches: kills=5, deaths=7, match_count=2
+# base = 5*0.3 + max(0, 3*2 - 7*0.3) = 1.5 + 3.9 = 5.4
 # + mvp bonus delta (from match 5001 alone) = 0.39
 # rarity_mod = 1 (no rarity_common weight configured -> defaults to 0%)
-_EXPECTED_CARD_TOTAL = pytest.approx(2.79, abs=1e-6)
+_EXPECTED_CARD_TOTAL = pytest.approx(5.79, abs=1e-6)
 
 
 class TestRosterSeasonPointsIncludesMvpBonus:
@@ -97,8 +95,8 @@ class TestSeasonLeaderboardIncludesMvpBonus:
         standings = compute_season_standings(db)
 
         assert len(standings) == 1
-        assert standings[0]["points"] == pytest.approx(2.79, abs=1e-2)
-        assert standings[0]["cards"][0]["points"] == pytest.approx(2.79, abs=1e-2)
+        assert standings[0]["points"] == pytest.approx(5.79, abs=1e-2)
+        assert standings[0]["cards"][0]["points"] == pytest.approx(5.79, abs=1e-2)
 
 
 class TestWeeklyLeaderboardIncludesMvpBonus:
@@ -108,7 +106,7 @@ class TestWeeklyLeaderboardIncludesMvpBonus:
         result = weekly_leaderboard(week_id=1, db=db)
 
         assert len(result) == 1
-        assert result[0]["week_points"] == pytest.approx(2.79, abs=1e-2)
+        assert result[0]["week_points"] == pytest.approx(5.79, abs=1e-2)
 
 
 class TestNoMvpMatchesLeavesCardUnaffected:
@@ -121,5 +119,5 @@ class TestNoMvpMatchesLeavesCardUnaffected:
 
         result = _build_roster_response(db, user_id=1, week_id=1)
 
-        # base only: 5*0.3 + max(0, 3-7*0.3) = 1.5 + 0.9 = 2.4, no +0.39
-        assert result["season_points"] == pytest.approx(2.4, abs=1e-6)
+        # base only: 5*0.3 + max(0, 3*2-7*0.3) = 1.5 + 3.9 = 5.4, no +0.39
+        assert result["season_points"] == pytest.approx(5.4, abs=1e-6)

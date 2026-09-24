@@ -2,29 +2,43 @@
 
 Complete submission package for the Kanaliiga Kana-Cards Twitch Extension: ready-to-use listing
 copy, required disclosures, and a step-by-step checklist covering every section of Twitch's
-"Submit for Review" form, plus the fixes made to satisfy
+"Submit for Review" form, the dev-console Asset Hosting and URL Fetching settings the Extension
+needs to load for a reviewer, plus the fixes made to satisfy
 [Extension Guidelines & Policies](https://dev.twitch.tv/docs/extensions/guidelines-and-policies/)
-in the process.
+in the process. See [Review history](#review-history) for past rejections.
 
-**Package to submit:** `twitch-extension-1.1.5.zip` (or later) — the first version with the
-XSS fix below. Do not submit an earlier version.
+**Package to submit:** `twitch-extension-1.1.6.zip` (or later), built with
+`bash twitch-extension/package.sh 1.1.6`. Version `1.1.5` was the first with the XSS fix below;
+`1.1.6` adds the chat disclosure copy required by the 2026-09 review. Do not resubmit `1.1.5` or
+earlier — Twitch requires a new version for every resubmission.
 
 ---
 
 ## Submission checklist (work through in order)
 
-- [ ] **Version** — upload `twitch-extension-1.1.5.zip`, confirm it in Local/Hosted Test first
+- [ ] **Version** — create version `1.1.6` in the dev console and upload `twitch-extension-1.1.6.zip`
 - [ ] **Listing copy** — name, summary, and description (below)
 - [ ] **Category** — below
 - [ ] **Icon & screenshots** — below (verify existing assets meet the size specs)
 - [ ] **Legal** — Privacy Policy and Terms of Service URLs (already published, below)
 - [ ] **Support contact** — an email or URL viewers/reviewers can reach you at
-- [ ] **Capabilities declared** — Extension Configuration Service, Chat (see disclosures below)
+- [ ] **Capabilities declared** — Extension Configuration Service, Chat. Chat use is disclosed in
+      the **Twitch Chat** paragraph of the listing description (below) — the reviewer checks it
 - [ ] **Notes for reviewer** — paste the EBS URL disclosure block verbatim (below)
 - [ ] **Testing instructions** — paste the numbered steps-to-reproduce below (Twitch's form asks
       for this explicitly, separate from "Notes for reviewer")
 - [ ] **Test setup** — a live/active review channel with real match data, plus a working test
       account (below) — arrange this *before* clicking submit, not after
+- [ ] **Asset Hosting paths** — Version → Asset Hosting: Panel Viewer Path `panel.html`, Config
+      Path `config.html`, Live Config Path `live_config.html`. No leading `/` and no folder prefix
+      such as `twitch-extension/` — a wrong path makes Twitch's CDN return 404 for the iframe
+- [ ] **URL Fetching allowlist** — Version → Capabilities → Allowlist for URL Fetching Domains:
+      `https://kana-cards.com`. No other entry is needed. Without it, Twitch's Content Security
+      Policy blocks every EBS call
+- [ ] **Hosted Test verification** — move the version to **Hosted Test**, then load the panel,
+      config and live config views on the review channel with browser dev tools open. Confirm no
+      404, no CSP `connect-src` violation, and that the panel reaches the unlinked or linked
+      state (never "not configured")
 - [ ] Submit
 
 ---
@@ -48,9 +62,17 @@ XSS fix below. Do not submit an earlier version.
 > Open Stream Manager, find the Kana Cards tile in the Quick Actions bar, and use it during or
 > after a match to name the MVP and trigger a chat announcement plus a token drop to linked
 > viewers currently watching.
+>
+> **Twitch Chat:** when the broadcaster confirms a match MVP, the extension posts one message to
+> the channel's chat, for example: "Match MVP: PlayerName! Token drop winners (+1 Kana Tokens): user1,
+> user2". The names listed are the winners' Kanaliiga Fantasy usernames. If no linked viewers are
+> watching, the message says so instead. Changing the MVP for a match that already had a drop
+> does not drop tokens again. The extension posts nothing else, and it never reads, stores or
+> moderates chat messages.
 
-This wording is deliberately consistent with `twitch-extension/config.html`'s existing broadcaster
-setup copy — keep them in sync if either changes.
+This wording is deliberately consistent with `twitch-extension/config.html`'s broadcaster setup
+copy and the chat note in `twitch-extension/panel.html`'s unlinked view — keep all three in sync
+if any changes.
 
 ## Category
 
@@ -134,7 +156,7 @@ viewer then enters into the panel.
 The Extension uses Twitch's Extension Chat capability to post one message when a broadcaster
 confirms a match MVP, e.g.:
 
-> `Match MVP: PlayerName! Token drop winners (+1 tokens): viewer1, viewer2`
+> `Match MVP: PlayerName! Token drop winners (+1 Kana Tokens): viewer1, viewer2`
 
 No other chat activity is read, stored, or posted. This does not use Twitch Bits — "tokens" here
 are the Service's own internal, non-monetary virtual currency (see Monetization below), unrelated
@@ -211,7 +233,8 @@ with no server-side sanitization (`backend/ingest.py`), so this was a real store
 also a direct violation of Twitch's *"DOM injection security"* requirement (*"Data from AJAX
 requests must be validated and processed before DOM insertion"*). Fixed by adding an `_escHtml()`
 helper to `extension.js` (mirroring `frontend/app-globals.js`'s existing helper) and escaping
-every untrusted name before it's concatenated into an HTML string, in `twitch-extension-1.1.5`.
+every untrusted name before it's concatenated into an HTML string, in `twitch-extension-1.1.5`
+(and carried forward into `1.1.6`).
 
 ## Confirmed compliant, no change needed
 
@@ -224,3 +247,16 @@ every untrusted name before it's concatenated into an HTML string, in `twitch-ex
   plus the account's own one-time linking code are used
 - No user-submitted content is shown to other users anywhere in the Extension, so the
   user-generated-content moderation rules don't apply
+
+---
+
+## Review history
+
+### 2026-09 — Pending Approval (version 1.1.5)
+
+| Guideline | Reviewer finding | Fix (version 1.1.6) |
+|---|---|---|
+| 1.2 | Extension did not load; the reviewer saw a 404 | The zip layout, EBS routing, CORS and helper script were all verified fine. The fix is dev-console configuration: exact Asset Hosting paths, `https://kana-cards.com` in the URL Fetching allowlist, and Hosted Test verification before submitting (checklist above). `package.sh` now fails on any unpackaged local reference and prints these console settings |
+| 4.2 | Chat capability enabled but not described in the listing | Added the **Twitch Chat** paragraph to the listing description, with matching copy in `config.html` and the panel's unlinked view |
+
+Details: [Twitch Review Resubmission](twitch-review-resubmission.md).

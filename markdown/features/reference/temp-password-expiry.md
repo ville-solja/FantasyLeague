@@ -4,6 +4,20 @@ Extends the forgot-password flow to give temporary passwords a configurable TTL 
 the reset email wording to accurately reflect that the previous password is invalidated
 immediately on request.
 
+> **Legacy-only since issue #123.** `POST /forgot-password` was redesigned
+> (`reference/password-reset-token-flow.md`) to stop generating temp passwords entirely — it now
+> only creates a single-use `PasswordResetToken` and never touches `password_hash`,
+> `must_change_password`, or `temp_password_expires_at`. **No current code path sets these
+> fields anymore.** Everything below describes what *used to* happen on every
+> `POST /forgot-password` call, and what *still* happens today only for the narrow case of an
+> account that already held an outstanding temp password issued before this redesign shipped:
+> `POST /login` still rejects it once `temp_password_expires_at` has passed (or accepts it before
+> then), and `PUT /profile/password` still clears both fields on a successful change, exactly as
+> described below. This is a deliberately narrow, self-resolving legacy window — see the "Data
+> Model" and "Endpoints affected" sections for what remains live vs. dead. A follow-up cleanup
+> (dropping the columns and the login-side check once no legacy temp passwords remain
+> outstanding) is out of scope and not currently planned.
+
 ---
 
 ## Overview
@@ -19,7 +33,7 @@ clear 401 message once the timestamp has passed, prompting the user to request a
 ## Flow
 
 ```
-POST /forgot-password
+POST /forgot-password   [PRE-#123 BEHAVIOR — NO LONGER HAPPENS]
     ↓
 Generate temp password
 Set user.password_hash = hash(temp)
@@ -27,14 +41,20 @@ Set user.must_change_password = True
 Set user.temp_password_expires_at = now + TTL
 Send email (corrected wording)
     ↓
-POST /login (with temp password)
+POST /login (with temp password)                      [STILL LIVE, for legacy accounts only]
     → if now > temp_password_expires_at → 401 "Temporary password has expired"
     → else → login succeeds, must_change_password flag signals Profile tab to prompt change
     ↓
-PUT /profile/password
+PUT /profile/password                                  [STILL LIVE — unconditionally, for any account]
     → user.must_change_password = False
     → user.temp_password_expires_at = None
 ```
+
+As of issue #123, `POST /forgot-password` no longer performs the first block above at all —
+see `reference/password-reset-token-flow.md` for what it does instead. The `POST /login` and
+`PUT /profile/password` blocks are unchanged and still execute exactly as shown, since both
+checks are keyed off the (now write-once-in-the-past) `users` columns rather than off
+`/forgot-password` itself.
 
 ---
 
@@ -50,10 +70,10 @@ Migration: `020_temp_password_expiry` — `ALTER TABLE users ADD COLUMN temp_pas
 
 ## Endpoints affected
 
-### `POST /forgot-password`
-Sets `temp_password_expires_at = now + TTL` alongside the existing `must_change_password`
-flag. Email body updated to state that the previous password is no longer valid and that the
-temporary password expires after the configured TTL.
+### `POST /forgot-password` — **no longer applicable**
+Previously set `temp_password_expires_at = now + TTL` alongside `must_change_password`. Since
+issue #123, this endpoint never touches either field (or `password_hash`) — it creates a
+`PasswordResetToken` instead. See `reference/password-reset-token-flow.md`.
 
 ### `POST /login`
 After successful bcrypt verification, if `must_change_password` is True and

@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-only -->
 
 You are the **Product Analyst** for this project.
@@ -21,12 +21,13 @@ Verify `markdown/stories/_index.md` and `backend/main.py` exist. If either is mi
 ## Files to read
 
 - `markdown/stories/_index.md` — the story index; then read each referenced section file in `markdown/stories/`
-- `backend/main.py` — all endpoints (routes + handler logic)
+- `backend/main.py` — app setup, background loops, `/config` and `/health`
+- `backend/routers/*.py` and `backend/twitch.py` — all other endpoints (routes + handler logic)
 - `backend/models.py` — data models
 - `backend/weeks.py` — week generation and locking
 - `backend/scoring.py` — scoring logic
 - `backend/seed.py` — initial data setup
-- `frontend/app-globals.js`, `frontend/app-init.js`, `frontend/app-auth.js`, `frontend/app-cards.js`, `frontend/app-roster.js` — client-side flows (for stories about UI interactions)
+- `frontend/app-*.js` — client-side flows (for stories about UI interactions); start with `app-globals.js`, `app-init.js`, `app-auth.js`, `app-cards.js`, `app-roster.js`, then the tab-specific modules (`app-leaderboard.js`, `app-players.js`, `app-profile.js`, `app-weekly-summary.js`, `app-admin-*.js`)
 
 ---
 

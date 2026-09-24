@@ -42,8 +42,9 @@ Authenticates with username and password.
 
 - Returns 401 if credentials are invalid.
 - Returns 401 with `"Temporary password has expired. Please request a new password reset."` if the
-  account has an unexpired-check-failed temporary password (`must_change_password` set and
-  `temp_password_expires_at` in the past). See `reference/temp-password-expiry.md`.
+  account still holds an outstanding **pre-fix legacy** temporary password (`must_change_password`
+  set and `temp_password_expires_at` in the past). This check is legacy-only — no current code
+  path sets these fields anymore. See `reference/temp-password-expiry.md`.
 - Returns `{ "username", "is_admin", "tokens" }` and sets the session cookie. (`must_change_password` is only returned by `GET /me`.)
 - Records a `user_login` audit log entry.
 
@@ -67,7 +68,10 @@ section alongside the other endpoints below (which are all in `auth.py`).
 }
 ```
 
-`must_change_password` is `true` after a forgot-password reset. The frontend detects this flag on login and redirects to the profile password change form before allowing other actions.
+`must_change_password` is `true` only for an account still holding an outstanding **pre-fix
+legacy** temporary password (see `reference/temp-password-expiry.md`). The frontend detects this
+flag on login and redirects to the profile password change form before allowing other actions.
+`POST /forgot-password` no longer sets this flag — see the Forgot Password section below.
 
 ---
 
@@ -75,7 +79,10 @@ section alongside the other endpoints below (which are all in `auth.py`).
 
 ### `GET /profile/{user_id}`
 
-Returns basic public information for any user by ID. No authentication required.
+Returns basic profile information for any user by ID. Requires login — any authenticated
+account can view any other user's profile (this is not an ownership restriction, just a
+login requirement; see `reference/profile-requires-login.md`). Returns 401 if unauthenticated.
+The response shape and content for an authenticated request are otherwise unchanged.
 
 ```json
 {
@@ -152,9 +159,14 @@ Changes the authenticated user's password. Requires login and the current passwo
 
 ## Forgot Password
 
+Password reset is a two-step, token-based flow (see `reference/password-reset-token-flow.md` for
+the full design rationale — this replaced an earlier design that mutated the real password
+immediately on `POST /forgot-password`, resolving GitHub issue #123). Requesting a reset never
+touches the account's real password; only completing the reset with a valid token does.
+
 ### `POST /forgot-password`
 
-Issues a temporary password to the user's registered email address.
+Requests a password reset for the given username. Does **not** change the account's password.
 
 ```json
 { "username": "SomeUser" }
@@ -162,19 +174,50 @@ Issues a temporary password to the user's registered email address.
 
 **Flow:**
 
-1. A random 12-character temporary password is generated.
-2. The user's password is immediately replaced with the temporary one.
-3. The `must_change_password` flag is set to `true` on the user record.
-4. `temp_password_expires_at` is set to `now + TEMP_PASSWORD_TTL_HOURS` hours (default 24) — the
-   temporary password stops working after this point and `POST /login` returns 401. Cleared back
-   to `null` once the user sets a real password via `PUT /profile/password`. See
-   `reference/temp-password-expiry.md`.
-5. The temporary password is emailed to the address on file.
-6. A `password_reset_requested` audit log entry is written.
+1. If the username doesn't resolve to an account with an email, or the account is within its
+   per-username cooldown (see `reference/forgot-password-cooldown.md`), the endpoint fast-exits
+   with the bcrypt timing-equalization call and returns `{"status": "ok"}` — no state changes.
+2. Any existing `PasswordResetToken` row for the account is deleted (only one live token per
+   user at a time — same invalidate-on-regenerate precedent as `TwitchLinkCode`).
+3. A new single-use token is generated (`secrets.token_urlsafe(32)`) and stored with an
+   `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS` hours (default `1`).
+4. A `password_reset_requested` audit log entry is written.
+5. An email is sent to the address on file containing a clickable link
+   (`{APP_BASE_URL}/?reset_token={token}`, only if `APP_BASE_URL` is configured) and the raw
+   token as a manual-entry fallback (always included). The wording states the current password
+   remains valid and nothing changes until the reset is completed.
 
-The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to prevent username enumeration.
+The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to
+prevent username enumeration. It never sets `user.password_hash`, `must_change_password`, or
+`temp_password_expires_at` — those fields are untouched by this endpoint entirely.
 
-**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the password change is still committed and the endpoint returns `{"status": "ok"}`, but the temporary password is not visible anywhere (it is not logged). To use the forgot-password flow locally, configure a real SMTP relay or temporarily set `SMTP_HOST` for testing.
+**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the
+endpoint still returns `{"status": "ok"}` and the token row is still created, but the token is
+not visible anywhere (it is not logged). To use this flow locally, configure a real SMTP relay
+or temporarily set `SMTP_HOST` for testing.
+
+### `POST /reset-password`
+
+Completes a password reset using a token obtained from the forgot-password email. No
+authentication required (the token itself is the credential).
+
+```json
+{ "token": "...", "new_password": "new-password" }
+```
+
+- `new_password` is subject to `Field(min_length=6, max_length=128)`.
+- An invalid, unknown, already-used, or expired token returns 400 with no side effects — the
+  account is completely untouched.
+- A valid, unexpired token:
+  1. Sets `user.password_hash` to the new password.
+  2. Clears any legacy `must_change_password`/`temp_password_expires_at` state on the account
+     (cleanup matching what `PUT /profile/password` already does).
+  3. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
+  4. Records a `password_reset_completed` audit log entry.
+  5. Returns `{"status": "ok"}`.
+
+Not separately rate-limited beyond the app-wide baseline — the token has 256 bits of entropy and
+is single-use, so a dedicated stricter limit wasn't warranted.
 
 ---
 
@@ -199,7 +242,9 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy |
 | `DEBUG` | `false` | Bypasses `SECRET_KEY` requirement for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
-| `TEMP_PASSWORD_TTL_HOURS` | `24` | Hours before a forgot-password temporary password expires |
+| `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
+| `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |
+| `APP_BASE_URL` | *(empty)* | Public base URL used to build a clickable reset link in emails; if unset, only the raw code is emailed |
 | `SMTP_HOST` | *(empty — disables email)* | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP login username |

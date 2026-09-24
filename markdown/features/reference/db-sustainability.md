@@ -48,10 +48,69 @@ bash scripts/backup-db.sh /path/to/other.db   # custom path
 
 Run before every deploy.
 
-This is separate from the automatic in-app backup `backup_sqlite_db()` (also in
-`backend/database.py`, same online-backup mechanism) takes immediately before
+**Custom-path caveat:** `.gitignore`'s `data/*.backup-*` entry (see
+`reference/db-backup-leak-fix.md`) only covers backups written at the default path,
+under `data/`. Running
+`scripts/backup-db.sh /custom/path` writes the timestamped copy next to
+`/custom/path` instead — outside the gitignored `data/` directory — so a backup taken
+this way is **not** protected by that pattern and could be committed by an unrelated
+`git add -A` if the custom path happens to live inside the repo. Prefer the default
+(no-argument) invocation unless there's a specific reason to write elsewhere.
+
+This is separate from the automatic in-app backup that `backup_sqlite_db()` (in
+`backend/database.py`, using the sqlite3 online backup API rather than this script's plain `cp`) takes immediately before
 `POST /admin/season/reset` deletes any data — see `reference/season-lifecycle.md`. That backup
 runs unconditionally on every reset; `scripts/backup-db.sh` is the manual pre-deploy step.
+
+## Automatic scheduled backups
+
+A background thread (`_backup_loop` in `backend/main.py`, started unconditionally at startup
+alongside week maintenance) calls `backup_sqlite_db()` on a timer and prunes old backup files with
+`cleanup_old_backups()` (both in `backend/database.py`). This is the only unattended safety net for
+the bind-mounted `data/fantasy.db` — `scripts/backup-db.sh` and the season-reset backup are both
+one-off/manual.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups |
+| `DB_BACKUP_RETENTION_DAYS` | `14` | Age (by file mtime) at which any backup file, automatic or manual, is deleted |
+
+Backups land next to the live DB as `data/fantasy.db.backup-YYYYMMDD-HHmmss`, same naming
+convention as the manual script, so both are pruned/restorable the same way. Retention only
+touches files matching that pattern — it never deletes the live database.
+
+## Admin panel
+
+The admin Settings tab's **Database Backups** panel is the no-shell alternative to
+`scripts/backup-db.sh` — use it before a mid-season deploy when you don't have a shell on the host.
+It calls the same `backup_sqlite_db()` and writes the same `data/fantasy.db.backup-YYYYMMDD-HHmmss`
+files, so manual panel backups are listed alongside scheduled and pre-reset ones.
+
+- **60-second cooldown:** `POST /admin/backups` returns 429 if the newest backup file is under
+  60 seconds old. This also prevents two backups in the same second from overwriting each other.
+- **Retention applies to manual backups too:** anything matching the backup pattern is pruned after
+  `DB_BACKUP_RETENTION_DAYS` (default 14, defined once in `database.backup_retention_days()` and
+  read by both the backup loop and the panel). Download a copy to keep it longer, or off the host.
+
+Endpoints and security details are in `reference/admin-db-backup.md`.
+
+## Restoring a backup
+
+Restore is a manual operator procedure, not an endpoint:
+
+1. Stop the container: `docker compose stop backend`
+2. Copy the chosen backup over the live file: `cp data/fantasy.db.backup-YYYYMMDD-HHmmss data/fantasy.db`
+3. Delete any stale WAL files: `rm -f data/fantasy.db-wal data/fantasy.db-shm`
+4. Start again: `docker compose start backend`
+
+Leaving the old `-wal`/`-shm` files in place would let SQLite replay the pre-restore WAL on top of
+the restored database.
+
+## Container restart policy
+
+`docker-compose.yml`'s `backend` service sets `restart: unless-stopped`, so the container
+restarts automatically after a crash, an OOM kill, or a host/Docker-daemon reboot, rather than
+staying down until someone notices and runs `docker compose up` by hand.
 
 ---
 

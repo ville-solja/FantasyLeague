@@ -5,6 +5,7 @@ from __future__ import annotations
 # Deaths is excluded — it uses a clamped pool formula handled separately.
 SCORING_STATS = [
     "kills",
+    "assists",
     "last_hits",
     "denies",
     "gold_per_min",
@@ -26,11 +27,16 @@ def fantasy_score(p: dict, weights: dict) -> float:
     return total
 
 
-def _death_contribution(deaths: float, weights: dict) -> float:
-    """Points from the death-survival pool: pool for 0 deaths, minus deduction per death, floored at 0."""
+def _death_contribution(deaths: float, weights: dict, games: int = 1) -> float:
+    """Points from the death-survival pool: pool per game, minus deduction per death, floored at 0.
+
+    The pool scales with the number of games so that a multi-game aggregate is credited
+    the same way every other stat is (linearly per game) instead of sharing one game's
+    pool across the whole window.
+    """
     pool = weights.get("death_pool", 3.0)
     deduction = weights.get("death_deduction", 0.3)
-    return max(0.0, pool - deaths * deduction)
+    return max(0.0, pool * max(games, 1) - deaths * deduction)
 
 
 def stat_dict_from_row(row) -> dict:
@@ -65,13 +71,15 @@ def apply_mvp_bonus_to_row(row, weights: dict, apply: bool) -> None:
     row.is_mvp = apply
 
 
-def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict) -> float:
+def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict,
+                       match_count: int = 1) -> float:
     """
     Fantasy points for a specific card, applying per-stat card modifiers.
 
     stat_sums      — {stat_key: aggregated_value} — should include "deaths"
     weights        — {stat_key: weight}
     card_modifiers — {stat_key: bonus_pct}  e.g. {"kills": 10.0}
+    match_count    — number of games aggregated into stat_sums; scales the death pool
 
     Death modifier amplifies the death-survival reward (always non-negative):
       death_contribution × (1 + bonus_pct / 100)
@@ -85,7 +93,7 @@ def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict) -> 
         bonus_pct = card_modifiers.get(stat, 0.0)
         total += w * value * (1 + bonus_pct / 100)
 
-    death_pts = _death_contribution(stat_sums.get("deaths", 0), weights)
+    death_pts = _death_contribution(stat_sums.get("deaths", 0), weights, match_count)
     bonus_pct = card_modifiers.get("deaths", 0.0)
     total += death_pts * (1 + bonus_pct / 100)
     return total

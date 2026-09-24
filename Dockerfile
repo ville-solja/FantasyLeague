@@ -25,4 +25,11 @@ RUN mkdir -p /app/data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
   CMD python -c "import urllib.request,sys; urllib.request.urlopen('http://localhost:8000/health', timeout=3)" || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Trust X-Forwarded-For/-Proto only from private networks, where a reverse proxy
+# on this host (reaching the published port via Docker's bridge gateway), a proxy
+# container or a private load balancer connects from. A client connecting from a
+# public address cannot choose its own IP, which the per-IP rate limits rely on.
+# Uvicorn reads this when --forwarded-allow-ips is not passed; override in .env.
+ENV FORWARDED_ALLOW_IPS="127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7"
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

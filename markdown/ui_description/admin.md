@@ -15,6 +15,16 @@ Visible only to admin users. All actions require an active admin session cookie 
 
 - **Recalculate** button — re-applies the current scoring weights to all stored player match stats without re-fetching from OpenDota. Use after adjusting weights.
 
+## Database Backups panel
+
+Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-backup.md`.
+
+- Explanatory line: "Backups are stored on the server and deleted automatically after N days. Download a copy before deploying if you need to keep it." — N comes from `retention_days` in `GET /admin/backups` (`DB_BACKUP_RETENTION_DAYS`).
+- **Create backup now** — calls `POST /admin/backups`. Disabled while the request is in flight. The status line shows "Created {filename}" or the error detail (e.g. the 60-second cooldown message on 429, or the non-SQLite message on 409). The table reloads only after a successful backup.
+- **Refresh** — reloads the table.
+- **Table** — columns Filename, Created (browser local time), Size (human-readable, e.g. `1.9 MB`), and a **Download** link per row (`GET /admin/backups/{filename}`, saved as an attachment). Newest first. Shows "No backups yet" when empty. Filenames are HTML-escaped.
+- The list loads whenever the Settings admin sub-tab is activated.
+
 ## Promo Codes panel
 
 - **Create** — enter a code name (auto-uppercased) and a token amount, then click Create. The code can be redeemed by users in the My Team tab.

@@ -12,16 +12,32 @@ from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 from card_utils import (
     _SCORED_STAT_COLS, _load_weights, _compute_card_points, _mvp_bonus_delta,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
+    _activate_card_atomic, _swap_roster_atomic,
 )
-from database import get_db
+from database import get_db, spend_tokens
 from deps import get_current_user, is_admin_fresh, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
+from rate_limit import limiter, key_by_user_or_ip
 from scoring import stat_dict_from_row
 from weeks import get_next_editable_week
 
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
+# Per-user limit on roster activate/deactivate/swap/reorder (issue #124). Keyed by
+# session user_id (falls back to source IP if somehow unauthenticated — see
+# key_by_user_or_ip in rate_limit.py). These four routes are split into a plain,
+# undecorated business-logic function (activate_card, deactivate_card,
+# reorder_roster, swap_roster — same signature as before, still directly
+# importable/callable by tests, e.g. backend/tests/test_issue_125_roster_limit_race_fix.py
+# and backend/tests/test_issue_40_my_team_drag_and_drop.py which call them as plain
+# Python functions with positional args) and a thin `*_route` wrapper that FastAPI
+# actually registers, carrying the new `request: Request` parameter slowapi's
+# @limiter.limit(...) decorator requires. Adding `request` directly to the business
+# functions would have shifted those tests' existing positional arguments into the
+# wrong parameters.
+RATE_LIMIT_ROSTER_MUTATION = os.getenv("RATE_LIMIT_ROSTER_MUTATION", "30/minute")
 
 
 class ReorderRequest(BaseModel):
@@ -151,7 +167,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             continue
         stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
         c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods,
-                                                   mvp_bonus_map.get(c["id"], 0.0))
+                                                   mvp_bonus_map.get(c["id"], 0.0),
+                                                   match_count=c.get("match_count", 1) or 1)
 
     active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
     bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
@@ -161,6 +178,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
     season_pts_rows = db.execute(text("""
         SELECT c.id as card_id, c.card_type,
+               COUNT(DISTINCT m.match_id)                    as match_count,
                COALESCE(SUM(s.deaths), 0)                    as deaths,
                COALESCE(SUM(s.kills), 0)                     as kills,
                COALESCE(SUM(s.last_hits), 0)                 as last_hits,
@@ -204,7 +222,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     season_points = sum(
         _compute_card_points(stat_dict_from_row(row), row.card_type, weights, rarity,
                              season_mods.get(row.card_id, {}),
-                             season_mvp_bonus_map.get(row.card_id, 0.0))
+                             season_mvp_bonus_map.get(row.card_id, 0.0),
+                             match_count=row.match_count or 1)
         for row in season_pts_rows
     )
 
@@ -279,7 +298,10 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": player.id}).first()
 
-    user.tokens = (user.tokens or 0) - 1
+    if not spend_tokens(db, user_id, 1):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card.id} player={player.name} rarity={rarity}")
     db.commit()
@@ -393,7 +415,10 @@ def draw_booster(team_id: int, db=Depends(get_db),
         WHERE s.player_id = :pid ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": player.id}).first()
 
-    user.tokens = (user.tokens or 0) - cost
+    if not spend_tokens(db, user_id, cost):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "token_booster_draw", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card.id} player={player.name} rarity={rarity} "
                   f"team_id={team_id} cost={cost}")
@@ -521,7 +546,10 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     weights = {w.key: w.value for w in db.query(Weight).all()}
     _assign_modifiers(db, card, weights)
 
-    user.tokens = (user.tokens or 0) - 1
+    if not spend_tokens(db, user_id, 1):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Not enough tokens")
+    db.refresh(user)
     _audit(db, "reroll_modifiers", actor_id=user_id, actor_username=user.username,
            detail=f"card_id={card_id} rarity={card.card_type}")
     db.commit()
@@ -534,7 +562,6 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     }
 
 
-@router.post("/roster/{card_id}/activate")
 def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     card = db.get(Card, card_id)
@@ -558,12 +585,20 @@ def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends
     if duplicate:
         raise HTTPException(status_code=409, detail="A card for this player is already active")
 
-    card.is_active = True
+    if not _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT):
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
     db.commit()
     return {"status": "ok", "card_id": card_id}
 
 
-@router.post("/roster/{card_id}/deactivate")
+@router.post("/roster/{card_id}/activate")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def activate_card_route(request: Request, card_id: int, db=Depends(get_db),
+                         current_user: dict = Depends(get_current_user)):
+    return activate_card(card_id, db, current_user)
+
+
 def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     card = db.get(Card, card_id)
@@ -574,7 +609,13 @@ def deactivate_card(card_id: int, db=Depends(get_db), current_user: dict = Depen
     return {"status": "ok", "card_id": card_id}
 
 
-@router.post("/roster/reorder")
+@router.post("/roster/{card_id}/deactivate")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def deactivate_card_route(request: Request, card_id: int, db=Depends(get_db),
+                           current_user: dict = Depends(get_current_user)):
+    return deactivate_card(card_id, db, current_user)
+
+
 def reorder_roster(body: ReorderRequest, user=Depends(get_current_user), db=Depends(get_db)):
     """Assign slot_index to each card in the ordered list. Zone (active/bench) is
     determined by each card's current is_active state; the caller should only mix
@@ -589,7 +630,13 @@ def reorder_roster(body: ReorderRequest, user=Depends(get_current_user), db=Depe
     return {"ok": True}
 
 
-@router.post("/roster/swap")
+@router.post("/roster/reorder")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def reorder_roster_route(request: Request, body: ReorderRequest,
+                          user=Depends(get_current_user), db=Depends(get_db)):
+    return reorder_roster(body, user, db)
+
+
 def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(get_db)):
     """Atomically move a bench card to the active roster and an active card to the
     bench. Applies the duplicate-player guard before committing."""
@@ -609,12 +656,19 @@ def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(ge
     if duplicate:
         raise HTTPException(status_code=409, detail="A card for this player is already active")
 
-    active_card.is_active = False
-    active_card.slot_index = None
-    bench_card.is_active = True
-    bench_card.slot_index = body.slot_index
+    if not _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
+                                bench_card.player_id, body.slot_index):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="A card for this player is already active")
     db.commit()
     return {"ok": True}
+
+
+@router.post("/roster/swap")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def swap_roster_route(request: Request, body: SwapRequest,
+                       user=Depends(get_current_user), db=Depends(get_db)):
+    return swap_roster(body, user, db)
 
 
 @router.get("/roster/{user_id}")

@@ -113,3 +113,55 @@ match ending so I can appoint MVP promptly after the game concludes.
 - A new `INGEST_LIVE_POLL_INTERVAL` env var (default: `120`) controls the polling interval used when an active (unlocked, currently-running) week exists
 - When no active week is in progress, the existing `INGEST_POLL_INTERVAL` (default: 900) is used instead
 - `.env.example` documents `INGEST_LIVE_POLL_INTERVAL` with a description
+
+---
+
+## Extension Review Resubmission
+
+### Reviewer Can Load Every Extension View
+**User story**
+As a Twitch Extension reviewer, I want every view of the Extension to load from Twitch's hosted CDN so that I can complete a full functional review.
+
+**Acceptance criteria**
+- The dev console's Asset Hosting paths are exactly `panel.html` (Panel Viewer Path), `config.html` (Config Path) and `live_config.html` (Live Config Path), with no leading slash or folder prefix
+- The submitted version is uploaded and moved to **Hosted Test** before submission, and all three views load in Hosted Test without a 404 on a real channel
+- The panel view reaches either the unlinked or linked state, never the "not configured" error, when loaded in Hosted Test
+- The submitted zip version is higher than `1.1.5`
+
+---
+
+### EBS Domain Allowlisted for Fetch
+**User story**
+As the Kanaliiga developer, I want the backend domain allowlisted in the dev console so that Twitch's Content Security Policy does not block the Extension's API calls.
+
+**Acceptance criteria**
+- The console's **Allowlist for URL Fetching Domains** contains `https://kana-cards.com`
+- No other external domain is fetched by the Extension frontend, so no other entry is needed
+- In Hosted Test, the browser console shows no CSP `connect-src` violation when the panel calls `/twitch/status`
+- The submission checklist lists the allowlist step before "Submit"
+
+---
+
+### Package Self-Check Before Upload
+**User story**
+As the Kanaliiga developer, I want the packaging script to fail when an HTML file references a local file missing from the zip so that a broken package never reaches review.
+
+**Acceptance criteria**
+- `bash twitch-extension/package.sh <version>` exits non-zero and names the missing file if any `src` or `href` in a packaged HTML file points to a local file not in the package
+- The script exits non-zero if no version argument is given, instead of silently defaulting to `1.0.0`
+- The script exits non-zero if the output zip already exists, instead of updating a previously submitted archive in place
+- On success, the script prints the exact console Asset Hosting paths and the fetch allowlist entry to set
+- A pytest test asserts every local asset referenced by `panel.html`, `config.html` and `live_config.html` is in the package file list, and that the Twitch helper script is the first `<script>` in each
+
+---
+
+### Chat Usage Disclosed in Listing
+**User story**
+As a Twitch reviewer and as a viewer, I want the Extension description to explain what it posts in chat so that I know how it interacts with Twitch Chat.
+
+**Acceptance criteria**
+- The listing description has a dedicated chat paragraph. It says the Extension posts one message to the channel's chat when the broadcaster confirms a match MVP, and never at any other time
+- The paragraph states the message contents: the MVP player's name, and the Kanaliiga Fantasy usernames of viewers who won the token drop, or a note that no linked viewers were in the pool
+- The paragraph states the Extension does not read, store or moderate chat, and re-selecting the MVP for a match that already had a token drop does not drop tokens again
+- `twitch-extension/config.html`'s broadcaster copy mentions the chat announcement, consistent with the listing description
+- The panel's unlinked view tells viewers that linking can show their Kanaliiga username in chat if they win a drop

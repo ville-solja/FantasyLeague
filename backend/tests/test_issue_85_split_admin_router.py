@@ -225,14 +225,32 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-84-week-management-editing's 8 new tests did after that, and
         plan-issue-111-week-boundary-formula's 7 new tests did after that, and
         plan-issue-113-mvp-schedule-cache-bust's 7 new tests did after that, and
-        plan-issue-115-username-xss-fix's 12 new tests did after that)."""
+        plan-issue-115-username-xss-fix's 12 new tests did after that, and
+        plan-issue-126-db-backup-leak-fix's 9 new tests did after that, and
+        plan-issue-121-rate-limiting's 14 new tests did after that, and
+        plan-issue-125-roster-limit-race-fix's 13 new tests did after that, and
+        plan-issue-124-roster-mutation-rate-limiting's 8 new tests did after that, and
+        plan-issue-130-assists-scoring-fix's 11 new tests did after that, and
+        plan-issue-122-forgot-password-cooldown's 11 new tests did after that, and
+        plan-issue-123-password-reset-token-flow's 20 new tests did after that, net of 7 tests
+        removed from test_issue_77_temp_password_expiry.py whose subject matter (forgot_password()
+        directly setting temp_password_expires_at) was intentionally and completely removed by
+        that same plan, not just given a different example value — see that plan's Context
+        section — for a net change of +13, and
+        plan-issue-120-profile-requires-login's 3 new tests did after that, and
+        the death-pool-scales-with-games scoring fix's 9 new tests did after that, and
+        plan-opendota-parse-retry's 21 new tests did after that, and
+        the parse re-request cooldown's 1 new test did after that, and
+        plan-twitch-review-resubmission's 21 new tests did after that, and
+        plan-issue-132-admin-db-backup's 21 new tests did after that, and
+        the proxy-trust and Twitch uniqueness fixes' 15 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "689 passed" in output, output[-3000:]
+        assert "859 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

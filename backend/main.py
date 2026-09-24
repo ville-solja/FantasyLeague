@@ -9,15 +9,18 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
-from database import SessionLocal, engine, Base, DATABASE_URL, get_db
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups, backup_retention_days
+from rate_limit import limiter
 from models import League, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league, get_live_match_league_ids
+from ingest import ingest_league, get_live_match_league_ids, retry_unparsed_matches, INGEST_LOCK
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, generate_weekly_summaries
@@ -36,6 +39,7 @@ from routers import admin_tags as admin_tags_router
 from routers import admin_players as admin_players_router
 from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
+from routers import admin_backups as admin_backups_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
 from routers import weekly_summary as weekly_summary_router
@@ -54,8 +58,11 @@ _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
 _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
 _INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
+_INGEST_PARSE_RETRY_HOURS  = int(os.getenv("INGEST_PARSE_RETRY_HOURS",   "48"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
+_DB_BACKUP_INTERVAL_HOURS  = int(os.getenv("DB_BACKUP_INTERVAL_HOURS",   "24"))
+_DB_BACKUP_RETENTION_DAYS  = backup_retention_days()
 
 
 def _week_maintenance_loop():
@@ -112,6 +119,15 @@ def _auto_ingest(league_ids: list[int], live_league_ids: set[int]):
         except Exception:
             logger.exception("Auto-ingest: league %d failed", league_id)
 
+    # Re-check recent matches that were ingested before OpenDota parsed the replay.
+    # Skipped when nothing is monitored so a fresh/test DB never makes OpenDota calls.
+    if league_ids and _INGEST_PARSE_RETRY_HOURS > 0:
+        try:
+            summary = retry_unparsed_matches(_INGEST_PARSE_RETRY_HOURS)
+            logger.info("Parse retry: %s", summary)
+        except Exception:
+            logger.exception("Parse retry step failed")
+
 
 def _run_toornament_sync():
     try:
@@ -154,8 +170,11 @@ def _ingest_poll_loop():
                 logger.info("Ingest poll: monitored league(s) with a live match: %s", sorted(live))
             else:
                 logger.info("Ingest poll: no monitored league has a live match")
-            _auto_ingest(monitored, live)
-            _run_toornament_sync()
+            # Shared with the admin-triggered manual ingest endpoint so the two
+            # never write the same league's data concurrently.
+            with INGEST_LOCK:
+                _auto_ingest(monitored, live)
+                _run_toornament_sync()
             if live:
                 interval = _INGEST_LIVE_MATCH_POLL_INTERVAL
             elif _has_active_week():
@@ -166,6 +185,26 @@ def _ingest_poll_loop():
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL
         _stop_event.wait(timeout=interval)
+
+
+def _backup_loop():
+    """Background thread: periodically snapshot the SQLite DB and prune old backups.
+
+    Runs regardless of DEMO_MODE (like week maintenance) since it's the only
+    thing standing between a crashed/corrupted volume and total data loss —
+    scripts/backup-db.sh and the season-reset backup are both manual/one-off.
+    """
+    while not _stop_event.is_set():
+        try:
+            path = backup_sqlite_db()
+            if path:
+                logger.info("Automatic DB backup created: %s", path)
+                deleted = cleanup_old_backups(_DB_BACKUP_RETENTION_DAYS)
+                if deleted:
+                    logger.info("Pruned %d backup(s) older than %d day(s)", deleted, _DB_BACKUP_RETENTION_DAYS)
+        except Exception:
+            logger.exception("Automatic DB backup failed")
+        _stop_event.wait(timeout=_DB_BACKUP_INTERVAL_HOURS * 3600)
 
 
 @asynccontextmanager
@@ -201,6 +240,9 @@ async def lifespan(app: FastAPI):
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
+    threading.Thread(target=_backup_loop, daemon=True).start()
+    logger.info("DB backup thread started (interval=%dh, retention=%dd)",
+                _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
     yield
     _stop_event.set()
 
@@ -257,6 +299,23 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.exception_handler(RateLimitExceeded)
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    # Must be a plain (sync) function, not `async def`: SlowAPIMiddleware's
+    # global baseline check runs inside a synchronous code path
+    # (slowapi.middleware.sync_check_limits) and cannot await a coroutine
+    # handler — it silently falls back to slowapi's own {"error": ...} shape
+    # for any exception_handler where inspect.iscoroutinefunction() is True.
+    # Route-level @limiter.limit(...) violations go through FastAPI's normal
+    # (async-aware) exception handling and would work with either, but this
+    # handler must stay sync so the app-wide middleware path also gets this
+    # app's {"detail": ...} shape instead.
+    return JSONResponse(status_code=429, content={"detail": f"Rate limit exceeded: {exc.detail}"})
+
 
 @app.exception_handler(Exception)
 async def _unhandled_exception_handler(request: Request, exc: Exception):
@@ -278,6 +337,7 @@ app.include_router(admin_tags_router.router)
 app.include_router(admin_players_router.router)
 app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
+app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
 app.include_router(weekly_summary_router.router)

@@ -347,6 +347,92 @@ def _m023_matches_vod_url(conn):
         conn.commit()
 
 
+def _m024_code_redemption_unique(conn):
+    # Dedupe any pre-existing double-redemptions (from before this constraint
+    # existed) before adding the unique index, keeping the earliest row.
+    conn.execute(text("""
+        DELETE FROM code_redemptions
+        WHERE id NOT IN (
+            SELECT MIN(id) FROM code_redemptions GROUP BY code_id, user_id
+        )
+    """))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_code_redemptions_code_user "
+        "ON code_redemptions(code_id, user_id)"
+    ))
+    conn.commit()
+    logger.info("Migration: code_redemptions — deduped and added unique(code_id, user_id) index")
+
+
+def _m026_twitch_mvp_drop_unique(conn):
+    # Dedupe rows created by concurrent MVP confirmations before this constraint
+    # existed. twitch_mvp keeps the newest row per match (the latest selection);
+    # twitch_token_drops keeps the earliest drop per channel and match.
+    mvp_deleted = conn.execute(text("""
+        DELETE FROM twitch_mvp
+        WHERE id NOT IN (SELECT MAX(id) FROM twitch_mvp GROUP BY match_id)
+    """)).rowcount
+    drop_deleted = conn.execute(text("""
+        DELETE FROM twitch_token_drops
+        WHERE id NOT IN (SELECT MIN(id) FROM twitch_token_drops GROUP BY channel_id, series_id)
+    """)).rowcount
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_twitch_mvp_match_id ON twitch_mvp(match_id)"
+    ))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_twitch_token_drops_channel_series "
+        "ON twitch_token_drops(channel_id, series_id)"
+    ))
+    conn.commit()
+    logger.info("Migration: twitch_mvp/twitch_token_drops — removed %d/%d duplicate rows, added unique indexes",
+                mvp_deleted, drop_deleted)
+
+
+def _m025_card_modifiers_assists(conn):
+    """Widen card_modifiers's stat_key CHECK constraint to allow 'assists',
+    now that assists flows through the standard weight x value scoring loop
+    (SCORING_STATS in scoring.py). Mirrors _m008_card_modifiers_constraint's
+    exact table-rebuild pattern — the CHECK constraint is baked into the
+    table DDL at creation time and does not update itself just because
+    SCORING_STATS changed in Python.
+    """
+    _cm_ddl = (conn.execute(text(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='card_modifiers'"
+    )).scalar() or "")
+    _needs_cm_rebuild = "'assists'" not in _cm_ddl
+    if _needs_cm_rebuild:
+        conn.execute(text("DROP TABLE IF EXISTS card_modifiers_new"))
+        conn.execute(text("""
+            CREATE TABLE card_modifiers_new (
+                id        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                card_id   INTEGER REFERENCES cards(id),
+                stat_key  VARCHAR,
+                bonus_pct FLOAT,
+                CONSTRAINT ck_card_modifiers_stat_key
+                    CHECK (stat_key IN (
+                        'kills','deaths','gold_per_min','obs_placed',
+                        'last_hits','denies','towers_killed','roshan_kills',
+                        'teamfight_participation','camps_stacked','rune_pickups',
+                        'firstblood_claimed','stuns','assists'
+                    ))
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO card_modifiers_new
+            SELECT id, card_id, stat_key, bonus_pct FROM card_modifiers
+            WHERE stat_key IN (
+                'kills','deaths','gold_per_min','obs_placed',
+                'last_hits','denies','towers_killed','roshan_kills',
+                'teamfight_participation','camps_stacked','rune_pickups',
+                'firstblood_claimed','stuns','assists'
+            )
+        """))
+        conn.execute(text("DROP TABLE card_modifiers"))
+        conn.execute(text("ALTER TABLE card_modifiers_new RENAME TO card_modifiers"))
+        conn.commit()
+        logger.info("Migration: card_modifiers — widened stat_key CHECK constraint to allow assists")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -394,6 +480,9 @@ MIGRATIONS = [
     ("021_card_slot_index",          _m021_card_slot_index),
     ("022_matches_duration",         _m022_matches_duration),
     ("023_matches_vod_url",          _m023_matches_vod_url),
+    ("024_code_redemption_unique",   _m024_code_redemption_unique),
+    ("025_card_modifiers_assists",   _m025_card_modifiers_assists),
+    ("026_twitch_mvp_drop_unique",   _m026_twitch_mvp_drop_unique),
 ]
 
 

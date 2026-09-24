@@ -1,4 +1,4 @@
-<!-- version: 7 -->
+<!-- version: 8 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -36,6 +36,9 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/routers/leaderboard.py` — leaderboard, weights, and simulate endpoints
 - `backend/routers/players.py` — player/team endpoints
 - `backend/routers/profile.py` — profile endpoints
+- `backend/routers/weekly_summary.py` — weekly summary report endpoints
+- `backend/routers/admin_backups.py` — admin DB backup create/list/download endpoints (downloads contain password hashes)
+- `backend/rate_limit.py` — shared slowapi limiter used by rate-limited routes
 - `backend/auth.py` — `hash_password` and `verify_password` helpers
 - `backend/deps.py` — `get_current_user` and `require_admin` dependency definitions
 - `backend/twitch.py` — Twitch EBS router (if it exists)

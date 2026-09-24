@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 6 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -52,7 +52,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 ### 1. Separation of concerns
 - Does `backend/main.py` mix business logic with request handling? Flag functions longer than ~50 lines that contain domain logic that could move to a service/helper module.
 - Are there repeated query patterns that should be extracted to a repository layer?
-- Does the frontend `app.js` mix data fetching, DOM manipulation, and state management without clear structure?
+- Does the frontend `frontend/app-*.js` modules mix data fetching, DOM manipulation, and state management without clear structure?
 
 ### 2. Data layer
 - Are there N+1 query risks? (e.g. querying inside a loop over ORM results)

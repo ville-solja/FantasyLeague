@@ -58,6 +58,9 @@ twitch-extension/
 | **Client ID** | Shown in the top-right corner of Extension Settings | Used as `TWITCH_EXTENSION_CLIENT_ID` |
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
 | **Capabilities** | Enable **Chat** | Without it, MVP chat announcements silently fail — PubSub/token drops still work |
+| **Asset Hosting paths** (per version: Version → Asset Hosting) | Panel Viewer Path `panel.html`, Config Path `config.html`, Live Config Path `live_config.html` | A folder prefix such as `twitch-extension/panel.html` or a leading `/` — Twitch's CDN then returns 404 for the Extension iframe |
+| **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
+| **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
 
 ### Step 1 — Register the extension
 
@@ -80,13 +83,15 @@ TWITCH_DROP_MAX=20
 
 ### Step 4 — Package and upload
 
-The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging:
+The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
 
 ```bash
-bash twitch-extension/package.sh
+bash twitch-extension/package.sh 1.1.6
 ```
 
-Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, or release for public use after Twitch review.
+The script refuses to run without a version, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. On success it prints the Asset Hosting paths and URL Fetching allowlist entry to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
+
+Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, move it to **Hosted Test** and verify all three views before submitting for review. See [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md).
 
 ### Step 5 — Set the EBS URL (one-time global, operator only)
 
@@ -227,8 +232,8 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 |---|---|
 | `twitch_link_codes` | Temporary 6-char codes with 10-min TTL |
 | `twitch_presence` | Viewer heartbeat timestamps for pool eligibility |
-| `twitch_mvp` | One MVP selection per match, broadcaster-updatable |
-| `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. |
+| `twitch_mvp` | One MVP selection per match, broadcaster-updatable. Unique on `match_id`; both MVP paths write through `twitch.upsert_mvp()` (`INSERT ... ON CONFLICT DO UPDATE`), so simultaneous confirmations update one row |
+| `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. Unique on `(channel_id, series_id)`: `_claim_drop()` inserts this row (`ON CONFLICT DO NOTHING`) before any tokens are granted, and only the request whose insert lands pays out, so two simultaneous confirmations cannot drop twice. Migration `026_twitch_mvp_drop_unique` removed pre-existing duplicates and added both unique indexes. |
 
 `users.twitch_user_id` stores the Twitch opaque user ID once linked.
 

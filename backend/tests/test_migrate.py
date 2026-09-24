@@ -237,10 +237,17 @@ class TestMigrationsAddColumns:
 
 class TestCardModifiersConstraintMigration:
     def test_old_stat_keys_removed_after_migration(self, legacy_engine):
+        # 'xp' is a made-up key that has never been a valid stat_key (unlike
+        # 'assists', which migration 025 makes valid going forward — see
+        # markdown/plans/plan-issue-130-assists-scoring-fix.md). Using a
+        # genuinely-and-permanently-invalid key here keeps this test's actual
+        # purpose intact: confirming migration 008 strips stat_key values
+        # that were never valid, without conflating it with assists' new
+        # validity.
         with legacy_engine.connect() as conn:
             conn.execute(text(
                 "INSERT INTO card_modifiers (card_id, stat_key, bonus_pct)"
-                " VALUES (1, 'assists', 10.0), (1, 'kills', 10.0)"
+                " VALUES (1, 'xp', 10.0), (1, 'kills', 10.0)"
             ))
             conn.commit()
 
@@ -251,7 +258,7 @@ class TestCardModifiersConstraintMigration:
                 text("SELECT stat_key FROM card_modifiers")
             ).fetchall()
         stat_keys = {r[0] for r in rows}
-        assert "assists" not in stat_keys
+        assert "xp" not in stat_keys
         assert "kills" in stat_keys  # valid stat should survive
 
     def test_check_constraint_applied_after_migration(self, legacy_engine):

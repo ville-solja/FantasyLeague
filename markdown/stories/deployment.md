@@ -143,3 +143,87 @@ containers accurately report health to whatever monitoring or orchestration the 
   broken duplicate definition
 - `markdown/features/reference/commands.md`'s Docker section documents how an operator checks
   health status (`docker compose ps`, `docker inspect --format='{{json .State.Health}}'`)
+
+---
+
+## DB Backup Leak Prevention
+
+### Prevent Future DB Backup Leaks
+**User story**
+As a developer, I want backup files created under `data/` to be permanently git-ignored, so
+that a routine `git add`/`git add -A` can never re-commit a database snapshot again.
+
+**Acceptance criteria**
+- `.gitignore` excludes the `data/*.backup-*` pattern in addition to the existing
+  `data/fantasy.db`, `data/fantasy.db-shm`, `data/fantasy.db-wal` entries
+- The two currently-tracked backup files are removed from the repository in the same change
+- A regression test confirms a synthetic filename matching the backup naming convention
+  (`data/fantasy.db.backup-YYYYMMDD-HHmmss`) is ignored by git
+
+### Audit for Other Leakable DB Artifact Patterns
+**User story**
+As a developer, I want a broader check of `.gitignore` for other database-artifact patterns
+that could leak the same way under a different filename, so this class of incident doesn't
+recur via a pattern nobody thought to exclude.
+
+**Acceptance criteria**
+- `.gitignore` is reviewed against every place the app or its scripts can write a database
+  file or copy (`backend/database.py::_default_database_url`, `backup_sqlite_db`,
+  `scripts/backup-db.sh`'s default argument) and covers each of them
+- `git ls-files` contains no `*.db`, `*.db-shm`, `*.db-wal`, or `*.backup-*` entries after the
+  fix is applied
+- `markdown/features/reference/db-sustainability.md` gets a short note warning that
+  `scripts/backup-db.sh /custom/path` (a non-default argument) writes outside the
+  gitignored `data/` directory and is not covered by this fix
+
+---
+
+## HTTPS Enforcement
+
+### Fail Loudly at Startup if HTTPS Isn't Enforced
+**User story**
+As an operator, I want the app to refuse to start in a production-like configuration if
+`HTTPS_ONLY` isn't set, so that a misconfigured deployment can't silently serve session cookies
+over unencrypted connections.
+
+**Acceptance criteria**
+- On startup, if `HTTPS_ONLY` is not `"true"` and neither `DEBUG=true` nor
+  `TWITCH_LOCAL_DEV=true` is set, the app raises a clear `RuntimeError` and refuses to start —
+  mirroring the existing `SECRET_KEY` check's exact structure and message style
+- Setting `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the same existing local-dev bypasses) skips
+  this check, so local development is unaffected
+- The error message states what to do: set `HTTPS_ONLY=true` once behind a TLS-terminating
+  reverse proxy, or use one of the local-dev bypasses
+- The existing test suite (which imports `main.py` with `DEBUG=true` set) is unaffected by this
+  new check
+
+---
+
+### Prominent Deployment Documentation
+**User story**
+As an operator setting up a new deployment, I want the README to clearly state upfront that
+production requires a TLS-terminating reverse proxy and `HTTPS_ONLY=true`, so I don't discover
+this requirement only when the app refuses to start.
+
+**Acceptance criteria**
+- `README.md`'s Deployment section explicitly states the TLS/reverse-proxy requirement for
+  production, not just a passing mention
+- `.env.example`'s `HTTPS_ONLY` comment is strengthened to match `SECRET_KEY`'s existing
+  "must be set in production" framing, rather than reading as one optional setting among many
+- A new reference doc explains the vulnerability this closes and the startup-check mechanics
+  for anyone debugging why their deployment won't start
+
+### Rotate Exposed Admin Credentials and Decide on History Purge *(not yet implemented)*
+**User story**
+As an operator, I want the exposed admin account's password rotated and a recorded decision
+on whether to purge the two blobs from git history entirely, so the specific credential
+exposure from this incident is actually remediated, not just prevented from recurring.
+
+**Acceptance criteria**
+- The exposed admin account's password has been changed in the live deployment (manual —
+  not verifiable by an automated test)
+- A decision (purge history now / defer / decline, and why) is recorded in
+  `markdown/features/reference/db-backup-leak-fix.md`
+- If a history purge is chosen, it is executed as its own deliberate, coordinated step
+  (`git filter-repo` + force-push) — never folded into this or any other routine PR, since it
+  rewrites history other clones/forks depend on
