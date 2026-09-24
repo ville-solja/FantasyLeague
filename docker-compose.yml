@@ -3,7 +3,9 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY:-local/dota-kanaliiga-fantasy}:latest
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Set APP_BIND_ADDRESS=127.0.0.1 in .env when the reverse proxy runs on this
+      # host, so port 8000 is not reachable from outside it at all.
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:8000:8000"
     volumes:
       - ./data:/app/data
       - ./twitch-extension:/app/twitch-extension

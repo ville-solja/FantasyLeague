@@ -216,6 +216,8 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
 | `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_db_backup` | Admin created a database backup from the admin panel (`detail` has the filename) |
+| `admin_db_backup_download` | Admin downloaded a database backup (`detail` has the filename) |
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_clock_cleared` | Operator cleared the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_accounts_seeded` | Operator seeded disposable demo accounts (`DEMO_MODE` only) |
@@ -265,5 +267,6 @@ These features have dedicated reference documents:
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/seen` | `core/weekly-summary.md` |

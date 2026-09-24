@@ -998,6 +998,27 @@
           <div class="status" id="seasonLifecycleStatus"></div>
         </div>
 
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h2 style="margin:0;">Database Backups</h2>
+            <button class="secondary" onclick="loadBackups()">Refresh</button>
+          </div>
+          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">
+            Backups are stored on the server and deleted automatically after <span id="dbBackupsRetention">N</span> days.
+            Download a copy before deploying if you need to keep it.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
+            <button id="createBackupBtn" onclick="createBackup()">Create backup now</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
+              <tbody id="dbBackupsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+            </table>
+          </div>
+          <div class="status" id="dbBackupsStatus"></div>
+        </div>
+
         <!-- Demo Mode panel is injected here by app-admin.js (renderDemoModePanel())
              only when GET /config reports demo_mode: true — entirely absent from
              the DOM otherwise, not merely hidden via CSS. -->
@@ -1087,6 +1108,7 @@
 <script src="/app-admin-leagues.js"></script>
 <script src="/app-admin-matches.js"></script>
 <script src="/app-admin-season.js"></script>
+<script src="/app-admin-backups.js"></script>
 <script src="/app-admin-demo.js"></script>
 <script src="/app-admin.js"></script>
 <script src="/app-profile.js"></script>

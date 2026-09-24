@@ -241,14 +241,16 @@ class TestPreserveExistingTestCoverageThroughSplit:
         the death-pool-scales-with-games scoring fix's 9 new tests did after that, and
         plan-opendota-parse-retry's 21 new tests did after that, and
         the parse re-request cooldown's 1 new test did after that, and
-        plan-twitch-review-resubmission's 21 new tests did after that)."""
+        plan-twitch-review-resubmission's 21 new tests did after that, and
+        plan-issue-132-admin-db-backup's 21 new tests did after that, and
+        the proxy-trust and Twitch uniqueness fixes' 15 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "823 passed" in output, output[-3000:]
+        assert "859 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
-from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups
+from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups, backup_retention_days
 from rate_limit import limiter
 from models import League, Week, Weight
 from migrate import run_migrations
@@ -39,6 +39,7 @@ from routers import admin_tags as admin_tags_router
 from routers import admin_players as admin_players_router
 from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
+from routers import admin_backups as admin_backups_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
 from routers import weekly_summary as weekly_summary_router
@@ -61,7 +62,7 @@ _INGEST_PARSE_RETRY_HOURS  = int(os.getenv("INGEST_PARSE_RETRY_HOURS",   "48"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
 _DB_BACKUP_INTERVAL_HOURS  = int(os.getenv("DB_BACKUP_INTERVAL_HOURS",   "24"))
-_DB_BACKUP_RETENTION_DAYS  = int(os.getenv("DB_BACKUP_RETENTION_DAYS",   "14"))
+_DB_BACKUP_RETENTION_DAYS  = backup_retention_days()
 
 
 def _week_maintenance_loop():
@@ -336,6 +337,7 @@ app.include_router(admin_tags_router.router)
 app.include_router(admin_players_router.router)
 app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
+app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
 app.include_router(weekly_summary_router.router)

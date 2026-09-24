@@ -9,6 +9,28 @@ Format:
 
 ---
 
+### 2026-09-24 — security-reviewer — endpoints
+**Problem:** Password fields allow `max_length=128` characters, but bcrypt 4.x (`bcrypt>=4.2,<5.0`, 4.3.0 installed) silently uses only the first 72 **bytes** — `checkpw(b'a'*72 + b'ZZZZZZZZ', hashpw(b'a'*80, ...))` returns `True`. bcrypt 5.x instead raises `ValueError` for >72-byte input, so lifting the `<5.0` pin would turn long passwords into 500s.
+**Solution:** When touching password handling, cap password fields at 72 bytes (validate the UTF-8 encoded length, not character count), or pre-hash before bcrypt. Check this before bumping bcrypt past 5.0.
+
+---
+
+### 2026-09-24 — developer — testing
+**Problem:** Tests that open `TestClient(main.app)` as a context manager (e.g.
+`test_issue_124_roster_mutation_rate_limiting.py`'s `client` fixture) run the lifespan, which
+starts `_backup_loop` — and those fixtures patch `database.engine`/`SessionLocal` but not
+`database.DATABASE_URL`, so the loop calls `backup_sqlite_db()` against the real
+`data/fantasy.db`. On a host where `data/` is root-owned (Docker bind mount), this showed up as an
+intermittent `sqlite3.OperationalError: unable to open database file` and a
+`test_issue_125_concurrent_activate_volume_does_not_trip_default_rate_limit` failure (4 == 5)
+roughly 1 run in 5, which also trips the suite-size tripwire in `test_issue_85_split_admin_router.py`.
+**Solution:** Re-run before blaming the current change. Any new test that touches backups must
+`monkeypatch.setattr(database, "DATABASE_URL", f"sqlite:///{tmp_path / 'fantasy.db'}")` —
+the backup helpers in `database.py` read that module global at call time, so patching it alone
+redirects `backup_sqlite_db()`, `list_sqlite_backups()` and `cleanup_old_backups()`.
+
+---
+
 ### 2026-09-18 — developer — testing
 **Problem:** `plan-opendota-parse-retry`'s endpoint stubs assumed the background thread spawned
 by `POST /ingest/retry-unparsed` could write its audit row through a monkeypatched

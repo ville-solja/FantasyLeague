@@ -256,6 +256,9 @@ class TwitchPresence(Base):
 
 class TwitchMVP(Base):
     __tablename__ = "twitch_mvp"
+    # One MVP per match. Concurrent confirmations upsert on this key instead of
+    # inserting a second row (see twitch.upsert_mvp).
+    __table_args__ = (UniqueConstraint("match_id", name="uq_twitch_mvp_match"),)
 
     id          = Column(Integer, primary_key=True, autoincrement=True)
     match_id    = Column(Integer, ForeignKey("matches.match_id"))
@@ -266,6 +269,9 @@ class TwitchMVP(Base):
 
 class TwitchTokenDrop(Base):
     __tablename__ = "twitch_token_drops"
+    # One drop per channel and match. The drop is claimed by inserting this row
+    # first, so a concurrent confirmation cannot pay out twice (see twitch._claim_drop).
+    __table_args__ = (UniqueConstraint("channel_id", "series_id", name="uq_twitch_token_drop_channel_series"),)
 
     id         = Column(Integer, primary_key=True, autoincrement=True)
     channel_id = Column(String)

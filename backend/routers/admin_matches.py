@@ -1,4 +1,3 @@
-import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -7,7 +6,7 @@ from database import get_db
 from deps import require_admin, _audit
 from models import Match, Player, PlayerMatchStats, Team, TwitchMVP, Weight
 from schedule import bust_cache
-from twitch import _apply_mvp_bonus
+from twitch import _apply_mvp_bonus, upsert_mvp
 
 router = APIRouter()
 
@@ -94,19 +93,7 @@ def admin_set_mvp(
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    existing = db.query(TwitchMVP).filter(TwitchMVP.match_id == match_id).first()
-    old_player_id = existing.player_id if existing else None
-    if existing:
-        existing.player_id = body.player_id
-        existing.channel_id = "admin"
-        existing.selected_at = int(time.time())
-    else:
-        db.add(TwitchMVP(
-            match_id=match_id,
-            player_id=body.player_id,
-            channel_id="admin",
-            selected_at=int(time.time()),
-        ))
+    old_player_id = upsert_mvp(db, match_id, body.player_id, "admin")
 
     weights = {w.key: w.value for w in db.query(Weight).all()}
     if old_player_id and old_player_id != body.player_id:

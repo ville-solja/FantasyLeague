@@ -11,6 +11,7 @@
 //   app-admin-leagues.js       League Monitoring
 //   app-admin-matches.js       Matches tab + MVP selection modal
 //   app-admin-season.js        Season Lifecycle (End Season / Season Reset)
+//   app-admin-backups.js       Database Backups (create / list / download)
 //   app-admin-demo.js          Demo Mode panel (DEMO_MODE-gated)
 // This file only owns the tab bar itself, since every other file needs it
 // loaded first for initWeekDateInputs()/switchAdminTab() to exist.
@@ -47,4 +48,5 @@ function switchAdminTab(tabName) {
 
   // Lazily load data for the matches tab on first activation
   if (tabName === 'matches') loadAdminMatches();
+  if (tabName === 'settings') loadBackups();
 }

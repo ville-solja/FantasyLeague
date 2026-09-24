@@ -21,6 +21,8 @@ import jwt as pyjwt
 import requests as _requests
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.dialects.postgresql import insert as _pg_insert
+from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 from sqlalchemy.orm import Session
 
 import clock
@@ -389,6 +391,48 @@ def current_matches(
 
 
 # ---------------------------------------------------------------------------
+# Race-safe MVP and token-drop writes
+# ---------------------------------------------------------------------------
+
+def _dialect_insert(db: Session):
+    """INSERT construct with ON CONFLICT support for the session's database."""
+    return _pg_insert if db.get_bind().dialect.name == "postgresql" else _sqlite_insert
+
+
+def upsert_mvp(db: Session, match_id: int, player_id: int, channel_id: str) -> int | None:
+    """Set the MVP for a match and return the previous MVP's player_id (or None).
+
+    A single INSERT ... ON CONFLICT(match_id) DO UPDATE, so two confirmations
+    arriving together update one row instead of creating two
+    (uq_twitch_mvp_match)."""
+    previous = db.query(TwitchMVP.player_id).filter(TwitchMVP.match_id == match_id).first()
+    now = int(time.time())
+    insert = _dialect_insert(db)
+    stmt = insert(TwitchMVP).values(
+        match_id=match_id, player_id=player_id, channel_id=channel_id, selected_at=now,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[TwitchMVP.match_id],
+        set_={"player_id": player_id, "channel_id": channel_id, "selected_at": now},
+    )
+    db.execute(stmt)
+    return previous[0] if previous else None
+
+
+def _claim_drop(db: Session, channel_id: str, drop_key: str) -> bool:
+    """Atomically claim the one token drop allowed per channel and match.
+
+    Returns True only for the request whose row was inserted. A concurrent or
+    repeated confirmation hits uq_twitch_token_drop_channel_series and gets
+    False, so it must not grant tokens."""
+    insert = _dialect_insert(db)
+    stmt = insert(TwitchTokenDrop).values(
+        channel_id=channel_id, series_id=drop_key, dropped_at=int(time.time()), count=0,
+    ).on_conflict_do_nothing(index_elements=[TwitchTokenDrop.channel_id, TwitchTokenDrop.series_id])
+    return db.execute(stmt).rowcount == 1
+
+
+# ---------------------------------------------------------------------------
 # MVP bonus helpers
 # ---------------------------------------------------------------------------
 
@@ -440,6 +484,9 @@ def _execute_token_drop(
     if not already_dropped:
         pool = _active_pool(db, channel_id)
         pool_size = len(pool)
+        if pool and not _claim_drop(db, channel_id, drop_key):
+            # Another confirmation claimed this drop between the check above and now.
+            return winner_names, pool_size, True
         if pool:
             count = min(_TWITCH_DROP_MAX, len(pool))
             winner_ids = random.sample(pool, count)
@@ -452,12 +499,8 @@ def _execute_token_drop(
                 if user:
                     user.tokens = (user.tokens or 0) + 1
                     winner_names.append(user.username)
-            db.add(TwitchTokenDrop(
-                channel_id=channel_id,
-                series_id=drop_key,
-                dropped_at=int(time.time()),
-                count=len(winner_names),
-            ))
+            db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).update(
+                {TwitchTokenDrop.count: len(winner_names)}, synchronize_session=False)
             db.add(AuditLog(
                 timestamp=int(time.time()),
                 actor_id=None,
@@ -494,20 +537,8 @@ def set_mvp(
 
     weights = {w.key: w.value for w in db.query(Weight).all()}
 
-    # Upsert MVP record — save previous player_id before overwriting
-    existing = db.query(TwitchMVP).filter_by(match_id=body.match_id).first()
-    old_player_id = existing.player_id if existing else None
-    if existing:
-        existing.player_id = body.player_id
-        existing.channel_id = channel_id
-        existing.selected_at = int(time.time())
-    else:
-        db.add(TwitchMVP(
-            match_id=body.match_id,
-            player_id=body.player_id,
-            channel_id=channel_id,
-            selected_at=int(time.time()),
-        ))
+    old_player_id = upsert_mvp(db, body.match_id, body.player_id, channel_id)
+    existing = old_player_id is not None
 
     # Clear bonus from previous MVP if different player
     if old_player_id and old_player_id != body.player_id:

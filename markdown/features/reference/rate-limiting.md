@@ -15,7 +15,10 @@ single uvicorn process with no `--workers` flag, so no shared-state backend (e.g
 needed. The shared `Limiter` instance lives in `backend/rate_limit.py` (not directly in
 `main.py`) so both `main.py` and `backend/routers/auth.py` can import it without a circular
 import. Limits are enforced per client IP address (`slowapi.util.get_remote_address`, i.e.
-`request.client.host` — it does not honor `X-Forwarded-For`) via a global middleware baseline
+`request.client.host`). slowapi itself never reads `X-Forwarded-For`, but uvicorn's
+`--proxy-headers` middleware rewrites `request.client.host` from that header before the limiter
+sees it, for peers listed in `FORWARDED_ALLOW_IPS` (see "Trusted proxies" below). Limits apply
+via a global middleware baseline
 (`SlowAPIMiddleware`, applied to every route with no per-route decorator) plus per-route
 `@limiter.limit(...)` decorators on the three sensitive auth endpoints, which override the
 global baseline for those routes rather than stacking on top of it.
@@ -23,6 +26,23 @@ global baseline for those routes rather than stacking on top of it.
 Exceeding a limit returns HTTP 429 with `{"detail": "Rate limit exceeded: ..."}`, via a custom
 `RateLimitExceeded` exception handler registered in `main.py` — matching the app's existing
 error response shape rather than slowapi's default `{"error": "..."}` shape.
+
+## Trusted proxies
+
+The per-IP limits are only as good as the client address uvicorn reports. The image sets
+`FORWARDED_ALLOW_IPS` to loopback and the private ranges (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`, `fc00::/7`), so forwarded headers are honoured only from a reverse proxy on the
+same host (reaching the published port through Docker's bridge gateway), a proxy container, or a
+private load balancer. A client connecting from a public address keeps its own address whatever
+`X-Forwarded-For` it sends, and behind a proxy the rightmost untrusted entry wins, so a
+client-supplied prefix is ignored.
+
+Before 2026-09-24 the image ran uvicorn with `--forwarded-allow-ips "*"` while
+`docker-compose.yml` published port 8000 on all interfaces, so anyone who could reach the port
+could pick a fresh IP per request and bypass every per-IP limit here. Never set
+`FORWARDED_ALLOW_IPS=*`. Set `APP_BIND_ADDRESS=127.0.0.1` in `.env` when the proxy runs on the same
+host, so the port is not reachable from outside at all. Covered by
+`backend/tests/test_proxy_trust_and_twitch_uniqueness.py`.
 
 ## Endpoints affected
 

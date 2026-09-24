@@ -21,6 +21,7 @@ existing per-router pattern used for `players`, `auth`, `profile`, `leaderboard`
 | `backend/routers/admin_players.py` | Player pool management (add/bulk-add/remove, with token refunds) |
 | `backend/routers/admin_leagues.py` | Monitored league list/monitor/unmonitor/purge |
 | `backend/routers/admin_season.py` | Season lifecycle (End Season archive, Season Reset), audit log |
+| `backend/routers/admin_backups.py` | Database backups: create on demand, list, download (Settings tab panel, `frontend/app-admin-backups.js`) |
 | `backend/routers/admin_matches.py` | Admin match table, MVP selection |
 | `backend/routers/admin_demo.py` | Demo Mode clock override and disposable account seeding |
 

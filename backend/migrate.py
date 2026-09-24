@@ -364,6 +364,30 @@ def _m024_code_redemption_unique(conn):
     logger.info("Migration: code_redemptions — deduped and added unique(code_id, user_id) index")
 
 
+def _m026_twitch_mvp_drop_unique(conn):
+    # Dedupe rows created by concurrent MVP confirmations before this constraint
+    # existed. twitch_mvp keeps the newest row per match (the latest selection);
+    # twitch_token_drops keeps the earliest drop per channel and match.
+    mvp_deleted = conn.execute(text("""
+        DELETE FROM twitch_mvp
+        WHERE id NOT IN (SELECT MAX(id) FROM twitch_mvp GROUP BY match_id)
+    """)).rowcount
+    drop_deleted = conn.execute(text("""
+        DELETE FROM twitch_token_drops
+        WHERE id NOT IN (SELECT MIN(id) FROM twitch_token_drops GROUP BY channel_id, series_id)
+    """)).rowcount
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_twitch_mvp_match_id ON twitch_mvp(match_id)"
+    ))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_twitch_token_drops_channel_series "
+        "ON twitch_token_drops(channel_id, series_id)"
+    ))
+    conn.commit()
+    logger.info("Migration: twitch_mvp/twitch_token_drops — removed %d/%d duplicate rows, added unique indexes",
+                mvp_deleted, drop_deleted)
+
+
 def _m025_card_modifiers_assists(conn):
     """Widen card_modifiers's stat_key CHECK constraint to allow 'assists',
     now that assists flows through the standard weight x value scoring loop
@@ -458,6 +482,7 @@ MIGRATIONS = [
     ("023_matches_vod_url",          _m023_matches_vod_url),
     ("024_code_redemption_unique",   _m024_code_redemption_unique),
     ("025_card_modifiers_assists",   _m025_card_modifiers_assists),
+    ("026_twitch_mvp_drop_unique",   _m026_twitch_mvp_drop_unique),
 ]
 
 

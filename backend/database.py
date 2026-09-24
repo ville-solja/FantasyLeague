@@ -64,19 +64,46 @@ def spend_tokens(db, user_id: int, amount: int) -> bool:
     return result.rowcount > 0
 
 
+DEFAULT_BACKUP_RETENTION_DAYS = 14
+
+
+def backup_retention_days() -> int:
+    """DB_BACKUP_RETENTION_DAYS, shared by the background pruning loop in main.py
+    and the admin backups panel so the default can't drift between them."""
+    return int(os.getenv("DB_BACKUP_RETENTION_DAYS", str(DEFAULT_BACKUP_RETENTION_DAYS)))
+
+
+def _sqlite_db_path() -> Path | None:
+    """Path of the live SQLite DB file, or None for a non-SQLite DATABASE_URL."""
+    prefix = "sqlite:///"
+    if not DATABASE_URL.startswith(prefix):
+        return None
+    return Path(DATABASE_URL[len(prefix):])
+
+
+def list_sqlite_backups() -> list[Path]:
+    """Backup files (from backup_sqlite_db()) next to the live SQLite DB, newest
+    first. Empty for non-SQLite URLs or if the DB directory can't be found."""
+    db_path = _sqlite_db_path()
+    if db_path is None or not db_path.parent.is_dir():
+        return []
+    files = []
+    for f in db_path.parent.glob(f"{db_path.name}.backup-*"):
+        try:
+            if f.is_file():
+                files.append((f.stat().st_mtime, f))
+        except OSError:
+            pass
+    return [f for _, f in sorted(files, key=lambda t: t[0], reverse=True)]
+
+
 def cleanup_old_backups(retention_days: int) -> int:
     """Delete local SQLite backup files (from backup_sqlite_db()) older than
     retention_days. Returns the number of files deleted. No-op for non-SQLite
     DATABASE_URLs or if the DB directory can't be found."""
-    prefix = "sqlite:///"
-    if not DATABASE_URL.startswith(prefix):
-        return 0
-    db_path = Path(DATABASE_URL[len(prefix):])
-    if not db_path.parent.is_dir():
-        return 0
     cutoff = time.time() - retention_days * 86400
     deleted = 0
-    for f in db_path.parent.glob(f"{db_path.name}.backup-*"):
+    for f in list_sqlite_backups():
         try:
             if f.stat().st_mtime < cutoff:
                 f.unlink()
@@ -95,10 +122,10 @@ def backup_sqlite_db() -> str | None:
     Returns the backup file path, or None if the database isn't a local SQLite
     file (e.g. a future non-SQLite DATABASE_URL).
     """
-    prefix = "sqlite:///"
-    if not DATABASE_URL.startswith(prefix):
+    sqlite_path = _sqlite_db_path()
+    if sqlite_path is None:
         return None
-    db_path = DATABASE_URL[len(prefix):]
+    db_path = str(sqlite_path)
     if not os.path.isfile(db_path):
         return None
     backup_path = f"{db_path}.backup-{time.strftime('%Y%m%d-%H%M%S')}"
