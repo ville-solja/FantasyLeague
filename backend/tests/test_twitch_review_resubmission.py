@@ -195,8 +195,10 @@ def test_package_sh_success_prints_fetch_allowlist_entry(tmp_path):
     ext = _ext_copy(tmp_path)
     result = _run_package(ext, "9.9.9")
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Allowlist for URL Fetching Domains" in result.stdout
-    assert "https://kana-cards.com" in result.stdout
+    lines = [line.strip() for line in result.stdout.splitlines()]
+    heading = next(i for i, line in enumerate(lines)
+                   if line.endswith("Allowlist for URL Fetching Domains:"))
+    assert lines[heading + 1] == "https://kana-cards.com"
 
 
 def test_package_sh_no_version_argument_exits_nonzero(tmp_path):
