@@ -95,3 +95,4 @@ Implementation details, integrations, and operator tooling.
 | [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |
+| [Unparseable Match Handling](reference/unparseable-match-handling.md) | Parse status per match, partial-stat markers for players, admin retry-parse, auto-flagging of stuck matches, and admin exclusion of unparseable matches from scoring |

@@ -131,8 +131,11 @@ asks OpenDota to parse the rest. Runs in a background thread and returns
 `{"status": "started", "max_age_hours": ...}` immediately; 409 if any ingest is already
 running (same `ingest.INGEST_LOCK`). The optional `max_age_hours` (1–8760) widens the default
 `INGEST_PARSE_RETRY_HOURS` window for a one-off backfill. The `parse_retry_triggered` audit row
-is written at trigger time; the run's counts go to the server log. See
-`reference/opendota-parse-retry.md`.
+is written at trigger time; the run's counts go to the server log. Matches marked `unparseable`
+are skipped. After the first poll following the `027_match_parse_status` deploy, every historical
+signature-zero match older than the window is flagged `unparseable`, so a wide manual backfill
+no longer re-checks those matches. Clear the flag, or use the Matches tab's Retry parse, to retry
+one. See `reference/opendota-parse-retry.md` and `reference/unparseable-match-handling.md`.
 
 ---
 
@@ -212,6 +215,9 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_tag_revoke` | Admin revoked a tag from a user |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
 | `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
+| `admin_match_retry_parse` | Admin retried a match's parse via the Matches tab (`detail` has the fetch result and outcome) |
+| `admin_match_scoring` | Admin changed a match's unparseable / excluded-from-scoring flags (`detail` has old and new values) |
+| `match_marked_unparseable` | Background parse-retry pass auto-marked a match still unparsed past the retry window (no actor) |
 | `twitch_mvp_set` | Broadcaster set match MVP via the Twitch extension |
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
@@ -266,6 +272,7 @@ These features have dedicated reference documents:
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
+| Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |

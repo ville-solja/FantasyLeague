@@ -1,40 +1,145 @@
+let _adminMatchesRows = [];
+
+const _PARSE_STATUS_LABELS = { parsed: 'Parsed', unparsed: 'Unparsed', unparseable: 'Unparseable' };
+
 async function loadAdminMatches() {
   if (!activeIsAdmin) return;
   try {
     const res = await fetch(`${API}/admin/matches`);
     const rows = await res.json();
     if (!res.ok) return setStatus('adminMatchesStatus', rows.detail, false);
-
-    const tbody = document.getElementById('adminMatchesBody');
-    if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='8' style='color:#444'>No matches</td></tr>";
-      setStatus('adminMatchesStatus', '');
-      return;
-    }
-    tbody.innerHTML = '';
-    rows.forEach(m => {
-      const tr = document.createElement('tr');
-      const start = m.start_time ? new Date(m.start_time * 1000).toLocaleString() : '—';
-      tr.innerHTML = `
-        <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">${m.match_id} ↗</a></td>
-        <td>${m.league_id || '—'}</td>
-        <td style="font-size:0.85rem;">${teamLink(m.radiant_team_id, m.team1)}</td>
-        <td style="font-size:0.85rem;">${teamLink(m.dire_team_id, m.team2)}</td>
-        <td style="font-size:0.8rem;">${start}</td>
-        <td class="mvp-cell">${m.mvp_player_name || '—'}</td>
-        <td></td>
-        <td></td>`;
-      const setMvpBtn = document.createElement('button');
-      setMvpBtn.className = 'secondary';
-      setMvpBtn.style.cssText = 'padding:2px 7px;';
-      setMvpBtn.textContent = 'Set MVP';
-      setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
-      tr.cells[6].appendChild(_buildVodCell(m.match_id, m.vod_url));
-      tr.cells[7].appendChild(setMvpBtn);
-      tbody.appendChild(tr);
-    });
+    _adminMatchesRows = rows;
+    renderAdminMatches();
     setStatus('adminMatchesStatus', '');
   } catch (e) {
+    setStatus('adminMatchesStatus', e.message, false);
+  }
+}
+
+function renderAdminMatches() {
+  const tbody = document.getElementById('adminMatchesBody');
+  const filterEl = document.getElementById('adminMatchesUnparseableOnly');
+  const unparseableOnly = !!(filterEl && filterEl.checked);
+  const rows = unparseableOnly
+    ? _adminMatchesRows.filter(m => m.parse_status === 'unparseable')
+    : _adminMatchesRows;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan='10' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = '';
+  rows.forEach(m => {
+    const tr = document.createElement('tr');
+    const start = m.start_time ? new Date(m.start_time * 1000).toLocaleString() : '—';
+    tr.innerHTML = `
+      <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">${m.match_id} ↗</a></td>
+      <td>${m.league_id || '—'}</td>
+      <td style="font-size:0.85rem;">${teamLink(m.radiant_team_id, m.team1)}</td>
+      <td style="font-size:0.85rem;">${teamLink(m.dire_team_id, m.team2)}</td>
+      <td style="font-size:0.8rem;">${start}</td>
+      <td></td>
+      <td></td>
+      <td class="mvp-cell">${_escHtml(m.mvp_player_name) || '—'}</td>
+      <td></td>
+      <td></td>`;
+    const setMvpBtn = document.createElement('button');
+    setMvpBtn.className = 'secondary';
+    setMvpBtn.style.cssText = 'padding:2px 7px;';
+    setMvpBtn.textContent = 'Set MVP';
+    setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
+    tr.cells[5].appendChild(_buildParseCell(m));
+    tr.cells[6].appendChild(_buildScoringCell(m));
+    tr.cells[8].appendChild(_buildVodCell(m.match_id, m.vod_url));
+    tr.cells[9].appendChild(setMvpBtn);
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Parse status + scoring flags
+// ---------------------------------------------------------------------------
+
+function _buildParseCell(m) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:4px;align-items:center;font-size:0.8rem;';
+  const label = document.createElement('span');
+  label.textContent = _PARSE_STATUS_LABELS[m.parse_status] || '—';
+  wrap.appendChild(label);
+  if (m.parse_status === 'unparsed') {
+    const btn = document.createElement('button');
+    btn.className = 'secondary';
+    btn.style.cssText = 'padding:2px 7px;';
+    btn.textContent = 'Retry parse';
+    btn.addEventListener('click', () => retryMatchParse(m.match_id, btn));
+    wrap.appendChild(btn);
+  }
+  return wrap;
+}
+
+function _buildScoringCell(m) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;font-size:0.8rem;';
+  const makeToggle = (text, checked, field) => {
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'display:flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!checked;
+    cb.addEventListener('change', () => saveMatchScoring(m.match_id, { [field]: cb.checked }, cb));
+    lbl.appendChild(cb);
+    lbl.appendChild(document.createTextNode(text));
+    return lbl;
+  };
+  wrap.appendChild(makeToggle('Unparseable', m.parse_status === 'unparseable', 'unparseable'));
+  wrap.appendChild(makeToggle('Not scored', m.excluded_from_scoring, 'excluded_from_scoring'));
+  return wrap;
+}
+
+const _RETRY_PARSE_MESSAGES = {
+  refreshed: 'now parsed — stats and points replaced',
+  requested: 'still unparsed — parse requested from OpenDota',
+  cooldown: 'still unparsed — a parse was requested recently, try again later',
+  request_failed: 'still unparsed — OpenDota rejected the parse request',
+};
+
+async function retryMatchParse(matchId, btn) {
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API}/admin/matches/${matchId}/retry-parse`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      btn.disabled = false;
+      setStatus('adminMatchesStatus', data.detail, false);
+      return;
+    }
+    await loadAdminMatches();
+    setStatus('adminMatchesStatus',
+      `Match ${matchId}: ${_RETRY_PARSE_MESSAGES[data.outcome] || data.outcome}`, data.outcome === 'refreshed');
+  } catch (e) {
+    btn.disabled = false;
+    setStatus('adminMatchesStatus', e.message, false);
+  }
+}
+
+async function saveMatchScoring(matchId, body, checkbox) {
+  checkbox.disabled = true;
+  try {
+    const res = await fetch(`${API}/admin/matches/${matchId}/scoring`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      checkbox.checked = !checkbox.checked;
+      checkbox.disabled = false;
+      setStatus('adminMatchesStatus', data.detail, false);
+      return;
+    }
+    await loadAdminMatches();
+  } catch (e) {
+    checkbox.checked = !checkbox.checked;
+    checkbox.disabled = false;
     setStatus('adminMatchesStatus', e.message, false);
   }
 }

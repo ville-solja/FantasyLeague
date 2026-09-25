@@ -7,6 +7,7 @@ from card_utils import (
     _compute_card_points, _mvp_bonus_delta,
 )
 from database import get_db
+from match_scoring import scored_match_sql, scored_stat_sql
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
 from scoring import fantasy_score, stat_dict_from_row, SCORING_STATS
 
@@ -105,10 +106,11 @@ def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
 
 @router.get("/top")
 def top_performances(db=Depends(get_db)):
-    results = db.execute(text("""
+    results = db.execute(text(f"""
         SELECT p.id, p.name, p.avatar_url, s.fantasy_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
+        WHERE {scored_stat_sql()}
         ORDER BY s.fantasy_points DESC
         LIMIT 10
     """)).fetchall()
@@ -117,10 +119,11 @@ def top_performances(db=Depends(get_db)):
 
 @router.get("/leaderboard")
 def leaderboard(db=Depends(get_db)):
-    results = db.execute(text("""
+    results = db.execute(text(f"""
         SELECT p.id, p.name, p.avatar_url, COUNT(s.id) as matches, AVG(s.fantasy_points) as avg_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
+        WHERE {scored_stat_sql()}
         GROUP BY p.id, p.name, p.avatar_url
         ORDER BY avg_points DESC
     """)).fetchall()
@@ -129,7 +132,7 @@ def leaderboard(db=Depends(get_db)):
 
 @router.get("/leaderboard/roster")
 def roster_leaderboard(db=Depends(get_db)):
-    results = db.execute(text("""
+    results = db.execute(text(f"""
         SELECT u.username,
                COALESCE(owned.total, 0) as total_cards,
                COALESCE(SUM(pts.total), 0) as roster_value
@@ -143,6 +146,7 @@ def roster_leaderboard(db=Depends(get_db)):
         LEFT JOIN (
             SELECT player_id, SUM(fantasy_points) as total
             FROM player_match_stats
+            WHERE {scored_stat_sql("match_id")}
             GROUP BY player_id
         ) pts ON pts.player_id = c.player_id
         WHERE u.is_tester = 0
@@ -159,7 +163,7 @@ def compute_season_standings(db) -> list[dict]:
     points descending. Shared by GET /leaderboard/season and the End Season
     archive action (POST /admin/season/end).
     """
-    rows = db.execute(text("""
+    rows = db.execute(text(f"""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
@@ -184,12 +188,13 @@ def compute_season_standings(db) -> list[dict]:
         LEFT JOIN players p ON p.id = c.player_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
+            AND {scored_match_sql()}
             AND (m.week_override_id = wk.id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
-    mvp_rows = db.execute(text("""
+    mvp_rows = db.execute(text(f"""
         SELECT c.id as card_id,
                s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
                s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
@@ -199,6 +204,7 @@ def compute_season_standings(db) -> list[dict]:
         JOIN cards c ON c.id = wre.card_id
         JOIN player_match_stats s ON s.player_id = c.player_id
         JOIN matches m ON m.match_id = s.match_id
+            AND {scored_match_sql()}
             AND (m.week_override_id = wk.id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
         WHERE s.is_mvp = 1
@@ -262,7 +268,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     week = db.get(Week, week_id)
     if not week:
         raise HTTPException(status_code=404, detail="Week not found")
-    rows = db.execute(text("""
+    rows = db.execute(text(f"""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
@@ -286,12 +292,13 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         LEFT JOIN players p ON p.id = c.player_id
         LEFT JOIN player_match_stats s ON s.player_id = c.player_id
         LEFT JOIN matches m ON m.match_id = s.match_id
+            AND {scored_match_sql()}
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
-    mvp_rows = db.execute(text("""
+    mvp_rows = db.execute(text(f"""
         SELECT c.id as card_id,
                s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
                s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
@@ -300,6 +307,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         JOIN cards c ON c.id = wre.card_id
         JOIN player_match_stats s ON s.player_id = c.player_id
         JOIN matches m ON m.match_id = s.match_id
+            AND {scored_match_sql()}
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         WHERE wre.week_id = :week_id AND s.is_mvp = 1

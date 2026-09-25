@@ -42,12 +42,14 @@ Returns all ingested matches ordered by start time descending. Admin-only.
     "start_time": 1700000000,
     "mvp_player_name": "SomePlayer",
     "mvp_player_id": 42,
-    "vod_url": null
+    "vod_url": null,
+    "parse_status": "parsed",
+    "excluded_from_scoring": false
   }
 ]
 ```
 
-`team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set. `vod_url` is `null` until an admin sets one via `PATCH /admin/matches/{match_id}/vod` (see below) — it is also surfaced to every user in the Weekly Report, see `core/weekly-summary.md`.
+`team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set. `vod_url` is `null` until an admin sets one via `PATCH /admin/matches/{match_id}/vod` (see below) — it is also surfaced to every user in the Weekly Report, see `core/weekly-summary.md`. `parse_status` (`parsed` / `unparsed` / `unparseable` / `null`) and `excluded_from_scoring` drive the Parse and Scoring columns, see `reference/unparseable-match-handling.md`.
 
 Note: `Match.duration` exists on the model (added by `reference/schedule-series-game-breakdown.md`,
 migration `022_matches_duration`) but this endpoint's response does not include it. `series_id`

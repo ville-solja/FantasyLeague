@@ -29,7 +29,8 @@ Returns all ingested players sorted by total fantasy points descending. Each ent
 `team_name` and `team_id` are resolved from the player's most recent ingested match. `mvp_count`
 is the number of that player's `player_match_stats` rows with `is_mvp = true` — the same flag
 `POST /twitch/mvp` sets (see `core/twitch-extension.md`) — and is `0`, not omitted, for players
-never named MVP.
+never named MVP. `matches` counts every match. `avg_points` and `total_points` skip matches an
+admin excluded from scoring (see `reference/unparseable-match-handling.md`).
 
 ---
 
@@ -70,6 +71,8 @@ Returns full detail for a single player, including a complete per-match history 
       "firstblood_claimed": 0,
       "stuns": 10.0,
       "is_mvp": false,
+      "parse_status": "parsed",
+      "excluded_from_scoring": false,
       "team_id": 42, "team_name": "SomeTeam",
       "opponent_team_id": 99, "opponent_team_name": "OtherTeam"
     }
@@ -80,6 +83,11 @@ Returns full detail for a single player, including a complete per-match history 
 `opponent_team_id`/`opponent_team_name` are resolved from whichever of the match's
 `radiant_team_id`/`dire_team_id` is not the player's own `team_id` for that row — both are
 `null` if the opponent team hasn't been ingested.
+
+`parse_status` is `parsed`, `unparsed`, `unparseable` or `null`. `match_history` lists every
+match, including excluded ones (`excluded_from_scoring: true`). `matches` counts every match.
+`avg_points`, `total_points` and `best_match` skip excluded matches. See
+`reference/unparseable-match-handling.md`.
 
 Returns 404 if the player has not been ingested.
 
@@ -130,5 +138,8 @@ Returns a team's details and the roster of players who have appeared in a match 
   ]
 }
 ```
+
+Each player's `matches` counts every match. `avg_points` and `total_points` skip matches an admin
+excluded from scoring.
 
 Returns 404 if the team has not been ingested.

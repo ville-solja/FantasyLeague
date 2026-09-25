@@ -6,6 +6,7 @@ import time
 from sqlalchemy import text, func
 
 from database import SessionLocal
+from match_scoring import scored_match_sql
 from models import Player, PlayerMatchStats, MatchBan, PlayerProfile
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
 
@@ -98,17 +99,18 @@ def _fetch_hero_name_map() -> dict:
 
 
 def crawl_player_facts(player_id: int, hero_name_map: dict, db) -> dict | None:
-    agg = db.execute(text("""
+    scored_pts = f"CASE WHEN {scored_match_sql()} THEN s.fantasy_points END"
+    agg = db.execute(text(f"""
         SELECT
             COUNT(DISTINCT s.match_id)               as kanaliiga_matches,
             COUNT(DISTINCT m.league_id)              as kanaliiga_seasons,
-            AVG(s.fantasy_points)                    as avg_fantasy_points,
+            AVG({scored_pts})                        as avg_fantasy_points,
             AVG(s.kills)                             as avg_kills,
             AVG(s.assists)                           as avg_assists,
             AVG(s.deaths)                            as avg_deaths,
             AVG(s.gold_per_min)                      as avg_gpm,
             AVG(s.obs_placed + s.sen_placed)         as avg_wards,
-            MAX(s.fantasy_points)                    as best_match_points
+            MAX({scored_pts})                        as best_match_points
         FROM player_match_stats s
         LEFT JOIN matches m ON m.match_id = s.match_id
         WHERE s.player_id = :pid

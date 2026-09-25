@@ -67,7 +67,9 @@ ordered most-recent-first:
 Auth required. 404 if no `WeeklySummary` row exists for the week yet. Returns matches (grouped
 into `series`) with team names/logos/winner/VOD link always included; each match additionally
 carries a `players` list (`player_id`, `name`, `avatar_url`, `team_id`, `points`, `is_mvp`,
-`on_roster`) only if the caller has revealed that week.
+`on_roster`) only if the caller has revealed that week. Each match also carries
+`excluded_from_scoring`. On an excluded match, every player's `points` is `null` (see
+`reference/unparseable-match-handling.md`).
 
 ### `POST /weekly-summary/{week_id}/reveal`
 Auth required. Idempotently inserts a `WeeklySummaryReveal` row for `(week_id, current user)`,

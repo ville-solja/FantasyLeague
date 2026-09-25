@@ -169,11 +169,11 @@ async function openPlayerModal(playerId) {
           ? new Date(m.start_time * 1000).toLocaleDateString("fi-FI", {day: "numeric", month: "numeric", year: "2-digit"})
           : "—";
         const mvpStar = m.is_mvp ? '<span style="font-size:0.85rem;color:#f5c842;">★</span>' : '';
-        const opponent = m.opponent_team_id ? teamLink(m.opponent_team_id, m.opponent_team_name) : (m.opponent_team_name || "—");
+        const opponent = m.opponent_team_id ? teamLink(m.opponent_team_id, m.opponent_team_name) : (_escHtml(m.opponent_team_name) || "—");
         return `<tr>
           <td>${mvpStar}</td>
           <td>${date}</td>
-          <td>${Number(m.fantasy_points).toFixed(1)}</td>
+          <td>${_matchPointsCellHtml(m)}</td>
           <td>${m.kills}/${m.assists}/${m.deaths}</td>
           <td>${Math.round(m.gold_per_min)}</td>
           <td>${m.obs_placed ?? 0}</td>
@@ -192,6 +192,23 @@ async function openPlayerModal(playerId) {
   } catch (e) {
     setStatus("playerModalStatus", e.message, false);
   }
+}
+
+const _PARTIAL_STATS_TOOLTIP =
+  "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.";
+const _NOT_SCORED_TOOLTIP = "An admin excluded this match from scoring. It adds no fantasy points.";
+
+// Fantasy pts cell for one match-history row: the points plus a "Partial stats"
+// marker for unparsed matches, or a dash plus "Not scored" for excluded ones.
+function _matchPointsCellHtml(m) {
+  if (m.excluded_from_scoring) {
+    return `— <span class="badge common" title="${_escHtml(_NOT_SCORED_TOOLTIP)}">Not scored</span>`;
+  }
+  const pts = _escHtml(Number(m.fantasy_points).toFixed(1));
+  if (m.parse_status === "unparsed" || m.parse_status === "unparseable") {
+    return `${pts} <span class="badge common" title="${_escHtml(_PARTIAL_STATS_TOOLTIP)}">Partial stats</span>`;
+  }
+  return pts;
 }
 
 function renderPlayerProfile(profile) {
@@ -387,6 +404,7 @@ async function loadSchedule() {
           <span class="game-row-heroes right">${_gameHeroIconsHtml(g.team2_heroes)}</span>
           <span class="game-row-meta">
             ${g.mvp_player_id ? `<span style="font-size:0.85rem;color:#f5c842;">★</span> ${playerLink(g.mvp_player_id, g.mvp_player_name)}` : ""}
+            ${g.excluded_from_scoring ? `<span class="badge common" title="${_escHtml(_NOT_SCORED_TOOLTIP)}">Not scored</span>` : ""}
             <span class="game-row-duration">${_formatGameDuration(g.duration)}</span>
             <a class="stream-link" href="https://www.opendota.com/matches/${g.match_id}" target="_blank" rel="noopener noreferrer">↗</a>
           </span>

@@ -40,3 +40,11 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 - Read-only table of all configured weight keys and values (loaded from `GET /weights`).
 - Includes scoring stat weights, death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_common` … `rarity_legendary`), and modifier tuning keys (`modifier_count_*`, `modifier_bonus_pct`).
 - Operational changes are made outside the UI (typically `WEIGHTS_JSON` overrides merged on startup and/or direct DB edits to the `weights` table), then use **Recalculate** to backfill `player_match_stats.fantasy_points` if needed.
+
+## Matches panel
+
+- Table columns: Match (OpenDota link), League, Team 1, Team 2, Start Time, **Parse**, **Scoring**, MVP, VOD, Action (**Set MVP**).
+- **Parse** shows Parsed, Unparsed or Unparseable (a dash for matches with no status). Unparsed rows have a **Retry parse** button (`POST /admin/matches/{id}/retry-parse`). After it finishes, the table reloads and the status line says whether the match was refreshed with parsed stats, a parse was requested, the request was on cooldown, or OpenDota rejected it. A 409 appears in the status line while an ingest is running.
+- **Scoring** has two checkboxes, **Unparseable** and **Not scored**. Each change sends `PATCH /admin/matches/{id}/scoring` with that single field, then the table reloads. On error, the checkbox reverts and the status line shows the error.
+- An **Unparseable only** checkbox in the panel header filters the table client-side to matches whose status is Unparseable. The empty state reads "No unparseable matches".
+- See `markdown/features/reference/unparseable-match-handling.md`.

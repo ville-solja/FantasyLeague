@@ -27,4 +27,7 @@ Opened by clicking any player name (in this tab or elsewhere). Shows:
 - **Match history table** — one row per match, columns (in order): MVP star (first column,
   populated only when `is_mvp` is true), Date, Fantasy pts, K/A/D, GPM, Wards, Tower dmg,
   Opponent (linked to the opposing team's detail modal), and a trailing link to the match on
-  OpenDota.
+  OpenDota. The Fantasy pts cell carries a "Partial stats" badge for a match whose replay is
+  unparsed or unparseable. Its tooltip says wards, stuns, teamfight, runes and camps count as 0.
+  A match an admin excluded from scoring shows a dash and a "Not scored" badge instead, and is
+  left out of the summary's average, total and best-match points.

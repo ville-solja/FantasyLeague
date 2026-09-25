@@ -1032,12 +1032,15 @@
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="margin:0;">Matches</h2>
-        <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+        <div style="display:flex;gap:12px;align-items:center;">
+          <label style="display:flex;gap:4px;align-items:center;font-size:0.85rem;cursor:pointer;"><input type="checkbox" id="adminMatchesUnparseableOnly" onchange="renderAdminMatches()">Unparseable only</label>
+          <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+        </div>
       </div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="8" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Parse</th><th>Scoring</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="10" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>

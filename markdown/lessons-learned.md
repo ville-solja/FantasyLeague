@@ -9,6 +9,12 @@ Format:
 
 ---
 
+### 2026-09-25 — developer — testing
+**Problem:** When a test must show that excluding a match removes "exactly its points", comparing the card totals to `before - match.fantasy_points` does not work. Card points (`_compute_card_points`) are recomputed from aggregate stat sums, and the death pool scales with `match_count`, so a match's contribution to a card is not its own `fantasy_points`. Also, `plan-unparseable-match-handling` said `card_draw.py` uses points for pick weighting. It does not: picks are weighted by how many cards the user owns.
+**Solution:** Measure the aggregate three times: with the match excluded, with the flag cleared, and after deleting that match's stat rows. Then assert excluded == deleted, excluded != baseline, and cleared == baseline (see `_assert_exclusion_removes_exactly_that_match` in `test_unparseable_match_handling.py`). Check a plan's claims about a module against the code before filtering it.
+
+---
+
 ### 2026-09-24 — security-reviewer — endpoints
 **Problem:** Password fields allow `max_length=128` characters, but bcrypt 4.x (`bcrypt>=4.2,<5.0`, 4.3.0 installed) silently uses only the first 72 **bytes** — `checkpw(b'a'*72 + b'ZZZZZZZZ', hashpw(b'a'*80, ...))` returns `True`. bcrypt 5.x instead raises `ValueError` for >72-byte input, so lifting the `<5.0` pin would turn long passwords into 500s.
 **Solution:** When touching password handling, cap password fields at 72 bytes (validate the UTF-8 encoded length, not character count), or pre-hash before bcrypt. Check this before bumping bcrypt past 5.0.

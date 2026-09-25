@@ -6,6 +6,7 @@ from sqlalchemy import text
 from database import get_db
 from deps import require_admin
 from enrich import run_profile_enrichment
+from match_scoring import scored_match_sql, scored_stat_sql
 from models import Player, PlayerProfile
 
 router = APIRouter()
@@ -13,12 +14,13 @@ router = APIRouter()
 
 @router.get("/players")
 def list_players(db=Depends(get_db)):
-    results = db.execute(text("""
+    scored_pts = f"CASE WHEN {scored_stat_sql()} THEN s.fantasy_points END"
+    results = db.execute(text(f"""
         SELECT p.id, p.name, p.avatar_url,
                t.name as team_name, t.id as team_id,
                COUNT(s.id) as matches,
-               COALESCE(AVG(s.fantasy_points), 0) as avg_points,
-               COALESCE(SUM(s.fantasy_points), 0) as total_points,
+               COALESCE(AVG({scored_pts}), 0) as avg_points,
+               COALESCE(SUM({scored_pts}), 0) as total_points,
                COALESCE(SUM(CASE WHEN s.is_mvp THEN 1 ELSE 0 END), 0) as mvp_count
         FROM players p
         LEFT JOIN player_match_stats s ON s.player_id = p.id
@@ -44,8 +46,10 @@ def get_player(player_id: int, db=Depends(get_db)):
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    stats = db.execute(text("""
+    stats = db.execute(text(f"""
         SELECT s.match_id, m.start_time, s.fantasy_points, s.is_mvp,
+               m.parse_status,
+               CASE WHEN {scored_match_sql()} THEN 0 ELSE 1 END as excluded_from_scoring,
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
                s.tower_damage,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
@@ -64,10 +68,13 @@ def get_player(player_id: int, db=Depends(get_db)):
     """), {"player_id": player_id}).fetchall()
 
     history = [dict(r._mapping) for r in stats]
+    for r in history:
+        r["excluded_from_scoring"] = bool(r["excluded_from_scoring"])
     matches = len(history)
-    total_points = sum(r["fantasy_points"] for r in history)
-    avg_points = total_points / matches if matches else 0
-    best = max(history, key=lambda r: r["fantasy_points"], default=None)
+    scored = [r for r in history if not r["excluded_from_scoring"]]
+    total_points = sum(r["fantasy_points"] or 0 for r in scored)
+    avg_points = total_points / len(scored) if scored else 0
+    best = max(scored, key=lambda r: r["fantasy_points"] or 0, default=None)
 
     team_name = history[0]["team_name"] if history else None
     team_id = history[0]["team_id"] if history else None
@@ -126,11 +133,12 @@ def get_team(team_id: int, db=Depends(get_db)):
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    players = db.execute(text("""
+    scored_pts = f"CASE WHEN {scored_stat_sql()} THEN s.fantasy_points END"
+    players = db.execute(text(f"""
         SELECT p.id, p.name, p.avatar_url,
                COUNT(s.id) as matches,
-               COALESCE(AVG(s.fantasy_points), 0) as avg_points,
-               COALESCE(SUM(s.fantasy_points), 0) as total_points
+               COALESCE(AVG({scored_pts}), 0) as avg_points,
+               COALESCE(SUM({scored_pts}), 0) as total_points
         FROM players p
         JOIN player_match_stats s ON s.player_id = p.id AND s.team_id = :team_id
         GROUP BY p.id, p.name, p.avatar_url

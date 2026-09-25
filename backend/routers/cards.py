@@ -15,6 +15,7 @@ from card_utils import (
     _activate_card_atomic, _swap_roster_atomic,
 )
 from database import get_db, spend_tokens
+from match_scoring import scored_match_sql
 from deps import get_current_user, is_admin_fresh, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import limiter, key_by_user_or_ip
@@ -106,7 +107,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             JOIN cards c ON c.id = wre.card_id
             JOIN players p ON p.id = c.player_id
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-            LEFT JOIN matches m ON m.match_id = s.match_id
+            LEFT JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
             GROUP BY c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
@@ -119,7 +120,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
             JOIN player_match_stats s ON s.player_id = c.player_id
-            JOIN matches m ON m.match_id = s.match_id
+            JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id AND s.is_mvp = 1
               AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
@@ -136,7 +137,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             FROM cards c
             JOIN players p ON p.id = c.player_id
             LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-            LEFT JOIN matches m ON m.match_id = s.match_id
+            LEFT JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
             GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
@@ -150,7 +151,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             FROM cards c
             JOIN players p ON p.id = c.player_id
             JOIN player_match_stats s ON s.player_id = c.player_id
-            JOIN matches m ON m.match_id = s.match_id
+            JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
             WHERE c.owner_id = :user_id AND p.is_active = 1 AND s.is_mvp = 1
               AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
@@ -176,7 +177,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    season_pts_rows = db.execute(text("""
+    season_pts_rows = db.execute(text(f"""
         SELECT c.id as card_id, c.card_type,
                COUNT(DISTINCT m.match_id)                    as match_count,
                COALESCE(SUM(s.deaths), 0)                    as deaths,
@@ -196,7 +197,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         JOIN weeks wk ON wk.id = wre.week_id
         JOIN cards c ON c.id = wre.card_id
         JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id
+        JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
         WHERE wre.user_id = :user_id
           AND wk.is_locked = 1
           AND (m.week_override_id = wk.id OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
@@ -209,7 +210,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         JOIN weeks wk ON wk.id = wre.week_id
         JOIN cards c ON c.id = wre.card_id
         JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id
+        JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
         WHERE wre.user_id = :user_id
           AND wk.is_locked = 1
           AND s.is_mvp = 1

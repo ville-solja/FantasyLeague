@@ -33,6 +33,13 @@ this feature shipped are picked up automatically on the first poll cycle after d
 | `request_parse(match_id) -> bool` | `POST /request/{match_id}` through `opendota_client.post_json(..., cost=10)`; at most once per match per `INGEST_PARSE_REREQUEST_HOURS` (`ingest._parse_requested` maps match_id → time of the last successful request). A failed POST is logged as a warning, returns `False`, and leaves the match eligible next cycle |
 | `retry_unparsed_matches(max_age_hours) -> dict` | One pass over `find_unparsed_match_ids()`: refreshes each match, and requests a parse for every one still unparsed that hasn't been requested yet. Returns `{"checked", "refreshed", "requested", "still_unparsed"}`; an `"unavailable"` match counts toward `still_unparsed`. A failure on one match is logged (`logger.exception`) and does not stop the others |
 
+`find_unparsed_match_ids()` skips matches whose `matches.parse_status` is `unparseable`. At the end of each
+pass, `retry_unparsed_matches()` calls `mark_stuck_matches_unparseable()`. It flags every match that is
+still `unparsed` and older than `max(max_age_hours, INGEST_PARSE_RETRY_HOURS)` as `unparseable`
+and writes a `match_marked_unparseable` audit row. Flagged matches are never requested again. See
+[Unparseable Match Handling](unparseable-match-handling.md) for the status column, the admin
+retry/scoring endpoints and exclusion from scoring.
+
 First-pass `ingest_match()` is unchanged in what it stores (an unparsed match still appears in
 the schedule immediately) but now calls `request_parse(match_id)` when the payload has
 `version: null`.
@@ -89,8 +96,9 @@ on the `routers.admin_ingest` logger.
   `SELECT match_id, SUM(teamfight_participation), SUM(stuns), SUM(obs_placed) FROM player_match_stats GROUP BY match_id`
   — zero rows for recent matches should disappear once OpenDota has parsed them.
 - A match OpenDota itself never parses (or parses to genuine zeros) is re-checked once per
-  cycle until it ages out of the window; that costs one `GET` per cycle and one 10-slot `POST`
-  per `INGEST_PARSE_REREQUEST_HOURS`.
+  cycle until it ages out of the window. That costs one `GET` per cycle and one 10-slot `POST`
+  per `INGEST_PARSE_REREQUEST_HOURS`. Once it ages out, it is auto-marked `unparseable`, and it
+  then appears under the admin Matches tab's "Unparseable only" filter.
 - `GET /request/{jobId}` returns `null` once OpenDota has processed the job, whether or not the
   parse succeeded; a match still reporting `version: null` afterwards usually means the replay
   could not be downloaded from Valve (check the `replay_url` from `GET /matches/{id}`), which
