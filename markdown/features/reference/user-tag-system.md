@@ -29,8 +29,10 @@ Initial seed tags: `caster` ("Caster") and `season_winner` ("Season Winner").
 Returns all defined tag types ordered by key.
 
 ### `POST /admin/tags`
-Creates a new tag definition. Body: `{"key": "...", "label": "..."}`. Returns 409 if the
-key already exists. Logged as `admin_tag_definition_created`.
+Creates a new tag definition. Body: `{"key": "...", "label": "..."}`. The key names a sticker
+file, so it must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, `_` and `-`, not
+starting with `_` or `-`, at most 50 characters); anything else returns 422 (issue #135).
+Returns 409 if the key already exists. Logged as `admin_tag_definition_created`.
 
 ### `DELETE /admin/tags/{tag_id}`
 Deletes a tag definition and cascade-revokes all grants for it. Returns 404 if not found.
@@ -50,7 +52,9 @@ Revokes a tag from a user. Returns 404 if the user does not hold the tag. Logged
 
 Sticker images live at `assets/stickers/{tag_key}.png`, 60 × 60 px, RGBA. The image
 pipeline in `backend/image.py` composites each sticker starting at `(10, 10)`, spaced
-64 px apart horizontally. Missing sticker files are silently skipped.
+64 px apart horizontally. Missing sticker files are silently skipped, and so is any key whose
+path resolves outside `STICKER_DIR` (for example a legacy key containing `../`) — the file is
+never opened.
 
 Placeholder assets for `caster.png` and `season_winner.png` are included for CI/testing
 and replaced by real artwork before deploy.

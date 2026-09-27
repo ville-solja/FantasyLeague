@@ -5,7 +5,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
@@ -40,9 +40,12 @@ ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
 # wrong parameters.
 RATE_LIMIT_ROSTER_MUTATION = os.getenv("RATE_LIMIT_ROSTER_MUTATION", "30/minute")
 
+# Per-IP limit on the public, render-per-call card image endpoint (issue #135).
+RATE_LIMIT_CARD_IMAGE = os.getenv("RATE_LIMIT_CARD_IMAGE", "60/minute")
+
 
 class ReorderRequest(BaseModel):
-    card_ids: list[int]           # ordered list; positions assigned by index
+    card_ids: list[int] = Field(max_length=500)  # ordered list; positions assigned by index. The frontend sends the whole bench, and bench size is unlimited, so this bounds abuse without breaking large collections
     slot_indexes: list[int] | None = None  # explicit positions; overrides sequential when provided
 
 
@@ -474,7 +477,6 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
     }
 
 
-@router.get("/cards/{card_id}/image")
 def get_card_image(card_id: int, db=Depends(get_db)):
     from image import generate_card_image, PIL_AVAILABLE
     from models import UserTag, TagDefinition
@@ -525,6 +527,12 @@ def get_card_image(card_id: int, db=Depends(get_db)):
             "Pragma": "no-cache",
         },
     )
+
+
+@router.get("/cards/{card_id}/image")
+@limiter.limit(RATE_LIMIT_CARD_IMAGE)
+def get_card_image_route(request: Request, card_id: int, db=Depends(get_db)):
+    return get_card_image(card_id, db)
 
 
 @router.post("/roster/{card_id}/reroll")

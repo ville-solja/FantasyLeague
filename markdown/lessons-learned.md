@@ -9,6 +9,16 @@ Format:
 
 ---
 
+### 2026-09-27 — security-reviewer — endpoints
+**Problem:** Rate-limited routes are registered through `*_route` wrapper functions (`redeem_code_route`, `link_account_route`, `get_card_image_route`, the roster `*_route`s) that delegate to plain functions of the same name without the suffix. An auth audit that reads the plain function's `Depends()` checks code FastAPI never registers, so a wrapper missing its guard would go unnoticed.
+**Solution:** Audit the function that carries the `@router.<method>` decorator. It is the wrapper, and it must declare `get_current_user` / `require_admin` / `verify_twitch_jwt` itself. The plain function's `Depends()` defaults only apply to direct calls from tests.
+
+### 2026-09-27 — developer — testing
+**Problem:** A rate-limit test helper that did `importlib.reload(importlib.import_module("routers.x"))` after reloading `rate_limit` counted every request twice (a 5/minute limit returned 429 on the 3rd call). When the router module had not been imported yet in that process, `import_module` decorated its routes against the fresh `Limiter`, and the immediate `reload` decorated them again against the same instance, so slowapi registered two identical limits under one endpoint name. It only showed up when the test ran in isolation or first, not in the full suite.
+**Solution:** Reload only modules already in `sys.modules`; import the rest once: `importlib.reload(sys.modules[n]) if n in sys.modules else importlib.import_module(n)` (see `_build_app` in `test_issue_135_security_review_fixes.py`). Build a minimal `FastAPI()` with only the routers under test, `SessionMiddleware`, and `app.state.limiter = rate_limit.limiter` rather than reloading `main`, which starts lifespan background loops.
+
+---
+
 ### 2026-09-25 — developer — testing
 **Problem:** When a test must show that excluding a match removes "exactly its points", comparing the card totals to `before - match.fantasy_points` does not work. Card points (`_compute_card_points`) are recomputed from aggregate stat sums, and the death pool scales with `match_count`, so a match's contribution to a card is not its own `fantasy_points`. Also, `plan-unparseable-match-handling` said `card_draw.py` uses points for pick weighting. It does not: picks are weighted by how many cards the user owns.
 **Solution:** Measure the aggregate three times: with the match excluded, with the flag cleared, and after deleting that match's stat rows. Then assert excluded == deleted, excluded != baseline, and cleared == baseline (see `_assert_exclusion_removes_exactly_that_match` in `test_unparseable_match_handling.py`). Check a plan's claims about a module against the code before filtering it.

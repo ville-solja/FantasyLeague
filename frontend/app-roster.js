@@ -57,7 +57,7 @@ function _renderWeekSelector() {
       ? (isLive ? `${w.label} (live)` : `${w.label} ✓`)
       : (isNext ? `${w.label} (upcoming)` : w.label);
     const isSelected = _rosterWeekId === w.id || (_rosterWeekId === null && isNext);
-    return `<option value="${w.id}"${isSelected ? " selected" : ""}>${label}</option>`;
+    return `<option value="${w.id}"${isSelected ? " selected" : ""}>${_escHtml(label)}</option>`;
   }).join("");
 }
 
@@ -186,14 +186,31 @@ function _cardSlotHTML(c, action) {
   const zone = action === "bench" ? "active" : "bench";
   const isActiveCard = action === "bench";
   return `
-    <div class="card-slot" data-rarity="${c.card_type}" data-card-id="${c.id}" data-zone="${zone}">
-      <img class="card-img" src="${imgSrc}" alt="${c.player_name}"
+    <div class="card-slot" data-rarity="${_escHtml(c.card_type)}" data-card-id="${c.id}" data-zone="${zone}">
+      <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
+           data-player-name="${_escHtml(c.player_name)}"
            draggable="false" tabindex="0" role="button"
            onclick="if(!window._rosterDragging)showRosterCard(${c.id})"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&!window._rosterDragging&&!_rosterLocked){event.preventDefault();toggleCardZone(${c.id},${isActiveCard})}"
-           onerror="this.outerHTML='<div class=\\'card-img-loading\\'>${c.card_type.toUpperCase()}<br><span style=\\'font-size:0.65rem;margin-top:4px;\\'>${c.player_name}</span></div>'" />
+           onerror="_cardImgFallback(this)" />
       <div class="card-slot-pts">${pts} pts</div>
     </div>`;
+}
+
+/** Image-load fallback: swap the <img> for a text placeholder built with
+ * textContent, so the player name is never parsed as HTML. */
+function _cardImgFallback(img) {
+  const div = document.createElement("div");
+  div.className = "card-img-loading";
+  const slot = img.closest(".card-slot");
+  const rarity = (slot && slot.dataset.rarity) || "";
+  div.append(rarity.toUpperCase(), document.createElement("br"));
+  const span = document.createElement("span");
+  span.style.fontSize = "0.65rem";
+  span.style.marginTop = "4px";
+  span.textContent = img.dataset.playerName || "";
+  div.appendChild(span);
+  img.replaceWith(div);
 }
 
 /** Keyboard fallback for the removed Bench/Activate buttons: Enter/Space on a

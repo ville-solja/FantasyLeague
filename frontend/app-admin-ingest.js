@@ -46,8 +46,8 @@ async function loadAuditLog() {
       return `<tr>
         <td style="white-space:nowrap;font-size:0.8rem;color:#888;">${dt}</td>
         <td>${r.actor_username ? _escHtml(r.actor_username) : "<em style='color:#555'>system</em>"}</td>
-        <td><code style="font-size:0.8rem;">${r.action}</code></td>
-        <td style="font-size:0.8rem;color:#888;">${r.detail || ""}</td>
+        <td><code style="font-size:0.8rem;">${_escHtml(r.action)}</code></td>
+        <td style="font-size:0.8rem;color:#888;">${_escHtml(r.detail || "")}</td>
       </tr>`;
     }).join("");
     setStatus("auditStatus", "");

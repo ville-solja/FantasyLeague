@@ -205,10 +205,13 @@ The `twitch-extension/` folder is served by the backend at `/twitch-ext` when pr
 ## Endpoints
 
 ### `POST /twitch/link-code`
-Authenticated Fantasy session. Generates a 6-char linking code. TTL: 10 minutes.
+Authenticated Fantasy session. Generates a 6-char linking code (`A-Z0-9`, drawn with Python's
+`secrets` module). TTL: 10 minutes.
 
 ### `POST /twitch/link`
 Twitch JWT. Body: `{code}`. Consumes code, stores Twitch opaque user ID on the user record.
+Limited to 10 requests a minute per client IP (`RATE_LIMIT_TWITCH_LINK`) so codes cannot be
+brute-forced; the 11th returns 429.
 
 ### `POST /twitch/heartbeat`
 Twitch JWT. Records viewer presence. Call every ~55 seconds.
@@ -219,10 +222,27 @@ Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 ### `GET /twitch/matches/current`
 Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
 data, regardless of week boundaries, with per-match player lists. See
-`reference/twitch-mvp-series-window.md`.
+`reference/twitch-mvp-series-window.md`. The series selection lives in
+`twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`.
+
+Before anything is written (MVP row, score bonus, token drop, audit entry), the request must
+pass these checks in order (issue #135):
+
+| Check | Failure |
+|---|---|
+| When `TWITCH_MVP_CHANNEL_IDS` is set, the calling channel is in it (checked first, so other channels learn nothing about IDs) | 403 |
+| The match exists | 404 `Match not found` |
+| The match is one `GET /twitch/matches/current` offers: started, has ingested stats, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
+| The player has a stat row for that match | 404 |
+
+Without these checks any channel with the extension installed could mint token drops and change
+scores for arbitrary match IDs. The admin MVP endpoint (`POST /admin/matches/{match_id}/mvp`)
+is not restricted to the series window.
+
+On success it upserts the MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
 ---
 
@@ -246,6 +266,8 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
+| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
 | `ENV` | *(unset)* | Defense-in-depth: with `TWITCH_LOCAL_DEV=true`, setting `ENV=production` makes the JWT bypass refuse to run (500) instead of silently accepting it. |
 

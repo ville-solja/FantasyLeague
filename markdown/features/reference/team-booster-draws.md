@@ -1,15 +1,21 @@
 # Team Booster Draws
 
 Users can spend a configurable number of Tokens (default 3) to draw a card guaranteed to
-come from a specific team's player roster. The feature is accessed via a "Draw Booster
-from Team" button in the Deck tab, which opens a team selector modal.
+come from a specific team's player roster. The feature is accessed via a "Draw from a team
+(N Tokens)" button in the Draw panel of the My Team tab, which opens a team picker modal.
+
+**Naming:** players see this feature as the **team draw** (it gives one card, not a pack).
+The internal names keep "booster": the endpoints `GET /deck/booster` and
+`POST /draw/booster/{team_id}`, the weight key `team_booster_cost`, the audit action
+`token_booster_draw`, and element IDs such as `boosterBtn` / `boosterModal`. See
+[Team Draw Explanation](team-draw-explanation.md).
 
 ---
 
 ## Flow
 
-The booster draw lives in the **Deck tab** alongside the standard draw. Clicking "Draw
-Booster from Team" opens a modal listing all teams with player data. Each team shows how
+The team draw lives in the **Draw panel** alongside the standard draw. Clicking "Draw
+from a team" opens a modal listing all teams with player data. Each team shows how
 many players on the team the current user does not yet own any card of. Teams where the
 user already owns at least one card of every player are greyed out.
 
@@ -43,7 +49,7 @@ log as `token_booster_draw`.
 
 | Weight Key | Default | Description |
 |---|---|---|
-| `team_booster_cost` | `3` | Token cost per team booster draw; editable in admin Scoring Weights panel |
+| `team_booster_cost` | `3` | Token cost per team draw. Shown read-only in the admin Scoring Weights panel (label "Team draw cost (Tokens)"); change it with `WEIGHTS_JSON` |
 
 The cost is also exposed via `GET /config` as `team_booster_cost` so the frontend can
 display it without hard-coding.

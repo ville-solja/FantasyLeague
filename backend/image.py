@@ -1,6 +1,7 @@
 """Card image generation — PIL compositing extracted from main.py."""
 import io
 import os
+from pathlib import Path
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -94,9 +95,12 @@ def _apply_stickers(img, tag_keys: list):
     """
     if not PIL_AVAILABLE or not tag_keys:
         return img
+    sticker_root = Path(STICKER_DIR).resolve()
     for i, key in enumerate(tag_keys):
-        path = os.path.join(STICKER_DIR, f"{key}.png")
-        if not os.path.exists(path):
+        path = (sticker_root / f"{key}.png").resolve()
+        if not path.is_relative_to(sticker_root):
+            continue
+        if not path.exists():
             continue
         try:
             sticker = Image.open(path).convert("RGBA").resize(STICKER_SIZE, Image.LANCZOS)

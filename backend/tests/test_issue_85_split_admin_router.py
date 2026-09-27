@@ -244,14 +244,16 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-twitch-review-resubmission's 21 new tests did after that, and
         plan-issue-132-admin-db-backup's 21 new tests did after that, and
         the proxy-trust and Twitch uniqueness fixes' 15 new tests did after that, and
-        plan-unparseable-match-handling's 41 new tests did after that)."""
+        plan-unparseable-match-handling's 41 new tests did after that, and
+        plan-issue-103-team-draw-explanation's 18 new tests did after that, and
+        plan-issue-135-security-review-fixes' 78 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "900 passed" in output, output[-3000:]
+        assert "996 passed" in output, output[-3000:]
         assert "10 skipped" in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

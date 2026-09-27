@@ -68,7 +68,7 @@ flowchart TD
     subgraph Spends["Token Spends"]
         direction LR
         D1[Standard draw — 1 token]
-        D2[Booster draw — 3 tokens]
+        D2[Team draw — 3 tokens by default]
         D3[Reroll modifiers — 1 token]
     end
 

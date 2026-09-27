@@ -3,7 +3,7 @@
 | File | Covers |
 |---|---|
 | [users-and-access.md](users-and-access.md) | Registration, login, password reset, profile, header link, temporary password expiry, rate limiting |
-| [cards.md](cards.md) | Deck generation, draw, rarity, modifiers, card art, blank team-logo placeholder, player popup, mid-season top-up, dynamic card creation, team booster draws |
+| [cards.md](cards.md) | Deck generation, draw, rarity, modifiers, card art, blank team-logo placeholder, player popup, mid-season top-up, dynamic card creation, team booster draws, team draw explanation and naming |
 | [user-tags.md](user-tags.md) | User tag system: card stickers, leaderboard badges, admin tag management, user search, profile tag visibility |
 | [team-tokens-scoring.md](team-tokens-scoring.md) | Active roster, roster limit race fix, roster mutation rate limiting, weekly lock, week history, tokens, scoring, weekly summary report, docked reveal-all control, pre-reveal winner hiding, match date display |
 | [data-and-players.md](data-and-players.md) | Dota data ingestion, live-match-aware OpenDota query prioritization, OpenDota parse retry for unparsed matches, unparseable match handling (partial-stat markers, admin retry and scoring exclusion), player profile enrichment, AI bios |
@@ -15,3 +15,4 @@
 | [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams, admin router organization, frontend framework evaluation |
 | [tipping.md](tipping.md) | Demoinfo2 tipping service: demo parsing, tip event extraction, tipping leaderboard |
 | [shoutrrr-support.md](shoutrrr-support.md) | Outbound push notifications via a separately-hosted Shoutrrr instance; match-starting-soon reminder |
+| [security-review-fixes.md](security-review-fixes.md) | Fixes from the 2026-09-26 external security review: Twitch MVP eligibility, escaping external text, reliable password reset, abuse limits, deployment hardening |

@@ -30,7 +30,7 @@ function _renderMvpLeaderboard() {
   tbody.innerHTML = ranked.map((p, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
+      <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.mvp_count}</td>
     </tr>`).join("");
 }
@@ -92,8 +92,8 @@ function renderPlayers(rows) {
   }
   tbody.innerHTML = sorted.map(p => `
     <tr>
-      <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
-      <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (p.team_name || "—")}</td>
+      <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
+      <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (_escHtml(p.team_name) || "—")}</td>
       <td>${p.matches}</td>
       <td>${Number(p.avg_points).toFixed(1)}</td>
       <td>${Number(p.total_points).toFixed(1)}</td>
@@ -145,12 +145,13 @@ async function openPlayerModal(playerId) {
     }
 
     const avatar = document.getElementById("playerModalAvatar");
-    if (p.avatar_url) { avatar.src = p.avatar_url; avatar.style.display = ""; }
+    const avatarUrl = _safeUrl(p.avatar_url);
+    if (avatarUrl) { avatar.src = avatarUrl; avatar.style.display = ""; }
 
     document.getElementById("playerModalName").textContent = p.name;
     document.getElementById("playerModalTeam").innerHTML = p.team_id
-      ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${p.team_name}</span>`
-      : (p.team_name || "");
+      ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${_escHtml(p.team_name)}</span>`
+      : _escHtml(p.team_name || "");
 
     document.getElementById("playerModalStats").innerHTML = `
       <div class="player-modal-stat-grid">
@@ -219,19 +220,19 @@ function renderPlayerProfile(profile) {
 
   const statGrid = `
     <div class="player-modal-stat-grid" style="margin-top:8px;">
-      <div class="player-modal-stat"><div class="val">${facts.kanaliiga_seasons}</div><div class="lbl">Seasons</div></div>
-      <div class="player-modal-stat"><div class="val">${Number(facts.avg_kills).toFixed(1)}</div><div class="lbl">Avg K</div></div>
-      <div class="player-modal-stat"><div class="val">${Number(facts.avg_deaths).toFixed(1)}</div><div class="lbl">Avg D</div></div>
-      <div class="player-modal-stat"><div class="val">${Number(facts.avg_assists).toFixed(1)}</div><div class="lbl">Avg A</div></div>
-      <div class="player-modal-stat"><div class="val">${Math.round(facts.avg_gpm)}</div><div class="lbl">Avg GPM</div></div>
-      <div class="player-modal-stat"><div class="val">${Number(facts.avg_wards).toFixed(1)}</div><div class="lbl">Avg wards</div></div>
-      <div class="player-modal-stat"><div class="val">${facts.role_tendency}</div><div class="lbl">Role</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(facts.kanaliiga_seasons)}</div><div class="lbl">Seasons</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_kills).toFixed(1))}</div><div class="lbl">Avg K</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_deaths).toFixed(1))}</div><div class="lbl">Avg D</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_assists).toFixed(1))}</div><div class="lbl">Avg A</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(Math.round(facts.avg_gpm))}</div><div class="lbl">Avg GPM</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_wards).toFixed(1))}</div><div class="lbl">Avg wards</div></div>
+      <div class="player-modal-stat"><div class="val">${_escHtml(facts.role_tendency)}</div><div class="lbl">Role</div></div>
     </div>`;
 
   function heroLine(h) {
     return h.win_rate !== undefined
-      ? `<span style="color:#aaa">${h.hero_name}</span> <span style="color:#555;font-size:0.78rem;">(${h.games}g, ${Math.round(h.win_rate*100)}%wr)</span>`
-      : `<span style="color:#aaa">${h.hero_name}</span> <span style="color:#555;font-size:0.78rem;">(${h.games}g)</span>`;
+      ? `<span style="color:#aaa">${_escHtml(h.hero_name)}</span> <span style="color:#555;font-size:0.78rem;">(${_escHtml(h.games)}g, ${_escHtml(Math.round(h.win_rate*100))}%wr)</span>`
+      : `<span style="color:#aaa">${_escHtml(h.hero_name)}</span> <span style="color:#555;font-size:0.78rem;">(${_escHtml(h.games)}g)</span>`;
   }
   function heroSection(label, heroes, limit) {
     const items = (heroes || []).slice(0, limit).map(heroLine).join(", ") || "—";
@@ -245,7 +246,7 @@ function renderPlayerProfile(profile) {
   </div>`;
 
   const bioSection = profile.bio_text
-    ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;">${profile.bio_text}</div>`
+    ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;white-space:pre-wrap;">${_escHtml(profile.bio_text)}</div>`
     : "";
 
   el.innerHTML = statGrid + heroes + bioSection;
@@ -282,7 +283,7 @@ async function openTeamModal(teamId) {
     } else {
       document.getElementById("teamModalPlayers").innerHTML = t.players.map(p => `
         <tr>
-          <td><img src="${p.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${p.name}</span></td>
+          <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${_escHtml(p.name)}</span></td>
           <td>${p.matches}</td>
           <td>${Number(p.avg_points).toFixed(1)}</td>
           <td>${Number(p.total_points).toFixed(1)}</td>
@@ -306,7 +307,7 @@ function _formatGameDuration(seconds) {
 
 function _gameHeroIconsHtml(heroUrls) {
   return (heroUrls || []).map(url => url
-    ? `<img class="hero-icon" src="${url}" title="" onerror="this.style.display='none'" />`
+    ? `<img class="hero-icon" src="${_escHtml(_safeUrl(url))}" title="" onerror="this.style.display='none'" />`
     : `<span class="hero-icon hero-icon-placeholder"></span>`
   ).join("");
 }
@@ -326,7 +327,7 @@ async function loadSchedule() {
       staleEl.style.display = "";
     }
     if (data.error && !data.weeks?.length && !data.extra_results?.length) {
-      content.innerHTML = `<span style='color:#555'>${data.error}</span>`;
+      content.innerHTML = `<span style='color:#555'>${_escHtml(data.error)}</span>`;
       setStatus("scheduleStatus", "");
       return;
     }
@@ -376,7 +377,7 @@ async function loadSchedule() {
 
       const r = s.series_result;
       const scoreHtml = r
-        ? `<span class="series-score">${r.team1_wins}–${r.team2_wins}</span>`
+        ? `<span class="series-score">${_escHtml(r.team1_wins)}–${_escHtml(r.team2_wins)}</span>`
         : `<span class="series-score no-result">vs</span>`;
 
       const games = (isPast && r && r.games && r.games.length) ? r.games : [];
@@ -384,15 +385,15 @@ async function loadSchedule() {
       let linksContent = "";
       if (games.length) {
         if (s.stream_url) {
-          linksContent = `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Stream"} ↗</a>`;
+          linksContent = `<a class="stream-link" href="${_escHtml(_safeUrl(s.stream_url))}" target="_blank" rel="noopener">${_escHtml(s.stream_label || "Stream")} ↗</a>`;
         }
       } else if (!isPast) {
         const time = s.time
-          ? `<span class="series-time">${s.time}</span>`
+          ? `<span class="series-time">${_escHtml(s.time)}</span>`
           : (s.scheduled === false ? `<span class="series-time tbd">Time TBD</span>` : "");
         const watch = s.stream_url
-          ? `<a class="stream-link" href="${s.stream_url}" target="_blank" rel="noopener">${s.stream_label || "Watch"} ↗</a>`
-          : (s.stream_label ? `<span style="color:#555">${s.stream_label}</span>` : "");
+          ? `<a class="stream-link" href="${_escHtml(_safeUrl(s.stream_url))}" target="_blank" rel="noopener">${_escHtml(s.stream_label || "Watch")} ↗</a>`
+          : (s.stream_label ? `<span style="color:#555">${_escHtml(s.stream_label)}</span>` : "");
         linksContent = time + (time && watch ? " · " : "") + watch;
       }
 
@@ -400,7 +401,7 @@ async function loadSchedule() {
         <div class="game-row">
           <span class="game-row-num">G${i + 1}</span>
           <span class="game-row-heroes">${_gameHeroIconsHtml(g.team1_heroes)}</span>
-          <span class="game-row-score">${g.team1_kills}–${g.team2_kills}</span>
+          <span class="game-row-score">${_escHtml(g.team1_kills)}–${_escHtml(g.team2_kills)}</span>
           <span class="game-row-heroes right">${_gameHeroIconsHtml(g.team2_heroes)}</span>
           <span class="game-row-meta">
             ${g.mvp_player_id ? `<span style="font-size:0.85rem;color:#f5c842;">★</span> ${playerLink(g.mvp_player_id, g.mvp_player_name)}` : ""}
@@ -413,15 +414,15 @@ async function loadSchedule() {
 
       return `<div class="series-row${isPast ? " past" : ""}">
         ${divLabel}
-        <span class="series-team">${s.team1_id ? teamLink(s.team1_id, s.team1) : (s.team1 || "—")}</span>
+        <span class="series-team">${s.team1_id ? teamLink(s.team1_id, s.team1) : (_escHtml(s.team1) || "—")}</span>
         ${scoreHtml}
-        <span class="series-team right">${s.team2_id ? teamLink(s.team2_id, s.team2) : (s.team2 || "—")}</span>
+        <span class="series-team right">${s.team2_id ? teamLink(s.team2_id, s.team2) : (_escHtml(s.team2) || "—")}</span>
         <span class="series-links">${linksContent}</span>
       </div>${gameRowsHtml}`;
     };
 
     const renderGroup = (groups) => groups.map(g =>
-      `<div class="schedule-date-hd">${g.key}</div>` + g.items.map(renderRow).join("")
+      `<div class="schedule-date-hd">${_escHtml(g.key)}</div>` + g.items.map(renderRow).join("")
     ).join("");
 
     let html = "";
@@ -444,7 +445,8 @@ function showPlayerPreview(name, avatarUrl) {
   const preview = document.getElementById("profilePlayerPreview");
   document.getElementById("profilePlayerName").textContent = name || "";
   const avatar = document.getElementById("profilePlayerAvatar");
-  if (avatarUrl) { avatar.src = avatarUrl; avatar.style.display = ""; }
+  const safeAvatar = _safeUrl(avatarUrl);
+  if (safeAvatar) { avatar.src = safeAvatar; avatar.style.display = ""; }
   else { avatar.style.display = "none"; }
   preview.style.display = name ? "flex" : "none";
 }

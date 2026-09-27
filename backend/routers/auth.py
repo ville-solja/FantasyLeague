@@ -12,9 +12,9 @@ from database import get_db
 from deps import _audit, get_current_user
 from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
                     NotificationDismissal, PasswordResetToken)
-from auth import hash_password, verify_password
-from email_utils import send_email
-from rate_limit import limiter
+from auth import check_email, check_password_bytes, hash_password, verify_password
+from email_utils import email_configured, send_email
+from rate_limit import limiter, key_by_user_or_ip
 
 router = APIRouter()
 
@@ -23,6 +23,7 @@ INITIAL_TOKENS = int(os.getenv("INITIAL_TOKENS", "5"))
 RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "5/minute")
 RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "5/minute")
 RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "3/minute")
+RATE_LIMIT_RESET_PASSWORD = os.getenv("RATE_LIMIT_RESET_PASSWORD", "10/minute")
 
 # Per-username failed-login lockout, independent of source IP — catches an
 # attacker rotating IPs against one account, which the per-IP RATE_LIMIT_LOGIN
@@ -73,6 +74,8 @@ def _record_forgot_password_request(username: str):
 
 class LoginBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
+    # No 72-byte cap here: accounts created before the cap may have longer
+    # passwords, and bcrypt 4.x truncates identically at hash and verify time.
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -80,6 +83,9 @@ class RegisterBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     email:    str = Field(min_length=3, max_length=254)
     password: str = Field(min_length=6, max_length=128)
+
+    _password_bytes = field_validator("password")(check_password_bytes)
+    _email_shape = field_validator("email")(check_email)
 
     @field_validator("username")
     @classmethod
@@ -96,6 +102,8 @@ class ForgotPasswordBody(BaseModel):
 class ResetPasswordBody(BaseModel):
     token: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=6, max_length=128)
+
+    _password_bytes = field_validator("new_password")(check_password_bytes)
 
 
 @router.post("/login")
@@ -132,10 +140,6 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
 @router.post("/register")
 @limiter.limit(RATE_LIMIT_REGISTER)
 def register(request: Request, body: RegisterBody, db=Depends(get_db)):
-    _e = body.email.strip()
-    _at = _e.find("@")
-    if _at < 1 or " " in _e or _e.count("@") != 1 or "." not in _e[_at + 2:] or _e.endswith("."):
-        raise HTTPException(status_code=422, detail="Invalid email address")
     if db.query(User).filter(User.username == body.username).first():
         raise HTTPException(status_code=409, detail="Username already taken")
     if db.query(User).filter(User.email == body.email).first():
@@ -183,8 +187,8 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
         verify_password("dummy-timing-equalizer", _DUMMY_HASH)  # equalize bcrypt timing
         return {"status": "ok"}
 
-    # Record before attempting the send — a slow/failing SMTP send must not
-    # let a rapid retry bypass the cooldown.
+    # Record before attempting the send — a slow SMTP send must not let a rapid
+    # retry bypass the cooldown. A failed send clears it again below.
     _record_forgot_password_request(body.username)
 
     user_email    = user.email
@@ -204,8 +208,9 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
     app_name = os.getenv("APP_NAME", "Kana Cards")
     base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
     link_block = f"    {base_url}/?reset_token={token}\n\n" if base_url else ""
+    send_failed = False
     try:
-        send_email(
+        sent = send_email(
             to_address=user_email,
             subject=f"[{app_name}] Password reset requested",
             body=(
@@ -222,9 +227,22 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
         )
     except Exception:
         logging.getLogger(__name__).exception(
+            "forgot_password: email send raised for user %s", user_username
+        )
+        send_failed = True
+    else:
+        # False without SMTP_HOST is the local-dev fallback: send_email() has
+        # already logged a warning, and the token is kept as before.
+        send_failed = not sent and email_configured()
+    if send_failed:
+        # The send raised, or a configured send failed. Roll back the new token
+        # (the prior token's delete is undone too) and the cooldown stamp so
+        # the user can retry right away.
+        logging.getLogger(__name__).error(
             "forgot_password: email send failed for user %s — aborting", user_username
         )
         db.rollback()
+        _last_forgot_password_request.pop(body.username, None)
         raise HTTPException(status_code=503, detail="Failed to send reset email; please try again later")
 
     db.commit()
@@ -232,7 +250,8 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
 
 
 @router.post("/reset-password")
-def reset_password(body: ResetPasswordBody, db=Depends(get_db)):
+@limiter.limit(RATE_LIMIT_RESET_PASSWORD)
+def reset_password(request: Request, body: ResetPasswordBody, db=Depends(get_db)):
     token_row = db.get(PasswordResetToken, body.token)
     if not token_row or token_row.expires_at < int(time.time()):
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")

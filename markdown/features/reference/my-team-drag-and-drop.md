@@ -66,6 +66,7 @@ Active and bench lists are both returned sorted by `slot_index` (nulls last), th
 Accepts `{"card_ids": [int, ...]}`. Sets `slot_index` to the list position for each card.
 Used for in-zone reorder and for assigning a bench position after a zone transfer. Only
 cards owned by the authenticated user are updated; unrecognised IDs are silently skipped.
+`card_ids` may hold at most 500 items; a longer list returns 422 (issue #135).
 
 ### `POST /roster/swap`
 Accepts `{"bench_card_id": int, "active_card_id": int, "slot_index": int}`. Atomically

@@ -6,7 +6,7 @@ Lets admins create, list and download SQLite database backups from the admin Set
 
 ## How it fits the existing backups
 
-Every backup is written next to the live database as `fantasy.db.backup-YYYYMMDD-HHmmss`. Scheduled, pre-reset and admin-panel backups use `backup_sqlite_db()` in `backend/database.py`, which uses the sqlite3 online backup API. `scripts/backup-db.sh` makes a plain file copy with the same name pattern. A backup can come from:
+Every backup is written next to the live database as `fantasy.db.backup-YYYYMMDD-HHmmss`. Scheduled, pre-reset and admin-panel backups use `backup_sqlite_db()` in `backend/database.py`, which uses the sqlite3 online backup API. `scripts/backup-db.sh` makes a plain file copy with the same name pattern. Both write the file with mode `0600` (owner read/write only), since a backup holds password hashes and emails. A backup can come from:
 
 - scheduled, from the background backup loop
 - taken before a season reset

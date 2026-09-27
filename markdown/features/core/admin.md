@@ -35,7 +35,7 @@ Grants a configurable number of tokens to a specific user.
 { "target_user_id": 5, "amount": 3 }
 ```
 
-Amount must be at least 1 — the endpoint returns 422 for values below 1. All grants are recorded in the audit log.
+Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. All grants are recorded in the audit log.
 
 ---
 
@@ -61,6 +61,8 @@ Regular users redeem a code via this endpoint. Returns the number of tokens gran
 ```json
 { "code": "LAUNCH2026" }
 ```
+Limited to 5 requests a minute per user (`RATE_LIMIT_REDEEM`), so codes cannot be guessed by
+brute force; the next request returns 429.
 
 ---
 
@@ -168,7 +170,9 @@ Also runs automatically after each ingest poll cycle. Requires `TOORNAMENT_*` en
 ## Audit Log
 
 ### `GET /audit-logs?limit=200`
-Returns the most recent audit log entries, newest first. All significant admin actions are recorded here automatically:
+Returns the most recent audit log entries, newest first. `limit` defaults to 200 and must be
+between 1 and 1,000 (422 otherwise). The Audit Log tab escapes `action` and `detail` before
+rendering them, since `detail` can carry user-supplied text such as usernames. All significant admin actions are recorded here automatically:
 
 | Action | Trigger |
 |---|---|
@@ -176,8 +180,9 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `user_login` | Successful user login |
 | `password_reset_requested` | Forgot-password flow issued a single-use password-reset token |
 | `password_reset_completed` | User completed a password reset via `POST /reset-password` |
+| `username_changed` | User renamed themselves via `PUT /profile/username` (`detail` has `old=` and `new=`) |
 | `token_draw` | Card drawn |
-| `token_booster_draw` | Team booster pack drawn |
+| `token_booster_draw` | Team draw: one card from a chosen team |
 | `reroll_modifiers` | User spent a token to reroll card modifiers |
 | `token_redeem` | User redeemed a code |
 | `token_grant_event_claim` | User auto-claimed tokens during an active token grant event |

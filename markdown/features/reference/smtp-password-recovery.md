@@ -21,8 +21,10 @@ flow end-to-end in local development.
    (`{APP_BASE_URL}/?reset_token={token}`, if configured) and the raw token as a manual-entry
    fallback (always included). If SMTP is not configured (`SMTP_HOST` unset), the email step is
    silently skipped — the token row still exists but is not logged or otherwise visible.
-5. The endpoint always returns `{"status": "ok"}` regardless of username or email existence,
-   preventing account enumeration.
+5. The endpoint returns `{"status": "ok"}` regardless of username or email existence,
+   preventing account enumeration. Exception (issue #135): when SMTP is configured and the send
+   fails or raises, the new token and cooldown stamp are rolled back and it returns 503. With
+   SMTP unconfigured it still returns `{"status": "ok"}`.
 6. The user completes the reset via `POST /reset-password` with the token and a new password —
    this is the only step that actually changes `user.password_hash`. See the full endpoint
    contract in [Auth & Accounts](../core/auth.md).
@@ -33,8 +35,8 @@ flow end-to-end in local development.
 
 ### `POST /forgot-password`
 
-No authentication required. Accepts `{ "username": "..." }`. Always returns `{"status": "ok"}`
-and never mutates the account's password. See [Auth & Accounts](../core/auth.md) for the full
+No authentication required. Accepts `{ "username": "..." }`. Returns `{"status": "ok"}`, or 503
+when a configured SMTP send fails, and never mutates the account's password. See [Auth & Accounts](../core/auth.md) for the full
 schema and flow description.
 
 ### `POST /reset-password`

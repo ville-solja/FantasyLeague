@@ -11,5 +11,6 @@ if [ ! -f "$DB" ]; then
     exit 1
 fi
 
-cp "$DB" "$BACKUP"
+(umask 077 && cp "$DB" "$BACKUP")
+chmod 600 "$BACKUP"
 echo "Backup created: $BACKUP"

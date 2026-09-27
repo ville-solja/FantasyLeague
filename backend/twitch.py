@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import random
+import secrets
 import string
 import time
 
@@ -30,6 +31,7 @@ from database import get_db
 from models import (AuditLog, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
+from rate_limit import limiter
 from schedule import bust_cache
 from scoring import apply_mvp_bonus_to_row
 
@@ -38,6 +40,13 @@ router = APIRouter(prefix="/twitch", tags=["twitch"])
 _LINK_CODE_TTL    = 600   # seconds — 10 minutes
 _PRESENCE_TTL     = 600   # seconds — viewers expire from pool after 10 min inactive
 _TWITCH_DROP_MAX  = int(os.getenv("TWITCH_DROP_MAX", "20"))
+
+# Per-IP limit on link-code guessing (issue #135). link_account stays a plain
+# function so direct calls keep working; link_account_route carries the
+# `request` parameter slowapi needs (same split as routers/cards.py).
+RATE_LIMIT_TWITCH_LINK = os.getenv("RATE_LIMIT_TWITCH_LINK", "10/minute")
+
+_LINK_CODE_ALPHABET = string.ascii_uppercase + string.digits
 
 
 # ---------------------------------------------------------------------------
@@ -204,14 +213,13 @@ def generate_link_code(
     user_id = current_user["user_id"]
     # Invalidate any existing unexpired code for this user
     db.query(TwitchLinkCode).filter_by(user_id=user_id).delete()
-    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(6))
     expires_at = int(time.time()) + _LINK_CODE_TTL
     db.add(TwitchLinkCode(code=code, user_id=user_id, expires_at=expires_at))
     db.commit()
     return {"code": code, "expires_in": _LINK_CODE_TTL}
 
 
-@router.post("/link")
 def link_account(
     body: LinkBody,
     payload: dict = Depends(verify_twitch_jwt),
@@ -240,6 +248,17 @@ def link_account(
     db.delete(link)
     db.commit()
     return {"linked": True, "username": user.username}
+
+
+@router.post("/link")
+@limiter.limit(RATE_LIMIT_TWITCH_LINK)
+def link_account_route(
+    request: Request,
+    body: LinkBody,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    return link_account(body, payload, db)
 
 
 # ---------------------------------------------------------------------------
@@ -287,12 +306,17 @@ def viewer_status(
 # Match data for MVP selection
 # ---------------------------------------------------------------------------
 
-@router.get("/matches/current")
-def current_matches(
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Return the 5 most recent series that have ingested match data, across any week."""
+_CURRENT_SERIES_LIMIT = 5
+
+
+def _current_series(db: Session) -> list[tuple[tuple[int, int], list[Match]]]:
+    """The series GET /twitch/matches/current offers, most recently played first.
+
+    A series is the started matches with ingested stats that share a normalised
+    team pair, sorted by start_time. Only the 5 most recent series are returned.
+    POST /twitch/mvp uses the same selection (via _eligible_mvp_match_ids) so a
+    broadcaster can only pick an MVP for a match the extension actually offers.
+    """
     now = clock.now(db)
 
     ingested_match_ids = [
@@ -300,7 +324,7 @@ def current_matches(
         for r in db.query(PlayerMatchStats.match_id).distinct().all()
     ]
     if not ingested_match_ids:
-        return {"series": []}
+        return []
 
     matches = (
         db.query(Match)
@@ -319,6 +343,32 @@ def current_matches(
         t2 = m.dire_team_id or 0
         key = (min(t1, t2), max(t1, t2))
         series_map.setdefault(key, []).append(m)
+
+    # Most-recently-played series first
+    ordered = sorted(
+        series_map.items(),
+        key=lambda item: item[1][-1].start_time if item[1] else 0,
+        reverse=True,
+    )
+    return ordered[:_CURRENT_SERIES_LIMIT]
+
+
+def _eligible_mvp_match_ids(db: Session) -> set[int]:
+    """Match IDs a broadcaster may set an MVP for: exactly those current_matches() offers."""
+    return {m.match_id for _, series_matches in _current_series(db) for m in series_matches}
+
+
+@router.get("/matches/current")
+def current_matches(
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """Return the 5 most recent series that have ingested match data, across any week."""
+    series = _current_series(db)
+    if not series:
+        return {"series": []}
+    series_map = dict(series)
+    matches = [m for _, series_matches in series for m in series_matches]
 
     # Bulk-fetch all teams and MVPs needed for this week in two queries
     all_team_ids = {tid for pair in series_map for tid in pair if tid}
@@ -384,10 +434,7 @@ def current_matches(
             "matches": match_list,
         })
 
-    # Most-recently-played series first
-    result_series.sort(key=lambda s: s["matches"][-1]["start_time"] if s["matches"] else 0, reverse=True)
-
-    return {"series": result_series[:5]}
+    return {"series": result_series}
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +559,12 @@ def _execute_token_drop(
     return winner_names, pool_size, already_dropped
 
 
+def _mvp_allowed_channels() -> set[str]:
+    """Channel IDs from TWITCH_MVP_CHANNEL_IDS (comma-separated). Empty set = any channel."""
+    raw = os.getenv("TWITCH_MVP_CHANNEL_IDS", "")
+    return {c.strip() for c in raw.split(",") if c.strip()}
+
+
 class MVPBody(BaseModel):
     match_id: int
     player_id: int
@@ -530,6 +583,20 @@ def set_mvp(
     """
     _require_broadcaster(payload)
     channel_id = payload.get("channel_id", "")
+
+    # Every check runs before any MVP row, bonus or token drop is written. The
+    # channel allowlist goes first so other channels learn nothing about IDs.
+    allowed_channels = _mvp_allowed_channels()
+    if allowed_channels and channel_id not in allowed_channels:
+        raise HTTPException(status_code=403, detail="This channel cannot set match MVPs")
+    if not db.get(Match, body.match_id):
+        raise HTTPException(status_code=404, detail="Match not found")
+    if body.match_id not in _eligible_mvp_match_ids(db):
+        raise HTTPException(status_code=403, detail="Match is not in the current series window")
+    played = db.query(PlayerMatchStats.id).filter_by(
+        match_id=body.match_id, player_id=body.player_id).first()
+    if not played:
+        raise HTTPException(status_code=404, detail="Player did not play in this match")
 
     player = db.query(Player).filter_by(id=body.player_id).first()
     if not player:

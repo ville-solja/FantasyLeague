@@ -37,7 +37,8 @@ password/email work:
   and no reset token is issued.
 - Otherwise → `_record_forgot_password_request(username)` is called **before** the reset-token
   issuance and `send_email` call (not after), so a slow or failing SMTP send can't be exploited
-  via rapid retry to bypass the cooldown. The token issuance + email logic then proceeds
+  via rapid retry to bypass the cooldown. If a configured send then fails (503, issue #135), the
+  cooldown stamp is cleared again so the user can retry at once. The token issuance + email logic then proceeds
   unchanged (see `reference/password-reset-token-flow.md` for what that now does — issue #123
   replaced the original temp-password issuance this cooldown was originally written against).
 

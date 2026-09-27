@@ -39,6 +39,11 @@ Response shape (simplified — `week` key removed):
 
 Series are sorted most-recently-played first. At most 5 series are returned.
 
+The selection lives in `twitch._current_series()`. Since issue #135 it is also the MVP
+eligibility window: `POST /twitch/mvp` returns 403 for a match outside it. The window can move
+between listing and confirming (a newer series pushes the oldest out), in which case the Live
+Config panel shows the 403 detail ("Match is not in the current series window") in its banner.
+
 ---
 
 ## Ingest Polling

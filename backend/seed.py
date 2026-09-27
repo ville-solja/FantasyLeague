@@ -174,8 +174,8 @@ DEFAULT_WEIGHTS = [
     {"key": "draw_rate_rare",       "label": "Draw rate: Rare (%)",       "value": 25.0},
     {"key": "draw_rate_epic",       "label": "Draw rate: Epic (%)",       "value": 10.0},
     {"key": "draw_rate_legendary",  "label": "Draw rate: Legendary (%)",  "value": 5.0},
-    # --- Team booster draw cost ---
-    {"key": "team_booster_cost", "label": "Team booster draw cost (Tokens)", "value": 3.0},
+    # --- Team draw cost ---
+    {"key": "team_booster_cost", "label": "Team draw cost (Tokens)", "value": 3.0},
 ]
 
 
@@ -216,6 +216,8 @@ def seed_weights():
         elif w["key"] in env_overrides and existing.value != target_value:
             logger.info("Weight %s overridden by env: %s → %s", w["key"], existing.value, target_value)
             existing.value = target_value
+        if existing is not None and existing.label != w["label"]:
+            existing.label = w["label"]
     db.commit()
     db.close()
 

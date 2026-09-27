@@ -132,7 +132,18 @@ async function createTag() {
       body: JSON.stringify({key, label}),
     });
     const data = await res.json();
-    if (!res.ok) return setStatus("tagsStatus", data.detail, false);
+    if (!res.ok) {
+      // A 422 detail is a list of validation errors; show the msg fields as text.
+      const msg = Array.isArray(data.detail)
+        ? data.detail.map(e => {
+            const field = e.loc ? e.loc[e.loc.length - 1] : "";
+            return field === "key"
+              ? "Key may only use lowercase letters, digits, _ and -, and must start with a letter or digit"
+              : (e.msg || "Invalid value");
+          }).join("; ")
+        : data.detail;
+      return setStatus("tagsStatus", msg, false);
+    }
     document.getElementById("tagKeyInput").value   = "";
     document.getElementById("tagLabelInput").value = "";
     setStatus("tagsStatus", `Tag "${data.label}" created`);

@@ -30,9 +30,11 @@ longer has any effect on an account's actual credentials.
 ## Endpoints
 
 ### `POST /forgot-password` — reworked
-Unchanged externally (`{"username": "..."}`, always `{"status": "ok"}`, enumeration-safe,
+Unchanged externally (`{"username": "..."}`, `{"status": "ok"}`, enumeration-safe,
 subject to issue #121's per-IP limit and issue #122's per-username cooldown, both applied
-before any token work). Internally:
+before any token work). Since issue #135, a configured SMTP send that fails or raises rolls
+back the new token (the previous one is kept) and returns 503; with `SMTP_HOST` unset the
+request still returns `{"status": "ok"}`. Internally:
 
 1. Deletes any existing `PasswordResetToken` row for the account (mirrors `TwitchLinkCode`'s
    invalidate-on-regenerate pattern in `twitch.py`'s `generate_link_code()`).

@@ -79,6 +79,10 @@ Backups land next to the live DB as `data/fantasy.db.backup-YYYYMMDD-HHmmss`, sa
 convention as the manual script, so both are pruned/restorable the same way. Retention only
 touches files matching that pattern — it never deletes the live database.
 
+Backups contain password hashes and email addresses, so they are owner-only (mode `0600`,
+`-rw-------`): `backup_sqlite_db()` creates the file with that mode before copying into it, and
+`scripts/backup-db.sh` copies under `umask 077` and then runs `chmod 600` (issue #135).
+
 ## Admin panel
 
 The admin Settings tab's **Database Backups** panel is the no-shell alternative to

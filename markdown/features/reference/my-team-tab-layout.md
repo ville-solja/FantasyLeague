@@ -22,7 +22,7 @@ finite card pool; cards are generated per draw (`reference/dynamic-card-creation
 - Per-rarity drop-rate percentages (Common / Rare / Epic / Legendary), sourced live from
   `GET /config`'s `draw_rates` — not a count of anything remaining
 - "Draw a card" button + token balance (`#drawCounter`)
-- "Draw Booster from Team" button, opening the team-booster modal (`reference/team-booster-draws.md`)
+- "Draw from a team (N Tokens)" button with a one-line hint under it, opening the team picker modal (`reference/team-booster-draws.md`, `reference/team-draw-explanation.md`)
 - Promo code redemption field
 - Scoring info toggle (collapsible)
 

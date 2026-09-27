@@ -21,8 +21,11 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 | Field | Rule | Error |
 |---|---|---|
 | `username` | Required. 1–64 characters. May not contain `<`, `>`, `"`, or `'` (see `reference/username-xss-fix.md`). | 422 if missing, exceeds limit, or contains a rejected character. 409 if already taken. |
-| `email` | Required. 3–254 characters. Must match `user@domain.tld` format. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
-| `password` | Required. 6–128 characters. | 422 if missing or outside length bounds. |
+| `email` | Required. 3–254 characters. Must fully match `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, so spaces, CR and LF are rejected. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
+| `password` | Required. 6–128 characters and at most 72 UTF-8 bytes (bcrypt's limit). | 422 if missing or outside length bounds. |
+
+`POST /login` does not apply the 72-byte cap: accounts created before the cap may have longer
+passwords, and bcrypt 4.x truncates the same way when hashing and verifying.
 
 The frontend validates all three fields before submitting and highlights the offending field inline. Server-side 409 conflicts (duplicate username or email) are also mapped back to the relevant field.
 
@@ -121,6 +124,8 @@ Changes the authenticated user's display name. Requires login.
 - Returns 409 if the username is already taken by another account.
 - Returns 422 if the stripped value is empty, or if it contains `<`, `>`, `"`, or `'`
   (see `reference/username-xss-fix.md`).
+- On success, updates the session's username and writes a `username_changed` audit entry
+  (`old=… new=…`).
 
 ---
 
@@ -152,8 +157,10 @@ Changes the authenticated user's password. Requires login and the current passwo
 ```
 
 - Returns 401 if `current_password` does not match the stored hash.
-- `new_password` must be at least 6 characters.
+- `new_password` must be at least 6 characters and at most 72 UTF-8 bytes (422 otherwise).
+  `current_password` is not byte-capped.
 - Clears the `must_change_password` flag if set.
+- Deletes the user's outstanding password-reset tokens, so an old reset link stops working.
 
 ---
 
@@ -187,12 +194,14 @@ Requests a password reset for the given username. Does **not** change the accoun
    token as a manual-entry fallback (always included). The wording states the current password
    remains valid and nothing changes until the reset is completed.
 
-The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to
-prevent username enumeration. It never sets `user.password_hash`, `must_change_password`, or
+The endpoint returns `{"status": "ok"}` regardless of whether the username exists, to
+prevent username enumeration. The one exception: when SMTP is configured and the send fails or
+raises, the new token, the audit entry and the cooldown stamp are rolled back (any previous token
+is kept) and the endpoint returns 503, so the user knows to retry. It never sets `user.password_hash`, `must_change_password`, or
 `temp_password_expires_at` — those fields are untouched by this endpoint entirely.
 
-**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the
-endpoint still returns `{"status": "ok"}` and the token row is still created, but the token is
+**If SMTP is not configured** (`SMTP_HOST` unset), the email step is skipped with a logged
+warning — the endpoint still returns `{"status": "ok"}` and the token row is still created, but the token is
 not visible anywhere (it is not logged). To use this flow locally, configure a real SMTP relay
 or temporarily set `SMTP_HOST` for testing.
 
@@ -205,7 +214,7 @@ authentication required (the token itself is the credential).
 { "token": "...", "new_password": "new-password" }
 ```
 
-- `new_password` is subject to `Field(min_length=6, max_length=128)`.
+- `new_password` is subject to `Field(min_length=6, max_length=128)` and at most 72 UTF-8 bytes.
 - An invalid, unknown, already-used, or expired token returns 400 with no side effects — the
   account is completely untouched.
 - A valid, unexpired token:
@@ -216,8 +225,7 @@ authentication required (the token itself is the credential).
   4. Records a `password_reset_completed` audit log entry.
   5. Returns `{"status": "ok"}`.
 
-Not separately rate-limited beyond the app-wide baseline — the token has 256 bits of entropy and
-is single-use, so a dedicated stricter limit wasn't warranted.
+Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next returns 429.
 
 ---
 
