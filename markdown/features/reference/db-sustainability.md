@@ -64,8 +64,8 @@ runs unconditionally on every reset; `scripts/backup-db.sh` is the manual pre-de
 
 ## Automatic scheduled backups
 
-A background thread (`_backup_loop` in `backend/main.py`, started unconditionally at startup
-alongside week maintenance) calls `backup_sqlite_db()` on a timer and prunes old backup files with
+A background thread (`_backup_loop` in `backend/main.py`, started at startup alongside week
+maintenance unless `BACKGROUND_TASKS_ENABLED=false`) calls `backup_sqlite_db()` on a timer and prunes old backup files with
 `cleanup_old_backups()` (both in `backend/database.py`). This is the only unattended safety net for
 the bind-mounted `data/fantasy.db` — `scripts/backup-db.sh` and the season-reset backup are both
 one-off/manual.

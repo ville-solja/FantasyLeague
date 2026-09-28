@@ -7,6 +7,8 @@ import bcrypt
 PASSWORD_MAX_BYTES = 72
 
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_USERNAME_RE = re.compile(r"[A-Za-z0-9_-]+")
+USERNAME_RULE = "Username may only contain letters A-Z and a-z, digits 0-9, underscore (_) and hyphen (-)"
 
 
 def check_password_bytes(password: str) -> str:
@@ -22,6 +24,17 @@ def check_email(email: str) -> str:
     if not _EMAIL_RE.fullmatch(email):
         raise ValueError("Invalid email address")
     return email
+
+
+def check_username(username: str) -> str:
+    """Pydantic field validator body: ASCII letters, digits, _ and - only (issue #136).
+
+    Applied to new registrations and renames only; LoginBody has no charset
+    check so pre-existing names outside the pattern can still log in.
+    """
+    if not _USERNAME_RE.fullmatch(username):
+        raise ValueError(USERNAME_RULE)
+    return username
 
 
 def hash_password(password: str) -> str:

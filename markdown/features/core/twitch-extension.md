@@ -81,6 +81,12 @@ TWITCH_DROP_MAX=20
 
 `TWITCH_EXTENSION_SECRET` is the **base64 key** from the Extension Secrets table. It is not the "Twitch API Client Secret" that appears mid-page.
 
+CORS allows only the extension iframe origin (`https://<client-id>.ext-twitch.tv`, matched by `^https://[a-z0-9]+\.ext-twitch\.tv$`), which covers Hosted Test and released versions. For **Local Test**, the panel is served from the Testing Base URI (`http://localhost:8080`), so add that origin:
+```
+CORS_EXTRA_ORIGINS=http://localhost:8080
+```
+Leave it unset in production. See `reference/security-headers.md`.
+
 ### Step 4 — Package and upload
 
 The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
@@ -200,6 +206,8 @@ skipped entirely if `TWITCH_EXTENSION_SECRET`/`TWITCH_EXTENSION_CLIENT_ID` are u
 
 The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
 
+The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/link-code` is the exception: it uses the session cookie (called from the main site's Profile tab), so it gets the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
+
 ---
 
 ## Endpoints
@@ -269,7 +277,8 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
 | `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
-| `ENV` | *(unset)* | Defense-in-depth: with `TWITCH_LOCAL_DEV=true`, setting `ENV=production` makes the JWT bypass refuse to run (500) instead of silently accepting it. |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `*.ext-twitch.tv`; `http://localhost:8080` for Local Test |
+| `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |
 
 ---
 

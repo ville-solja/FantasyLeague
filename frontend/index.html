@@ -103,7 +103,8 @@
       <h2 style="margin-bottom:0;">Create account</h2>
       <button class="ghost" onclick="closeRegisterModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <input id="regUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regUsername','regUsernameErr')" />
+    <input id="regUsername" type="text" placeholder="Username" aria-describedby="regUsernameHint" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regUsername','regUsernameErr')" />
+    <p id="regUsernameHint" style="font-size:0.75rem;color:#888;margin:0 0 4px;">Letters, digits, underscore (_) and hyphen (-) only.</p>
     <span class="field-error" id="regUsernameErr"></span>
     <input id="regEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regEmail','regEmailErr')" />
     <span class="field-error" id="regEmailErr"></span>
@@ -333,9 +334,10 @@
       <div style="margin-bottom:24px;">
         <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Username</div>
         <div class="row">
-          <input id="profileUsername" type="text" placeholder="Username" />
+          <input id="profileUsername" type="text" placeholder="Username" aria-describedby="profileUsernameHint" />
           <button onclick="saveUsername()">Save</button>
         </div>
+        <p id="profileUsernameHint" style="font-size:0.75rem;color:#888;margin:6px 0 0;">Letters, digits, underscore (_) and hyphen (-) only.</p>
         <div class="status" id="usernameStatus"></div>
       </div>
       <div>

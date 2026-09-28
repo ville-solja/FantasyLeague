@@ -5,3 +5,7 @@ services:
       - ./backend:/app
       - ./frontend:/app/frontend
       - ./assets:/app/assets:ro
+    # Dev runs over plain http, so it uses the local-dev bypass for the
+    # SECRET_KEY / HTTPS_ONLY startup checks. Never use this file in production.
+    environment:
+      - DEBUG=true

@@ -14,6 +14,14 @@ The existing pytest suite lives in `backend/tests/`. It covers scoring formulas,
 cd backend && python -m pytest tests/ -v --tb=short
 ```
 
+### Background tasks are disabled under tests
+
+`backend/tests/conftest.py` sets `BACKGROUND_TASKS_ENABLED=false` (via `os.environ.setdefault`) before `main` or any router is imported. With the variable `false`, the app lifespan still creates tables, runs migrations and seeds, then logs `Background tasks disabled (BACKGROUND_TASKS_ENABLED=false)` instead of starting its four daemon threads (`_week_maintenance_loop`, `_ingest_poll_loop`, `_profile_enrichment_loop`, `_backup_loop`). The default is `true`, so production is unchanged. The value is compared case-insensitively.
+
+Why: any test that enters `TestClient(main.app)` as a context manager runs the lifespan. Before this switch, each of those tests started all four loops. The ingest-poll, week-maintenance and profile-enrichment loops run their first pass immediately, against the test's in-memory `StaticPool` engine. That engine is a single SQLite connection shared by every thread. Each session a loop closes issues a `ROLLBACK` on that shared connection. When this lands while the request thread is between a write and its commit, the write is silently undone. Seeded cards then vanish (404), a deactivate hits a card whose activation was lost (409), or a sixth activation gets past `ROSTER_LIMIT=5` (`assert 6 == 5`). This was the long-running `test_issue_124_roster_mutation_rate_limiting.py` flake, which also hit `test_issue_121_rate_limiting.py`. The enrichment loop's executor thread could still be rolling back after the test's teardown. The backup loop also ran against the real `data/fantasy.db` and logged `Automatic DB backup failed` (`PermissionError`) when `data/` was not writable.
+
+Tests that exercise a loop call its function directly (for example `main._ingest_poll_loop()` in `test_issue_109_opendota_query_prioritization.py`). `test_test_background_task_isolation.py` checks which loops the lifespan would start by replacing `threading.Thread` with an in-process recorder, so no real loop runs in the pytest process. Only the tests that must see real threads start the app in a subprocess, with the variable removed and `DATABASE_URL` pointed at `tmp_path`.
+
 ### CI
 
 `.github/workflows/unit-tests.yml` runs the suite on every push to `main` and on every pull request. A failing test blocks the PR check.
@@ -46,6 +54,8 @@ npx playwright install chromium
 npm test
 ```
 
+`docker-compose.dev.yml` sets `DEBUG=true`, so the app starts over plain http without `SECRET_KEY` or `HTTPS_ONLY=true` (plain `docker compose up` refuses to start without them).
+
 Override the target URL with `TEST_BASE_URL=http://your-host:port npm test`.
 
 Every spec registers and logs in a fresh user, all from one IP, so the production-oriented
@@ -66,10 +76,11 @@ RATE_LIMIT_REGISTER=1000/minute
 
 ## Configuration
 
-No new environment variables are introduced. The CI workflows use existing `.env.example` values.
+The CI workflows use existing `.env.example` values.
 
 | Variable | Used by | Notes |
 |---|---|---|
 | `TEST_BASE_URL` | Playwright config | Defaults to `http://localhost:8000`; overridden in CI |
 | `SECRET_KEY` | App startup | Set to a fixed CI value in the workflow; not a repo secret |
-| `DEBUG` | App startup | Set to `true` in CI to bypass `SECRET_KEY` strength check |
+| `DEBUG` | App startup | `true` bypasses the `SECRET_KEY` presence check and the `HTTPS_ONLY` check (not a strength check; `ENV=production` refuses it). `backend/tests/conftest.py` sets it for backend tests; `ui-tests.yml` sets it in CI |
+| `BACKGROUND_TASKS_ENABLED` | App lifespan | Default `true`. Set to `false` by `backend/tests/conftest.py` so pytest never starts the background loops |

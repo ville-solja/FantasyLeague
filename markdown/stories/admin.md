@@ -119,7 +119,9 @@ privileges without my explicit action.
 
 ---
 
-### Reject Usernames Containing HTML-Significant Characters at Registration
+### Reject Usernames Containing HTML-Significant Characters at Registration *(superseded by issue #136)*
+> The character blocklist was replaced by an allowlist, `^[A-Za-z0-9_-]+$`, for new registrations and renames. See `stories/security-review-fixes.md`, Security Audit 3.
+
 **User story**
 As an operator, I want the registration and username-change endpoints to reject usernames
 containing characters that have no legitimate use in a display name, so this class of payload

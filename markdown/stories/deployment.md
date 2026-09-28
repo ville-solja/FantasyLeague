@@ -85,11 +85,13 @@ policies.
   `frame-ancestors 'self' https://www.twitch.tv https://*.ext-twitch.tv`
 - When `HTTPS_ONLY=true`, every response includes
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-- When `HTTPS_ONLY=false` (default), `Strict-Transport-Security` is not sent
+- When `HTTPS_ONLY=false` (default; only allowed in local dev since issue #118), `Strict-Transport-Security` is not sent
 - The headers are added by a middleware layer and do not require changes to individual
   endpoint handlers
 
-### CORS Wildcard Documentation
+### CORS Wildcard Documentation *(superseded by issue #136)*
+> CORS no longer uses a wildcard. It is limited to `https://<client-id>.ext-twitch.tv` plus `CORS_EXTRA_ORIGINS`. See `stories/security-review-fixes.md`, Security Audit 3.
+
 **User story**
 As a security reviewer, I want the intentional `access-control-allow-origin: *`
 configuration to be explained in the codebase and documentation so that it is not
@@ -196,6 +198,8 @@ over unencrypted connections.
   reverse proxy, or use one of the local-dev bypasses
 - The existing test suite (which imports `main.py` with `DEBUG=true` set) is unaffected by this
   new check
+- With `ENV=production` the dev bypasses are themselves refused (issue #136), so the check
+  cannot be bypassed in production
 
 ---
 

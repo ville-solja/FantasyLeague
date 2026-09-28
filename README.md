@@ -24,6 +24,10 @@ cp .env.example .env
 docker compose up -d
 ```
 
+`docker compose up -d` is the production path: the app refuses to start unless `SECRET_KEY`
+and `HTTPS_ONLY=true` (behind a TLS proxy, see [Deployment](#deployment)) are set. For local use,
+run the dev compose command below (it sets `DEBUG=true`) or set `DEBUG=true` in `.env`.
+
 The app runs at `http://localhost:8000`. Data persists in `./data/fantasy.db`.
 
 ### Local development
@@ -32,7 +36,8 @@ The app runs at `http://localhost:8000`. Data persists in `./data/fantasy.db`.
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
-Source directories are mounted for live reload.
+Source directories are mounted for live reload. The dev file sets `DEBUG=true`, so the app starts
+over plain http without `SECRET_KEY` or `HTTPS_ONLY`.
 
 ### Reset the database
 
@@ -48,6 +53,24 @@ Before every deploy, back up the database:
 bash scripts/backup-db.sh          # creates data/fantasy.db.backup-YYYYMMDD-HHmmss
 docker compose up --build -d
 ```
+
+### Production requires HTTPS
+
+Production deployments must run behind a TLS-terminating reverse proxy (nginx, Caddy, etc.)
+and set `HTTPS_ONLY=true`. The app refuses to start without it (unless `DEBUG=true` or
+`TWITCH_LOCAL_DEV=true` for local dev; `TWITCH_LOCAL_DEV` only works with `SECRET_KEY` unset), because without it session cookies are sent without
+the `Secure` flag and can be intercepted on unencrypted connections. Only set it once TLS is
+really in front of the app: browsers do not send `Secure` cookies over plain HTTP, so login
+breaks otherwise. See [HTTPS Enforcement](markdown/features/reference/https-enforcement.md).
+
+### Production environment
+
+Production environment must set `ENV=production`, `HTTPS_ONLY=true` and a `SECRET_KEY` of at
+least 32 characters. With `ENV=production` the app refuses to start if `DEBUG=true` or
+`TWITCH_LOCAL_DEV=true` is set, so the HTTPS check cannot be bypassed there.
+After deploying to staging behind the real proxy, log in, draw a card and change the roster: a 403
+"Cross-origin request refused" means the proxy rewrites `Host` — set `APP_BASE_URL`, or as a last
+resort `CSRF_ORIGIN_CHECK=false`. See [Security Headers](markdown/features/reference/security-headers.md).
 
 Schema migrations run automatically on startup via `run_migrations()` in `backend/migrate.py`.
 See [DB Sustainability](markdown/features/reference/db-sustainability.md) for the migration registry rules.

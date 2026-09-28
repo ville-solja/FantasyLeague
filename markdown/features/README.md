@@ -68,6 +68,7 @@ Implementation details, integrations, and operator tooling.
 | [Gmail SMTP Integration](reference/gmail-smtp-integration.md) | Operator guide for using Gmail or Google Workspace as the SMTP relay; adds SSL mode (port 465) alongside existing STARTTLS |
 | [Security Headers](reference/security-headers.md) | Starlette middleware that adds X-Content-Type-Options, Referrer-Policy, CSP frame-ancestors, and conditional HSTS to every response |
 | [Security Review Fixes](reference/security-review-fixes.md) | Triage and fixes for the 2026-09-26 external review (issue #135): Twitch MVP eligibility and channel allowlist, escaping, reset-email failures, route limits, SRI and file hardening |
+| [Security Audit 3](reference/security-audit-3.md) | Issue #136: Origin check against cross-site state changes, username allowlist, CORS limited to the Twitch extension, production guards on dev shortcuts, pip-audit in CI |
 | [Username XSS Fix](reference/username-xss-fix.md) | Fixes a stored-XSS privilege-escalation vulnerability where an unescaped username could execute script (e.g. calling `toggleAdmin`) in an admin's session |
 | [DB Volume Persistence](reference/db-volume-persistence.md) | Bind-mount persistence strategy for SQLite; explains why bind mount over named volume, `--volumes` safety, and reset procedure |
 | [Admin Player Pool](reference/admin-player-pool.md) | Admin CRUD for the known player pool; soft-delete with automatic token refunds to card holders |

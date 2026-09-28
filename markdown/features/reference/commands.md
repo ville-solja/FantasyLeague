@@ -127,9 +127,9 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `WEIGHTS_JSON` | *(empty)* | JSON overrides for scoring weights applied at startup |
 | `TOKEN_NAME` | `Tokens` | Display name for the token currency |
 | `INITIAL_TOKENS` | `5` | Tokens granted to newly registered users |
-| `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
-| `DEBUG` | *(unset)* | Set to `true` to bypass `SECRET_KEY` requirement for local dev — **never set in production** |
-| `HTTPS_ONLY` | `false` | Set to `true` when behind an HTTPS reverse proxy; enables `Secure` flag on session cookies |
+| `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production**; with `ENV=production` it must be at least 32 characters |
+| `DEBUG` | *(unset)* | Set to `true` for local dev: bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check — **never set in production**; with `ENV=production` startup refuses it. `docker-compose.dev.yml` and the backend test conftest set it |
+| `HTTPS_ONLY` | `false` | **Required in production.** Set to `true` behind an HTTPS reverse proxy; enables `Secure` flag on session cookies and HSTS. The app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset) |
 | `SMTP_HOST` | *(empty)* | SMTP host for email (forgot-password). Disabled if unset. |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP username |
@@ -141,8 +141,11 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
-| `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally — **never set in production** |
-| `ENV` | *(unset)* | Defense-in-depth: if `TWITCH_LOCAL_DEV=true` and `ENV=production`, the JWT bypass refuses to run (500) instead of silently accepting it in prod |
+| `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |
+| `BACKGROUND_TASKS_ENABLED` | `true` | `false` skips starting the four background threads (ingest poll, week maintenance, profile enrichment, DB backup). The backend test conftest sets it `false` — **do not set `false` in production** |
+| `ENV` | *(unset)* | Set `production` in production. Startup then fails if `DEBUG=true` or `TWITCH_LOCAL_DEV=true`, or if `SECRET_KEY` is shorter than 32 characters; the Twitch JWT bypass also refuses to run (500) |
+| `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except `/twitch/link-code`. Set `false` if the proxy rewrites `Host` |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<client-id>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
 | `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup if the email isn't already registered. See `reference/env-based-admin-seeding.md` |

@@ -23,5 +23,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements-dev.txt
 
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
+
       - name: Run pytest
         run: python -m pytest tests/ --ignore=tests/ui -v --tb=short

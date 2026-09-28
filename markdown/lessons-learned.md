@@ -9,6 +9,22 @@ Format:
 
 ---
 
+### 2026-09-28 — developer — testing
+**Problem:** Plan #118 (and its test stubs) said the backend suite imports `main` with `DEBUG=true` set by conftest. It did not. `backend/tests/conftest.py` never set `DEBUG`; individual tests `monkeypatch.setenv("DEBUG", "true")` before their first `import main`, and files such as `test_issue_109_opendota_query_prioritization.py` import `main` bare. Those only passed because an earlier test had already imported `main`, so running one alone could hit the import-time SECRET_KEY (now also HTTPS_ONLY) check. Separately, `_run_import_main` subprocess helpers that strip dev flags now also need `HTTPS_ONLY=true` to reach the check they are testing.
+**Solution:** conftest now does `os.environ.setdefault("DEBUG", "true")` before any app import. Subprocess tests that strip `DEBUG` must pass `HTTPS_ONLY=true` (and a 32+ char `SECRET_KEY` for `ENV=production`) unless they are testing the HTTPS_ONLY refusal itself.
+
+---
+
+### 2026-09-28 — developer — testing
+**Problem:** Root cause of the `test_issue_124_roster_mutation_rate_limiting.py` flake (404/409 on just-seeded cards, `assert 6 == 5` on the roster limit), also seen in `test_issue_121_rate_limiting.py` and noted in the 2026-09-24 entry below. Each `with TestClient(main.app)` ran the lifespan, which started the ingest-poll, week-maintenance and profile-enrichment loops. Each loop runs its first pass at once. The test fixtures use a `StaticPool` in-memory engine, which is one SQLite connection shared by every thread. So every session a loop closed issued a `ROLLBACK` on the test's own connection, sometimes between a request's write and its commit. A `do_rollback` trace caught all three loops rolling back during a failing test, and the enrichment executor thread kept doing so into teardown. Targeted runs with threads on failed 2 in 15. With threads off they failed 0 in 15. Rate-limiter reloads and module reload order were not the cause.
+**Solution:** `backend/tests/conftest.py` sets `BACKGROUND_TASKS_ENABLED=false` before any app import, and the lifespan skips starting the four threads when that variable is `false`. With that change, 10 of 10 full-suite runs were clean. To exercise a loop, call its function directly. For real threads, use a subprocess with the variable unset and `DATABASE_URL` pointed at `tmp_path` (see `test_test_background_task_isolation.py`). To reproduce the old behaviour, run `BACKGROUND_TASKS_ENABLED=true python3 -m pytest ...`; conftest uses `setdefault`, so the override wins. Also note that the first rate-limited request starts a `threading.Timer` (the `limits` MemoryStorage expiry timer), so thread-count assertions should not make requests.
+
+---
+
+### 2026-09-28 — developer — testing
+**Problem:** Two surprises implementing issue #136. First, PyYAML is importable locally (5.4.1) but is not in `backend/requirements*.txt`, so a test that `import yaml`s to parse `.github/workflows/*.yml` would fail in a clean env. Second, `PUT /profile/username` does `body.username.strip()` in the endpoint, but Pydantic field validators run first, so a charset validator rejects `" bob"` with 422 before the strip ever runs.
+**Solution:** Check workflow files with plain text splits (see `_workflow_steps` in `test_issue_136_security_audit_3.py`) and validate YAML by hand locally. Remember that endpoint-level normalisation runs after body validation; trim in the frontend (it already does) or normalise inside the validator.
+
 ### 2026-09-27 — security-reviewer — endpoints
 **Problem:** Rate-limited routes are registered through `*_route` wrapper functions (`redeem_code_route`, `link_account_route`, `get_card_image_route`, the roster `*_route`s) that delegate to plain functions of the same name without the suffix. An auth audit that reads the plain function's `Depends()` checks code FastAPI never registers, so a wrapper missing its guard would go unnoticed.
 **Solution:** Audit the function that carries the `@router.<method>` decorator. It is the wrapper, and it must declare `get_current_user` / `require_admin` / `verify_twitch_jwt` itself. The plain function's `Depends()` defaults only apply to direct calls from tests.

@@ -177,3 +177,27 @@ cost.
 - Documents the actual build-tooling and FastAPI-serving integration cost observed (not
   estimated) from doing the spike, as a follow-up note to the evaluation doc
 - Intentionally deferred and separately gated — not implemented as part of the first story
+
+---
+
+## Test Background Task Isolation
+
+### Tests Never Start Background Threads
+**User story**
+As a developer, I want the test suite to run without the app's background threads so that tests cannot interfere with each other through a shared database.
+
+**Acceptance criteria**
+- A `BACKGROUND_TASKS_ENABLED` env var, default `true`, controls whether the lifespan starts the week-maintenance, ingest-poll, profile-enrichment and backup threads
+- `backend/tests/conftest.py` sets `BACKGROUND_TASKS_ENABLED=false` before any app module is imported, so no test starts those threads by default
+- The lifespan still runs its synchronous startup work, such as table creation, migrations and seeding, and logs one line saying background tasks are disabled
+- A test that opens `TestClient(main.app)` as a context manager starts no new threads. The number of live threads is the same before and after
+- No test writes a backup file into the real `data/` directory, and the "Automatic DB backup failed" log line no longer appears during the suite
+
+### Stable Full-Suite Runs
+**User story**
+As a developer, I want the full suite to pass repeatedly so that a red CI build means a real regression.
+
+**Acceptance criteria**
+- `test_issue_124_roster_mutation_rate_limiting.py` passes in 10 consecutive full-suite runs
+- The suite-size tripwire in `test_issue_85_split_admin_router.py` passes in the same runs
+- Production behaviour is unchanged: with the variable unset, all four threads start as before

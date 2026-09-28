@@ -68,3 +68,57 @@ As the operator, I want third-party scripts pinned and local files protected so 
 - Tag keys must match `^[a-z0-9][a-z0-9_-]*$` when created, and `_apply_stickers` skips any path that resolves outside `STICKER_DIR`
 - `POST /admin/season/reset` aborts with 500 and deletes nothing when `backup_sqlite_db()` returns `None`
 - Backup files are written with mode `0600`
+
+---
+
+## Security Audit 3 Hardening (issue #136)
+
+### Reject Cross-Origin State Changes
+**User story**
+As a logged-in player, I want the server to refuse state-changing requests that come from another site, including sibling subdomains, so that a malicious page cannot act with my session.
+
+**Acceptance criteria**
+- For `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus `POST /twitch/link-code`, which uses the session cookie), the server returns 403 when the `Origin` header is present and its host matches neither the request's `Host` nor the host of `APP_BASE_URL`
+- When `Origin` is absent, the same check applies to the `Referer` header. When both are absent the request is allowed, as for API clients and tests
+- `GET`, `HEAD` and `OPTIONS` requests are never blocked
+- `CSRF_ORIGIN_CHECK=false` disables the check; it is on by default
+- A request from `https://test.kana-cards.com` to `https://kana-cards.com/draw` is refused with 403
+
+
+---
+
+### Username Allowlist for New Names
+**User story**
+As an admin, I want new usernames limited to plain letters, digits, underscores and hyphens, so that names cannot carry markup, look-alike characters or invisible characters.
+
+**Acceptance criteria**
+- `POST /register` and `PUT /profile/username` accept only usernames matching `^[A-Za-z0-9_-]+$`, still 1–64 characters, and return 422 otherwise with a message listing the allowed characters
+- Existing accounts whose names fall outside the pattern can still log in, and keep their name until they choose to change it
+- The registration and profile forms show the allowed characters before submission
+
+
+---
+
+### CORS Limited to the Twitch Extension
+**User story**
+As the operator, I want cross-origin API access limited to the Twitch extension so that scanners stop flagging a wildcard CORS policy, while the extension keeps working.
+
+**Acceptance criteria**
+- CORS allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$`, plus any comma-separated origins in `CORS_EXTRA_ORIGINS`
+- `allow_credentials` stays `False`
+- A preflight from `https://abc123.ext-twitch.tv` succeeds, and one from `https://example.com` gets no `Access-Control-Allow-Origin` header
+- The main site keeps working, because it is same-origin and needs no CORS
+- `.env.example` documents `CORS_EXTRA_ORIGINS`, with `http://localhost:8080` as the example for Twitch Local Test
+
+
+---
+
+### Production Guardrails for Secrets and Dependencies
+**User story**
+As the operator, I want production to refuse insecure dev shortcuts and CI to flag vulnerable dependencies, so that a stray flag or a new CVE is caught before it reaches users.
+
+**Acceptance criteria**
+- With `ENV=production`, startup fails with a clear error when `DEBUG=true` or `TWITCH_LOCAL_DEV=true`, even if `SECRET_KEY` is set
+- With `ENV=production`, startup fails when `SECRET_KEY` is shorter than 32 characters
+- The unit-test GitHub workflow runs `pip-audit -r backend/requirements.txt` and fails on a known vulnerability
+- The deploy notes say to set `ENV=production` (README.md Deployment section in the repo; the hoster's external notes should match)

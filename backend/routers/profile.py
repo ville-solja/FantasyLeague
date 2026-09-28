@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 from database import get_db
 from deps import _audit, get_current_user
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
-from auth import check_password_bytes, hash_password, verify_password
+from auth import check_password_bytes, check_username, hash_password, verify_password
 
 router = APIRouter()
 
@@ -12,12 +12,7 @@ router = APIRouter()
 class UpdateUsernameBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
 
-    @field_validator("username")
-    @classmethod
-    def no_html_significant_chars(cls, v: str) -> str:
-        if any(c in v for c in '<>"\''):
-            raise ValueError("Username cannot contain < > \" '")
-        return v
+    _username_chars = field_validator("username")(check_username)
 
 
 class UpdatePlayerIdBody(BaseModel):

@@ -12,7 +12,7 @@ from database import get_db
 from deps import _audit, get_current_user
 from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
                     NotificationDismissal, PasswordResetToken)
-from auth import check_email, check_password_bytes, hash_password, verify_password
+from auth import check_email, check_password_bytes, check_username, hash_password, verify_password
 from email_utils import email_configured, send_email
 from rate_limit import limiter, key_by_user_or_ip
 
@@ -86,13 +86,7 @@ class RegisterBody(BaseModel):
 
     _password_bytes = field_validator("password")(check_password_bytes)
     _email_shape = field_validator("email")(check_email)
-
-    @field_validator("username")
-    @classmethod
-    def no_html_significant_chars(cls, v: str) -> str:
-        if any(c in v for c in '<>"\''):
-            raise ValueError("Username cannot contain < > \" '")
-        return v
+    _username_chars = field_validator("username")(check_username)
 
 
 class ForgotPasswordBody(BaseModel):

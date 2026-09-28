@@ -17,9 +17,14 @@ def health():
     return {"status": "ok"}
 ```
 Unconditional — it never touches the database, never checks the background threads
-(`_week_maintenance_loop`, `_ingest_poll_loop`, `_profile_enrichment_loop`), and cannot return
+(`_week_maintenance_loop`, `_ingest_poll_loop`, `_profile_enrichment_loop`, `_backup_loop`), and cannot return
 anything other than 200. This is a pure **liveness** check ("the ASGI process is accepting
 HTTP requests"), not a **readiness** check ("the service can actually do its job").
+
+A startup `RuntimeError` from the import-time guards (`HTTPS_ONLY` not set, `SECRET_KEY`
+missing, `ENV=production` guards) kills the process before `/health` exists. Under
+`restart: unless-stopped` this shows up as a restart loop (`docker compose ps` shows
+`Restarting`; read `docker compose logs backend`), not as `unhealthy`.
 
 **`docker-compose.yml`** already wires a healthcheck against it:
 ```yaml

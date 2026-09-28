@@ -20,12 +20,16 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 
 | Field | Rule | Error |
 |---|---|---|
-| `username` | Required. 1–64 characters. May not contain `<`, `>`, `"`, or `'` (see `reference/username-xss-fix.md`). | 422 if missing, exceeds limit, or contains a rejected character. 409 if already taken. |
+| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 409 if already taken. |
 | `email` | Required. 3–254 characters. Must fully match `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, so spaces, CR and LF are rejected. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
 | `password` | Required. 6–128 characters and at most 72 UTF-8 bytes (bcrypt's limit). | 422 if missing or outside length bounds. |
 
 `POST /login` does not apply the 72-byte cap: accounts created before the cap may have longer
-passwords, and bcrypt 4.x truncates the same way when hashing and verifying.
+passwords, and bcrypt 4.x truncates the same way when hashing and verifying. Nor does it apply
+the username character rule, so accounts created before the rule keep logging in with their
+existing name.
+
+The register form shows the allowed username characters under the field before submission.
 
 The frontend validates all three fields before submitting and highlights the offending field inline. Server-side 409 conflicts (duplicate username or email) are also mapped back to the relevant field.
 
@@ -120,10 +124,11 @@ Changes the authenticated user's display name. Requires login.
 { "username": "NewName" }
 ```
 
-- Leading/trailing whitespace is stripped.
 - Returns 409 if the username is already taken by another account.
-- Returns 422 if the stripped value is empty, or if it contains `<`, `>`, `"`, or `'`
-  (see `reference/username-xss-fix.md`).
+- Returns 422 unless the value matches the same rule as registration: 1–64 characters of
+  letters, digits, `_` and `-` (see `reference/security-audit-3.md`). Surrounding whitespace
+  is rejected rather than stripped; the profile form trims it before sending and shows the
+  allowed characters under the field.
 - On success, updates the session's username and writes a `username_changed` audit entry
   (`old=… new=…`).
 
@@ -238,7 +243,7 @@ equivalent local-dev bypasses at startup, `backend/main.py`). Conversely, settin
 that combination would silently accept the insecure Twitch JWT bypass in what looks like a
 production config, so the app refuses to boot rather than risk it.
 
-Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie.
+Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie. It is required outside local dev: the app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset; issue #118, see `reference/https-enforcement.md`).
 
 ---
 
@@ -247,8 +252,8 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | Variable | Default | Description |
 |---|---|---|
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
-| `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy |
-| `DEBUG` | `false` | Bypasses `SECRET_KEY` requirement for local dev — **never set in production** |
+| `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy — **must be `true` in production**; startup fails without it unless `DEBUG`/`TWITCH_LOCAL_DEV` is set (`TWITCH_LOCAL_DEV` only with `SECRET_KEY` unset) |
+| `DEBUG` | `false` | Bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
 | `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |

@@ -4,7 +4,7 @@ Visible only to logged-in users.
 
 ## Account panel
 
-- **Username** — editable field pre-filled with the current username. Save button updates it server-side; must remain unique.
+- **Username** — editable field pre-filled with the current username. Save button updates it server-side; must remain unique. A muted hint below the field lists the allowed characters (letters, digits, underscore, hyphen); other characters get a 422 error in the status line.
 - **Password** — two fields (current password, new password). Requires the correct current password before accepting a change.
 
 ## Dota 2 Player panel
