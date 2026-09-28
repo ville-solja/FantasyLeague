@@ -108,7 +108,7 @@ function _weeklySummaryPlayerHtml(p) {
       ${mvpLabel}
       <img src="${p.avatar_url || ''}" alt="" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'">
       <div>${playerLink(p.player_id, p.name)}</div>
-      <div class="${pointsClass}">${p.points}</div>
+      <div class="${pointsClass}">${p.points == null ? '—' : _escHtml(p.points)}</div>
     </div>`;
 }
 
@@ -130,6 +130,7 @@ function _weeklySummaryMatchHtml(m, revealed) {
         <div class="weekly-summary-match-vs-cell">
           <span>vs</span>
           ${playedOn ? `<span class="weekly-summary-match-date">${playedOn}</span>` : ''}
+          ${m.excluded_from_scoring ? '<span class="badge common">Not scored</span>' : ''}
           ${m.vod_url ? `<a class="stream-link" style="font-size:0.75rem;" href="${_escHtml(m.vod_url)}" target="_blank" rel="noopener noreferrer">VOD ↗</a>` : ''}
         </div>
         ${_weeklySummaryTeamColHtml(m.dire_team, winnerDire, true)}

@@ -129,6 +129,9 @@ def backup_sqlite_db() -> str | None:
     if not os.path.isfile(db_path):
         return None
     backup_path = f"{db_path}.backup-{time.strftime('%Y%m%d-%H%M%S')}"
+    # Create the file owner-only up front so it is never world-readable, even
+    # briefly: backups hold password hashes and emails.
+    os.close(os.open(backup_path, os.O_CREAT | os.O_WRONLY, 0o600))
     src = sqlite3.connect(db_path)
     try:
         dst = sqlite3.connect(backup_path)
@@ -138,4 +141,5 @@ def backup_sqlite_db() -> str | None:
             dst.close()
     finally:
         src.close()
+    os.chmod(backup_path, 0o600)
     return backup_path

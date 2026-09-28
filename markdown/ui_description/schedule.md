@@ -16,6 +16,7 @@ Shows all series (fixtures) for the season in a single chronological list spanni
   - Actual match start timestamp (from the database, not the planned date).
   - Series result (e.g. "2–0" or "1–1"), resolved from match outcomes in the database.
   - VOD link where available.
+  - Per-game rows (heroes, kills, MVP, duration, OpenDota link). A game an admin excluded from fantasy scoring shows a "Not scored" badge.
 - Series with no database match (unresolved result) show "vs" and the planned date.
 
 ### Stale notice

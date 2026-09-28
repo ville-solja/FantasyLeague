@@ -95,7 +95,8 @@ guard). Response shape gains a `games` array per resolved series inside `series_
   "team1_kills": 32, "team2_kills": 28,
   "team1_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null],
   "team2_heroes": ["https://cdn.cloudflare.steamstatic.com/...png", null, null, null, null],
-  "mvp_player_id": 123456789, "mvp_player_name": "SomePlayer"
+  "mvp_player_id": 123456789, "mvp_player_name": "SomePlayer",
+  "excluded_from_scoring": false
 }
 ```
 `duration` is `null` for matches ingested before the `Match.duration` column existed, until
@@ -103,6 +104,8 @@ re-ingested. Hero slots are padded to 5 with `null` when fewer than 5 heroes res
 (unresolved) series are untouched — `series_result` stays `None`, with no `games` key.
 `mvp_player_id`/`mvp_player_name` are both `null` when the match has no `player_match_stats` row
 with `is_mvp = true` — the same flag `POST /twitch/mvp` sets (see `core/twitch-extension.md`).
+`excluded_from_scoring` is `true` when an admin excluded the match from fantasy scoring. The game
+is still listed, with a "Not scored" badge (see `reference/unparseable-match-handling.md`).
 
 Response also gains a top-level `extra_results` array — see "Schedule-independent results" above
 — of series shaped like a resolved sheet series (`team1`/`team2`/`team1_id`/`team2_id`/

@@ -341,11 +341,12 @@ def _build_games(db, match_ids, team1_id, team2_id):
     hero_icon_map = _fetch_hero_icon_map()
 
     duration_rows = db.execute(
-        text("SELECT match_id, duration FROM matches WHERE match_id IN :ids")
+        text("SELECT match_id, duration, excluded_from_scoring FROM matches WHERE match_id IN :ids")
             .bindparams(bindparam("ids", expanding=True)),
         {"ids": ids},
     ).fetchall()
     duration_by_match = {r[0]: r[1] for r in duration_rows}
+    excluded_match_ids = {r[0] for r in duration_rows if r[2]}
 
     kills_rows = db.execute(
         text("""
@@ -396,6 +397,7 @@ def _build_games(db, match_ids, team1_id, team2_id):
             "team2_heroes": _pad5(heroes_by_match_team.get((match_id, team2_id), [])),
             "mvp_player_id": mvp_player_id,
             "mvp_player_name": mvp_player_name,
+            "excluded_from_scoring": match_id in excluded_match_ids,
         })
     return games
 

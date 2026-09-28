@@ -1,7 +1,7 @@
 import os
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -11,6 +11,8 @@ from models import Card, CardModifier, League, Match, MatchBan, Player, PlayerMa
 from routers.leaderboard import compute_season_standings
 
 router = APIRouter()
+
+AUDIT_LOG_LIMIT_MAX = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +104,10 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
         raise HTTPException(
             status_code=500,
             detail=f"Season reset aborted — pre-reset backup failed: {e}")
+    if backup_path is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Season reset aborted — no pre-reset backup could be taken")
 
     counts = {
         "player_match_stats":    db.query(PlayerMatchStats).delete(synchronize_session=False),
@@ -134,7 +140,8 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
 
 
 @router.get("/audit-logs")
-def get_audit_logs(db=Depends(get_db), limit: int = 200, _: dict = Depends(require_admin)):
+def get_audit_logs(db=Depends(get_db), limit: int = Query(200, ge=1, le=AUDIT_LOG_LIMIT_MAX),
+                   _: dict = Depends(require_admin)):
     rows = db.execute(text("""
         SELECT id, timestamp, actor_username, action, detail
         FROM audit_logs

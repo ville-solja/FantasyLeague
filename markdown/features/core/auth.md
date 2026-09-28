@@ -20,9 +20,16 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 
 | Field | Rule | Error |
 |---|---|---|
-| `username` | Required. 1–64 characters. May not contain `<`, `>`, `"`, or `'` (see `reference/username-xss-fix.md`). | 422 if missing, exceeds limit, or contains a rejected character. 409 if already taken. |
-| `email` | Required. 3–254 characters. Must match `user@domain.tld` format. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
-| `password` | Required. 6–128 characters. | 422 if missing or outside length bounds. |
+| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 409 if already taken. |
+| `email` | Required. 3–254 characters. Must fully match `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, so spaces, CR and LF are rejected. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
+| `password` | Required. 6–128 characters and at most 72 UTF-8 bytes (bcrypt's limit). | 422 if missing or outside length bounds. |
+
+`POST /login` does not apply the 72-byte cap: accounts created before the cap may have longer
+passwords, and bcrypt 4.x truncates the same way when hashing and verifying. Nor does it apply
+the username character rule, so accounts created before the rule keep logging in with their
+existing name.
+
+The register form shows the allowed username characters under the field before submission.
 
 The frontend validates all three fields before submitting and highlights the offending field inline. Server-side 409 conflicts (duplicate username or email) are also mapped back to the relevant field.
 
@@ -117,10 +124,13 @@ Changes the authenticated user's display name. Requires login.
 { "username": "NewName" }
 ```
 
-- Leading/trailing whitespace is stripped.
 - Returns 409 if the username is already taken by another account.
-- Returns 422 if the stripped value is empty, or if it contains `<`, `>`, `"`, or `'`
-  (see `reference/username-xss-fix.md`).
+- Returns 422 unless the value matches the same rule as registration: 1–64 characters of
+  letters, digits, `_` and `-` (see `reference/security-audit-3.md`). Surrounding whitespace
+  is rejected rather than stripped; the profile form trims it before sending and shows the
+  allowed characters under the field.
+- On success, updates the session's username and writes a `username_changed` audit entry
+  (`old=… new=…`).
 
 ---
 
@@ -152,8 +162,10 @@ Changes the authenticated user's password. Requires login and the current passwo
 ```
 
 - Returns 401 if `current_password` does not match the stored hash.
-- `new_password` must be at least 6 characters.
+- `new_password` must be at least 6 characters and at most 72 UTF-8 bytes (422 otherwise).
+  `current_password` is not byte-capped.
 - Clears the `must_change_password` flag if set.
+- Deletes the user's outstanding password-reset tokens, so an old reset link stops working.
 
 ---
 
@@ -187,12 +199,14 @@ Requests a password reset for the given username. Does **not** change the accoun
    token as a manual-entry fallback (always included). The wording states the current password
    remains valid and nothing changes until the reset is completed.
 
-The endpoint always returns `{"status": "ok"}` regardless of whether the username exists, to
-prevent username enumeration. It never sets `user.password_hash`, `must_change_password`, or
+The endpoint returns `{"status": "ok"}` regardless of whether the username exists, to
+prevent username enumeration. The one exception: when SMTP is configured and the send fails or
+raises, the new token, the audit entry and the cooldown stamp are rolled back (any previous token
+is kept) and the endpoint returns 503, so the user knows to retry. It never sets `user.password_hash`, `must_change_password`, or
 `temp_password_expires_at` — those fields are untouched by this endpoint entirely.
 
-**If SMTP is not configured** (`SMTP_HOST` unset), the email step is silently skipped — the
-endpoint still returns `{"status": "ok"}` and the token row is still created, but the token is
+**If SMTP is not configured** (`SMTP_HOST` unset), the email step is skipped with a logged
+warning — the endpoint still returns `{"status": "ok"}` and the token row is still created, but the token is
 not visible anywhere (it is not logged). To use this flow locally, configure a real SMTP relay
 or temporarily set `SMTP_HOST` for testing.
 
@@ -205,7 +219,7 @@ authentication required (the token itself is the credential).
 { "token": "...", "new_password": "new-password" }
 ```
 
-- `new_password` is subject to `Field(min_length=6, max_length=128)`.
+- `new_password` is subject to `Field(min_length=6, max_length=128)` and at most 72 UTF-8 bytes.
 - An invalid, unknown, already-used, or expired token returns 400 with no side effects — the
   account is completely untouched.
 - A valid, unexpired token:
@@ -216,8 +230,7 @@ authentication required (the token itself is the credential).
   4. Records a `password_reset_completed` audit log entry.
   5. Returns `{"status": "ok"}`.
 
-Not separately rate-limited beyond the app-wide baseline — the token has 256 bits of entropy and
-is single-use, so a dedicated stricter limit wasn't warranted.
+Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next returns 429.
 
 ---
 
@@ -230,7 +243,7 @@ equivalent local-dev bypasses at startup, `backend/main.py`). Conversely, settin
 that combination would silently accept the insecure Twitch JWT bypass in what looks like a
 production config, so the app refuses to boot rather than risk it.
 
-Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie.
+Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie. It is required outside local dev: the app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset; issue #118, see `reference/https-enforcement.md`).
 
 ---
 
@@ -239,8 +252,8 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 | Variable | Default | Description |
 |---|---|---|
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
-| `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy |
-| `DEBUG` | `false` | Bypasses `SECRET_KEY` requirement for local dev — **never set in production** |
+| `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy — **must be `true` in production**; startup fails without it unless `DEBUG`/`TWITCH_LOCAL_DEV` is set (`TWITCH_LOCAL_DEV` only with `SECRET_KEY` unset) |
+| `DEBUG` | `false` | Bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
 | `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |

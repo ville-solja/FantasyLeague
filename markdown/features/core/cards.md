@@ -299,7 +299,7 @@ The card is automatically placed in the active roster if fewer than `ROSTER_LIMI
 
 Generates and returns a PNG card image for any card (owner not required). Returns `Content-Type: image/png` with `no-cache` headers.
 
-Returns 404 if the card does not exist. Returns 503 if the Pillow image library is not available in the runtime environment.
+Returns 404 if the card does not exist. Returns 503 if the Pillow image library is not available in the runtime environment. Returns 429 after 60 requests a minute from one IP (`RATE_LIMIT_CARD_IMAGE`).
 
 The image includes the player avatar, team logo, card rarity border, player name, and any stat modifier labels. Used by the frontend draw reveal modal.
 

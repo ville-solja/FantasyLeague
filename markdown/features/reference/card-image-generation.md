@@ -117,6 +117,7 @@ Returns the composited card PNG for any card regardless of ownership. Response h
 
 - Returns **404** if the card does not exist.
 - Returns **503** if the Pillow library is not installed in the runtime environment.
+- Returns **429** after 60 requests a minute from one IP (`RATE_LIMIT_CARD_IMAGE`), since every call renders a new image.
 
 The image is generated fresh on every request (no server-side caching). The frontend adds a cache-bust query parameter after a reroll so the browser does not serve a stale image from its own cache.
 

@@ -373,7 +373,7 @@ async function loadDeck() {
   }
 }
 
-// ── Team Booster Draw ──────────────────────────────────────────────────────
+// ── Team Draw (internal name: booster) ──────────────────────────────────────────────────────
 
 let _selectedBoosterTeamId = null;
 
@@ -383,8 +383,8 @@ function _updateBoosterBtn() {
   const cost = _teamBoosterCost ?? 3;
   // Always show the real cost on the button itself — it differs from the
   // 1-token standard draw, and #drawCounter/#deckStatus only reflect the
-  // standard-draw balance, not what a booster draw actually costs.
-  btn.textContent = `Draw Booster from Team (${cost} ${_tokenName})`;
+  // standard-draw balance, not what a team draw actually costs.
+  btn.textContent = `Draw from a team (${cost} ${_tokenName})`;
   if (!activeUserId) {
     btn.disabled = true;
     btn.title = "Log in to draw";
@@ -412,7 +412,7 @@ async function loadBoosterTeams() {
     if (!res.ok) { grid.innerHTML = `<span style="color:#c44;">${teams.detail ?? "Error"}</span>`; return; }
 
     const cost = _teamBoosterCost ?? 3;
-    if (costLabel) costLabel.textContent = `Costs ${cost} ${_tokenName} per draw`;
+    if (costLabel) costLabel.textContent = `Costs ${cost} ${_tokenName} for 1 card`;
 
     if (!teams.length) { grid.innerHTML = '<span style="color:#555;">No teams available.</span>'; return; }
 

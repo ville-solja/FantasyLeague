@@ -27,6 +27,8 @@ async function loadConfig() {
       const cfg = await res.json();
       _tokenName = cfg.token_name || "Tokens";
       if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
+      const htpCostEl = document.getElementById("htpTeamDrawCost");
+      if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
       const parts = [];
       if (cfg.app_release) parts.push(cfg.app_release);
       if (cfg.app_version) parts.push(cfg.app_version);
@@ -108,7 +110,14 @@ function toggleScoringInfo() {
 }
 
 function _escHtml(s) {
-  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// URLs from external data (avatars, stream links, hero icons) go into src/href
+// only when they are plain http(s) links; anything else (javascript:, data:) is dropped.
+function _safeUrl(u) {
+  const s = String(u ?? "").trim();
+  return /^https?:\/\//i.test(s) ? s : "";
 }
 
 function playerLink(id, name) {

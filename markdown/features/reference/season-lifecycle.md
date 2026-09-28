@@ -32,7 +32,8 @@ is already archived. Logged as `admin_season_archived`.
 ### `POST /admin/season/reset`
 Body: `{"force": false}`. Before any deletes, takes an automatic online backup of the live
 SQLite database (`backup_sqlite_db()` in `backend/database.py`, using SQLite's online backup
-API so it's safe against a WAL-mode connection). If the backup fails, the reset aborts with a
+API so it's safe against a WAL-mode connection). If the backup fails, or returns no file
+because the database is not a local SQLite file or the SQLite file is missing (issue #135), the reset aborts with a
 500 and **no deletes are performed** — there's no code path that wipes season data without a
 fresh backup existing first. Deletes all rows from `player_match_stats`, `match_bans`,
 `matches`, `weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`,

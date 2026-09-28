@@ -65,7 +65,7 @@ def _team_dict(team):
 def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
     match_rows = db.execute(text("""
         SELECT m.match_id, m.radiant_team_id, m.dire_team_id, m.radiant_win,
-               m.start_time, m.vod_url
+               m.start_time, m.vod_url, m.excluded_from_scoring
         FROM matches m
         WHERE m.week_override_id = :week_id
            OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)
@@ -90,6 +90,7 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
         }
 
     match_ids = [r.match_id for r in match_rows]
+    excluded_ids = {r.match_id for r in match_rows if r.excluded_from_scoring}
     players_by_match = {}
     if revealed and match_ids:
         stat_rows = (
@@ -104,7 +105,7 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
                 "name": player.name,
                 "avatar_url": player.avatar_url,
                 "team_id": stats.team_id,
-                "points": round(stats.fantasy_points or 0.0, 1),
+                "points": None if stats.match_id in excluded_ids else round(stats.fantasy_points or 0.0, 1),
                 "is_mvp": bool(stats.is_mvp),
                 "on_roster": player.id in roster_player_ids,
             })
@@ -123,6 +124,7 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
             "winner_team_id": winner_team_id if revealed else None,
             "vod_url": r.vod_url,
             "start_time": r.start_time,
+            "excluded_from_scoring": bool(r.excluded_from_scoring),
         }
         if revealed:
             match["players"] = players_by_match.get(r.match_id, [])

@@ -185,6 +185,8 @@ the time of review"* and third-party setup must be ready on that channel:
   reviewer nothing to validate
 - Make sure the review channel is actually live at review time — Twitch requires this
   independent of anything above
+- If `TWITCH_MVP_CHANNEL_IDS` is set on the server, add the review channel's ID to it before
+  the review, or Flow 2 (MVP selection) fails with 403
 
 ## Steps to reproduce (paste into "Testing Instructions")
 

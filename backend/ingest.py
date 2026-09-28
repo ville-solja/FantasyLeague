@@ -6,7 +6,7 @@ import time
 from sqlalchemy import func
 
 from database import SessionLocal
-from models import Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
+from models import AuditLog, Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json, post_json as opendota_post_json
 from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -174,6 +174,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
         start_time=data.get("start_time"),
         radiant_win=data.get("radiant_win"),
         duration=duration,
+        parse_status=_parse_status_for(data),
     )
     db.add(match)
 
@@ -294,9 +295,18 @@ def _is_unparsed(data: dict) -> bool:
     return data.get("version") is None
 
 
+def _parse_status_for(data: dict) -> str:
+    return "unparsed" if _is_unparsed(data) else "parsed"
+
+
+def _default_parse_retry_hours() -> int:
+    return int(os.getenv("INGEST_PARSE_RETRY_HOURS", "48"))
+
+
 def find_unparsed_match_ids(db, max_age_hours: int) -> list[int]:
     """Match IDs from the last `max_age_hours` whose stat rows sum to 0 on the three
-    parse-only signature stats (teamfight_participation, stuns, obs_placed)."""
+    parse-only signature stats (teamfight_participation, stuns, obs_placed). Matches
+    marked 'unparseable' (by an admin or by mark_stuck_matches_unparseable) are skipped."""
     if max_age_hours <= 0:
         return []
     cutoff = int(time.time()) - max_age_hours * 3600
@@ -304,6 +314,7 @@ def find_unparsed_match_ids(db, max_age_hours: int) -> list[int]:
         db.query(Match.match_id)
         .join(PlayerMatchStats, PlayerMatchStats.match_id == Match.match_id)
         .filter(Match.start_time >= cutoff)
+        .filter((Match.parse_status.is_(None)) | (Match.parse_status != "unparseable"))
         .group_by(Match.match_id)
         .having(func.coalesce(func.sum(PlayerMatchStats.teamfight_participation), 0) == 0)
         .having(func.coalesce(func.sum(PlayerMatchStats.stuns), 0) == 0)
@@ -330,6 +341,7 @@ def refresh_match_stats(db, match_id: int, weights: dict) -> str:
     match = db.get(Match, match_id)
     if match is None:
         return "unavailable"
+    match.parse_status = "parsed"
 
     radiant_team_id = data.get("radiant_team_id") or match.radiant_team_id
     dire_team_id = data.get("dire_team_id") or match.dire_team_id
@@ -377,13 +389,41 @@ def request_parse(match_id: int) -> bool:
     return True
 
 
+def mark_stuck_matches_unparseable(db, max_age_hours: int) -> list[int]:
+    """Mark every match still 'unparsed' and older than `max_age_hours` as 'unparseable'
+    (one `match_marked_unparseable` audit row each) so the retry pass stops asking
+    OpenDota for it and admins see it flagged. Never touches excluded_from_scoring.
+    Commits. Returns the marked match IDs."""
+    if max_age_hours <= 0:
+        return []
+    cutoff = int(time.time()) - max_age_hours * 3600
+    stuck = (
+        db.query(Match)
+        .filter(Match.parse_status == "unparsed", Match.start_time < cutoff)
+        .order_by(Match.match_id)
+        .all()
+    )
+    now = int(time.time())
+    for match in stuck:
+        match.parse_status = "unparseable"
+        db.add(AuditLog(timestamp=now, action="match_marked_unparseable",
+                        detail=f"match {match.match_id} still unparsed after {max_age_hours}h"))
+        logger.info("Parse retry: marked match %d unparseable", match.match_id)
+    if stuck:
+        db.commit()
+    return [m.match_id for m in stuck]
+
+
 def retry_unparsed_matches(max_age_hours: int) -> dict:
     """Run one re-check pass over recent unparsed matches.
 
-    Returns {"checked", "refreshed", "requested", "still_unparsed"}. A match that could
-    not be re-fetched ("unavailable") counts as still unparsed — from the app's point of
-    view it is — and is requested like any other unparsed match. A failure on one match
-    is logged and does not stop the others. Caller holds INGEST_LOCK.
+    Returns {"checked", "refreshed", "requested", "still_unparsed"}.
+    A match that could not be re-fetched ("unavailable") counts as still unparsed — from
+    the app's point of view it is — and is requested like any other unparsed match. A
+    failure on one match is logged and does not stop the others. After the pass, matches
+    still unparsed past the retry window are marked unparseable; the window for that step
+    is never shorter than INGEST_PARSE_RETRY_HOURS, so a narrow manual pass cannot flag
+    recent matches. Caller holds INGEST_LOCK.
     """
     summary = {"checked": 0, "refreshed": 0, "requested": 0, "still_unparsed": 0}
     if max_age_hours <= 0:
@@ -391,9 +431,7 @@ def retry_unparsed_matches(max_age_hours: int) -> dict:
     db = SessionLocal()
     try:
         match_ids = find_unparsed_match_ids(db, max_age_hours)
-        if not match_ids:
-            return summary
-        weights = {w.key: w.value for w in db.query(Weight).all()}
+        weights = {w.key: w.value for w in db.query(Weight).all()} if match_ids else {}
         for match_id in match_ids:
             summary["checked"] += 1
             try:
@@ -408,6 +446,11 @@ def retry_unparsed_matches(max_age_hours: int) -> dict:
             summary["still_unparsed"] += 1
             if _parse_request_due(match_id) and request_parse(match_id):
                 summary["requested"] += 1
+        try:
+            mark_stuck_matches_unparseable(db, max(max_age_hours, _default_parse_retry_hours()))
+        except Exception:
+            logger.exception("Parse retry: marking stuck matches unparseable failed")
+            db.rollback()
     finally:
         db.close()
     return summary

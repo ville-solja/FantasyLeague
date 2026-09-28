@@ -81,6 +81,12 @@ TWITCH_DROP_MAX=20
 
 `TWITCH_EXTENSION_SECRET` is the **base64 key** from the Extension Secrets table. It is not the "Twitch API Client Secret" that appears mid-page.
 
+CORS allows only the extension iframe origin (`https://<client-id>.ext-twitch.tv`, matched by `^https://[a-z0-9]+\.ext-twitch\.tv$`), which covers Hosted Test and released versions. For **Local Test**, the panel is served from the Testing Base URI (`http://localhost:8080`), so add that origin:
+```
+CORS_EXTRA_ORIGINS=http://localhost:8080
+```
+Leave it unset in production. See `reference/security-headers.md`.
+
 ### Step 4 — Package and upload
 
 The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
@@ -200,15 +206,20 @@ skipped entirely if `TWITCH_EXTENSION_SECRET`/`TWITCH_EXTENSION_CLIENT_ID` are u
 
 The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
 
+The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/link-code` is the exception: it uses the session cookie (called from the main site's Profile tab), so it gets the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
+
 ---
 
 ## Endpoints
 
 ### `POST /twitch/link-code`
-Authenticated Fantasy session. Generates a 6-char linking code. TTL: 10 minutes.
+Authenticated Fantasy session. Generates a 6-char linking code (`A-Z0-9`, drawn with Python's
+`secrets` module). TTL: 10 minutes.
 
 ### `POST /twitch/link`
 Twitch JWT. Body: `{code}`. Consumes code, stores Twitch opaque user ID on the user record.
+Limited to 10 requests a minute per client IP (`RATE_LIMIT_TWITCH_LINK`) so codes cannot be
+brute-forced; the 11th returns 429.
 
 ### `POST /twitch/heartbeat`
 Twitch JWT. Records viewer presence. Call every ~55 seconds.
@@ -219,10 +230,27 @@ Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 ### `GET /twitch/matches/current`
 Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
 data, regardless of week boundaries, with per-match player lists. See
-`reference/twitch-mvp-series-window.md`.
+`reference/twitch-mvp-series-window.md`. The series selection lives in
+`twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id}`.
+
+Before anything is written (MVP row, score bonus, token drop, audit entry), the request must
+pass these checks in order (issue #135):
+
+| Check | Failure |
+|---|---|
+| When `TWITCH_MVP_CHANNEL_IDS` is set, the calling channel is in it (checked first, so other channels learn nothing about IDs) | 403 |
+| The match exists | 404 `Match not found` |
+| The match is one `GET /twitch/matches/current` offers: started, has ingested stats, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
+| The player has a stat row for that match | 404 |
+
+Without these checks any channel with the extension installed could mint token drops and change
+scores for arbitrary match IDs. The admin MVP endpoint (`POST /admin/matches/{match_id}/mvp`)
+is not restricted to the series window.
+
+On success it upserts the MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
 ---
 
@@ -246,8 +274,11 @@ Twitch JWT (broadcaster role). Body: `{match_id, player_id}`. Upserts MVP, trigg
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
+| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
-| `ENV` | *(unset)* | Defense-in-depth: with `TWITCH_LOCAL_DEV=true`, setting `ENV=production` makes the JWT bypass refuse to run (500) instead of silently accepting it. |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `*.ext-twitch.tv`; `http://localhost:8080` for Local Test |
+| `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |
 
 ---
 

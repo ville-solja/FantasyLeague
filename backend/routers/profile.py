@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
-from deps import get_current_user
-from models import Player, SeasonArchive, User, UserTag, TagDefinition
-from auth import hash_password, verify_password
+from deps import _audit, get_current_user
+from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
+from auth import check_password_bytes, check_username, hash_password, verify_password
 
 router = APIRouter()
 
@@ -12,12 +12,7 @@ router = APIRouter()
 class UpdateUsernameBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
 
-    @field_validator("username")
-    @classmethod
-    def no_html_significant_chars(cls, v: str) -> str:
-        if any(c in v for c in '<>"\''):
-            raise ValueError("Username cannot contain < > \" '")
-        return v
+    _username_chars = field_validator("username")(check_username)
 
 
 class UpdatePlayerIdBody(BaseModel):
@@ -27,6 +22,9 @@ class UpdatePlayerIdBody(BaseModel):
 class ChangePasswordBody(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password:     str = Field(min_length=6, max_length=128)
+
+    # Only the new password is capped; the current one may predate the cap.
+    _password_bytes = field_validator("new_password")(check_password_bytes)
 
 
 @router.get("/me")
@@ -73,7 +71,8 @@ def get_profile(user_id: int, db=Depends(get_db),
 
 
 @router.put("/profile/username")
-def update_username(body: UpdateUsernameBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+def update_username(request: Request, body: UpdateUsernameBody, db=Depends(get_db),
+                    current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
     if not user:
@@ -84,8 +83,13 @@ def update_username(body: UpdateUsernameBody, db=Depends(get_db), current_user: 
     existing = db.query(User).filter(User.username == username, User.id != user_id).first()
     if existing:
         raise HTTPException(status_code=409, detail="Username already taken")
+    old_username = user.username
     user.username = username
+    if old_username != username:
+        _audit(db, "username_changed", actor_id=user.id, actor_username=username,
+               detail=f"old={old_username} new={username}")
     db.commit()
+    request.session["username"] = username
     return {"username": username}
 
 
@@ -118,5 +122,7 @@ def change_password(body: ChangePasswordBody, db=Depends(get_db), current_user: 
     user.password_hash = hash_password(body.new_password)
     user.must_change_password = False
     user.temp_password_expires_at = None
+    # A password change supersedes any reset link still sitting in the inbox.
+    db.query(PasswordResetToken).filter_by(user_id=user.id).delete()
     db.commit()
     return {"status": "ok"}

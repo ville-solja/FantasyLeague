@@ -5,6 +5,7 @@ import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -207,6 +208,21 @@ def _backup_loop():
         _stop_event.wait(timeout=_DB_BACKUP_INTERVAL_HOURS * 3600)
 
 
+def _start_background_threads():
+    if _DEMO_MODE:
+        logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
+    else:
+        threading.Thread(target=_ingest_poll_loop, daemon=True).start()
+        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+    threading.Thread(target=_week_maintenance_loop, daemon=True).start()
+    logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
+    threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
+    logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
+    threading.Thread(target=_backup_loop, daemon=True).start()
+    logger.info("DB backup thread started (interval=%dh, retention=%dd)",
+                _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _log_level = logging.DEBUG if os.getenv("DEBUG", "").lower() == "true" else logging.INFO
@@ -232,17 +248,12 @@ async def lifespan(app: FastAPI):
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
             "endpoints are active. NEVER enable in production."
         )
-        logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
+    if os.getenv("BACKGROUND_TASKS_ENABLED", "true").lower() != "false":
+        _start_background_threads()
     else:
-        threading.Thread(target=_ingest_poll_loop, daemon=True).start()
-        logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
-    threading.Thread(target=_week_maintenance_loop, daemon=True).start()
-    logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
-    threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
-    logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
-    threading.Thread(target=_backup_loop, daemon=True).start()
-    logger.info("DB backup thread started (interval=%dh, retention=%dd)",
-                _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
+        # The test suite disables these: they share the tests' in-memory DB
+        # connection and outlive the test that started them.
+        logger.info("Background tasks disabled (BACKGROUND_TASKS_ENABLED=false)")
     yield
     _stop_event.set()
 
@@ -250,6 +261,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 _secret_key = os.environ.get("SECRET_KEY", "")
 _is_dev = os.getenv("TWITCH_LOCAL_DEV") == "true" or os.getenv("DEBUG", "").lower() == "true"
+_MIN_PRODUCTION_SECRET_LEN = 32
+if os.getenv("ENV", "").lower() == "production":
+    _active_dev_flags = [
+        name for name in ("DEBUG", "TWITCH_LOCAL_DEV")
+        if os.getenv(name, "").lower() == "true"
+    ]
+    if _active_dev_flags:
+        raise RuntimeError(
+            f"[SECURITY] ENV=production but {' and '.join(f'{n}=true' for n in _active_dev_flags)} "
+            "is set. Dev bypasses must never run in production — unset them."
+        )
+    if len(_secret_key) < _MIN_PRODUCTION_SECRET_LEN:
+        raise RuntimeError(
+            f"[SECURITY] ENV=production requires a SECRET_KEY of at least "
+            f"{_MIN_PRODUCTION_SECRET_LEN} characters (got {len(_secret_key)})."
+        )
 if not _secret_key:
     if not _is_dev:
         raise RuntimeError(
@@ -262,6 +289,13 @@ if not _secret_key:
     )
     _secret_key = "dev-secret-change-me"
 _https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
+if not _https_only and not _is_dev:
+    raise RuntimeError(
+        "[SECURITY] HTTPS_ONLY is not set. Session cookies would be sent without the Secure "
+        "flag, making them interceptable over unencrypted connections. Set HTTPS_ONLY=true "
+        "once the app is behind a TLS-terminating reverse proxy (nginx, Caddy, etc.). "
+        "To bypass this check in local dev, set DEBUG=true or TWITCH_LOCAL_DEV=true."
+    )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -287,14 +321,92 @@ app.add_middleware(
     max_age=86400,
 )
 app.add_middleware(SecurityHeadersMiddleware)
-# Twitch extension iframes are served from *.ext-twitch.tv — a different origin.
-# All /twitch/* endpoints authenticate via JWT (not cookies), so allow_origins="*"
-# is safe: cross-origin requests cannot carry session cookies, so regular
-# session-protected endpoints are unaffected.
+
+
+_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _url_host(url: str, scheme_hint: str | None = None) -> str | None:
+    """Return lower-cased host[:port] of a URL (default port dropped), or None when unparseable.
+
+    With scheme_hint, `url` is a bare Host header value such as "example.com:8000".
+    """
+    try:
+        parts = urlsplit(f"//{url}" if scheme_hint else url)
+        host = parts.hostname
+        port = parts.port
+    except ValueError:
+        return None
+    scheme = scheme_hint or parts.scheme.lower()
+    if not scheme or not host:
+        return None
+    # A TLS-terminating proxy may forward https traffic as http, so a bare
+    # Host header drops either default port.
+    defaults = set(_DEFAULT_PORTS.values()) if scheme_hint else {_DEFAULT_PORTS.get(scheme)}
+    if port is None or port in defaults:
+        return host
+    return f"{host}:{port}"
+
+
+# /twitch/* routes use a Twitch JWT, except these, which use the session cookie
+# (called from the main site's Profile tab) and so get the Origin check too.
+_COOKIE_AUTH_TWITCH_PATHS = {"/twitch/link-code"}
+
+
+class OriginCheckMiddleware(BaseHTTPMiddleware):
+    """Refuse cross-origin state-changing requests (issue #136).
+
+    The session cookie is SameSite=Lax, which does not stop same-site sibling
+    subdomains (e.g. test.kana-cards.com). Unsafe methods carrying an Origin
+    (or, failing that, a Referer) whose host matches neither the request Host
+    nor APP_BASE_URL get 403. Requests with neither header (API clients,
+    tests) pass. /twitch/* uses a JWT in Authorization, not the cookie, and is
+    called from the extension origin, so it is exempt, except the cookie-auth
+    routes in _COOKIE_AUTH_TWITCH_PATHS. Settings are read per
+    request so CSRF_ORIGIN_CHECK / APP_BASE_URL changes need no reload.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if (
+            request.method in _UNSAFE_METHODS
+            and (not request.url.path.startswith("/twitch/")
+                 or request.url.path in _COOKIE_AUTH_TWITCH_PATHS)
+            and os.getenv("CSRF_ORIGIN_CHECK", "true").lower() != "false"
+        ):
+            source = request.headers.get("origin") or request.headers.get("referer")
+            if source:
+                source_host = _url_host(source)
+                allowed = set()
+                req_host = _url_host(request.headers.get("host", "").strip(), request.url.scheme)
+                if req_host:
+                    allowed.add(req_host)
+                base_url = os.getenv("APP_BASE_URL", "")
+                if base_url:
+                    base_host = _url_host(base_url)
+                    if base_host:
+                        allowed.add(base_host)
+                if source_host is None or source_host not in allowed:
+                    return JSONResponse(
+                        {"detail": "Cross-origin request refused"}, status_code=403
+                    )
+        return await call_next(request)
+
+
+app.add_middleware(OriginCheckMiddleware)
+# Only the Twitch extension iframe (https://<client-id>.ext-twitch.tv) calls
+# the API cross-origin; the main site is same-origin and needs no CORS. All
+# /twitch/* endpoints authenticate via JWT in the Authorization header, not
+# cookies, so allow_credentials stays False. CORS_EXTRA_ORIGINS adds origins
+# such as http://localhost:8080 for Twitch Local Test.
+_cors_extra_origins = [
+    o.strip() for o in os.getenv("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Must stay False with allow_origins="*" — see comment above
+    allow_origins=_cors_extra_origins,
+    allow_origin_regex=r"^https://[a-z0-9]+\.ext-twitch\.tv$",
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )

@@ -18,6 +18,11 @@ from email.mime.text import MIMEText
 _logger = logging.getLogger(__name__)
 
 
+def email_configured() -> bool:
+    """True when SMTP_HOST is set, i.e. send_email() will actually try to send."""
+    return bool(os.getenv("SMTP_HOST", ""))
+
+
 def send_email(to_address: str, subject: str, body: str) -> bool:
     """Send a plain-text email. Returns True on success, False if SMTP is not configured."""
     host = os.getenv("SMTP_HOST", "")

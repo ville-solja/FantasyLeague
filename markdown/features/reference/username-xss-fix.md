@@ -42,6 +42,8 @@ reported as a user being "promoted/demoted constantly."
    the value contains any of `<`, `>`, `"`, `'`. Does not retroactively rename any already-stored
    username — the display-side fix is what protects against those, confirmed by
    `test_existing_legacy_html_username_unaffected_by_new_validation`.
+   Issue #136 later replaced this blocklist with an allowlist (`^[A-Za-z0-9_-]+$`,
+   `check_username()` in `backend/auth.py`); see `security-audit-3.md`.
 
 Covered by `backend/tests/test_issue_115_username_xss_fix.py` (12 tests: 6 static file-content
 assertions for the three escaping sites, 6 endpoint tests via `TestClient` for the registration/

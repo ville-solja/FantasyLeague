@@ -9,6 +9,44 @@ Format:
 
 ---
 
+### 2026-09-28 — security-patcher — testing
+**Problem:** CodeQL `py/bad-tag-filter` (CWE-20/116/185/186) flags any regex that matches HTML tags, e.g. `re.findall(r"<script\b[^>]*>", html)`, including in static-check tests (alerts #26 and #27 in `test_issue_135_security_review_fixes.py`). Such a regex really does miss `<SCRIPT>`, single-quoted attributes and `>` inside attribute values.
+**Solution:** Parse the HTML with the standard library's `html.parser.HTMLParser` (lower-cases tag and attribute names, handles quoting) and inspect the attribute dicts (see `_script_tags()` / `_external_scripts()`). Don't just add `re.IGNORECASE`, which leaves the other regex gaps and can draw the same alert again.
+
+---
+
+### 2026-09-28 — developer — testing
+**Problem:** Plan #118 (and its test stubs) said the backend suite imports `main` with `DEBUG=true` set by conftest. It did not. `backend/tests/conftest.py` never set `DEBUG`; individual tests `monkeypatch.setenv("DEBUG", "true")` before their first `import main`, and files such as `test_issue_109_opendota_query_prioritization.py` import `main` bare. Those only passed because an earlier test had already imported `main`, so running one alone could hit the import-time SECRET_KEY (now also HTTPS_ONLY) check. Separately, `_run_import_main` subprocess helpers that strip dev flags now also need `HTTPS_ONLY=true` to reach the check they are testing.
+**Solution:** conftest now does `os.environ.setdefault("DEBUG", "true")` before any app import. Subprocess tests that strip `DEBUG` must pass `HTTPS_ONLY=true` (and a 32+ char `SECRET_KEY` for `ENV=production`) unless they are testing the HTTPS_ONLY refusal itself.
+
+---
+
+### 2026-09-28 — developer — testing
+**Problem:** Root cause of the `test_issue_124_roster_mutation_rate_limiting.py` flake (404/409 on just-seeded cards, `assert 6 == 5` on the roster limit), also seen in `test_issue_121_rate_limiting.py` and noted in the 2026-09-24 entry below. Each `with TestClient(main.app)` ran the lifespan, which started the ingest-poll, week-maintenance and profile-enrichment loops. Each loop runs its first pass at once. The test fixtures use a `StaticPool` in-memory engine, which is one SQLite connection shared by every thread. So every session a loop closed issued a `ROLLBACK` on the test's own connection, sometimes between a request's write and its commit. A `do_rollback` trace caught all three loops rolling back during a failing test, and the enrichment executor thread kept doing so into teardown. Targeted runs with threads on failed 2 in 15. With threads off they failed 0 in 15. Rate-limiter reloads and module reload order were not the cause.
+**Solution:** `backend/tests/conftest.py` sets `BACKGROUND_TASKS_ENABLED=false` before any app import, and the lifespan skips starting the four threads when that variable is `false`. With that change, 10 of 10 full-suite runs were clean. To exercise a loop, call its function directly. For real threads, use a subprocess with the variable unset and `DATABASE_URL` pointed at `tmp_path` (see `test_test_background_task_isolation.py`). To reproduce the old behaviour, run `BACKGROUND_TASKS_ENABLED=true python3 -m pytest ...`; conftest uses `setdefault`, so the override wins. Also note that the first rate-limited request starts a `threading.Timer` (the `limits` MemoryStorage expiry timer), so thread-count assertions should not make requests.
+
+---
+
+### 2026-09-28 — developer — testing
+**Problem:** Two surprises implementing issue #136. First, PyYAML is importable locally (5.4.1) but is not in `backend/requirements*.txt`, so a test that `import yaml`s to parse `.github/workflows/*.yml` would fail in a clean env. Second, `PUT /profile/username` does `body.username.strip()` in the endpoint, but Pydantic field validators run first, so a charset validator rejects `" bob"` with 422 before the strip ever runs.
+**Solution:** Check workflow files with plain text splits (see `_workflow_steps` in `test_issue_136_security_audit_3.py`) and validate YAML by hand locally. Remember that endpoint-level normalisation runs after body validation; trim in the frontend (it already does) or normalise inside the validator.
+
+### 2026-09-27 — security-reviewer — endpoints
+**Problem:** Rate-limited routes are registered through `*_route` wrapper functions (`redeem_code_route`, `link_account_route`, `get_card_image_route`, the roster `*_route`s) that delegate to plain functions of the same name without the suffix. An auth audit that reads the plain function's `Depends()` checks code FastAPI never registers, so a wrapper missing its guard would go unnoticed.
+**Solution:** Audit the function that carries the `@router.<method>` decorator. It is the wrapper, and it must declare `get_current_user` / `require_admin` / `verify_twitch_jwt` itself. The plain function's `Depends()` defaults only apply to direct calls from tests.
+
+### 2026-09-27 — developer — testing
+**Problem:** A rate-limit test helper that did `importlib.reload(importlib.import_module("routers.x"))` after reloading `rate_limit` counted every request twice (a 5/minute limit returned 429 on the 3rd call). When the router module had not been imported yet in that process, `import_module` decorated its routes against the fresh `Limiter`, and the immediate `reload` decorated them again against the same instance, so slowapi registered two identical limits under one endpoint name. It only showed up when the test ran in isolation or first, not in the full suite.
+**Solution:** Reload only modules already in `sys.modules`; import the rest once: `importlib.reload(sys.modules[n]) if n in sys.modules else importlib.import_module(n)` (see `_build_app` in `test_issue_135_security_review_fixes.py`). Build a minimal `FastAPI()` with only the routers under test, `SessionMiddleware`, and `app.state.limiter = rate_limit.limiter` rather than reloading `main`, which starts lifespan background loops.
+
+---
+
+### 2026-09-25 — developer — testing
+**Problem:** When a test must show that excluding a match removes "exactly its points", comparing the card totals to `before - match.fantasy_points` does not work. Card points (`_compute_card_points`) are recomputed from aggregate stat sums, and the death pool scales with `match_count`, so a match's contribution to a card is not its own `fantasy_points`. Also, `plan-unparseable-match-handling` said `card_draw.py` uses points for pick weighting. It does not: picks are weighted by how many cards the user owns.
+**Solution:** Measure the aggregate three times: with the match excluded, with the flag cleared, and after deleting that match's stat rows. Then assert excluded == deleted, excluded != baseline, and cleared == baseline (see `_assert_exclusion_removes_exactly_that_match` in `test_unparseable_match_handling.py`). Check a plan's claims about a module against the code before filtering it.
+
+---
+
 ### 2026-09-24 — security-reviewer — endpoints
 **Problem:** Password fields allow `max_length=128` characters, but bcrypt 4.x (`bcrypt>=4.2,<5.0`, 4.3.0 installed) silently uses only the first 72 **bytes** — `checkpw(b'a'*72 + b'ZZZZZZZZ', hashpw(b'a'*80, ...))` returns `True`. bcrypt 5.x instead raises `ValueError` for >72-byte input, so lifting the `<5.0` pin would turn long passwords into 500s.
 **Solution:** When touching password handling, cap password fields at 72 bytes (validate the UTF-8 encoded length, not character count), or pre-hash before bcrypt. Check this before bumping bcrypt past 5.0.

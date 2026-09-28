@@ -15,7 +15,9 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 class TagBody(BaseModel):
-    key:   str = Field(..., min_length=1, max_length=50)
+    # The key names a sticker file (assets/stickers/{key}.png), so keep it to a
+    # safe filename alphabet.
+    key:   str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9][a-z0-9_-]*$")
     label: str = Field(..., min_length=1, max_length=100)
 
 

@@ -433,6 +433,35 @@ def _m025_card_modifiers_assists(conn):
         logger.info("Migration: card_modifiers — widened stat_key CHECK constraint to allow assists")
 
 
+def _m027_match_parse_status(conn):
+    """Add matches.parse_status / matches.excluded_from_scoring and backfill
+    parse_status from the parse-retry signature (ingest.find_unparsed_match_ids):
+    a match whose stat rows sum to 0 on teamfight_participation, stuns and
+    obs_placed is 'unparsed', every other match is 'parsed'. Only NULL statuses
+    are backfilled, so a re-run never overwrites 'unparseable'."""
+    match_cols = [r[1] for r in conn.execute(text("PRAGMA table_info(matches)")).fetchall()]
+    if "parse_status" not in match_cols:
+        conn.execute(text("ALTER TABLE matches ADD COLUMN parse_status TEXT"))
+    if "excluded_from_scoring" not in match_cols:
+        conn.execute(text(
+            "ALTER TABLE matches ADD COLUMN excluded_from_scoring BOOLEAN NOT NULL DEFAULT 0"
+        ))
+    conn.execute(text("""
+        UPDATE matches SET parse_status = 'unparsed'
+        WHERE parse_status IS NULL
+          AND match_id IN (
+            SELECT match_id FROM player_match_stats
+            GROUP BY match_id
+            HAVING COALESCE(SUM(teamfight_participation), 0) = 0
+               AND COALESCE(SUM(stuns), 0) = 0
+               AND COALESCE(SUM(obs_placed), 0) = 0
+          )
+    """))
+    conn.execute(text("UPDATE matches SET parse_status = 'parsed' WHERE parse_status IS NULL"))
+    conn.commit()
+    logger.info("Migration: matches — added parse_status/excluded_from_scoring and backfilled parse_status")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -483,6 +512,7 @@ MIGRATIONS = [
     ("024_code_redemption_unique",   _m024_code_redemption_unique),
     ("025_card_modifiers_assists",   _m025_card_modifiers_assists),
     ("026_twitch_mvp_drop_unique",   _m026_twitch_mvp_drop_unique),
+    ("027_match_parse_status",       _m027_match_parse_status),
 ]
 
 

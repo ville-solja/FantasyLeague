@@ -37,7 +37,7 @@ class BulkAddPlayersBody(BaseModel):
 
 
 class RemovePlayersBody(BaseModel):
-    player_ids: List[int]
+    player_ids: List[int] = Field(max_length=500)
 
 
 @router.get("/admin/players")

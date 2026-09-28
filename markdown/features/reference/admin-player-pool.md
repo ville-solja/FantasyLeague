@@ -87,6 +87,8 @@ Historical `PlayerMatchStats` rows are untouched.
 {"player_ids": [12345, 67890]}
 ```
 
+`player_ids` may hold at most 500 items; a longer list returns 422 (issue #135).
+
 **Response:** `{"ok": true}`
 
 **Audit events:**

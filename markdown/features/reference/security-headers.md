@@ -26,31 +26,35 @@ in an iframe on Twitch pages.
 HSTS must only be sent over HTTPS connections. Sending it over plain HTTP causes browsers
 to refuse future plain-HTTP requests, which breaks local development. The header is only
 added when `HTTPS_ONLY=true`, which indicates the app is behind an HTTPS reverse proxy.
+`HTTPS_ONLY` is itself required outside local dev (the app refuses to start without it
+unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true`; see `https-enforcement.md`), so in practice
+HSTS is only absent in local development.
 
 ---
 
 ## CORS Configuration
 
-The app uses `allow_origins=["*"]` in `CORSMiddleware`. This is intentional:
+`CORSMiddleware` no longer uses a wildcard (issue #136). Its settings are:
 
-- The Twitch panel extension is served from `*.ext-twitch.tv`, a different origin. It
-  must be able to call `/twitch/*` endpoints using an `Authorization` header carrying a
-  Twitch-signed JWT.
-- `allow_credentials=False` is set alongside the wildcard. This means the browser will
-  never attach session cookies to cross-origin requests, so the wildcard does not expose
-  session-protected endpoints to cross-origin abuse.
-- All `/twitch/*` endpoints authenticate via JWT (`verify_twitch_jwt`), not cookies.
-  Cross-origin callers cannot impersonate a logged-in user.
+- `allow_origin_regex=r"^https://[a-z0-9]+\.ext-twitch\.tv$"`. The Twitch panel extension is served from `https://<client-id>.ext-twitch.tv`, a different origin, and calls `/twitch/*` endpoints with an `Authorization` header carrying a Twitch-signed JWT.
+- `allow_origins` holds the parsed, comma-separated `CORS_EXTRA_ORIGINS` list, empty by default. Set it to `http://localhost:8080` for Twitch Local Test. It is read at startup.
+- `allow_credentials=False`. Browsers never attach session cookies to allowed cross-origin requests. All `/twitch/*` endpoints authenticate via JWT (`verify_twitch_jwt`), not cookies.
 
-If the Twitch extension is removed in the future, `allow_origins` should be restricted
-to the app's own origin and `allow_credentials` may be set to `True`.
+Any other origin gets no `Access-Control-Allow-Origin` header. The main site is same-origin and needs no CORS.
+
+---
+
+## Origin Check (CSRF)
+
+`OriginCheckMiddleware` refuses `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus `POST /twitch/link-code`, which uses the session cookie) with `403 {"detail": "Cross-origin request refused"}` when the `Origin` header, or the `Referer` if there is no `Origin`, names a host other than the request's `Host` header or the host of `APP_BASE_URL`. Requests with neither header pass. `CSRF_ORIGIN_CHECK=false` turns it off. The main case it covers is a page on a sibling subdomain, which `SameSite=Lax` does not stop. See [Security Audit 3](security-audit-3.md) for details.
 
 ---
 
 ## Implementation
 
-`SecurityHeadersMiddleware` is a `BaseHTTPMiddleware` subclass registered in
-`backend/main.py` after `SessionMiddleware` and before `CORSMiddleware`. It reads the
+`SecurityHeadersMiddleware` and `OriginCheckMiddleware` are `BaseHTTPMiddleware` subclasses
+registered in `backend/main.py` after `SessionMiddleware` and before `CORSMiddleware`, so
+`CORSMiddleware` answers preflights before the Origin check runs. `SecurityHeadersMiddleware` reads the
 already-resolved `_https_only` boolean (derived from the `HTTPS_ONLY` env var) to decide
 whether to include `Strict-Transport-Security`.
 

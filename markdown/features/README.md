@@ -63,9 +63,12 @@ Implementation details, integrations, and operator tooling.
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |
-| [Team Booster Draws](reference/team-booster-draws.md) | Team-specific booster packs: 3-Token draw restricted to a chosen team's player roster; configurable cost |
+| [Team Booster Draws](reference/team-booster-draws.md) | Team draw (internal name "booster"): one card for 3 Tokens, restricted to a chosen team's player roster; configurable cost |
+| [Team Draw Explanation](reference/team-draw-explanation.md) | User-facing "team draw" naming for the booster draw, its How to Play explanation, and the admin cost label |
 | [Gmail SMTP Integration](reference/gmail-smtp-integration.md) | Operator guide for using Gmail or Google Workspace as the SMTP relay; adds SSL mode (port 465) alongside existing STARTTLS |
 | [Security Headers](reference/security-headers.md) | Starlette middleware that adds X-Content-Type-Options, Referrer-Policy, CSP frame-ancestors, and conditional HSTS to every response |
+| [Security Review Fixes](reference/security-review-fixes.md) | Triage and fixes for the 2026-09-26 external review (issue #135): Twitch MVP eligibility and channel allowlist, escaping, reset-email failures, route limits, SRI and file hardening |
+| [Security Audit 3](reference/security-audit-3.md) | Issue #136: Origin check against cross-site state changes, username allowlist, CORS limited to the Twitch extension, production guards on dev shortcuts, pip-audit in CI |
 | [Username XSS Fix](reference/username-xss-fix.md) | Fixes a stored-XSS privilege-escalation vulnerability where an unescaped username could execute script (e.g. calling `toggleAdmin`) in an admin's session |
 | [DB Volume Persistence](reference/db-volume-persistence.md) | Bind-mount persistence strategy for SQLite; explains why bind mount over named volume, `--volumes` safety, and reset procedure |
 | [Admin Player Pool](reference/admin-player-pool.md) | Admin CRUD for the known player pool; soft-delete with automatic token refunds to card holders |
@@ -95,3 +98,4 @@ Implementation details, integrations, and operator tooling.
 | [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |
+| [Unparseable Match Handling](reference/unparseable-match-handling.md) | Parse status per match, partial-stat markers for players, admin retry-parse, auto-flagging of stuck matches, and admin exclusion of unparseable matches from scoring |

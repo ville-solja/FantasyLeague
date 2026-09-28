@@ -276,7 +276,7 @@ team for 3 Tokens so that I can target the players I care about rather than rely
 random selection from the full pool.
 
 **Acceptance criteria**
-- A "Draw Booster from Team" button is visible in the Draw tab
+- A "Draw from a team (N Tokens)" button (originally "Draw Booster from Team"; renamed by issue #103) is visible in the Draw tab
 - Clicking the button opens a team selection modal listing all teams with at least one
   player with match data, each showing how many drawable (player, rarity) combinations
   remain for the current user
@@ -284,7 +284,7 @@ random selection from the full pool.
 - Selecting a team and confirming spends `team_booster_cost` Tokens and draws a card whose
   player is from that team; rarity is still determined by the standard `draw_rate_*` weights
 - The drawn card is revealed in the same reveal modal as a standard draw
-- The "Draw Booster" button is disabled with "Not enough Tokens" if the user's balance is
+- The "Draw from a team" button is disabled with "Not enough Tokens" if the user's balance is
   below the configured cost
 - After a successful draw, the team selector modal updates its remaining counts and the
   token balance refreshes
@@ -372,3 +372,44 @@ different numbers for the same thing.
 - `GET /deck`'s response shape, and its use by the team-booster panel (`GET /deck/booster`,
   `loadBoosterTeams()`), are unaffected — this fix only changes how `loadDeck()`'s status line
   interprets data, not the `/deck` endpoint's contract or any other caller of it
+
+---
+
+## Team Draw Explanation and Naming
+
+### Team Draw Explained on How to Play
+**User story**
+As a player, I want the How to Play tab to explain the team draw so that I know what I get for the extra tokens before spending them.
+
+**Acceptance criteria**
+- The Users subtab's Cards & Drawing section has a bullet for the team draw, right after the standard draw bullet
+- The bullet says the team draw gives **one card** from a team you choose, at the current team draw cost in tokens
+- The cost shown is read from `GET /config` (`team_booster_cost`) at page load, with 3 as the fallback when it is unavailable
+- The bullet says rarity uses the same odds as the standard draw, and that you get a player from that team you do not own yet, until you own every player on it
+- The bullet says fully collected teams are greyed out in the team picker
+
+
+---
+
+### Clear Team Draw Naming in the Draw Panel
+**User story**
+As a player, I want the team draw's buttons and labels to say plainly what it does so that I don't expect a pack of several cards.
+
+**Acceptance criteria**
+- The Draw panel button reads "Draw from a team (N Tokens)", using the live cost and the configured token name
+- A one-line hint under the button reads "One card from a team you pick, favouring players you don't own yet."
+- The team picker's confirm button reads "Draw 1 card from this team", and its cost line reads "Costs N Tokens for 1 card"
+- No user-visible text in `frontend/index.html` or `frontend/app-cards.js` contains the word "Booster"; internal identifiers are unchanged
+- The reveal modal's "Draw another card" button still repeats a team draw from the same team after a team draw, as it does today
+
+
+---
+
+### Team Draw Cost Label for Admins
+**User story**
+As an admin, I want the cost setting to use the same name players see so that I know which draw it controls.
+
+**Acceptance criteria**
+- The Scoring Weights panel labels `team_booster_cost` as "Team draw cost (Tokens)"
+- `seed_weights()` refreshes the label of every existing weight row to the label defined in `DEFAULT_WEIGHTS` on startup, so relabels reach deployed databases
+- Refreshing labels never changes a weight's value

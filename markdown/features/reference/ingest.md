@@ -31,7 +31,10 @@ After the per-league loop, `ingest.retry_unparsed_matches()` re-checks every mat
 `teamfight_participation`, `stuns` and `obs_placed`. A match that now has a parsed payload gets
 its `player_match_stats` rows replaced and `fantasy_points` recomputed (Twitch MVP bonus
 preserved); one still reporting `version: null` gets a parse request, at most once per match per
-`INGEST_PARSE_REREQUEST_HOURS` (default 6).
+`INGEST_PARSE_REREQUEST_HOURS` (default 6). Matches with `parse_status = 'unparseable'` are
+skipped. At the end of each pass, every match still `unparsed` and older than the window is
+flagged `unparseable`, with one `match_marked_unparseable` audit row each (see
+`reference/unparseable-match-handling.md`).
 Skipped when no league is monitored. Admins can run it on demand with a wider window via
 `POST /ingest/retry-unparsed`. Full details: `reference/opendota-parse-retry.md`.
 

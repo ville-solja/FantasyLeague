@@ -58,6 +58,16 @@ host, so the port is not reachable from outside at all. Covered by
 - `POST /register` — stricter per-IP limit (`RATE_LIMIT_REGISTER`)
 - `POST /forgot-password` — stricter per-IP limit (`RATE_LIMIT_FORGOT_PASSWORD`); its existing
   enumeration-safe behavior (`{"status": "ok"}` always, bcrypt timing equalization) is unchanged
+- `POST /reset-password` — per-IP limit (`RATE_LIMIT_RESET_PASSWORD`, issue #135) against
+  reset-code guessing
+- `POST /redeem` — per-user limit (`RATE_LIMIT_REDEEM`, issue #135) against promo-code guessing,
+  keyed by session `user_id` via `key_by_user_or_ip`
+- `GET /cards/{card_id}/image` — per-IP limit (`RATE_LIMIT_CARD_IMAGE`, issue #135); the endpoint
+  is public and renders a PNG with Pillow on every call
+- `POST /twitch/link` — per-IP limit (`RATE_LIMIT_TWITCH_LINK`, issue #135) against link-code
+  guessing
+- Roster activate/deactivate/swap/reorder — per-user limit (`RATE_LIMIT_ROSTER_MUTATION`,
+  issue #124)
 - Every other route — the global baseline (`RATE_LIMIT_GLOBAL`) applies automatically via
   `SlowAPIMiddleware`, with no per-route opt-in needed
 
@@ -76,11 +86,22 @@ limiting.
 | `RATE_LIMIT_LOGIN` | `5/minute` | Stricter per-IP limit on `POST /login` |
 | `RATE_LIMIT_REGISTER` | `5/minute` | Stricter per-IP limit on `POST /register` |
 | `RATE_LIMIT_FORGOT_PASSWORD` | `3/minute` | Stricter per-IP limit on `POST /forgot-password` |
+| `RATE_LIMIT_RESET_PASSWORD` | `10/minute` | Per-IP limit on `POST /reset-password` |
+| `RATE_LIMIT_REDEEM` | `5/minute` | Per-user limit on `POST /redeem` |
+| `RATE_LIMIT_CARD_IMAGE` | `60/minute` | Per-IP limit on `GET /cards/{card_id}/image` |
+| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
+| `RATE_LIMIT_ROSTER_MUTATION` | `30/minute` | Per-user limit on roster mutations |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed login attempts against one username before lockout |
 | `LOGIN_LOCKOUT_WINDOW_SECONDS` | `300` | Rolling window the lockout threshold is counted over |
 
-All values are read once at process startup (module-import time in `backend/rate_limit.py` and
-`backend/routers/auth.py`); changing them requires a restart.
+All values are read once at process startup (module-import time in `backend/rate_limit.py`,
+`backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/admin_users.py` and
+`backend/twitch.py`); changing them requires a restart.
+
+Handlers that other code or tests call as plain functions (`redeem_code`, `get_card_image`,
+`link_account`, the roster mutations) are split into the undecorated function and a thin
+`*_route` wrapper that FastAPI registers. The wrapper carries the `request: Request` parameter
+slowapi needs, so direct callers keep their existing signature.
 
 ## Response shape
 

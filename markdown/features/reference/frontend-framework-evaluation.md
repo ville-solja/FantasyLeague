@@ -184,7 +184,7 @@ tab's subtab switching (previously `switchHowToPlayTab()`/`initHowToPlayTabs()` 
 tab switching.
 
 - **Build-tooling cost: zero, as predicted.** Alpine was added as
-  `<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>`
+  `<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.17.4/dist/cdn.min.js" integrity="sha384-…" crossorigin="anonymous"></script>` (pinned with SRI since issue #135; originally `alpinejs@3.x.x`)
   in `frontend/index.html`'s `<head>` — the same mechanism as the existing `lucide.min.js` tag.
   No `package.json`, no `node_modules`, no change to the Docker build or CI.
 - **FastAPI serving: unaffected, as predicted.** `frontend/index.html` and `frontend/app-init.js`

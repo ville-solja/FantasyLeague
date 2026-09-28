@@ -1,6 +1,7 @@
+import os
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
@@ -8,13 +9,21 @@ from sqlalchemy.exc import IntegrityError
 from database import get_db
 from deps import get_current_user, require_admin, _audit
 from models import PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
+from rate_limit import limiter, key_by_user_or_ip
 
 router = APIRouter()
+
+# Per-user limit on promo-code guessing (issue #135). redeem_code stays a plain
+# function so direct calls keep working; redeem_code_route carries the
+# `request` parameter slowapi needs (same split as routers/cards.py).
+RATE_LIMIT_REDEEM = os.getenv("RATE_LIMIT_REDEEM", "5/minute")
+
+GRANT_TOKENS_MAX = 10_000
 
 
 class GrantTokensBody(BaseModel):
     target_user_id: int
-    amount: int
+    amount: int = Field(le=GRANT_TOKENS_MAX)
 
 
 class CreateCodeBody(BaseModel):
@@ -139,7 +148,6 @@ def delete_code(code_id: int, db=Depends(get_db), admin: dict = Depends(require_
     return {"status": "ok"}
 
 
-@router.post("/redeem")
 def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -168,6 +176,13 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
         db.rollback()
         raise HTTPException(status_code=409, detail="Code already redeemed")
     return {"tokens": user.tokens, "granted": promo.token_amount}
+
+
+@router.post("/redeem")
+@limiter.limit(RATE_LIMIT_REDEEM, key_func=key_by_user_or_ip)
+def redeem_code_route(request: Request, body: RedeemCodeBody, db=Depends(get_db),
+                      current_user: dict = Depends(get_current_user)):
+    return redeem_code(body, db, current_user)
 
 
 class TokenGrantEventBody(BaseModel):

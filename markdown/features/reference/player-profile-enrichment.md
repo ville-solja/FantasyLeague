@@ -72,6 +72,8 @@ A `hero_id INTEGER` column was added to `player_match_stats` to record which her
 
 `role_tendency` is `"support"` when `avg_wards ≥ 3 AND avg_gpm < 450`, otherwise `"core"`.
 
+`avg_fantasy_points` and `best_match_points` skip matches an admin excluded from scoring. The other aggregates count every match (see `reference/unparseable-match-handling.md`).
+
 `ban_correlations` lists heroes from the player's career pool that also appeared as bans in their tournament matches, sorted by `ban_rate` descending.
 
 ---

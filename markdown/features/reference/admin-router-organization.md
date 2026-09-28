@@ -22,7 +22,7 @@ existing per-router pattern used for `players`, `auth`, `profile`, `leaderboard`
 | `backend/routers/admin_leagues.py` | Monitored league list/monitor/unmonitor/purge |
 | `backend/routers/admin_season.py` | Season lifecycle (End Season archive, Season Reset), audit log |
 | `backend/routers/admin_backups.py` | Database backups: create on demand, list, download (Settings tab panel, `frontend/app-admin-backups.js`) |
-| `backend/routers/admin_matches.py` | Admin match table, MVP selection |
+| `backend/routers/admin_matches.py` | Admin match table, MVP selection, VOD links, parse retry (`retry-parse`) and scoring flags (`scoring`) |
 | `backend/routers/admin_demo.py` | Demo Mode clock override and disposable account seeding |
 
 No endpoint path, request/response shape, or auth guard changes as part of this split — it is

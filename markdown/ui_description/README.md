@@ -16,7 +16,7 @@ Short specifications for each tab and major UI element. Use these as the referen
 
 - **Header** — app title, logged-in username, token balance (e.g. "3 Kana Tokens"), Login/Logout button.
 - **Login modal** — username + password fields, link to registration.
-- **Register modal** — username, email, password fields. Auto-logs in on success.
+- **Register modal** — username, email, password fields. A muted hint under the username lists the allowed characters (letters, digits, underscore, hyphen). Auto-logs in on success.
 - **Card reveal modal** — shown after drawing a card. Displays rarity, player avatar, player name, team.
 - **Player detail modal** — opened by clicking any player name. Stats summary + full match history.
 - **Team detail modal** — opened by clicking any team name. Player roster with stats.

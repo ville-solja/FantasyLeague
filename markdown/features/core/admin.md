@@ -35,7 +35,7 @@ Grants a configurable number of tokens to a specific user.
 { "target_user_id": 5, "amount": 3 }
 ```
 
-Amount must be at least 1 — the endpoint returns 422 for values below 1. All grants are recorded in the audit log.
+Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. All grants are recorded in the audit log.
 
 ---
 
@@ -61,6 +61,8 @@ Regular users redeem a code via this endpoint. Returns the number of tokens gran
 ```json
 { "code": "LAUNCH2026" }
 ```
+Limited to 5 requests a minute per user (`RATE_LIMIT_REDEEM`), so codes cannot be guessed by
+brute force; the next request returns 429.
 
 ---
 
@@ -131,8 +133,11 @@ asks OpenDota to parse the rest. Runs in a background thread and returns
 `{"status": "started", "max_age_hours": ...}` immediately; 409 if any ingest is already
 running (same `ingest.INGEST_LOCK`). The optional `max_age_hours` (1–8760) widens the default
 `INGEST_PARSE_RETRY_HOURS` window for a one-off backfill. The `parse_retry_triggered` audit row
-is written at trigger time; the run's counts go to the server log. See
-`reference/opendota-parse-retry.md`.
+is written at trigger time; the run's counts go to the server log. Matches marked `unparseable`
+are skipped. After the first poll following the `027_match_parse_status` deploy, every historical
+signature-zero match older than the window is flagged `unparseable`, so a wide manual backfill
+no longer re-checks those matches. Clear the flag, or use the Matches tab's Retry parse, to retry
+one. See `reference/opendota-parse-retry.md` and `reference/unparseable-match-handling.md`.
 
 ---
 
@@ -165,7 +170,9 @@ Also runs automatically after each ingest poll cycle. Requires `TOORNAMENT_*` en
 ## Audit Log
 
 ### `GET /audit-logs?limit=200`
-Returns the most recent audit log entries, newest first. All significant admin actions are recorded here automatically:
+Returns the most recent audit log entries, newest first. `limit` defaults to 200 and must be
+between 1 and 1,000 (422 otherwise). The Audit Log tab escapes `action` and `detail` before
+rendering them, since `detail` can carry user-supplied text such as usernames. All significant admin actions are recorded here automatically:
 
 | Action | Trigger |
 |---|---|
@@ -173,8 +180,9 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `user_login` | Successful user login |
 | `password_reset_requested` | Forgot-password flow issued a single-use password-reset token |
 | `password_reset_completed` | User completed a password reset via `POST /reset-password` |
+| `username_changed` | User renamed themselves via `PUT /profile/username` (`detail` has `old=` and `new=`) |
 | `token_draw` | Card drawn |
-| `token_booster_draw` | Team booster pack drawn |
+| `token_booster_draw` | Team draw: one card from a chosen team |
 | `reroll_modifiers` | User spent a token to reroll card modifiers |
 | `token_redeem` | User redeemed a code |
 | `token_grant_event_claim` | User auto-claimed tokens during an active token grant event |
@@ -212,6 +220,9 @@ Returns the most recent audit log entries, newest first. All significant admin a
 | `admin_tag_revoke` | Admin revoked a tag from a user |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
 | `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
+| `admin_match_retry_parse` | Admin retried a match's parse via the Matches tab (`detail` has the fetch result and outcome) |
+| `admin_match_scoring` | Admin changed a match's unparseable / excluded-from-scoring flags (`detail` has old and new values) |
+| `match_marked_unparseable` | Background parse-retry pass auto-marked a match still unparsed past the retry window (no actor) |
 | `twitch_mvp_set` | Broadcaster set match MVP via the Twitch extension |
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
@@ -266,6 +277,7 @@ These features have dedicated reference documents:
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
+| Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
