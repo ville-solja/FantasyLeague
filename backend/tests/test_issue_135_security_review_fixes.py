@@ -94,6 +94,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -1092,20 +1093,41 @@ def test_update_username_taken_name_no_session_change_or_audit(db):
 # Story 5 — Deployment and File Hardening
 # ---------------------------------------------------------------------------
 
+class _ScriptTagCollector(HTMLParser):
+    """Collects the attributes of every <script> tag (tag names and attribute
+    names are case-insensitive, as in browsers)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.scripts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script":
+            self.scripts.append({k: (v or "") for k, v in attrs})
+
+
+def _script_tags(html):
+    collector = _ScriptTagCollector()
+    collector.feed(html)
+    collector.close()
+    return collector.scripts
+
+
+def _external_scripts(html):
+    return [a for a in _script_tags(html) if re.match(r"https?://", a.get("src", ""), re.I)]
+
+
 def _cdn_script_problems(html):
     """Problems with external <script src> tags: floating version, missing SRI or crossorigin."""
     problems = []
-    for tag in re.findall(r"<script\b[^>]*>", html, flags=re.S):
-        m = re.search(r'src="(https?://[^"]+)"', tag)
-        if not m:
-            continue
-        url = m.group(1)
+    for attrs in _external_scripts(html):
+        url = attrs["src"]
         pkg = re.search(r"/(?:npm/)?((?:@[^/]+/)?[^/@]+)@([^/]+)/", url)
         if not pkg or not re.fullmatch(r"\d+\.\d+\.\d+", pkg.group(2)):
             problems.append(f"not pinned to an exact version: {url}")
-        if not re.search(r'integrity="sha(256|384|512)-[A-Za-z0-9+/=]{40,}"', tag):
+        if not re.fullmatch(r"sha(256|384|512)-[A-Za-z0-9+/=]{40,}", attrs.get("integrity", "")):
             problems.append(f"missing integrity: {url}")
-        if 'crossorigin="anonymous"' not in tag:
+        if attrs.get("crossorigin") != "anonymous":
             problems.append(f"missing crossorigin: {url}")
     return problems
 
@@ -1126,11 +1148,10 @@ def test_index_html_alpine_pinned_to_exact_version():
 def test_index_html_cdn_scripts_have_integrity_and_crossorigin():
     """Both CDN scripts (lucide, alpinejs) carry an integrity sha hash and crossorigin="anonymous"."""
     html = _index_html()
-    external = [t for t in re.findall(r"<script\b[^>]*>", html, flags=re.S)
-                if re.search(r'src="https?://', t)]
+    external = _external_scripts(html)
     assert len(external) == 2
-    assert any("lucide@0.453.0" in t for t in external)
-    assert any("alpinejs@" in t for t in external)
+    assert any("lucide@0.453.0" in a["src"] for a in external)
+    assert any("alpinejs@" in a["src"] for a in external)
     assert _cdn_script_problems(html) == []
 
 

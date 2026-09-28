@@ -9,6 +9,12 @@ Format:
 
 ---
 
+### 2026-09-28 — security-patcher — testing
+**Problem:** CodeQL `py/bad-tag-filter` (CWE-20/116/185/186) flags any regex that matches HTML tags, e.g. `re.findall(r"<script\b[^>]*>", html)`, including in static-check tests (alerts #26 and #27 in `test_issue_135_security_review_fixes.py`). Such a regex really does miss `<SCRIPT>`, single-quoted attributes and `>` inside attribute values.
+**Solution:** Parse the HTML with the standard library's `html.parser.HTMLParser` (lower-cases tag and attribute names, handles quoting) and inspect the attribute dicts (see `_script_tags()` / `_external_scripts()`). Don't just add `re.IGNORECASE`, which leaves the other regex gaps and can draw the same alert again.
+
+---
+
 ### 2026-09-28 — developer — testing
 **Problem:** Plan #118 (and its test stubs) said the backend suite imports `main` with `DEBUG=true` set by conftest. It did not. `backend/tests/conftest.py` never set `DEBUG`; individual tests `monkeypatch.setenv("DEBUG", "true")` before their first `import main`, and files such as `test_issue_109_opendota_query_prioritization.py` import `main` bare. Those only passed because an earlier test had already imported `main`, so running one alone could hit the import-time SECRET_KEY (now also HTTPS_ONLY) check. Separately, `_run_import_main` subprocess helpers that strip dev flags now also need `HTTPS_ONLY=true` to reach the check they are testing.
 **Solution:** conftest now does `os.environ.setdefault("DEBUG", "true")` before any app import. Subprocess tests that strip `DEBUG` must pass `HTTPS_ONLY=true` (and a 32+ char `SECRET_KEY` for `ENV=production`) unless they are testing the HTTPS_ONLY refusal itself.
