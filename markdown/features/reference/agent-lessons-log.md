@@ -23,7 +23,7 @@ Entries are never rewritten or deleted by agents. Operators may manually remove 
 **Solution:** What to do instead.
 ```
 
-Category tags: `file-paths`, `endpoints`, `testing`, `models`, `frontend`, `agent-config`
+Category tags: `file-paths`, `endpoints`, `testing`, `models`, `frontend`, `agent-config`, `security`, `docs`
 
 ## Participating agents
 
@@ -34,7 +34,9 @@ The following agents read and write the log:
 - `/security-reviewer`
 - `/scoring-analyst`
 - `/test-planner`
+- `/security-patcher`
+- `/technical-writer`
 
 ## Log file
 
-`markdown/lessons-learned.md` — live; seeded with entries from the initial implementation session. Read and written by the five participating agents on every run.
+`markdown/lessons-learned.md` — live; seeded with entries from the initial implementation session. Read and written by the participating agents on every run.

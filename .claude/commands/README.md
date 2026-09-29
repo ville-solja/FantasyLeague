@@ -95,6 +95,7 @@ flowchart TD
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | [`/ui-design`](ui-design.md) | New UI surface or brand/design change | Brand-compliant production edits or throwaway prototypes |
 | [`/systems-architect`](systems-architect.md) | Before a major refactor or new subsystem | N+1 queries, background job resilience, config hygiene |
+| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Clarity, concision, audience fit; facts kept exact |
 
 ### Maintenance agents
 
@@ -102,6 +103,7 @@ flowchart TD
 |---|---|---|
 | [`/product-analyst`](product-analyst.md) | After a sprint or milestone | Maps every user story to implementation; surfaces gaps |
 | [`/agent-steward`](agent-steward.md) | After file renames, endpoint changes, or before a planning session | Validates agent definitions aren't stale; updates this README |
+| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Rewrites a doc for its audience; proposes changes and edits only after approval |
 
 ---
 

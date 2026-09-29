@@ -12,7 +12,7 @@
 | [twitch.md](twitch.md) | MVP selection, token drops, account linking, extension setup, MVP fantasy bonus, series window, live polling, review resubmission (asset hosting, fetch allowlist, chat disclosure) |
 | [ux-and-polish.md](ux-and-polish.md) | Schedule tab, JSON fixtures API source, MVP schedule cache invalidation, scoring explanation, My Team layout, CI testing, How to Play tab, drag-and-drop roster ordering, card viewer backdrop dismiss |
 | [deployment.md](deployment.md) | DB sustainability, versioned migrations, pre-deploy backup, container health reporting, DB backup leak prevention, HTTPS enforcement |
-| [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams, admin router organization, frontend framework evaluation, test background task isolation |
+| [tooling.md](tooling.md) | Agent lessons log, development tooling, process diagrams, admin router organization, frontend framework evaluation, test background task isolation, technical writer skill |
 | [tipping.md](tipping.md) | Demoinfo2 tipping service: demo parsing, tip event extraction, tipping leaderboard |
 | [shoutrrr-support.md](shoutrrr-support.md) | Outbound push notifications via a separately-hosted Shoutrrr instance; match-starting-soon reminder |
 | [security-review-fixes.md](security-review-fixes.md) | Fixes from the 2026-09-26 external security review: Twitch MVP eligibility, escaping external text, reliable password reset, abuse limits, deployment hardening; security audit 3 (issue #136): cross-origin request check, username allowlist, CORS limited to Twitch, production guards and pip-audit |

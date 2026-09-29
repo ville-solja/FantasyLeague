@@ -59,6 +59,7 @@ Implementation details, integrations, and operator tooling.
 | [Env-Based Admin Seeding](reference/env-based-admin-seeding.md) | Replace hardcoded seed credentials with `SEED_ADMIN_*` env vars (numbered suffixes seed further admins); empty `users.json` stub in repo; in-app promotion via `POST /users/{user_id}/toggle-admin` |
 | [Process Diagrams](../process-diagrams.md) | Mermaid flowcharts: season lifecycle, token/card economy, admin tools overview |
 | [Agent Lessons Log](reference/agent-lessons-log.md) | Append-only lessons file read by agents at run start to avoid recurring pitfalls |
+| [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |

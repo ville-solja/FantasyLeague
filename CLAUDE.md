@@ -236,6 +236,20 @@ Audits the Fantasy web app for usability and experience problems. Produces a pri
 
 ---
 
+### `/technical-writer`
+**Role: Technical Writer**
+Rewrites a piece of documentation so it states its core message clearly and concisely for its audience, keeping every fact exact.
+- Names the audience, what they need, and the core message; asks when the audience is unclear
+- Proposes the rewrite with word counts and a list of removed/moved facts
+- Edits nothing until you choose: apply, apply with exclusions, or discard; structural changes are separate choices
+- Does not check docs against code (that is `/documentation-steward`)
+
+**When to run:** After a significant documentation change, or when a doc is hard to read.
+
+**Usage:** `/technical-writer <path>`, `/technical-writer <path>#<heading>`, or `/technical-writer <description>` — e.g. `/technical-writer README.md#Deployment`
+
+---
+
 ## Development Workflow
 
 ### Automated planning (background)
@@ -273,6 +287,7 @@ gh issue close <N>
 | `/scoring-analyst` | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, division-by-zero, stat mapping |
 | `/documentation-steward` | Any significant backend change | Doc drift, missing env vars, terminology mismatches |
 | `/ux-reviewer` | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
+| `/technical-writer` | After a significant documentation change | Clarity, concision, audience fit; facts kept exact |
 | `/product-analyst` | After a sprint or milestone | Story coverage percentage, prioritised gaps |
 | `/systems-architect` | Before a refactor or new subsystem | Architecture risks, N+1 queries, background job resilience |
 
