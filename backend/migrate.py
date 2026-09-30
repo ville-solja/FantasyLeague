@@ -462,6 +462,14 @@ def _m027_match_parse_status(conn):
     logger.info("Migration: matches — added parse_status/excluded_from_scoring and backfilled parse_status")
 
 
+def _m028_users_session_version(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "session_version" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0"))
+        conn.commit()
+        logger.info("Migration: users — added session_version column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -513,6 +521,7 @@ MIGRATIONS = [
     ("025_card_modifiers_assists",   _m025_card_modifiers_assists),
     ("026_twitch_mvp_drop_unique",   _m026_twitch_mvp_drop_unique),
     ("027_match_parse_status",       _m027_match_parse_status),
+    ("028_users_session_version",    _m028_users_session_version),
 ]
 
 

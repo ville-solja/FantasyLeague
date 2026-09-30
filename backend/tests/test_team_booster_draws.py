@@ -264,7 +264,7 @@ class TestTeamBoosterDraw:
 
         # Now simulate the deck endpoint with user context
         class AuthRequest:
-            session = {"user_id": user.id}
+            session = {"user_id": user.id, "sv": user.session_version or 0}
 
         after = get_booster_deck(request=AuthRequest(), db=db)
         after_remaining = next(r["remaining"] for r in after if r["team_id"] == team.id)
@@ -370,7 +370,7 @@ class TestBoosterDuplicatePrevention:
         db.flush()
 
         class AuthRequest:
-            session = {"user_id": user.id}
+            session = {"user_id": user.id, "sv": user.session_version or 0}
 
         result = get_booster_deck(request=AuthRequest(), db=db)
         team_entry = next((r for r in result if r["team_id"] == team.id), None)

@@ -16,28 +16,16 @@ The bonus affects `player_match_stats.fantasy_points` directly, so it propagates
 into queries that read that column: player match history (`GET /players/{player_id}`), the
 player-performance browser and Top Single-Match Performances (`GET /leaderboard`, `GET /top`).
 
-**It also reaches card, roster, weekly-leaderboard, and season-leaderboard totals**, via a
-separate additive term rather than by sharing the player-level code path. Those totals are
-computed by `card_fantasy_score()`/`_compute_card_points()` (`backend/card_utils.py`,
-`backend/scoring.py`), which aggregate raw per-stat columns (`kills`, `last_hits`, etc.) with
-`SUM(...)` across every match in a card's scoring window *before* computing points — a
-structurally different path from the player-level pipeline, which computes points per match
-and then multiplies. The card path scales the death pool by the number of games in the window
-(`max(0, death_pool × match_count - deaths × death_deduction)`), which matches the sum of
-per-match death terms except when a single game floors out at 0; the MVP bonus is kept as a
-separate per-match term so it reflects only the MVP game.
-
-Instead, `_compute_card_points()` takes an `mvp_bonus` parameter: a flat point value computed by
-`card_utils._mvp_bonus_delta()` from the single MVP match's own `fantasy_score()` (still
-correctly clamped, since it's computed per match) times `mvp_bonus_pct`, summed across any
-MVP matches that fall in the card's scoring window and added *before* the rarity multiplier so
-it scales with card rarity like every other stat. This bonus is not affected by card modifiers
-(`CardModifier` bonuses are a card-only concept with no player-level equivalent). All three call
-sites — `_build_roster_response()` in `backend/routers/cards.py` (both the active/bench card
-list and the season-points total) and `_leaderboard_rows()` in `backend/routers/leaderboard.py`
-(shared by season and weekly leaderboards, and therefore also by the End Season archive action)
-— run a parallel query for raw, un-aggregated `is_mvp = 1` rows in the same scoring window as
-their existing stat-sum query, and pass the resulting per-card bonus map through.
+**It also reaches card, roster, weekly-leaderboard, and season-leaderboard totals.** Since
+issue #141 those totals are sums of stored per-match card points (`card_match_points`, see
+[Stored Card Points](stored-card-points.md)). Each stored row is computed by
+`_compute_card_points()` (`backend/card_utils.py`) for one match, with an `mvp_bonus` term
+from `card_utils._mvp_bonus_delta()`: the match's own `fantasy_score()` times `mvp_bonus_pct`,
+added *before* the rarity multiplier so it scales with card rarity like every other stat. The
+bonus is not affected by card modifiers (`CardModifier` bonuses are a card-only concept with no
+player-level equivalent). Setting or changing an MVP (Twitch or admin), and re-applying it at
+ingest, refreshes that match's stored card points in the same step, so every card-based view
+picks the change up at once.
 
 ---
 
@@ -63,7 +51,7 @@ Existing endpoint. In addition to saving the MVP and dropping tokens, it now:
 
 ### `POST /recalculate` *(updated)*
 
-Existing endpoint. After recalculating base scores for all rows, applies `fantasy_points *= (1 + mvp_bonus_pct / 100)` to every row where `is_mvp = true`.
+Existing endpoint. After recalculating base scores for all rows, applies `fantasy_points *= (1 + mvp_bonus_pct / 100)` to every row where `is_mvp = true`, then rebuilds the stored card points, which include the MVP bonus.
 
 ---
 

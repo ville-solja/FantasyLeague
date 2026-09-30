@@ -7,16 +7,17 @@ needs to load for a reviewer, plus the fixes made to satisfy
 [Extension Guidelines & Policies](https://dev.twitch.tv/docs/extensions/guidelines-and-policies/)
 in the process. See [Review history](#review-history) for past rejections.
 
-**Package to submit:** `twitch-extension-1.1.6.zip` (or later), built with
-`bash twitch-extension/package.sh 1.1.6`. Version `1.1.5` was the first with the XSS fix below;
-`1.1.6` adds the chat disclosure copy required by the 2026-09 review. Do not resubmit `1.1.5` or
+**Package to submit:** `twitch-extension-1.1.7.zip` (or later), built with
+`bash twitch-extension/package.sh 1.1.7`. Version `1.1.5` was the first with the XSS fix below;
+`1.1.6` adds the chat disclosure copy required by the 2026-09 review; `1.1.7` adds the Live /
+Stats pending labels for early MVP selection (issue #139). Do not resubmit `1.1.6` or
 earlier — Twitch requires a new version for every resubmission.
 
 ---
 
 ## Submission checklist (work through in order)
 
-- [ ] **Version** — create version `1.1.6` in the dev console and upload `twitch-extension-1.1.6.zip`
+- [ ] **Version** — create version `1.1.7` in the dev console and upload `twitch-extension-1.1.7.zip`
 - [ ] **Listing copy** — name, summary, and description (below)
 - [ ] **Category** — below
 - [ ] **Icon & screenshots** — below (verify existing assets meet the size specs)
@@ -35,6 +36,9 @@ earlier — Twitch requires a new version for every resubmission.
 - [ ] **URL Fetching allowlist** — Version → Capabilities → Allowlist for URL Fetching Domains:
       `https://kana-cards.com`. No other entry is needed. Without it, Twitch's Content Security
       Policy blocks every EBS call
+- [ ] **Backend setting** — set `TWITCH_EXTENSION_VERSION=1.1.7` on the EBS host once this
+      version is installed on the channel, and confirm **Chat** is enabled for it. Without it the
+      MVP chat announcement is skipped
 - [ ] **Hosted Test verification** — move the version to **Hosted Test**, then load the panel,
       config and live config views on the review channel with browser dev tools open. Confirm no
       404, no CSP `connect-src` violation, and that the panel reaches the unlinked or linked
@@ -262,3 +266,9 @@ every untrusted name before it's concatenated into an HTML string, in `twitch-ex
 | 4.2 | Chat capability enabled but not described in the listing | Added the **Twitch Chat** paragraph to the listing description, with matching copy in `config.html` and the panel's unlinked view |
 
 Details: [Twitch Review Resubmission](twitch-review-resubmission.md).
+
+### 2026-09 — Version 1.1.7 change log
+
+| File | Change |
+|---|---|
+| `live_config.js` | Matches seen live but not yet ingested are listed and marked **Live** or **Stats pending**; their player tiles show the team name without points; the confirmation banner says the fantasy bonus is applied when the stats arrive; the empty-state copy no longer mentions the ingest cycle. All names still go through `_escHtml`. See [Early MVP Selection](early-mvp-selection.md) |

@@ -21,7 +21,7 @@ flowchart TD
 
     REVIEW_PLAN{{"[HUMAN GATE]\nReview plan in\nmarkdown/plans/"}}
 
-    DEVELOP["/develop\nOrchestrates 3 stages\nautomatically"]
+    DEVELOP["/develop\nOrchestrates 4 stages\nautomatically"]
 
     STUBS["/test-planner\nStage 1 — Write\nfailing pytest stubs"]
 
@@ -33,7 +33,9 @@ flowchart TD
 
     DOCS["/documentation-steward\nDoc drift,\nenv var gaps"]
 
-    REVIEW_CODE{{"[HUMAN GATE]\nReview report,\nclose issue"}}
+    CLOSE["Stage 4 — Close\nGitHub issue with\nsummary comment"]
+
+    REVIEW_CODE{{"[HUMAN GATE]\nReview report,\nreopen if needed"}}
 
     GATES["Pre-merge gates\n(run as needed)"]
 
@@ -55,8 +57,9 @@ flowchart TD
     DEVELOP --> STUBS --> IMPL --> VALID
     VALID --> QA
     VALID --> DOCS
-    QA --> REVIEW_CODE
-    DOCS --> REVIEW_CODE
+    QA --> CLOSE
+    DOCS --> CLOSE
+    CLOSE --> REVIEW_CODE
     REVIEW_CODE --> GATES
     GATES --> SEC
     GATES --> SCORE
@@ -79,7 +82,7 @@ flowchart TD
 | Agent | Mode | Role |
 |---|---|---|
 | [`/product-planner`](product-planner.md) | read-write | Formalises a feature: writes plan file, user stories, and feature stub. Entry point for all new work. |
-| [`/develop`](develop.md) | read-write | Orchestrates the full 3-stage pipeline: test stubs → implementation → QA + docs. Use this instead of running the three stages manually. |
+| [`/develop`](develop.md) | read-write | Orchestrates the full pipeline: test stubs → implementation → QA + docs → closes the source GitHub issue with a summary comment when every stage passes. Use this instead of running the stages manually. |
 | [`/test-planner`](test-planner.md) | read-write | Writes failing pytest stubs from a plan's acceptance criteria. Called by `/develop` Stage 1; can be run standalone. |
 | [`/developer`](developer.md) | read-write | Implements a plan and makes the test stubs pass. Called by `/develop` Stage 2; can be run standalone. |
 | [`/qa-engineer`](qa-engineer.md) | read-only | Runs `pytest` and reports results grouped by module. Called by `/develop` Stage 3; also useful after any ad-hoc backend change. |
@@ -95,6 +98,7 @@ flowchart TD
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | [`/ui-design`](ui-design.md) | New UI surface or brand/design change | Brand-compliant production edits or throwaway prototypes |
 | [`/systems-architect`](systems-architect.md) | Before a major refactor or new subsystem | N+1 queries, background job resilience, config hygiene |
+| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Clarity, concision, audience fit; facts kept exact |
 
 ### Maintenance agents
 
@@ -102,6 +106,7 @@ flowchart TD
 |---|---|---|
 | [`/product-analyst`](product-analyst.md) | After a sprint or milestone | Maps every user story to implementation; surfaces gaps |
 | [`/agent-steward`](agent-steward.md) | After file renames, endpoint changes, or before a planning session | Validates agent definitions aren't stale; updates this README |
+| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Rewrites a doc for its audience; proposes changes and edits only after approval |
 
 ---
 

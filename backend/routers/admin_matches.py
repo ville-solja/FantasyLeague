@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
+import card_points
 from database import get_db
 from deps import require_admin, _audit
 import ingest
@@ -108,6 +109,7 @@ def admin_set_mvp(
     if old_player_id and old_player_id != body.player_id:
         _apply_mvp_bonus(db, old_player_id, match_id, apply=False, weights=weights)
     _apply_mvp_bonus(db, body.player_id, match_id, apply=True, weights=weights)
+    card_points.refresh_card_points(db, match_ids=[match_id])
 
     _audit(db, "admin_set_mvp", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"match {match_id} → player {body.player_id} ({player.name})")

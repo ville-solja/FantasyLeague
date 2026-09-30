@@ -79,7 +79,10 @@ def card_fantasy_score(stat_sums: dict, weights: dict, card_modifiers: dict,
     stat_sums      — {stat_key: aggregated_value} — should include "deaths"
     weights        — {stat_key: weight}
     card_modifiers — {stat_key: bonus_pct}  e.g. {"kills": 10.0}
-    match_count    — number of games aggregated into stat_sums; scales the death pool
+    match_count    — number of games aggregated into stat_sums; scales the death pool.
+                     Production callers (card_points.py via card_utils, issue #141)
+                     score one match at a time with match_count=1; the parameter is
+                     kept for API compatibility.
 
     Death modifier amplifies the death-survival reward (always non-negative):
       death_contribution × (1 + bonus_pct / 100)

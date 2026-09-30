@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -5,8 +6,9 @@ import time
 
 from sqlalchemy import func
 
+import card_points
 from database import SessionLocal
-from models import AuditLog, Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
+from models import AuditLog, LiveMatch, Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json, post_json as opendota_post_json
 from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -65,11 +67,99 @@ def get_league_info(league_id: int):
     return opendota_get_json(url, label=f"league {league_id} info")
 
 
-def get_live_match_league_ids() -> set[int]:
-    """League IDs with a match currently in progress, per OpenDota's live endpoint.
-    One request regardless of how many leagues are monitored."""
-    data = opendota_get_json(f"{OPEN_DOTA_URL}/live", label="live matches") or []
-    return {m.get("league_id") for m in data if m.get("league_id")}
+def get_live_matches() -> list[dict]:
+    """Games currently in progress, per OpenDota's live endpoint (raw entries).
+    One request regardless of how many leagues are monitored; [] if the call fails."""
+    data = opendota_get_json(f"{OPEN_DOTA_URL}/live", label="live matches")
+    if not isinstance(data, list):
+        return []
+    return [m for m in data if isinstance(m, dict)]
+
+
+# A stored live match that is still not ingested this long after it was last seen
+# (e.g. ingest skipped it as shorter than 15 minutes) is dropped.
+_LIVE_MATCH_STALE_SECONDS = 24 * 3600
+
+
+def _live_int(val) -> int | None:
+    """OpenDota /live sends ids as numbers or strings, with 0 / "" for a missing team."""
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return None
+    return n or None
+
+
+def _live_players(raw_players) -> list[dict]:
+    players = []
+    for p in raw_players or []:
+        if not isinstance(p, dict):
+            continue
+        account_id = _live_int(p.get("account_id"))
+        if account_id is None:
+            continue
+        side = {0: "radiant", 1: "dire"}.get(p.get("team"))
+        players.append({"account_id": account_id, "name": p.get("name") or None, "side": side})
+    return players
+
+
+def store_live_matches(entries: list[dict], monitored_league_ids, db=None, now: int | None = None) -> None:
+    """Record the monitored-league games in `entries` (a /live response) in live_matches.
+
+    Upserts every game seen, sets ended_at on rows no longer present, and deletes
+    rows whose match now has ingested stats or that were last seen over 24 hours ago."""
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
+    try:
+        now = int(time.time()) if now is None else now
+        monitored = set(monitored_league_ids or ())
+        seen: set[int] = set()
+        for e in entries or []:
+            if _live_int(e.get("league_id")) not in monitored:
+                continue
+            match_id = _live_int(e.get("match_id"))
+            if match_id is None or match_id in seen:
+                continue
+            seen.add(match_id)
+            fields = dict(
+                league_id=_live_int(e.get("league_id")),
+                radiant_team_id=_live_int(e.get("team_id_radiant")),
+                dire_team_id=_live_int(e.get("team_id_dire")),
+                radiant_name=e.get("team_name_radiant") or None,
+                dire_name=e.get("team_name_dire") or None,
+                players_json=json.dumps(_live_players(e.get("players"))),
+                last_seen_at=now,
+                ended_at=None,
+            )
+            row = db.get(LiveMatch, match_id)
+            if row is None:
+                db.add(LiveMatch(match_id=match_id, first_seen_at=now, **fields))
+            else:
+                for key, value in fields.items():
+                    setattr(row, key, value)
+        db.flush()
+
+        for row in db.query(LiveMatch).filter(LiveMatch.ended_at.is_(None)).all():
+            if row.match_id not in seen:
+                row.ended_at = now
+
+        ingested = {
+            r[0] for r in db.query(PlayerMatchStats.match_id)
+            .filter(PlayerMatchStats.match_id.in_(db.query(LiveMatch.match_id)))
+            .distinct().all()
+        }
+        cutoff = now - _LIVE_MATCH_STALE_SECONDS
+        for row in db.query(LiveMatch).all():
+            if row.match_id in ingested or (row.last_seen_at or 0) < cutoff:
+                db.delete(row)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if own_session:
+            db.close()
 
 
 # -----------------------
@@ -196,6 +286,10 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
 
     _reapply_mvp_bonus(db, match_id)
 
+    # The match now has stats, so the Twitch panel lists it from those instead.
+    if db.query(LiveMatch).filter(LiveMatch.match_id == match_id).delete():
+        db.commit()
+
     if _is_unparsed(data):
         request_parse(match_id)
 
@@ -266,18 +360,24 @@ def _build_stat_row(p: dict, match_id: int, radiant_team_id, dire_team_id, weigh
 
 def _reapply_mvp_bonus(db, match_id: int) -> None:
     """Re-apply the Twitch MVP flag + bonus to the freshly written stat row, if one was
-    confirmed for this match. Commits on its own."""
+    confirmed for this match, then refresh the match's stored card points. Commits on
+    its own."""
     mvp = db.query(TwitchMVP).filter_by(match_id=match_id).first()
-    if not mvp:
-        return
-    pms_row = db.query(PlayerMatchStats).filter_by(
-        player_id=mvp.player_id, match_id=match_id
-    ).first()
-    if pms_row:
-        mvp_weights = {w.key: w.value for w in db.query(Weight).all()}
-        apply_mvp_bonus_to_row(pms_row, mvp_weights, apply=True)
-        db.commit()
-        logger.info("Ingest: applied MVP bonus to player %d match %d", mvp.player_id, match_id)
+    if mvp:
+        pms_row = db.query(PlayerMatchStats).filter_by(
+            player_id=mvp.player_id, match_id=match_id
+        ).first()
+        if pms_row:
+            mvp_weights = {w.key: w.value for w in db.query(Weight).all()}
+            apply_mvp_bonus_to_row(pms_row, mvp_weights, apply=True)
+            logger.info("Ingest: applied MVP bonus to player %d match %d", mvp.player_id, match_id)
+        else:
+            logger.warning(
+                "Ingest: MVP player %d has no stats row in match %d; no bonus applied",
+                mvp.player_id, match_id,
+            )
+    card_points.refresh_card_points(db, match_ids=[match_id])
+    db.commit()
 
 
 # -----------------------

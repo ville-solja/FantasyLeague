@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
-from deps import _audit, get_current_user
+from deps import _audit, bump_session_version, get_current_user, start_session
 from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
                     NotificationDismissal, PasswordResetToken)
 from auth import check_email, check_password_bytes, check_username, hash_password, verify_password
@@ -121,9 +121,7 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
                 status_code=401,
                 detail="Temporary password has expired. Please request a new password reset.",
             )
-    request.session["user_id"]  = user.id
-    request.session["username"] = user.username
-    request.session["is_admin"] = user.is_admin
+    start_session(request, user)
     _clear_failed_logins(user.username)
     _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
     db.commit()
@@ -151,14 +149,23 @@ def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     db.flush()
     _audit(db, "user_register", actor_id=user.id, actor_username=user.username)
     db.commit()
-    request.session["user_id"]  = user.id
-    request.session["username"] = user.username
-    request.session["is_admin"] = user.is_admin
+    start_session(request, user)
     return {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
 
 
 @router.post("/logout")
 def logout(request: Request):
+    request.session.clear()
+    return {"status": "ok"}
+
+
+@router.post("/logout-everywhere")
+def logout_everywhere(request: Request, db=Depends(get_db),
+                      current_user: dict = Depends(get_current_user)):
+    user = db.get(User, current_user["user_id"])
+    bump_session_version(user)
+    _audit(db, "user_logout_everywhere", actor_id=user.id, actor_username=user.username)
+    db.commit()
     request.session.clear()
     return {"status": "ok"}
 
@@ -259,8 +266,11 @@ def reset_password(request: Request, body: ResetPasswordBody, db=Depends(get_db)
     # PUT /profile/password already does), since this reset supersedes it.
     user.must_change_password = False
     user.temp_password_expires_at = None
+    # A reset may follow a compromise: end every existing session of this user.
+    bump_session_version(user)
     db.delete(token_row)
-    _audit(db, "password_reset_completed", actor_id=user.id, actor_username=user.username)
+    _audit(db, "password_reset_completed", actor_id=user.id, actor_username=user.username,
+           detail="all sessions revoked")
     db.commit()
     return {"status": "ok"}
 

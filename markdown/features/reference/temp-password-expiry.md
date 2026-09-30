@@ -89,5 +89,5 @@ Clears `temp_password_expires_at = None` alongside `must_change_password = False
 
 | Variable | Default | Description |
 |---|---|---|
-| `TEMP_PASSWORD_TTL_HOURS` | `24` | Hours before a temporary password expires. Set to a higher value for low-traffic deployments. |
+| `TEMP_PASSWORD_TTL_HOURS` | `24` | **Legacy, no longer read.** Temporary passwords are no longer issued (resets use single-use links, `reference/password-reset-token-flow.md`). The login check still enforces the expiry stored on any account holding an old temporary password. |
 

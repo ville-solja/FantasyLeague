@@ -37,8 +37,10 @@ their KDA despite an MVP-worthy performance.
 
 ## What this does *not* retroactively fix on its own
 
-Card/roster/leaderboard scores recompute live from raw stat sums on every read, so they reflect
-the new weight immediately once seeded. The *stored* `player_match_stats.fantasy_points` column
+Card/roster/leaderboard scores are sums of stored per-match card points (issue #141, see
+`stored-card-points.md`), so a new or changed weight applies to them after a restart (the
+startup check sees the weights fingerprint change and rebuilds) or after `POST /recalculate`.
+The *stored* `player_match_stats.fantasy_points` column
 (used by the Players tab match history and `/top`) does not update itself — an admin needs to
 run `POST /recalculate` once after this ships to retroactively apply the new weight to
 already-ingested matches.

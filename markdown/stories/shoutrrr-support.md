@@ -1,6 +1,6 @@
 # Shoutrrr Support
 
-### Configure Shoutrrr Push Notifications
+### Configure Shoutrrr Push Notifications *(not yet implemented)*
 **User story**
 As an operator, I want to configure a separately-hosted Shoutrrr instance's endpoint and an
 auth token via environment variables, so the app can send push notifications without needing to
@@ -20,7 +20,7 @@ know anything about the downstream notification channels Shoutrrr forwards to.
 
 ---
 
-### Receive a Match-Starting-Soon Reminder
+### Receive a Match-Starting-Soon Reminder *(not yet implemented)*
 **User story**
 As a viewer/fan, I want a push notification roughly 15 minutes before a scheduled match
 starts, including the two teams, the scheduled time, and the stream link, so I don't miss the

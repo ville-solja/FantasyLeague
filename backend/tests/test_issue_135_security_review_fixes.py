@@ -176,6 +176,8 @@ def _build_app(router_module_names, *, rate_limited=False, admin_override=False)
             request.session["user_id"] = user_id
             request.session["username"] = user.username if user else f"user{user_id}"
             request.session["is_admin"] = False
+            # Session revocation (issue #119): a session is valid only with the user's current version.
+            request.session["sv"] = (user.session_version or 0) if user else 0
         finally:
             db.close()
         return {"ok": True}

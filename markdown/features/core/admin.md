@@ -19,14 +19,16 @@ Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_a
 as `admin_toggle_admin`. Two guards prevent the app from ever ending up with zero admins: an
 admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
 the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
-`require_admin` (`backend/deps.py`) re-checks `is_admin` against the database on every
-admin-gated request rather than trusting the session's cached value, so a promotion or
-demotion takes effect on the very next request — not just at the next login. This closes what
-would otherwise be a real gap: without it, a demoted admin would keep destructive access
-(season reset, league purge, user management) for the rest of their existing session. One
-UI-only asymmetry remains: the frontend's Admin tab visibility (`activeIsAdmin`, populated from
-`GET /me`) is still session-cached and only refreshes at next login, so a freshly-promoted user
-can call admin endpoints directly before the Admin tab appears in their own browser.
+Admin status is read from the database on every request (`get_current_user` and
+`require_admin` in `backend/deps.py`), so a promotion or demotion takes effect on the very next
+request. The frontend's Admin tab visibility (`activeIsAdmin`) comes from `GET /me`, which runs
+on each page load, so it updates on the next reload.
+
+### `POST /users/{user_id}/force-logout`
+Ends every session of the given user by incrementing their `session_version` (see
+`core/auth.md`, Session Validation and Revocation). Returns `{ user_id, username }`. Logged as
+`admin_force_logout` with the target's username and id in the detail. 404 for an unknown user,
+403 for a non-admin. An admin may force their own logout, which ends their own sessions too.
 
 ### `POST /grant-tokens`
 Grants a configurable number of tokens to a specific user.
@@ -72,10 +74,10 @@ brute force; the next request returns 429.
 Returns all scoring weight keys, labels, and current values. Available to all users (used to display weights in the UI).
 
 ### Changing weights
-Weights are configured via the `WEIGHTS_JSON` environment variable (a JSON object mapping weight keys to float values). Changes take effect on the next container restart. See `commands.md` for the full variable reference and `seed.py` for the list of all weight keys and their defaults.
+Weights are configured via the `WEIGHTS_JSON` environment variable (a JSON object mapping weight keys to float values). Changes take effect on the next container restart, which also rebuilds the stored card points when the weights differ from the last build ([Stored Card Points](../reference/stored-card-points.md)). See `commands.md` for the full variable reference and `seed.py` for the list of all weight keys and their defaults.
 
 ### `POST /recalculate`
-Recalculates fantasy points for every `PlayerMatchStats` row using the current weights. Run this after changing weights to update historical scores. Takes several seconds on large datasets.
+Recalculates fantasy points for every `PlayerMatchStats` row using the current weights, then rebuilds every stored card point row (`card_match_points`). Returns `{"status": "ok", "recalculated": <stat rows>, "card_points": <stored rows written>}`. Run this after changing weights to update historical scores. Takes several seconds on large datasets.
 
 ---
 
@@ -179,7 +181,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `user_register` | New user registration |
 | `user_login` | Successful user login |
 | `password_reset_requested` | Forgot-password flow issued a single-use password-reset token |
-| `password_reset_completed` | User completed a password reset via `POST /reset-password` |
+| `password_reset_completed` | User completed a password reset via `POST /reset-password` (all their sessions are revoked) |
+| `user_logout_everywhere` | User ended all their sessions via `POST /logout-everywhere` |
 | `username_changed` | User renamed themselves via `PUT /profile/username` (`detail` has `old=` and `new=`) |
 | `token_draw` | Card drawn |
 | `token_booster_draw` | Team draw: one card from a chosen team |
@@ -190,6 +193,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_grant_tokens` | Admin granted tokens to a user |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_toggle_admin` | Admin toggled admin flag on a user |
+| `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |

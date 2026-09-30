@@ -13,7 +13,7 @@ Visible only to admin users. All actions require an active admin session cookie 
 
 ## Recalculate Fantasy Points panel
 
-- **Recalculate** button — re-applies the current scoring weights to all stored player match stats without re-fetching from OpenDota. Use after adjusting weights.
+- **Recalculate** button — re-applies the current scoring weights to all stored player match stats without re-fetching from OpenDota, then rebuilds every stored per-match card point (`card_match_points`). The response includes `recalculated` (stat rows) and `card_points` (stored card-point rows written), and the status line shows both counts. If the card-point rebuild fails, the recalculated stats are kept, the previous card points stay, and the status line shows the error. Use after adjusting weights.
 
 ## Database Backups panel
 
@@ -34,12 +34,13 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 
 - Lists all registered users with their current token balance.
 - Each row has a number input and a **Grant** button to add tokens to that user's balance.
+- Each row has a **Force logout** button. After a confirmation prompt it calls `POST /users/{id}/force-logout`, which ends every session of that user; the status line then reads "{username} logged out of every session". Forcing your own logout (the prompt says it includes your own session) returns the page to the logged-out state.
 
 ## Scoring Weights panel
 
 - Read-only table of all configured weight keys and values (loaded from `GET /weights`).
 - Includes scoring stat weights, death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_common` … `rarity_legendary`), and modifier tuning keys (`modifier_count_*`, `modifier_bonus_pct`).
-- Operational changes are made outside the UI (typically `WEIGHTS_JSON` overrides merged on startup and/or direct DB edits to the `weights` table), then use **Recalculate** to backfill `player_match_stats.fantasy_points` if needed.
+- Operational changes are made outside the UI (typically `WEIGHTS_JSON` overrides merged on startup and/or direct DB edits to the `weights` table), then use **Recalculate** to backfill `player_match_stats.fantasy_points` and rebuild the stored card points if needed. A restart also rebuilds the stored card points automatically when the weights changed (see `features/reference/stored-card-points.md`).
 
 ## Matches panel
 

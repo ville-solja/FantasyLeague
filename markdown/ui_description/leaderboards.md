@@ -11,6 +11,8 @@ Fantasy user standings with two modes toggled by buttons:
 
 Card rarity modifiers are applied to points in both views (e.g. a Legendary card gets +3% on top of raw stats).
 
+In the Weekly view, clicking a row expands that user's card chips: rarity, player name and the card's points for that week, the same stored week value My Team shows. The Season view shows totals only and does not expand into chips. The API rounds each card value and each user total to 2 decimals, each from its own unrounded sum, and the page shows 1 decimal, so the chips can differ from the shown total by less than 0.1.
+
 ## Player average performance panel
 
 Ranks all players in the league by average fantasy points per match. Columns: Rank, Player (clickable → Player detail modal), Matches, Avg pts.

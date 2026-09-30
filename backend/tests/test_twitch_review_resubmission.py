@@ -146,13 +146,13 @@ def _linked_view(panel_text):
 # Story 1 — Reviewer Can Load Every Extension View (version bump)
 # ---------------------------------------------------------------------------
 
-def test_submission_doc_references_version_1_1_6():
-    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference 1.1.6."""
+def test_submission_doc_references_current_version():
+    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference the current version (1.1.7 since issue #139)."""
     doc = _submission_doc()
     header = doc.split("## Submission checklist")[0]
     checklist = doc.split("## Submission checklist")[1].split("## Listing copy")[0]
-    assert "twitch-extension-1.1.6.zip" in header
-    assert "1.1.6" in checklist
+    assert "twitch-extension-1.1.7.zip" in header
+    assert "1.1.7" in checklist
 
 
 def test_submission_doc_does_not_submit_version_1_1_5():

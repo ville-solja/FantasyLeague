@@ -8,7 +8,7 @@
 
 set -e
 
-VERSION=${1:?"Usage: package.sh <version>  (e.g. 1.1.6)"}
+VERSION=${1:?"Usage: package.sh <version>  (e.g. 1.1.7)"}
 OUT="twitch-extension-${VERSION}.zip"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 

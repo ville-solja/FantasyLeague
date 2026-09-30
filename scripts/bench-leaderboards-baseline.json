@@ -1,0 +1,35 @@
+{
+  "size": {
+    "users": 60,
+    "weeks": 10,
+    "players": 40,
+    "matches": 80,
+    "stat_rows": 800,
+    "cards": 900,
+    "roster_entries": 3000
+  },
+  "timings": {
+    "weekly_leaderboard": {
+      "median_ms": 18.33,
+      "p95_ms": 18.65,
+      "queries": 6
+    },
+    "season_leaderboard": {
+      "median_ms": 112.5,
+      "p95_ms": 130.39,
+      "queries": 5
+    },
+    "roster_one_user": {
+      "median_ms": 3.83,
+      "p95_ms": 3.89,
+      "queries": 9
+    }
+  },
+  "totals": {
+    "weekly_points_sum": 12620.73,
+    "season_points_sum": 123429.05,
+    "roster_week_points": 218.22,
+    "roster_season_points": 2024.91
+  },
+  "python": "3.10.12"
+}

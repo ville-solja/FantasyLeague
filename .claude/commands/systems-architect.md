@@ -1,4 +1,4 @@
-<!-- version: 6 -->
+<!-- version: 8 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -22,10 +22,18 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 
 **Backend structure:**
 - `backend/main.py` — middleware, lifespan setup, and router mounts
-- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py` — all endpoint implementations
+- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py`, `backend/routers/weekly_summary.py`, `backend/routers/admin_backups.py` — all endpoint implementations
+- `backend/deps.py` — shared dependencies: session validation (`get_current_user`), `require_admin`, audit helper
+- `backend/rate_limit.py` — shared in-memory slowapi limiter (single-process constraint)
 - `backend/models.py` — SQLAlchemy models and relationships
 - `backend/scoring.py` — scoring logic
+- `backend/match_scoring.py` — SQL helpers excluding matches from scoring
+- `backend/card_points.py` — stored per-match card points, their write triggers and the startup rebuild check
+- `backend/card_draw.py` — draw-time card generation
 - `backend/ingest.py` — data ingestion pipeline
+- `backend/enrich.py` — player profile enrichment background job
+- `backend/schedule.py` — fixture schedule loading and cache
+- `backend/toornament.py` — Toornament result sync
 - `backend/weeks.py` — week locking (admin-created; no auto-generation)
 - `backend/clock.py` — demo-clock override read by week-locking logic under `DEMO_MODE`
 - `backend/twitch.py` — Twitch EBS router
@@ -37,7 +45,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/dotabuff_league_logos.py` — Dotabuff logo fetching
 
 **Frontend:**
-- `frontend/app-globals.js`, `frontend/app-init.js`, `frontend/app-auth.js`, `frontend/app-cards.js`, `frontend/app-admin.js`, `frontend/app-roster.js`, `frontend/app-leaderboard.js`, `frontend/app-players.js`, `frontend/app-profile.js` — client-side logic (split by tab/role)
+- `frontend/app-globals.js`, `frontend/app-init.js`, `frontend/app-auth.js`, `frontend/app-cards.js`, `frontend/app-admin.js`, `frontend/app-roster.js`, `frontend/app-leaderboard.js`, `frontend/app-players.js`, `frontend/app-profile.js`, `frontend/app-weekly-summary.js`, `frontend/app-admin-*.js` — client-side logic (split by tab/role)
 - `frontend/style.css` — styles (skim for structural patterns only)
 
 **Config:**

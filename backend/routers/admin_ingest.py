@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 
+import card_points
 from database import get_db, SessionLocal
 from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
@@ -122,10 +123,23 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
     for stat in stats:
         if stat.is_mvp:
             stat.fantasy_points = round(stat.fantasy_points * (1 + bonus_pct / 100), 4)
-    _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"records={len(stats)}")
+    # Commit the fantasy_points pass first so a card-points rebuild failure (which
+    # rolls back its own transaction and keeps the previous rows) does not undo it.
     db.commit()
-    return {"status": "ok", "recalculated": len(stats)}
+    try:
+        card_point_rows = card_points.rebuild_all(db)
+    except Exception:
+        _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
+               detail=f"records={len(stats)} card_points=failed")
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail="Stats recalculated, but rebuilding stored card points failed; previous card points kept",
+        )
+    _audit(db, "admin_recalculate", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"records={len(stats)} card_points={card_point_rows}")
+    db.commit()
+    return {"status": "ok", "recalculated": len(stats), "card_points": card_point_rows}
 
 
 @router.get("/schedule")

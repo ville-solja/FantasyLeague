@@ -48,8 +48,8 @@ These places apply the helpers:
 
 | Site | What is filtered |
 |---|---|
-| `routers/leaderboard.py` | `GET /top`, `GET /leaderboard`, `GET /leaderboard/roster`, `compute_season_standings()` (season leaderboard + End Season archive), `GET /leaderboard/weekly`, including the MVP-bonus row queries |
-| `routers/cards.py::_build_roster_response` | Week card stat sums and match counts (locked and unlocked week), week MVP rows, season points and season MVP rows |
+| `routers/leaderboard.py` | `GET /top`, `GET /leaderboard`, `GET /leaderboard/roster` (stat rows); `compute_season_standings()` (season leaderboard + End Season archive) and `GET /leaderboard/weekly` (stored `card_match_points` sums, filtered by `scored_match_sql()` on the joined match) |
+| `routers/cards.py::_build_roster_response` | Stored `card_match_points` sums for the week (locked and unlocked week) and for season points, filtered by `scored_match_sql()` on the joined match |
 | `routers/players.py` | `GET /players` and `GET /teams/{id}` avg/total points; `GET /players/{id}` total/avg/best (match count and history still list every match) |
 | `enrich.py::crawl_player_facts` | `avg_fantasy_points` and `best_match_points` profile facts |
 | `routers/weekly_summary.py` | An excluded match stays listed, carries `excluded_from_scoring: true`, and its players' `points` are `null` |

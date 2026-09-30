@@ -258,8 +258,8 @@ async function register() {
   }
 }
 
-async function logout() {
-  await fetch(`${API}/logout`, { method: "POST" });
+// Drop every trace of the logged-in user from the page and show the logged-out state.
+function _clearLocalAuthState() {
   activeUserId = activeUsername = null;
   activeIsAdmin = false;
   activeMustChangePassword = false;
@@ -269,9 +269,20 @@ async function logout() {
   applyAuthState();
 }
 
+async function logout() {
+  await fetch(`${API}/logout`, { method: "POST" });
+  _clearLocalAuthState();
+}
+
 async function loadMe() {
   try {
     const res = await fetch(`${API}/me`);
+    // 401: the session expired or was revoked (password change elsewhere, log out
+    // everywhere, admin force logout). Show the logged-out state, not a stale header.
+    if (res.status === 401) {
+      if (activeUsername || localStorage.getItem("username")) _clearLocalAuthState();
+      return;
+    }
     if (!res.ok) return;
     const data = await res.json();
     activeUserId             = data.user_id;

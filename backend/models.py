@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
 from database import Base
 from scoring import SCORING_STATS
 
@@ -111,6 +111,7 @@ class User(Base):
     must_change_password = Column(Boolean, default=False)  # True after a temp password is issued
     temp_password_expires_at = Column(Integer, nullable=True)  # Unix timestamp; NULL when no temp password is active
     twitch_user_id = Column(String, nullable=True, unique=True)  # opaque Twitch user ID from extension JWT
+    session_version = Column(Integer, nullable=False, default=0)  # bumped to revoke every session of this user
 
 
 class League(Base):
@@ -248,6 +249,30 @@ class PasswordResetToken(Base):
     expires_at = Column(Integer)                         # Unix timestamp
 
 
+class CardMatchPoints(Base):
+    """A card's final points for one match (issue #141): stats with card modifiers, plus
+    the MVP bonus when the player was that match's MVP, times the rarity multiplier.
+    Written by card_points.py whenever an input changes; every points view sums these
+    rows. Match exclusion and week assignment are applied when reading."""
+    __tablename__ = "card_match_points"
+    __table_args__ = (UniqueConstraint("card_id", "match_id", name="uq_card_match_points"),)
+
+    id        = Column(Integer, primary_key=True, autoincrement=True)
+    card_id   = Column(Integer, ForeignKey("cards.id"))
+    match_id  = Column(Integer, ForeignKey("matches.match_id"), index=True)
+    player_id = Column(Integer, index=True)
+    points    = Column(Float, nullable=False)
+
+
+class ScoringState(Base):
+    """Small key/value store for scoring bookkeeping, e.g. the fingerprint of the
+    weights the stored card points were built with (card_points.FINGERPRINT_KEY)."""
+    __tablename__ = "scoring_state"
+
+    key   = Column(String, primary_key=True)
+    value = Column(String, nullable=True)
+
+
 class TwitchPresence(Base):
     __tablename__ = "twitch_presence"
 
@@ -280,6 +305,23 @@ class TwitchTokenDrop(Base):
     series_id  = Column(String)   # broadcaster-supplied series identifier
     dropped_at = Column(Integer)  # Unix timestamp
     count      = Column(Integer)  # number of tokens actually distributed
+
+
+class LiveMatch(Base):
+    """A monitored-league game seen in OpenDota's /live, kept until its stats are
+    ingested so the Twitch MVP panel can offer it early (see ingest.store_live_matches)."""
+    __tablename__ = "live_matches"
+
+    match_id        = Column(Integer, primary_key=True)
+    league_id       = Column(Integer)
+    radiant_team_id = Column(Integer, nullable=True)
+    dire_team_id    = Column(Integer, nullable=True)
+    radiant_name    = Column(String, nullable=True)
+    dire_name       = Column(String, nullable=True)
+    players_json    = Column(Text)  # [{"account_id", "name", "side": "radiant"|"dire"}]
+    first_seen_at   = Column(Integer)
+    last_seen_at    = Column(Integer)
+    ended_at        = Column(Integer, nullable=True)  # set when a poll no longer sees it
 
 
 class MatchBan(Base):
@@ -401,3 +443,5 @@ Index('ix_matches_week_override_id', Match.week_override_id)
 Index('ix_matches_start_time',       Match.start_time)
 Index('ix_match_bans_match_id',      MatchBan.match_id)
 Index('ix_matches_league_id',        Match.league_id)
+# Covering index for the readers' card_id -> (match_id, points) lookups.
+Index('ix_card_match_points_card_cover', CardMatchPoints.card_id, CardMatchPoints.match_id, CardMatchPoints.points)

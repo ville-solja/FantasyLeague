@@ -29,6 +29,8 @@ async function loadConfig() {
       if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
+      const hintCostEl = document.getElementById("boosterHintCost");
+      if (hintCostEl) hintCostEl.textContent = _teamBoosterCost;
       const parts = [];
       if (cfg.app_release) parts.push(cfg.app_release);
       if (cfg.app_version) parts.push(cfg.app_version);
@@ -102,11 +104,6 @@ function setStatus(id, msg, ok = true) {
   const el = document.getElementById(id);
   el.textContent = Array.isArray(msg) ? msg.map(e => e.msg ?? JSON.stringify(e)).join("; ") : (msg ?? "Unknown error");
   el.className = "status " + (ok ? "ok" : "err");
-}
-
-function toggleScoringInfo() {
-  const el = document.getElementById("scoringInfo");
-  if (el) el.style.display = el.style.display === "none" ? "" : "none";
 }
 
 function _escHtml(s) {

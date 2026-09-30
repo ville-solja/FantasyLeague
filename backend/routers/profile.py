@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 from database import get_db
-from deps import _audit, get_current_user
+from deps import SESSION_VERSION_KEY, _audit, bump_session_version, get_current_user
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
 from auth import check_password_bytes, check_username, hash_password, verify_password
 
@@ -111,7 +111,8 @@ def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user:
 
 
 @router.put("/profile/password")
-def change_password(body: ChangePasswordBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_db),
+                    current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -124,5 +125,8 @@ def change_password(body: ChangePasswordBody, db=Depends(get_db), current_user: 
     user.temp_password_expires_at = None
     # A password change supersedes any reset link still sitting in the inbox.
     db.query(PasswordResetToken).filter_by(user_id=user.id).delete()
+    # Log out every other session; the requester's session moves to the new version.
+    new_version = bump_session_version(user)
     db.commit()
+    request.session[SESSION_VERSION_KEY] = new_version
     return {"status": "ok"}

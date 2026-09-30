@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+import card_points
 from database import get_db, backup_sqlite_db
 from deps import require_admin, _audit
 from models import Card, CardModifier, League, Match, MatchBan, Player, PlayerMatchStats, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
@@ -66,7 +67,7 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
                  admin: dict = Depends(require_admin)):
     """Clear all per-season data so the next season starts from a clean slate.
 
-    Deletes matches, stats, bans, weeks, roster snapshots, Twitch season
+    Deletes matches, stats, stored card points, bans, weeks, roster snapshots, Twitch season
     records, all known players and teams, and every user's cards; resets
     user tokens to INITIAL_TOKENS; unmonitors all leagues. User accounts,
     tags, audit logs, and season archives are retained.
@@ -110,6 +111,7 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
             detail="Season reset aborted — no pre-reset backup could be taken")
 
     counts = {
+        "card_match_points":     card_points.delete_card_points(db),
         "player_match_stats":    db.query(PlayerMatchStats).delete(synchronize_session=False),
         "match_bans":            db.query(MatchBan).delete(synchronize_session=False),
         "matches":               db.query(Match).delete(synchronize_session=False),

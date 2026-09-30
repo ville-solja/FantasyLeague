@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
+import card_points
 from models import Card, Match, Player, PlayerMatchStats, Team, User, Week, WeeklyRosterEntry, Weight
 from routers.cards import _build_roster_response
 from routers.leaderboard import weekly_leaderboard
@@ -66,13 +67,20 @@ def _seed_two_game_card(db):
     for key, value in WEIGHTS.items():
         db.add(Weight(key=key, label=key, value=value))
     db.commit()
+    card_points.rebuild_all(db)
 
 
-# kills 6*0.3 = 1.8; deaths 10 over 2 games -> max(0, 6 - 3) = 3.0; total 4.8
+# Stored per-match points (issue #141): 9001 = 4*0.3 + max(0, 3 - 5*0.3) = 2.7;
+# 9002 = 2*0.3 + 1.5 = 2.1; total 4.8 — the same as the whole-window value
+# 6*0.3 + max(0, 3*2 - 10*0.3) because neither game hits the death floor.
 _EXPECTED = pytest.approx(4.8, abs=1e-6)
 
 
 class TestAggregatesUseMatchCount:
+    """Card totals on My Team and the weekly leaderboard for a two-game week. Since issue
+    #141 they are sums of stored per-match points (death pool per game, floored per
+    match); card_fantasy_score's match_count scaling above still covers direct callers."""
+
     def test_roster_week_and_season_totals(self, db):
         _seed_two_game_card(db)
         result = _build_roster_response(db, user_id=1, week_id=1)

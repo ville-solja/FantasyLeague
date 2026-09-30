@@ -97,15 +97,17 @@ class TestAccurateAvailableDrawsCount:
 
     def test_deck_status_line_derived_from_token_balance_not_deck_sum(self):
         """loadDeck() in frontend/app-cards.js no longer fetches GET /deck or
-        sums its per-rarity values for #deckStatus; the "draws available"
-        number is derived from `_tokenBalance` (frontend/app-globals.js)
-        instead (failure case: `${API}/deck` still fetched by loadDeck(), or
-        `#deckStatus` text still built from Object.values(deck).reduce(...))."""
+        sums its per-rarity values. Since the 2026-09-30 Draw panel copy pass
+        it writes no draw count at all: the balance is shown only by
+        #drawCounter, and #deckStatus is cleared for errors (failure case:
+        `${API}/deck` still fetched, or a "draws available" count still
+        written)."""
         js = _read(APP_CARDS_JS_PATH)
         body = _extract_function(js, "loadDeck")
         assert "${API}/deck`" not in body, "loadDeck() must no longer fetch GET /deck"
         assert "Object.values(deck)" not in body, "loadDeck() must no longer sum a deck object"
-        assert "_tokenBalance" in body, "loadDeck() must derive its total from _tokenBalance"
+        assert "draws available" not in body, "loadDeck() must not repeat the balance as a draw count"
+        assert 'setStatus("deckStatus", "")' in body, "loadDeck() must clear #deckStatus on success"
 
     def test_deck_status_decrements_immediately_after_standard_draw(self):
         """After a successful standard draw (drawCard() in app-cards.js),
@@ -143,39 +145,25 @@ class TestAccurateAvailableDrawsCount:
         )
 
     def test_deck_status_shows_no_draws_available_at_zero_tokens(self):
-        """When _tokenBalance is 0, #deckStatus reads exactly "No draws
-        available", matching the account's actual draw eligibility (POST
-        /draw returns 409 "Not enough tokens" at this point) — no more
-        disagreement between a large displayed count and an immediate
-        real-world failure."""
-        js = _read(APP_CARDS_JS_PATH)
-        body = _extract_function(js, "loadDeck")
-        assert '"No draws available"' in body
-        # The ternary must gate on total > 0 (total <= 0, incl. 0, falls
-        # through to "No draws available"), and total must derive from
-        # _tokenBalance so a 0 balance yields total === 0.
-        assert re.search(r"total\s*>\s*0", body), (
-            "loadDeck() must only show a positive count when total > 0"
+        """At 0 tokens the panel shows "0 {token name} remaining" in
+        #drawCounter, matching POST /draw's 409 at that point. The balance is
+        written for any non-null value, including 0."""
+        body = _extract_function(_read(APP_GLOBALS_JS_PATH), "updateTokenDisplay")
+        assert re.search(r"balance\s*!==\s*null", body), (
+            "updateTokenDisplay() must write the counter for a 0 balance too"
         )
-        assert re.search(r"_tokenBalance\s*\?\?\s*0", body), (
-            "loadDeck() must default total to 0 when _tokenBalance is unset"
-        )
+        assert "remaining`" in body
 
     def test_deck_status_hides_specific_count_for_logged_out_users(self):
-        """Logged-out users (no activeUserId) are not shown a specific
-        draws-available number derived from data that doesn't apply to them,
-        mirroring #drawCounter's existing logged-out behavior in
-        updateTokenDisplay() (frontend/app-globals.js)."""
-        js = _read(APP_CARDS_JS_PATH)
-        body = _extract_function(js, "loadDeck")
-        # setStatus("deckStatus", ...) must be gated on activeUserId, not
-        # just on the token total, so a logged-out user (activeUserId ===
-        # null) always falls through to "No draws available" regardless of
-        # any stray _tokenBalance value.
-        assert re.search(r"activeUserId\s*&&\s*total\s*>\s*0", body), (
-            "loadDeck()'s deckStatus ternary must require activeUserId "
-            "before showing a specific draws-available count"
+        """Logged-out users (no activeUserId) are not shown a balance:
+        #drawCounter is only written when activeUserId is set, and loadDeck()
+        writes no count of its own."""
+        body = _extract_function(_read(APP_GLOBALS_JS_PATH), "updateTokenDisplay")
+        assert re.search(r"counter\s*&&\s*balance\s*!==\s*null\s*&&\s*activeUserId", body), (
+            "updateTokenDisplay() must require activeUserId before writing #drawCounter"
         )
+        deck_body = _extract_function(_read(APP_CARDS_JS_PATH), "loadDeck")
+        assert "draws available" not in deck_body
 
 
 # ---------------------------------------------------------------------------
@@ -199,10 +187,12 @@ class TestConsistentDrawCountMessaging:
             "updateTokenDisplay() must still drive #drawCounter"
         )
 
+        # Since the 2026-09-30 Draw panel copy pass, #drawCounter is the only
+        # balance indicator: loadDeck() writes no second count that could disagree.
         cards_js = _read(APP_CARDS_JS_PATH)
         deck_body = _extract_function(cards_js, "loadDeck")
-        assert "_tokenBalance" in deck_body, (
-            "loadDeck() must read the same _tokenBalance global for #deckStatus"
+        assert "draws available" not in deck_body, (
+            "loadDeck() must not write a second balance indicator into #deckStatus"
         )
         assert "${API}/deck`" not in deck_body, (
             "loadDeck() must not derive #deckStatus from a separate /deck-based total"

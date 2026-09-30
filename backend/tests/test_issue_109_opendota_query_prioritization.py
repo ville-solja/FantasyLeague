@@ -6,16 +6,17 @@ Resolves GitHub issue #109. Covers the three user stories in that plan:
   - Poll Faster While a Monitored Match Is Live
   - Operator Visibility into Prioritization State
 
-`backend/ingest.py` gains `get_live_match_league_ids() -> set[int]`, a single `GET /live`
-call (mirroring the existing `get_league_matches`/`get_league_info` pattern) that returns
-the set of `league_id`s with a match currently in progress, per OpenDota's live endpoint.
+`backend/ingest.py` gains a single `GET /live` call per poll cycle (mirroring the existing
+`get_league_matches`/`get_league_info` pattern). Since issue #139 it is
+`get_live_matches() -> list[dict]` (the raw live games); the poll loop derives the set of
+`league_id`s with a match in progress from those entries.
 
 `backend/main.py`'s `_auto_ingest`/`_ingest_poll_loop` are extended to check live-match
 state once per poll cycle against the monitored league IDs: while any monitored league is
 live, `run_enrichment()` is skipped for that cycle (ingestion itself is never paused) and
 the loop selects the new, tighter `INGEST_LIVE_MATCH_POLL_INTERVAL` instead of the existing
 `INGEST_LIVE_POLL_INTERVAL`/`INGEST_POLL_INTERVAL` tiers. A failure in
-`get_live_match_league_ids()` (network error, OpenDota down) must degrade to an empty live
+`get_live_matches()` (network error, OpenDota down) must degrade to an empty live
 set rather than crash the loop, falling back to today's interval-selection behavior.
 """
 
@@ -51,7 +52,7 @@ class _OneShotEvent:
 class TestDeferLowPriorityEnrichmentWhileMonitoredMatchLive:
 
     def test_auto_ingest_skips_enrichment_when_league_has_live_match(self, monkeypatch):
-        """AC: while a monitored league has a live match (per get_live_match_league_ids()),
+        """AC: while a monitored league has a live match (per get_live_matches()),
         _auto_ingest() skips run_enrichment() for that cycle but still ingests new match
         data for the league — only enrichment is paused, never ingestion."""
         import main
@@ -64,15 +65,15 @@ class TestDeferLowPriorityEnrichmentWhileMonitoredMatchLive:
 
         assert ingested == [123]
 
-    def test_get_live_match_league_ids_falls_back_to_empty_set_when_opendota_call_fails(self, monkeypatch):
+    def test_get_live_matches_falls_back_to_empty_list_when_opendota_call_fails(self, monkeypatch):
         """AC failure path: when OpenDota's GET /live call fails or returns None (network
-        error, rate-limited past retries), get_live_match_league_ids() must not raise —
-        it degrades to an empty set so the enrichment gate falls back to running normally."""
+        error, rate-limited past retries), get_live_matches() must not raise —
+        it degrades to an empty list so the enrichment gate falls back to running normally."""
         import ingest as ingest_module
 
         monkeypatch.setattr(ingest_module, "opendota_get_json", lambda url, label=None: None)
 
-        assert ingest_module.get_live_match_league_ids() == set()
+        assert ingest_module.get_live_matches() == []
 
 
 # ===========================================================================
@@ -88,7 +89,8 @@ class TestPollFasterWhileMonitoredMatchLive:
         import main
 
         monkeypatch.setattr(main, "_get_monitored_league_ids", lambda: [123])
-        monkeypatch.setattr(main, "get_live_match_league_ids", lambda: {123})
+        monkeypatch.setattr(main, "get_live_matches", lambda: [{"match_id": "1", "league_id": 123}])
+        monkeypatch.setattr(main, "store_live_matches", lambda entries, monitored: None)
         monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: None)
         monkeypatch.setattr(main, "_run_toornament_sync", lambda: None)
         monkeypatch.setattr(main, "_has_active_week", lambda: pytest.fail("active-week check should not be reached when a match is live"))
@@ -110,7 +112,7 @@ class TestPollFasterWhileMonitoredMatchLive:
 
         def _raise_live_check():
             raise RuntimeError("simulated OpenDota /live failure")
-        monkeypatch.setattr(main, "get_live_match_league_ids", _raise_live_check)
+        monkeypatch.setattr(main, "get_live_matches", _raise_live_check)
 
         auto_ingest_calls = []
         monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: auto_ingest_calls.append((league_ids, live)))

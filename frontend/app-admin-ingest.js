@@ -63,7 +63,7 @@ async function recalculate() {
   try {
     const res = await fetch(`${API}/recalculate`, { method: "POST" });
     const data = await res.json();
-    setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated.` : data.detail, res.ok);
+    setStatus("recalcStatus", res.ok ? `Done. ${data.recalculated} records updated, ${data.card_points} stored card points rebuilt.` : data.detail, res.ok);
   } catch (e) {
     setStatus("recalcStatus", e.message, false);
   } finally {

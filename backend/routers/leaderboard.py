@@ -2,14 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from card_utils import (
-    _SCORED_STAT_COLS, _load_weights,
-    _compute_card_points, _mvp_bonus_delta,
-)
 from database import get_db
 from match_scoring import scored_match_sql, scored_stat_sql
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
-from scoring import fantasy_score, stat_dict_from_row, SCORING_STATS
+from scoring import fantasy_score, SCORING_STATS
 
 router = APIRouter()
 
@@ -47,27 +43,16 @@ def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
     return result
 
 
-def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
-    """Compute leaderboard totals using per-stat card_fantasy_score().
+def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
+    """Build leaderboard entries from per-(user, card) stored-point sums.
 
     rows must have: user_id, username, card_id, card_type, player_name, match_count,
-                    deaths, kills, last_hits, denies, gold_per_min, obs_placed,
-                    towers_killed, roshan_kills, teamfight_participation,
-                    camps_stacked, rune_pickups, firstblood_claimed, stuns
+                    points (the SUM of the card's card_match_points rows in scope)
 
-    mvp_rows — optional raw (un-aggregated) is_mvp=1 match rows, one per MVP
-    match, each with card_id + the same per-stat columns as `rows`. Summed
-    per card via _mvp_bonus_delta() and added to that card's total.
+    Cards with no scored matches in scope are left out of the card list. Totals are
+    summed unrounded; values are rounded once for the response. scope, when given, is
+    added to every card chip (e.g. "season").
     """
-    from card_utils import _card_modifiers_map
-    weights, rarity = _load_weights(db)
-    card_ids = list({r.card_id for r in rows if r.card_id})
-    mods_map = _card_modifiers_map(db, card_ids)
-
-    mvp_bonus_map: dict[int, float] = {}
-    for r in (mvp_rows or []):
-        mvp_bonus_map[r.card_id] = mvp_bonus_map.get(r.card_id, 0.0) + _mvp_bonus_delta(r, weights)
-
     totals: dict[int, float] = {}
     usernames: dict[int, str] = {}
     cards_by_user: dict[int, list] = {}
@@ -77,22 +62,19 @@ def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
         usernames[uid] = r.username
         totals.setdefault(uid, 0.0)
         cards_by_user.setdefault(uid, [])
-        if not r.card_id:
+        if not r.card_id or not r.match_count:
             continue
-        if getattr(r, 'match_count', 1) == 0:
-            continue
-        stat_sums = stat_dict_from_row(r)
-        mods = mods_map.get(r.card_id, {})
-        card_pts = _compute_card_points(stat_sums, r.card_type, weights, rarity, mods,
-                                         mvp_bonus_map.get(r.card_id, 0.0),
-                                         match_count=getattr(r, 'match_count', 1) or 1)
+        card_pts = float(r.points or 0.0)
         totals[uid] += card_pts
-        cards_by_user[uid].append({
+        chip = {
             "card_id": r.card_id,
             "card_type": r.card_type,
-            "player_name": getattr(r, "player_name", None) or "",
+            "player_name": r.player_name or "",
             "points": round(card_pts, 2),
-        })
+        }
+        if scope:
+            chip["scope"] = scope
+        cards_by_user[uid].append(chip)
 
     tags_by_user = _fetch_tags_for_users(db, list(totals.keys()))
     return sorted(
@@ -102,6 +84,12 @@ def _leaderboard_rows(db, rows, mvp_rows=None) -> list[dict]:
          for uid in totals],
         key=lambda x: x["points"], reverse=True,
     )
+
+
+_STORED_POINT_SUMS = (
+    "COUNT(m.match_id) as match_count, "
+    "COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN cmp.points END), 0) as points"
+)
 
 
 @router.get("/top")
@@ -163,53 +151,34 @@ def compute_season_standings(db) -> list[dict]:
     points descending. Shared by GET /leaderboard/season and the End Season
     archive action (POST /admin/season/end).
     """
+    # Sum stored points per (user, card) over locked weeks in a grouped subquery first,
+    # then attach names; grouping the wide joined rows directly was ~4x slower.
     rows = db.execute(text(f"""
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
-               COUNT(DISTINCT m.match_id) as match_count,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.denies                  ELSE 0 END), 0) as denies,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min            ELSE 0 END), 0) as gold_per_min,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed              ELSE 0 END), 0) as obs_placed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.towers_killed           ELSE 0 END), 0) as towers_killed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.roshan_kills            ELSE 0 END), 0) as roshan_kills,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.teamfight_participation ELSE 0 END), 0) as teamfight_participation,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.camps_stacked           ELSE 0 END), 0) as camps_stacked,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.rune_pickups            ELSE 0 END), 0) as rune_pickups,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.firstblood_claimed      ELSE 0 END), 0) as firstblood_claimed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.stuns                   ELSE 0 END), 0) as stuns
+               COALESCE(agg.match_count, 0) as match_count,
+               COALESCE(agg.points, 0) as points
         FROM users u
-        LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id
-        LEFT JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
-        LEFT JOIN cards c ON c.id = wre.card_id
+        LEFT JOIN (SELECT DISTINCT user_id, card_id FROM weekly_roster_entries) rc
+            ON rc.user_id = u.id
+        LEFT JOIN cards c ON c.id = rc.card_id
         LEFT JOIN players p ON p.id = c.player_id
-        LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-        LEFT JOIN matches m ON m.match_id = s.match_id
-            AND {scored_match_sql()}
-            AND (m.week_override_id = wk.id
-                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+        LEFT JOIN (
+            SELECT wre.user_id, wre.card_id,
+                   COUNT(*) as match_count, SUM(cmp.points) as points
+            FROM weekly_roster_entries wre
+            JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
+            JOIN card_match_points cmp ON cmp.card_id = wre.card_id
+            JOIN matches m ON m.match_id = cmp.match_id
+                AND {scored_match_sql()}
+                AND (m.week_override_id = wk.id
+                     OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+            GROUP BY wre.user_id, wre.card_id
+        ) agg ON agg.user_id = u.id AND agg.card_id = c.id
         WHERE u.is_tester = 0
-        GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """)).fetchall()
-    mvp_rows = db.execute(text(f"""
-        SELECT c.id as card_id,
-               s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
-               s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
-               s.rune_pickups, s.firstblood_claimed, s.stuns
-        FROM weekly_roster_entries wre
-        JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
-        JOIN cards c ON c.id = wre.card_id
-        JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id
-            AND {scored_match_sql()}
-            AND (m.week_override_id = wk.id
-                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
-        WHERE s.is_mvp = 1
-    """)).fetchall()
-    return _leaderboard_rows(db, rows, mvp_rows)
+    return _leaderboard_rows(db, rows, scope="season")
 
 
 @router.get("/leaderboard/season")
@@ -272,47 +241,20 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
         SELECT u.id as user_id, u.username,
                c.id as card_id, c.card_type,
                p.name as player_name,
-               COUNT(DISTINCT m.match_id) as match_count,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.deaths                  ELSE 0 END), 0) as deaths,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.kills                   ELSE 0 END), 0) as kills,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.last_hits               ELSE 0 END), 0) as last_hits,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.denies                  ELSE 0 END), 0) as denies,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.gold_per_min            ELSE 0 END), 0) as gold_per_min,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.obs_placed              ELSE 0 END), 0) as obs_placed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.towers_killed           ELSE 0 END), 0) as towers_killed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.roshan_kills            ELSE 0 END), 0) as roshan_kills,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.teamfight_participation ELSE 0 END), 0) as teamfight_participation,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.camps_stacked           ELSE 0 END), 0) as camps_stacked,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.rune_pickups            ELSE 0 END), 0) as rune_pickups,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.firstblood_claimed      ELSE 0 END), 0) as firstblood_claimed,
-               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN s.stuns                   ELSE 0 END), 0) as stuns
+               {_STORED_POINT_SUMS}
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
         LEFT JOIN cards c ON c.id = wre.card_id
         LEFT JOIN players p ON p.id = c.player_id
-        LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-        LEFT JOIN matches m ON m.match_id = s.match_id
+        LEFT JOIN card_match_points cmp ON cmp.card_id = c.id
+        LEFT JOIN matches m ON m.match_id = cmp.match_id
             AND {scored_match_sql()}
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         WHERE u.is_tester = 0
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
-    mvp_rows = db.execute(text(f"""
-        SELECT c.id as card_id,
-               s.deaths, s.kills, s.last_hits, s.denies, s.gold_per_min, s.obs_placed,
-               s.towers_killed, s.roshan_kills, s.teamfight_participation, s.camps_stacked,
-               s.rune_pickups, s.firstblood_claimed, s.stuns
-        FROM weekly_roster_entries wre
-        JOIN cards c ON c.id = wre.card_id
-        JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id
-            AND {scored_match_sql()}
-            AND (m.week_override_id = :week_id
-                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-        WHERE wre.week_id = :week_id AND s.is_mvp = 1
-    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
-    result = _leaderboard_rows(db, rows, mvp_rows)
+    result = _leaderboard_rows(db, rows)
     return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
              "tags": r["tags"], "cards": r["cards"]} for r in result]
 

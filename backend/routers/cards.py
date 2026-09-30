@@ -9,17 +9,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
+import card_points
 from card_utils import (
-    _SCORED_STAT_COLS, _load_weights, _compute_card_points, _mvp_bonus_delta,
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
     _activate_card_atomic, _swap_roster_atomic,
 )
 from database import get_db, spend_tokens
 from match_scoring import scored_match_sql
-from deps import get_current_user, is_admin_fresh, _audit
+from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import limiter, key_by_user_or_ip
-from scoring import stat_dict_from_row
 from weeks import get_next_editable_week
 
 router = APIRouter()
@@ -69,48 +68,37 @@ _LATEST_TEAM_SUBQUERY = """
 """
 
 
-def _mvp_bonus_map(mvp_rows, weights: dict) -> dict[int, float]:
-    """{card_id: summed _mvp_bonus_delta()} across a set of raw, un-aggregated
-    is_mvp=1 match rows (one row per MVP match, not per card)."""
-    result: dict[int, float] = {}
-    for row in mvp_rows:
-        result[row.card_id] = result.get(row.card_id, 0.0) + _mvp_bonus_delta(row, weights)
-    return result
+_WEEK_WINDOW_SQL = ("(m.week_override_id = :week_id OR "
+                    "(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))")
 
 
 def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
-    """Compute roster data for a user, scoped to the given week (or next editable week)."""
+    """Compute roster data for a user, scoped to the given week (or next editable week).
+
+    Card points are sums of stored per-match rows (card_match_points, issue #141) over
+    the scored matches in the week window; nothing is recalculated here."""
     week = db.get(Week, week_id) if week_id is not None else get_next_editable_week(db)
     now = int(time.time())
-    weights, rarity = _load_weights(db)
-    mvp_stat_cols = ", ".join(f"s.{col}" for col in _SCORED_STAT_COLS)
 
-    def _week_stat_case(col):
-        return (
-            f"COALESCE(SUM(CASE WHEN (m.week_override_id = :week_id OR "
-            f"(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
-            f"THEN s.{col} ELSE 0 END), 0) as {col}"
-        )
-    stat_cols = ",\n                   ".join(_week_stat_case(col) for col in _SCORED_STAT_COLS)
-
-    week_match_count = (
-        "COUNT(DISTINCT CASE WHEN (m.week_override_id = :week_id OR "
-        "(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we)) "
-        "THEN m.match_id END) as match_count"
+    week_sums = (
+        f"COUNT(m.match_id) as match_count, "
+        f"COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN cmp.points END), 0) as total_points"
     )
+    week_join = f"""
+            LEFT JOIN card_match_points cmp ON cmp.card_id = c.id
+            LEFT JOIN matches m ON m.match_id = cmp.match_id AND {scored_match_sql()}
+                AND {_WEEK_WINDOW_SQL}"""
 
     if week and week.is_locked:
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, 1 as is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   {week_match_count},
-                   {stat_cols}
+                   {week_sums}
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
             JOIN players p ON p.id = c.player_id
-            LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-            LEFT JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
+            {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
             GROUP BY c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
@@ -118,16 +106,6 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
         active, bench = cards, []
-        mvp_rows = db.execute(text(f"""
-            SELECT c.id as card_id, {mvp_stat_cols}
-            FROM weekly_roster_entries wre
-            JOIN cards c ON c.id = wre.card_id
-            JOIN player_match_stats s ON s.player_id = c.player_id
-            JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
-            WHERE wre.week_id = :week_id AND wre.user_id = :user_id AND s.is_mvp = 1
-              AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-        """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
-               "user_id": user_id}).fetchall()
     else:
         ws = week.start_time if week else 0
         we = week.end_time if week else now
@@ -135,12 +113,10 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             SELECT c.id, c.card_type, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
-                   {week_match_count},
-                   {stat_cols}
+                   {week_sums}
             FROM cards c
             JOIN players p ON p.id = c.player_id
-            LEFT JOIN player_match_stats s ON s.player_id = c.player_id
-            LEFT JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
+            {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
             GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
@@ -149,30 +125,11 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         cards = [dict(r._mapping) for r in results]
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
-        mvp_rows = db.execute(text(f"""
-            SELECT c.id as card_id, {mvp_stat_cols}
-            FROM cards c
-            JOIN players p ON p.id = c.player_id
-            JOIN player_match_stats s ON s.player_id = c.player_id
-            JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
-            WHERE c.owner_id = :user_id AND p.is_active = 1 AND s.is_mvp = 1
-              AND (m.week_override_id = :week_id OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-        """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
 
-    card_ids = [c["id"] for c in cards]
-    modifiers_map = _card_modifiers_map(db, card_ids)
-    mvp_bonus_map = _mvp_bonus_map(mvp_rows, weights)
-
+    modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
     for c in cards:
-        mods = modifiers_map.get(c["id"], {})
-        c["modifiers"] = _format_modifiers(mods)
-        if c.get("match_count", 1) == 0:
-            c["total_points"] = 0.0
-            continue
-        stat_sums = {stat: c.get(stat, 0) or 0 for stat in _SCORED_STAT_COLS}
-        c["total_points"] = _compute_card_points(stat_sums, c["card_type"], weights, rarity, mods,
-                                                   mvp_bonus_map.get(c["id"], 0.0),
-                                                   match_count=c.get("match_count", 1) or 1)
+        c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
+        c["total_points"] = float(c["total_points"] or 0.0)
 
     active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
     bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
@@ -180,62 +137,22 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
 
-    season_pts_rows = db.execute(text(f"""
-        SELECT c.id as card_id, c.card_type,
-               COUNT(DISTINCT m.match_id)                    as match_count,
-               COALESCE(SUM(s.deaths), 0)                    as deaths,
-               COALESCE(SUM(s.kills), 0)                     as kills,
-               COALESCE(SUM(s.last_hits), 0)                 as last_hits,
-               COALESCE(SUM(s.denies), 0)                    as denies,
-               COALESCE(SUM(s.gold_per_min), 0)              as gold_per_min,
-               COALESCE(SUM(s.obs_placed), 0)                as obs_placed,
-               COALESCE(SUM(s.towers_killed), 0)             as towers_killed,
-               COALESCE(SUM(s.roshan_kills), 0)              as roshan_kills,
-               COALESCE(SUM(s.teamfight_participation), 0)   as teamfight_participation,
-               COALESCE(SUM(s.camps_stacked), 0)             as camps_stacked,
-               COALESCE(SUM(s.rune_pickups), 0)              as rune_pickups,
-               COALESCE(SUM(s.firstblood_claimed), 0)        as firstblood_claimed,
-               COALESCE(SUM(s.stuns), 0)                     as stuns
+    season_points = db.execute(text(f"""
+        SELECT COALESCE(SUM(cmp.points), 0)
         FROM weekly_roster_entries wre
-        JOIN weeks wk ON wk.id = wre.week_id
-        JOIN cards c ON c.id = wre.card_id
-        JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
+        JOIN weeks wk ON wk.id = wre.week_id AND wk.is_locked = 1
+        JOIN card_match_points cmp ON cmp.card_id = wre.card_id
+        JOIN matches m ON m.match_id = cmp.match_id AND {scored_match_sql()}
+            AND (m.week_override_id = wk.id
+                 OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
         WHERE wre.user_id = :user_id
-          AND wk.is_locked = 1
-          AND (m.week_override_id = wk.id OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
-        GROUP BY c.id, c.card_type
-    """), {"user_id": user_id}).fetchall()
-
-    season_mvp_rows = db.execute(text(f"""
-        SELECT c.id as card_id, {mvp_stat_cols}
-        FROM weekly_roster_entries wre
-        JOIN weeks wk ON wk.id = wre.week_id
-        JOIN cards c ON c.id = wre.card_id
-        JOIN player_match_stats s ON s.player_id = c.player_id
-        JOIN matches m ON m.match_id = s.match_id AND {scored_match_sql()}
-        WHERE wre.user_id = :user_id
-          AND wk.is_locked = 1
-          AND s.is_mvp = 1
-          AND (m.week_override_id = wk.id OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
-    """), {"user_id": user_id}).fetchall()
-    season_mvp_bonus_map = _mvp_bonus_map(season_mvp_rows, weights)
-
-    season_card_ids = [r.card_id for r in season_pts_rows]
-    season_mods = _card_modifiers_map(db, season_card_ids)
-    season_points = sum(
-        _compute_card_points(stat_dict_from_row(row), row.card_type, weights, rarity,
-                             season_mods.get(row.card_id, {}),
-                             season_mvp_bonus_map.get(row.card_id, 0.0),
-                             match_count=row.match_count or 1)
-        for row in season_pts_rows
-    )
+    """), {"user_id": user_id}).scalar() or 0.0
 
     return {
         "active": active, "bench": bench,
         "combined_value": sum(c["total_points"] for c in active),
         "tokens": tokens,
-        "season_points": season_points,
+        "season_points": float(season_points),
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
                  "start_time": week.start_time, "end_time": week.end_time} if week else None,
     }
@@ -247,7 +164,8 @@ def get_deck(request: Request, db=Depends(get_db)):
     all_players = db.query(Player).all()
     all_combos = {(p.id, r) for p in all_players for r in rarities}
 
-    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    session_user = session_user_or_none(request, db)
+    user_id = session_user.id if session_user else None
     if user_id:
         owned_combos = {
             (c.player_id, c.card_type)
@@ -293,6 +211,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     card.is_active = is_active
 
     _assign_modifiers(db, card, weights)
+    card_points.refresh_card_points(db, card_ids=[card.id])
 
     team_row = db.execute(text("""
         SELECT t.name, t.logo_url
@@ -329,7 +248,8 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
 @router.get("/deck/booster")
 def get_booster_deck(request: Request, db=Depends(get_db)):
     """Return per-team drawable card counts for the requesting user."""
-    user_id = request.session.get("user_id") if hasattr(request, "session") else None
+    session_user = session_user_or_none(request, db)
+    user_id = session_user.id if session_user else None
 
     teams = db.query(Team).all()
 
@@ -412,6 +332,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
     card.is_active = active_count < ROSTER_LIMIT
 
     _assign_modifiers(db, card, weights_map)
+    card_points.refresh_card_points(db, card_ids=[card.id])
 
     team_row = db.execute(text("""
         SELECT t.name, t.logo_url FROM player_match_stats s
@@ -554,6 +475,7 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
 
     weights = {w.key: w.value for w in db.query(Weight).all()}
     _assign_modifiers(db, card, weights)
+    card_points.refresh_card_points(db, card_ids=[card_id])
 
     if not spend_tokens(db, user_id, 1):
         db.rollback()

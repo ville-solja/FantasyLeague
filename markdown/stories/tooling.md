@@ -201,3 +201,50 @@ As a developer, I want the full suite to pass repeatedly so that a red CI build 
 - `test_issue_124_roster_mutation_rate_limiting.py` passes in 10 consecutive full-suite runs
 - The suite-size tripwire in `test_issue_85_split_admin_router.py` passes in the same runs
 - Production behaviour is unchanged: with the variable unset, all four threads start as before
+
+---
+
+## Technical Writer
+
+### Rewrite a Document for Its Audience
+**User story**
+As a maintainer, I want to run `/technical-writer <target>` on a piece of documentation so that it states its core message clearly and concisely for the people who read it.
+
+**Acceptance criteria**
+- The command accepts a file path, a file path plus section heading (e.g. `README.md#Deployment`), or a short description of a documentation area (e.g. "hoster deploy notes")
+- If no argument is given, the command stops and asks what documentation to consider
+- If the target cannot be resolved to existing files, the command lists the closest matches and asks which one was meant
+- Before proposing changes, the command prints the audience it identified, what that audience needs to know or do, and the one- or two-sentence core message of the document
+- The rewrite keeps every fact that audience needs: env var names, defaults, endpoint paths, commands, file paths and version numbers stay exact
+- Any fact the rewrite removes or moves elsewhere is listed in the report with the reason
+
+### Identify the Audience and Ask When Unsure
+**User story**
+As a maintainer, I want the writer to tell me who it thinks the document is for, and ask me when it cannot tell, so that the rewrite targets the right readers.
+
+**Acceptance criteria**
+- The command infers the audience from the file's location and content using a documented mapping (e.g. `markdown/features/reference/` → developers and operators; `.env.example` and the README deployment section → the hoster; `markdown/stories/` → product owner and developers; `.claude/commands/` → the agents themselves)
+- When the location and content point to different audiences, or the document serves more than one, the command asks the user to choose, offering 2–4 concrete options
+- When a question is open that changes the rewrite (for example whether a section still applies), the command asks it instead of guessing
+- The command never asks about choices that have a clear default in the project's conventions (CLAUDE.md, existing doc structure)
+
+### Approve Changes Before They Are Written
+**User story**
+As a maintainer, I want to see the proposed rewrite and choose how to proceed so that no documentation changes without my agreement.
+
+**Acceptance criteria**
+- The command shows the proposed rewrite, or a before/after of each changed section for long files, with word counts before and after
+- It then offers options: apply as proposed, apply with listed changes excluded, or discard
+- Decisions that go beyond rewording, such as deleting a section, splitting a file, or moving content to another doc, are offered as separate options, not applied silently
+- After approval, the command edits only the target files and any index it must keep in sync (`markdown/features/README.md`, `markdown/stories/_index.md`)
+- It follows CLAUDE.md documentation rules: the README links to `markdown/features/` instead of duplicating it, and stories keep the standard **User story** / **Acceptance criteria** format
+
+### Keep the Agent Roster Consistent
+**User story**
+As a maintainer, I want the new command registered like every other agent so that `/agent-steward` and the docs know about it.
+
+**Acceptance criteria**
+- `.claude/commands/technical-writer.md` starts with `<!-- version: 1 -->` and `<!-- mode: read-write -->` and follows the shared contract: Role, Scope, When to run, Precondition check, output format
+- The command is listed in `CLAUDE.md` under Developer Agents and in `.claude/commands/README.md` under Maintenance agents
+- The command reads `markdown/lessons-learned.md` at the start of a run and appends an entry when it finds a novel documentation pitfall
+- `/agent-steward` reports no missing headers or broken file references for the new command

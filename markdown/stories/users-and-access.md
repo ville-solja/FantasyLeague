@@ -306,3 +306,60 @@ a new password directly, so I don't have to manually construct any requests myse
   where the email only contains a raw code
 - The existing "Forgot password" modal's copy is updated to describe a reset link/code being
   sent, not a temporary password
+
+---
+
+## Session Revocation
+
+### Password Changes Log Out Other Sessions
+**User story**
+As a player, I want changing or resetting my password to end every other session on my account so that someone who stole my session cookie loses access.
+
+**Acceptance criteria**
+- `users.session_version` is an integer, default 0, added by migration `028_users_session_version`
+- `POST /login` and `POST /register` store the user's current `session_version` in the session
+- `PUT /profile/password` increments `session_version` and updates the current session to the new value, so the requester stays logged in and every other session gets 401 on its next request
+- `POST /reset-password` increments `session_version`, so every existing session of that user gets 401
+- A session whose stored version does not match the database, or that has no stored version, gets 401 from every route that uses `get_current_user`
+- A session for a user id that no longer exists gets 401
+
+### Log Out Everywhere
+**User story**
+As a player, I want a "Log out everywhere" button so that I can end sessions on devices I no longer have.
+
+**Acceptance criteria**
+- `POST /logout-everywhere` requires login, increments the caller's `session_version`, clears the current session, and returns `{"status": "ok"}`
+- It writes a `user_logout_everywhere` audit entry
+- After it, a second session of the same user gets 401 from `GET /me`
+- Without a session it returns 401
+- The Profile tab shows a "Log out everywhere" button. On success the page returns to the logged-out state
+
+### Admin Force Logout
+**User story**
+As an admin, I want to force-log-out a user so that I can cut off a compromised or abusive account immediately.
+
+**Acceptance criteria**
+- `POST /users/{user_id}/force-logout` requires admin, increments that user's `session_version`, and returns `{"user_id", "username"}`
+- It writes an `admin_force_logout` audit entry naming the target user
+- An unknown `user_id` returns 404. A non-admin gets 403
+- Forcing your own logout is allowed and ends your own sessions too
+- The admin Users table shows a "Force logout" button per user, with a confirmation prompt
+
+### All Session Checks Go Through One Place
+**User story**
+As a developer, I want every session-based check to validate the session version so that no route can be reached with a revoked cookie.
+
+**Acceptance criteria**
+- `get_current_user` loads the user from the database and returns `user_id`, `username` and `is_admin` from the database row, not from the cookie
+- `get_session_user` in `backend/twitch.py` (used by `POST /twitch/link-code`) uses the same check
+- The optional-login paths of `GET /deck` and `GET /deck/booster` treat a revoked session as logged out
+- The frontend treats a 401 from `GET /me` as logged out and clears the stored username and admin flag, instead of showing a stale logged-in header
+
+### Configurable Session Lifetime
+**User story**
+As an operator, I want to set the session lifetime so that longer sessions (issue #117) can be enabled once revocation exists.
+
+**Acceptance criteria**
+- `SESSION_MAX_AGE_SECONDS` sets the session cookie `max_age`. Default `86400` (unchanged behaviour)
+- A non-integer or non-positive value fails startup with a clear error
+- The variable is documented in `.env.example` and the feature doc, with a note that revocation makes a longer value safe

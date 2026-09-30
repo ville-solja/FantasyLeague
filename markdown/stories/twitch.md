@@ -165,3 +165,92 @@ As a Twitch reviewer and as a viewer, I want the Extension description to explai
 - The paragraph states the Extension does not read, store or moderate chat, and re-selecting the MVP for a match that already had a token drop does not drop tokens again
 - `twitch-extension/config.html`'s broadcaster copy mentions the chat announcement, consistent with the listing description
 - The panel's unlinked view tells viewers that linking can show their Kanaliiga username in chat if they win a drop
+
+---
+
+## Early MVP Selection
+
+### Pick the MVP Right After the Game
+**User story**
+As a streamer, I want a match to appear in the MVP panel as soon as it starts so that I can confirm the MVP the moment the game ends, while viewers are still watching.
+
+**Acceptance criteria**
+- The ingest poll stores every `/live` game of a monitored league in a `live_matches` table: match id, league id, both team ids and names, the ten players (account id, name if given, side), and first and last seen times
+- `GET /twitch/matches/current` includes a stored live match that has no ingested stats yet, in the series of its team pair, within the existing 5-series window
+- Such a match has `"provisional": true`, `"live": true` while it is still in `/live` and `false` after, and a `players` list built from the stored players with `fantasy_points: 0`
+- A match with ingested stats is listed exactly as today with `"provisional": false`, and is never listed twice
+- A live match whose team ids are missing is still listed, grouped under its team names
+
+### Confirm an MVP Before Stats Exist
+**User story**
+As a streamer, I want confirming an MVP on a provisional match to work like any other confirmation so that the chat message and token drop happen immediately.
+
+**Acceptance criteria**
+- `POST /twitch/mvp` accepts a provisional match id in the series window, when the player is one of that match's stored live players
+- It stores the MVP row, runs the token drop, posts the chat message using the player's display name (known `players` name, else live `name`, else `Player {account_id}`), and writes the `twitch_mvp_set` audit entry with `provisional=True` in the detail
+- No fantasy bonus is applied at confirm time, because there is no stats row yet
+- A player not among the match's stored live players gets 404 "Player did not play in this match"
+- The channel allowlist and series-window checks run first and behave as today
+- Changing the MVP on a provisional match updates the row and does not drop tokens again
+
+### Bonus Applied When Stats Arrive
+**User story**
+As a player owner, I want an MVP picked early to get the same fantasy bonus as one picked after ingest so that early selection changes nothing about scoring.
+
+**Acceptance criteria**
+- When the match is ingested, `_reapply_mvp_bonus` sets `is_mvp` and the bonus on the chosen player's stats row, as for any MVP
+- If the chosen player has no stats row in the ingested match, a warning is logged naming the match and player, and nothing else changes
+- Once a match has stats rows, its `live_matches` row is deleted
+- A stored live match that has not been ingested 24 hours after it was last seen (for example because ingest skipped a game shorter than 15 minutes) is deleted and no longer listed. An MVP row already confirmed for it stays but has no effect
+
+### Faster Ingest Right After a Game Ends
+**User story**
+As a streamer, I want the final stats to arrive soon after the game so that the panel shows real points shortly after I pick.
+
+**Acceptance criteria**
+- While any stored live match of a monitored league has ended but has no ingested stats, the poll loop keeps using `INGEST_LIVE_MATCH_POLL_INTERVAL`
+- This faster polling stops after `INGEST_POST_MATCH_FAST_POLL_MINUTES` (default 20) from the end of the match, even if the match is still not ingested
+- With no live or recently ended matches, intervals are unchanged
+
+### Panel Shows Which Matches Are Provisional *(extension release)*
+**User story**
+As a streamer, I want the panel to show when a match is live or waiting for stats so that I know the points are not final.
+
+**Acceptance criteria**
+- A provisional match row shows "Live" while `live` is true, otherwise "Stats pending"
+- Player tiles of a provisional match show the team name without a points value
+- After confirming on a provisional match, the confirmation says the bonus is applied when the stats arrive
+- The empty-state text no longer says to wait for the next ingest cycle
+- `live_config.js` passes the extension package self-check (`twitch-extension/package.sh`) and is released as a new extension version
+
+---
+
+## Chat Announcement Fix
+
+### MVP Announcement Reaches Chat
+**User story**
+As a streamer, I want the MVP and token-drop winners announced in my channel's chat so that viewers without the panel open see them too.
+
+**Acceptance criteria**
+- `_post_chat_message` sends `{"text", "extension_id", "extension_version"}`, with `extension_id` from `TWITCH_EXTENSION_CLIENT_ID` and `extension_version` from `TWITCH_EXTENSION_VERSION`
+- The request keeps `broadcaster_id` as a query parameter and a JWT with `role: "external"`, `user_id` and `channel_id` equal to the broadcaster's channel
+- When `TWITCH_EXTENSION_VERSION` is unset, no request is sent and a warning is logged once per process naming the missing setting
+- Local dev (`TWITCH_LOCAL_DEV=true`) still logs the message instead of calling Twitch
+
+### Announcements Fit Twitch's Limit
+**User story**
+As a streamer, I want a large token drop still announced so that a long winner list doesn't stop the message.
+
+**Acceptance criteria**
+- The announcement text is at most 280 characters for any realistic MVP name; the MVP name is never cut
+- When the winners don't all fit, the message lists as many as fit, followed by "and N more"
+- The MVP name is always included in full
+
+### Failures Are Visible to Operators
+**User story**
+As an operator, I want failed Twitch calls logged with Twitch's reason so that the next problem can be diagnosed from the server log.
+
+**Acceptance criteria**
+- A chat or PubSub response other than 2xx logs a warning with the HTTP status and Twitch's error message (response body, truncated to 300 characters), and never the JWT
+- A timeout or connection error is still logged, as today
+- `POST /twitch/mvp` returns 200 and keeps the MVP, bonus and token drop when the chat or PubSub call fails

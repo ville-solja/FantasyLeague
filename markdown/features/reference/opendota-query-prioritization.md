@@ -25,9 +25,11 @@ monitored league needs urgent attention right now.
 
 ## Behaviour
 
-- `backend/ingest.py::get_live_match_league_ids()` — one `GET /live` call per poll cycle, returns
-  the set of `league_id`s with a match currently in progress. Called only when at least one
-  league is currently monitored, so an idle app makes no extra requests.
+- `backend/ingest.py::get_live_matches()` — one `GET /live` call per poll cycle, returns the raw
+  live games; the poll loop derives the set of `league_id`s with a match in progress from them.
+  Called only when at least one league is currently monitored, so an idle app makes no extra
+  requests. Since issue #139 the monitored-league games are also stored in `live_matches`
+  (`reference/early-mvp-selection.md`).
 - `backend/main.py::_ingest_poll_loop` intersects that set with the currently-monitored league
   IDs; if any monitored league is live:
   - `run_enrichment()` is skipped for that cycle (match ingestion itself is never skipped) —
@@ -39,7 +41,7 @@ monitored league needs urgent attention right now.
 - A failed/unreachable `GET /live` call raises inside `_ingest_poll_loop`'s per-cycle try/except,
   which falls back to the plain default interval (`INGEST_POLL_INTERVAL`) for that cycle only —
   not the active-week interval, since the `except` block doesn't re-check `_has_active_week()` —
-  without crashing the loop; `get_live_match_league_ids()` itself also degrades to an empty set
+  without crashing the loop; `get_live_matches()` itself also degrades to an empty list
   rather than raising when the underlying `opendota_get_json` call is exhausted, matching that helper's
   existing None-on-exhausted-retries contract
 
@@ -47,7 +49,7 @@ monitored league needs urgent attention right now.
 
 | Variable | Default | Description |
 |---|---|---|
-| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Poll interval (seconds) while a monitored league has a live match, per `GET /live` |
+| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Poll interval (seconds) while a monitored league has a live match, per `GET /live`, and for `INGEST_POST_MATCH_FAST_POLL_MINUTES` after one ends |
 
 ---
 

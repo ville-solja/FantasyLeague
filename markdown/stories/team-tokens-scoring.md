@@ -382,9 +382,10 @@ is reflected in my points instead of silently contributing nothing.
 - `card_modifiers`'s DB-level `CHECK` constraint is updated via a new migration (rebuilding
   the table the same way migration `008_card_modifiers_constraint` did) to allow `assists` as
   a valid `stat_key`, so card modifier rolls that land on it don't fail
-- Card, roster, and leaderboard scores (recomputed live from raw stat sums + current weights
-  on every read) reflect the new weight immediately after the weight is seeded, with no extra
-  step needed
+- Card, roster, and leaderboard scores (since issue #141, sums of stored per-match card
+  points) reflect the new weight once the stored points are rebuilt: automatically at the
+  next startup (the weights fingerprint changes after seeding) or by running
+  `POST /recalculate`
 - Running `POST /recalculate` after the fix retroactively updates every already-ingested
   match's stored `player_match_stats.fantasy_points` (used by the Players tab match history
   and `/top`) to include assists, not just newly-ingested matches going forward
@@ -424,3 +425,52 @@ other scored stat, so I understand what actually earns me points without needing
 **Acceptance criteria**
 - Match events uniquely tracked
 - Safe to retry ingestion — already-stored records are not duplicated
+
+---
+
+## Stored Card Points
+
+### One Card Value Everywhere
+**User story**
+As a player, I want a card to show the same points on My Team, the weekly leaderboard, the season leaderboard and in season archives so that I can trust the numbers.
+
+**Acceptance criteria**
+- A card's points for a week are the sum of its stored per-match points for the scored matches in that week's window, on every page that shows them
+- A card's season points equal the sum of its weekly points over the locked weeks it was rostered in
+- A user's weekly and season totals equal the sum of their cards' points in that scope
+- The death bonus is floored at 0 per match, so it matches the Players tab's per-match `fantasy_points` before card modifiers and rarity
+- The season leaderboard view shows totals only (no card chips); the weekly leaderboard's card chips and My Team ("wk pts") show the same stored week value for a card
+- Values are stored and summed unrounded and rounded only in the response (2 decimals on the leaderboards) and on the page (1 decimal), and a list of card values adds up to the shown total within 0.1
+
+### Stored Per-Match Card Points
+**User story**
+As a developer, I want each card's points per match stored when the inputs change so that pages read totals instead of recalculating them on every request.
+
+**Acceptance criteria**
+- A `card_match_points` table stores one row per (card, match) with the card's final points for that match: stats with card modifiers, plus the MVP bonus when the player was that match's MVP, times the rarity multiplier. It has a unique constraint on (card_id, match_id)
+- Rows are written or updated when:
+  - a match is ingested or its stats are replaced after a parse (for every card of the players in it),
+  - an MVP is set or changed (Twitch or admin, for that match),
+  - a card is drawn (for all of that player's matches),
+  - a card's modifiers are rerolled (for that card)
+- Rows are deleted when their card or match is deleted (season reset, league purge) or when a match's stat rows are removed. Player removal only deactivates cards, so their rows are kept and past locked weeks still score
+- My Team, the weekly leaderboard, the season leaderboard and End Season's `compute_season_standings` read `SUM(points)` from `card_match_points` joined to roster entries and weeks. They no longer call `card_fantasy_score` per request
+- Match exclusion and week assignment are applied when reading, as today, so toggling them changes totals immediately without a rebuild
+
+### Rebuild Stored Points
+**User story**
+As an admin, I want stored card points rebuilt when scoring rules change so that stored values never go stale.
+
+**Acceptance criteria**
+- `POST /recalculate` also rebuilds every `card_match_points` row, and its response says how many rows were written
+- At startup, after weights are seeded, the table is rebuilt if it is empty or if the weights differ from those it was built with (a stored fingerprint of the weight values)
+- A rebuild runs in one transaction; a failure leaves the previous rows in place and logs the error
+
+### Faster Pages
+**User story**
+As a player, I want My Team and the leaderboards to load quickly as the season grows.
+
+**Acceptance criteria**
+- Each leaderboard and roster request runs a fixed number of queries, independent of the number of users and cards (no per-card Python scoring loop)
+- `scripts/bench_leaderboards.py --compare scripts/bench-leaderboards-baseline.json` (60 users, 10 locked weeks, 20 matches per player) shows the season leaderboard at least 5× faster than the pre-#141 baseline of 112.5 ms median, and the weekly leaderboard no slower than its 18.3 ms baseline
+- At `--weeks 20 --games 3` (240 matches, 6,000 roster entries) the season leaderboard stays under 100 ms median, against 584 ms before #141

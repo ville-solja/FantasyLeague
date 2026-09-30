@@ -35,9 +35,9 @@ Values are normalised from `draw_rate_common / draw_rate_rare / draw_rate_epic /
 
 - Panel heading: "Deck" → "Draw"
 - Each rarity box: count replaced with `{pct}%`
-- `loadDeck()` fetches `GET /config` for the rarity percentages. The status line's draw count is
-  sourced from the user's token balance (`_tokenBalance`), not from `GET /deck` — see "Status
-  line data source" below.
+- A "Chance per draw" caption labels the rarity boxes
+- `loadDeck()` fetches `GET /config` for the rarity percentages. The token balance is shown once,
+  in `#drawCounter`; `#deckStatus` only shows errors — see "Status line data source" below.
 
 ---
 
@@ -88,8 +88,13 @@ is owned, so a user is never blocked by running out of combos). Summing the per-
 could therefore show numbers in the hundreds, unrelated to how many draws the user could
 actually make.
 
-`loadDeck()` no longer fetches `GET /deck` at all. The status line now reads `_tokenBalance`
-(`app-globals.js`) — the same value that already correctly drives the adjacent `#drawCounter`
-element via `updateTokenDisplay()` — so both indicators near the Draw button always agree.
-`GET /deck`'s response shape and its use by the team-booster panel (`GET /deck/booster`) are
-unchanged; only this one status-line calculation was corrected.
+`loadDeck()` no longer fetches `GET /deck` at all. The fix first had the status line
+sourced from the user's token balance (`_tokenBalance`, `app-globals.js`), the same value that
+drives the adjacent `#drawCounter`, instead of the summed `GET /deck` counts.
+
+Since 2026-09-30 the "draws available" line is gone: it repeated `#drawCounter`'s
+"N {token name} remaining" in other words, and "draws" was wrong for team draws, which cost more
+than 1 token. `#drawCounter` (set by `updateTokenDisplay()` from `_tokenBalance`) is now the only
+balance indicator in the panel, and `#deckStatus` only shows draw errors; `loadDeck()` clears it
+after a successful reload. `GET /deck`'s response shape and its use by the team-booster panel
+(`GET /deck/booster`) are unchanged.

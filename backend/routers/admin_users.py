@@ -7,7 +7,7 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 
 from database import get_db
-from deps import get_current_user, require_admin, _audit
+from deps import bump_session_version, get_current_user, require_admin, _audit
 from models import PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
 from rate_limit import limiter, key_by_user_or_ip
 
@@ -90,6 +90,18 @@ def toggle_admin(user_id: int, admin: dict = Depends(require_admin), db=Depends(
            detail=f"{user.username} is_admin={user.is_admin}")
     db.commit()
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin}
+
+
+@router.post("/users/{user_id}/force-logout")
+def force_logout(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    bump_session_version(user)
+    _audit(db, "admin_force_logout", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"target={user.username} user_id={user.id}")
+    db.commit()
+    return {"user_id": user.id, "username": user.username}
 
 
 @router.post("/grant-tokens")
