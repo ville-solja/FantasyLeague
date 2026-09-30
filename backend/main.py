@@ -17,11 +17,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
+import card_points
+import database
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups, backup_retention_days
 from rate_limit import limiter
-from models import League, Week, Weight
+from models import League, LiveMatch, PlayerMatchStats, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league, get_live_match_league_ids, retry_unparsed_matches, INGEST_LOCK
+from ingest import ingest_league, get_live_matches, store_live_matches, retry_unparsed_matches, INGEST_LOCK
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, generate_weekly_summaries
@@ -59,6 +61,7 @@ _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
 _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
 _INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
+_INGEST_POST_MATCH_FAST_POLL_MINUTES = int(os.getenv("INGEST_POST_MATCH_FAST_POLL_MINUTES", "20"))
 _INGEST_PARSE_RETRY_HOURS  = int(os.getenv("INGEST_PARSE_RETRY_HOURS",   "48"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
 _ENRICHMENT_BATCH_SIZE     = int(os.getenv("ENRICHMENT_BATCH_SIZE",      "3"))
@@ -161,12 +164,40 @@ def _has_active_week() -> bool:
         db.close()
 
 
+def _has_recently_ended_live_match(league_ids: list[int]) -> bool:
+    """True if a stored live match of these leagues ended within
+    INGEST_POST_MATCH_FAST_POLL_MINUTES and its stats are not ingested yet."""
+    if not league_ids or _INGEST_POST_MATCH_FAST_POLL_MINUTES <= 0:
+        return False
+    cutoff = int(time.time()) - _INGEST_POST_MATCH_FAST_POLL_MINUTES * 60
+    db = SessionLocal()
+    try:
+        ingested = db.query(PlayerMatchStats.id).filter(
+            PlayerMatchStats.match_id == LiveMatch.match_id
+        ).exists()
+        return db.query(LiveMatch.match_id).filter(
+            LiveMatch.league_id.in_(league_ids),
+            LiveMatch.ended_at.isnot(None),
+            LiveMatch.ended_at >= cutoff,
+            ~ingested,
+        ).first() is not None
+    finally:
+        db.close()
+
+
 def _ingest_poll_loop():
     """Background thread: periodically ingest new matches then sync to toornament."""
     while not _stop_event.is_set():
         try:
             monitored = _get_monitored_league_ids()
-            live = get_live_match_league_ids() & set(monitored) if monitored else set()
+            # Skipped when nothing is monitored so a fresh/test DB never calls OpenDota.
+            live_entries = get_live_matches() if monitored else []
+            live = {e.get("league_id") for e in live_entries if e.get("league_id")} & set(monitored)
+            if monitored:
+                try:
+                    store_live_matches(live_entries, monitored)
+                except Exception:
+                    logger.exception("Ingest poll: storing live matches failed")
             if live:
                 logger.info("Ingest poll: monitored league(s) with a live match: %s", sorted(live))
             else:
@@ -176,7 +207,7 @@ def _ingest_poll_loop():
             with INGEST_LOCK:
                 _auto_ingest(monitored, live)
                 _run_toornament_sync()
-            if live:
+            if live or _has_recently_ended_live_match(monitored):
                 interval = _INGEST_LIVE_MATCH_POLL_INTERVAL
             elif _has_active_week():
                 interval = _INGEST_LIVE_POLL_INTERVAL
@@ -223,6 +254,20 @@ def _start_background_threads():
                 _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
 
 
+def _ensure_card_points_current():
+    """Rebuild stored card points when the table is empty or the weights changed since
+    the last build (issue #141). A failure is logged and leaves the previous rows."""
+    db = database.SessionLocal()
+    try:
+        rows = card_points.ensure_card_points_current(db)
+        if rows is not None:
+            logger.info("Startup: rebuilt %d stored card points", rows)
+    except Exception:
+        logger.exception("Startup: stored card points check failed")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _log_level = logging.DEBUG if os.getenv("DEBUG", "").lower() == "true" else logging.INFO
@@ -236,6 +281,7 @@ async def lifespan(app: FastAPI):
     seed_users()
     seed_admin_from_env()
     seed_weights()
+    _ensure_card_points_current()
     seed_tags()
     if os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
         if os.getenv("SECRET_KEY"):
@@ -297,6 +343,16 @@ if not _https_only and not _is_dev:
         "To bypass this check in local dev, set DEBUG=true or TWITCH_LOCAL_DEV=true."
     )
 
+_session_max_age_raw = os.getenv("SESSION_MAX_AGE_SECONDS", "86400")
+try:
+    SESSION_MAX_AGE_SECONDS = int(_session_max_age_raw)
+except ValueError:
+    SESSION_MAX_AGE_SECONDS = 0
+if SESSION_MAX_AGE_SECONDS <= 0:
+    raise RuntimeError(
+        f"SESSION_MAX_AGE_SECONDS must be a positive integer number of seconds "
+        f"(got {_session_max_age_raw!r})."
+    )
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -318,7 +374,7 @@ app.add_middleware(
     secret_key=_secret_key,
     same_site="lax",
     https_only=_https_only,
-    max_age=86400,
+    max_age=SESSION_MAX_AGE_SECONDS,
 )
 app.add_middleware(SecurityHeadersMiddleware)
 

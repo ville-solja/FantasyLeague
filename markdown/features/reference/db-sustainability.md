@@ -27,6 +27,10 @@ on startup. New columns on existing tables must be added as a numbered migration
 | `id` | TEXT PK | Human-readable migration ID, e.g. `"008_card_modifiers_constraint"` |
 | `applied_at` | INTEGER | Unix timestamp of when the migration ran |
 
+`backend/migrate_scoring_stats.py` is a legacy one-off script from before the registry. It adds
+the expanded `player_match_stats` columns, which `run_migrations()` in `backend/migrate.py` now
+adds as well, so it never needs to be run. It is kept only for reference and can be deleted.
+
 ---
 
 ## Adding a migration

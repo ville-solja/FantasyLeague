@@ -60,8 +60,10 @@ Never sets `user.password_hash`, `must_change_password`, or `temp_password_expir
      matching `PUT /profile/password`).
   3. The token row is deleted — resubmitting it afterward returns 400 (single-use, enforced by
      the row simply no longer existing).
-  4. A `password_reset_completed` audit log entry is written.
-  5. Returns `{"status": "ok"}`.
+  4. `users.session_version` is incremented, ending every existing session of the user
+     (issue #119, see `session-revocation.md`).
+  5. A `password_reset_completed` audit log entry is written, with detail `all sessions revoked`.
+  6. Returns `{"status": "ok"}`.
 
 No authentication required for either endpoint — the token itself is the credential for
 `POST /reset-password`.

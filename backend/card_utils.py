@@ -43,10 +43,15 @@ def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity:
                           mvp_bonus: float = 0.0, match_count: int = 1) -> float:
     """Apply card_fantasy_score + rarity multiplier for one card.
 
-    mvp_bonus is the sum of _mvp_bonus_delta() across any MVP-flagged matches
-    in the card's scoring window — added before the rarity multiplier so an
-    MVP bonus scales with card rarity the same way every other stat does.
-    match_count is the number of games in stat_sums (scales the death pool).
+    mvp_bonus is the sum of _mvp_bonus_delta() over the MVP-flagged matches in
+    stat_sums — added before the rarity multiplier so an MVP bonus scales with
+    card rarity the same way every other stat does.
+    match_count is the number of games in stat_sums (the death pool scales with it).
+
+    Production callers (card_points.py, issue #141) score one match at a time:
+    stat_sums is a single match's stats, mvp_bonus is that match's delta (or 0) and
+    match_count is 1, so the death bonus is floored per match. The aggregate
+    arguments are kept for API compatibility.
     """
     base = card_fantasy_score(stat_sums, weights, mods, match_count) + mvp_bonus
     rarity_mod = 1 + rarity.get(f"mod_{card_type}", 0)

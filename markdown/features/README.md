@@ -45,6 +45,8 @@ Implementation details, integrations, and operator tooling.
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
+| [Early MVP Selection](reference/early-mvp-selection.md) | Lists matches in the MVP panel from OpenDota's live feed before stats are ingested; bonus applied at ingest; faster polling right after a game |
+| [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
@@ -58,6 +60,7 @@ Implementation details, integrations, and operator tooling.
 | [Prevent Common Card Reroll](reference/prevent-common-card-reroll.md) | Backend 400 guard and hidden Reroll button for common-rarity cards |
 | [Env-Based Admin Seeding](reference/env-based-admin-seeding.md) | Replace hardcoded seed credentials with `SEED_ADMIN_*` env vars (numbered suffixes seed further admins); empty `users.json` stub in repo; in-app promotion via `POST /users/{user_id}/toggle-admin` |
 | [Process Diagrams](../process-diagrams.md) | Mermaid flowcharts: season lifecycle, token/card economy, admin tools overview |
+| [Mermaid Process Documentation](reference/mermaid-process-docs.md) | What each diagram in `process-diagrams.md` covers and when to update it |
 | [Agent Lessons Log](reference/agent-lessons-log.md) | Append-only lessons file read by agents at run start to avoid recurring pitfalls |
 | [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
@@ -82,7 +85,7 @@ Implementation details, integrations, and operator tooling.
 | [Schedule Fixtures API Source](reference/schedule-fixtures-api.md) | Structured JSON fixtures feed (`SCHEDULE_FIXTURES_URL`) as a preferred alternative to the Google Sheet CSV; same parsed shape downstream, "Time TBD" for unscheduled fixtures |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
-| [Shoutrrr Support](reference/shoutrrr-support.md) | Outbound push notifications via a separately-hosted Shoutrrr instance; first notification type is a match-starting-soon reminder |
+| [Shoutrrr Support](reference/shoutrrr-support.md) | **PLANNED** — not built yet. Outbound push notifications via a separately-hosted Shoutrrr instance; first notification type is a match-starting-soon reminder |
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | HTML5 drag-and-drop to reorder the active roster; card viewer backdrop-click dismiss |
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
@@ -94,8 +97,10 @@ Implementation details, integrations, and operator tooling.
 | [Roster Limit Race Fix](reference/roster-limit-race-fix.md) | Atomic conditional-UPDATE fix for a race condition that let concurrent requests exceed the active-roster limit |
 | [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
+| [Stored Card Points](reference/stored-card-points.md) | Card points stored per match and summed by every view, so My Team and the leaderboards agree and pages stop recalculating per request |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |
+| [Session Revocation](reference/session-revocation.md) | Per-user session version checked on every request: password change/reset, log out everywhere and admin force-logout end existing sessions; configurable session lifetime |
 | [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |

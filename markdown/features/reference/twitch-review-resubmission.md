@@ -34,7 +34,7 @@ Remaining suspects are all dev-console settings: the Asset Hosting viewer paths,
 
 ## Chat behaviour to disclose
 
-One message each time the broadcaster confirms a match MVP, including re-selections, posted by `backend/twitch.py` via `POST https://api.twitch.tv/helix/extensions/chat`. It contains the MVP player's name and the Kanaliiga Fantasy usernames of token-drop winners, or a note that the drop pool was empty. The Extension never reads, stores or moderates chat.
+One message each time the broadcaster confirms a match MVP, including re-selections, posted by `backend/twitch.py` via `POST https://api.twitch.tv/helix/extensions/chat`. It contains the MVP player's name and, when tokens were dropped, the Kanaliiga Fantasy usernames of token-drop winners (or a note that the drop pool was empty). A re-selection on a match that already dropped posts only the MVP line. The Extension never reads, stores or moderates chat.
 
 ## Package self-check
 

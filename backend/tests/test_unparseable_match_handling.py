@@ -68,6 +68,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 
 import card_draw
+import card_points
 import ingest  # noqa: F401
 import migrate
 from database import Base
@@ -138,6 +139,7 @@ def _seed_scoring(db):
     db.add(PlayerMatchStats(player_id=102, match_id=_UNPARSED_MATCH, team_id=2, fantasy_points=5.5,
                             kills=3, deaths=1, obs_placed=0, stuns=0.0, teamfight_participation=0.0))
     db.commit()
+    card_points.rebuild_all(db)
 
 
 def _set_excluded(db, match_id, value):
@@ -148,6 +150,8 @@ def _set_excluded(db, match_id, value):
 def _delete_stats(db, match_id):
     for row in db.query(PlayerMatchStats).filter_by(match_id=match_id).all():
         db.delete(row)
+    # Stored card points follow their stat rows (refresh drops rows with no stats left).
+    card_points.refresh_card_points(db, match_ids=[match_id])
     db.commit()
 
 
@@ -655,7 +659,7 @@ def test_top_performances_and_player_leaderboard_exclude_excluded_match(db):
 
 
 def test_build_roster_response_card_points_exclude_excluded_match(db):
-    """_build_roster_response() card points (raw stat sums with modifiers) omit the excluded match's stats."""
+    """_build_roster_response() card points (sums of stored per-match card points) omit the excluded match."""
     _assert_exclusion_removes_exactly_that_match(db, _roster_cards)
 
 

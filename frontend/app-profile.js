@@ -129,6 +129,20 @@ async function changePassword() {
   }
 }
 
+async function logoutEverywhere() {
+  if (!confirm("Log out on every device, including this one?")) return;
+  try {
+    const res = await fetch(`${API}/logout-everywhere`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return setStatus("logoutEverywhereStatus", data.detail || "Could not log out everywhere", false);
+    }
+    _clearLocalAuthState();
+  } catch (e) {
+    setStatus("logoutEverywhereStatus", e.message, false);
+  }
+}
+
 async function savePlayerId() {
   const raw = document.getElementById("profilePlayerId").value.trim();
   const player_id = raw ? parseInt(raw) : null;

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, text
 
+import card_points
 from database import get_db
 from deps import require_admin, _audit
 from models import League, Match, MatchBan, PlayerMatchStats
@@ -67,6 +68,7 @@ def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_
     deleted_stats = 0
     deleted_bans = 0
     if match_ids:
+        card_points.delete_card_points(db, match_ids=match_ids)
         deleted_stats = (
             db.query(PlayerMatchStats)
             .filter(PlayerMatchStats.match_id.in_(match_ids))

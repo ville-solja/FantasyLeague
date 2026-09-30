@@ -260,10 +260,16 @@ def test_update_booster_btn_text_is_draw_from_a_team_with_live_cost():
 
 
 def test_booster_btn_hint_line_under_button():
-    """A hint line under #boosterBtn reads "One card from a team you pick, favouring players you don't own yet." """
+    """A hint line under #boosterBtn gives both draw costs (team cost in #boosterHintCost) and the
+    unowned-players-first rule, which applies to both draws."""
     html = _read(INDEX_HTML)
-    hint = "One card from a team you pick, favouring players you don't own yet."
-    assert _element_text(html, "boosterHint") == hint
+    assert _element_text(html, "boosterHint") == (
+        "1 token for a random player, or 3 for a player from a team you pick. "
+        "You get players you don't own yet first."
+    )
+    assert '<span id="boosterHintCost">3</span> for a player from a team you pick.' in html
+    body = _js_function_body(_read(APP_GLOBALS_JS), "loadConfig")
+    assert re.search(r'getElementById\("boosterHintCost"\)', body)
     btn_pos = html.index('id="boosterBtn"')
     hint_pos = html.index('id="boosterHint"')
     assert btn_pos < hint_pos < html.index('id="redeemCodeInput"')

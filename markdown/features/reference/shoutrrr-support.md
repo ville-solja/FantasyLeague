@@ -1,4 +1,6 @@
-# Shoutrrr Support
+# Shoutrrr Support *(planned)*
+
+> **Status: not built.** Nothing below exists in the code yet: there is no `backend/shoutrrr_client.py`, `backend/match_reminders.py`, `MatchStartNotification` model or `SHOUTRRR_*` / `MATCH_REMINDER_*` env var. This page describes the design in `markdown/plans/plan-issue-97-shoutrrr-support.md`.
 
 Outbound push notifications sent to a separately-hosted
 [Shoutrrr](https://containrrr.dev/shoutrrr/)-fronting HTTP instance the operator runs and
@@ -8,7 +10,7 @@ type built on this integration point is a match-starting-soon reminder.
 
 ---
 
-## Integration Point
+## Integration Point *(planned)*
 
 `backend/shoutrrr_client.py`'s `send_notification(title, message, **fields)` POSTs
 `{"title": ..., "message": ..., **fields}` as JSON to `SHOUTRRR_URL`, with an
@@ -22,7 +24,7 @@ structured fields — not a shape confirmed against a specific operator's Shoutr
 instance. It may need a small adjustment once that instance's expected request format is
 known.*
 
-## Match-Starting-Soon Reminder
+## Match-Starting-Soon Reminder *(planned)*
 
 `backend/match_reminders.py`'s `check_and_send_match_reminders(db)` runs from a background
 loop (`_match_reminder_loop` in `backend/main.py`, interval `MATCH_REMINDER_CHECK_INTERVAL`).
@@ -37,7 +39,7 @@ Each series is deduplicated via a `MatchStartNotification` row keyed on
 the same series, and a series whose window has already passed (e.g. the app was down) is
 never reminded late.
 
-## Configuration
+## Configuration *(planned)*
 
 | Variable | Default | Description |
 |---|---|---|

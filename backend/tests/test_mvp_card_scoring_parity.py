@@ -7,12 +7,13 @@ leaderboard, but invisible in every card-based total (My Team roster value, week
 leaderboard, season leaderboard, and the End Season archive that shares
 compute_season_standings()).
 
-The fix (card_utils._mvp_bonus_delta() / _mvp_bonus_map()) adds the bonus as a flat,
-additive term computed from each MVP match's own fantasy_score() (not the card's
-aggregate), so the bonus reflects only the MVP game. These tests lock in both halves of
-that behavior — the MVP bonus reaching every card-based total, and the card's aggregate
-death term (death_pool × match_count − deaths × death_deduction, floored at 0) being
-computed on the whole window.
+The fix (card_utils._mvp_bonus_delta()) adds the bonus as a flat, additive term computed
+from each MVP match's own fantasy_score(), so the bonus reflects only the MVP game. Since
+issue #141 card points are stored per match (card_points.py, card_match_points) and every
+view sums the stored rows, so the death term (death_pool − deaths × death_deduction,
+floored at 0) is also per match. These tests lock in the MVP bonus reaching every
+card-based total; the fixture's matches never hit the death floor, so the per-match sum
+equals the old whole-window value.
 """
 
 import os
@@ -23,6 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
+import card_points
 from models import Card, Match, Player, PlayerMatchStats, Team, User, Week, WeeklyRosterEntry, Weight
 from routers.cards import _build_roster_response
 from routers.leaderboard import compute_season_standings, weekly_leaderboard
@@ -51,9 +53,9 @@ def _seed(db):
     db.add(PlayerMatchStats(player_id=101, match_id=5001, team_id=1, fantasy_points=4.29,
                              kills=5, deaths=2, is_mvp=True))
 
-    # Non-MVP match in the same window: kills=0, deaths=5. Aggregated with the MVP match,
-    # total deaths=7 over 2 games -> death term = max(0, 3*2 - 7*0.3) = 3.9 (the pool
-    # scales per game; a single shared pool would have given only 0.9).
+    # Non-MVP match in the same window: kills=0, deaths=5 -> death term max(0, 3 - 5*0.3) = 1.5.
+    # Neither match hits the floor, so the per-match sum 2.4 + 1.5 = 3.9 equals the old
+    # whole-window value max(0, 3*2 - 7*0.3).
     db.add(Match(match_id=5002, radiant_team_id=1, dire_team_id=2, start_time=600, radiant_win=True))
     db.add(PlayerMatchStats(player_id=101, match_id=5002, team_id=1, fantasy_points=1.5,
                              kills=0, deaths=5, is_mvp=False))
@@ -61,18 +63,19 @@ def _seed(db):
     for key, value in _WEIGHTS.items():
         db.add(Weight(key=key, label=key, value=value))
     db.commit()
+    card_points.rebuild_all(db)
     return week
 
 
-# aggregate stat_sums across both matches: kills=5, deaths=7, match_count=2
-# base = 5*0.3 + max(0, 3*2 - 7*0.3) = 1.5 + 3.9 = 5.4
+# per match: 5001 = 5*0.3 + max(0, 3 - 2*0.3) = 3.9; 5002 = 0 + max(0, 3 - 5*0.3) = 1.5
+# base = 3.9 + 1.5 = 5.4
 # + mvp bonus delta (from match 5001 alone) = 0.39
 # rarity_mod = 1 (no rarity_common weight configured -> defaults to 0%)
 _EXPECTED_CARD_TOTAL = pytest.approx(5.79, abs=1e-6)
 
 
 class TestRosterSeasonPointsIncludesMvpBonus:
-    def test_season_points_reflects_mvp_bonus_and_aggregate_death_term(self, db):
+    def test_season_points_reflects_mvp_bonus_and_per_match_death_term(self, db):
         _seed(db)
 
         result = _build_roster_response(db, user_id=1, week_id=1)
@@ -112,12 +115,13 @@ class TestWeeklyLeaderboardIncludesMvpBonus:
 class TestNoMvpMatchesLeavesCardUnaffected:
     def test_card_with_no_mvp_matches_gets_zero_bonus(self, db):
         week = _seed(db)
-        # Clear the MVP flag entirely -> bonus should vanish, aggregate math unaffected.
+        # Clear the MVP flag entirely -> bonus should vanish, base points unaffected.
         row = db.query(PlayerMatchStats).filter_by(match_id=5001).first()
         row.is_mvp = False
+        card_points.refresh_card_points(db, match_ids=[5001])
         db.commit()
 
         result = _build_roster_response(db, user_id=1, week_id=1)
 
-        # base only: 5*0.3 + max(0, 3*2-7*0.3) = 1.5 + 3.9 = 5.4, no +0.39
+        # base only: 3.9 + 1.5 = 5.4, no +0.39
         assert result["season_points"] == pytest.approx(5.4, abs=1e-6)

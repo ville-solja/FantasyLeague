@@ -43,23 +43,27 @@ already-snapshotted set, but that guard is not what makes re-runs across ticks s
 
 ## Roster Scoring
 
-Points for a week are calculated from the locked snapshot, recomputed from each match's raw
-per-stat columns rather than any stored `fantasy_points` value:
+Points for a week are sums over the locked snapshot of each card's stored per-match points
+(`card_match_points`, see [Stored Card Points](../reference/stored-card-points.md)):
 
 ```
 For each card in the user's WeeklyRosterEntry for that week:
-  for each player_match_stats row for that card's player
-  where the match start_time falls within the week's [start_time, end_time]:
-    sum the raw per-stat columns (kills, last_hits, gold_per_min, ...)
-  apply stat weights, then rarity bonus and card modifier bonuses (card_fantasy_score())
+  for each stored card_match_points row for that card
+  whose match counts for this week (week_override_id = week, or no override and
+  start_time within [start_time, end_time]) and is not excluded from scoring:
+    add its points
 ```
 
-Only matches played during the week's window contribute. Matches outside the window (including those with a `week_override_id` pointing to a different week) do not count.
+Each stored row is the card's points for one match: stat weights with card modifiers, plus
+the MVP bonus when the player was that match's MVP, times the rarity bonus. The death term
+is floored at 0 per match, so a week's value is always the sum of its matches.
+
+Only matches assigned to the week contribute: those played during the week's window, or with a `week_override_id` pointing at it. Matches with a `week_override_id` pointing to a different week do not count. Exclusion and week assignment are applied when reading, so changing them updates totals immediately.
 
 ## Leaderboards
 
 ### Season Leaderboard (`GET /leaderboard/season`)
-Aggregates points from all locked weekly roster entries across the entire season. Each user's score is the sum of their weekly points from all locked weeks combined.
+Aggregates points from all locked weekly roster entries across the entire season. Each user's score is the sum of their weekly points from all locked weeks combined. Each card chip carries `"scope": "season"` and shows the card's total over every locked week it was rostered in; the frontend labels it as season points.
 
 ### Weekly Leaderboard (`GET /leaderboard/weekly?week_id=N`)
 Points for a single specified week only, using the snapshot for that week.

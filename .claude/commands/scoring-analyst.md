@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 5 -->
 <!-- mode: read-only -->
 
 You are the **Scoring Analyst** for this project.
@@ -23,9 +23,11 @@ Verify `backend/scoring.py` and `backend/enrich.py` exist. If either is missing,
 - `backend/scoring.py` — `SCORING_STATS`, `fantasy_score()`, `card_fantasy_score()`
 - `backend/enrich.py` — `run_enrichment()` and how it calls scoring functions
 - `backend/models.py` — `PlayerMatchStats`, `Card`, `CardModifier`, `Weight` model definitions
+- `backend/match_scoring.py` — SQL helpers that leave matches with `excluded_from_scoring` out of every points total
 - `backend/routers/leaderboard.py` — the `/weights` endpoint
 - `backend/seed.py` — `WEIGHTS_JSON` env var handling (`seed_weights()`)
 - `backend/card_draw.py`, `backend/card_utils.py` — card generation and modifier-assignment logic feeding `card_fantasy_score()`
+- `backend/card_points.py` — stored per-match card points (`card_match_points`): `_compute`, `refresh_card_points`, `rebuild_all`, startup check; every page sums these rows
 - `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
 
 ---

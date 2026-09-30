@@ -140,7 +140,10 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
+| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel (e.g. `1.1.6`); required for MVP chat announcements, which are skipped with one warning when empty |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs allowed to set MVPs; empty allows any channel |
+| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` (link-code guessing) |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |
 | `BACKGROUND_TASKS_ENABLED` | `true` | `false` skips starting the four background threads (ingest poll, week maintenance, profile enrichment, DB backup). The backend test conftest sets it `false` — **do not set `false` in production** |
 | `ENV` | *(unset)* | Set `production` in production. Startup then fails if `DEBUG=true` or `TWITCH_LOCAL_DEV=true`, or if `SECRET_KEY` is shorter than 32 characters; the Twitch JWT bypass also refuses to run (500) |

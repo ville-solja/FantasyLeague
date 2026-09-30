@@ -57,7 +57,7 @@ twitch-extension/
 | **Extension status** | **Local Test** or higher | Configuration Service API returns 401 if extension is still in "Created" status |
 | **Client ID** | Shown in the top-right corner of Extension Settings | Used as `TWITCH_EXTENSION_CLIENT_ID` |
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
-| **Capabilities** | Enable **Chat** | Without it, MVP chat announcements silently fail — PubSub/token drops still work |
+| **Capabilities** | Enable **Chat** on the version installed on the channel | Without it, Twitch rejects MVP chat announcements with 403 (logged by the EBS) — PubSub/token drops still work |
 | **Asset Hosting paths** (per version: Version → Asset Hosting) | Panel Viewer Path `panel.html`, Config Path `config.html`, Live Config Path `live_config.html` | A folder prefix such as `twitch-extension/panel.html` or a leading `/` — Twitch's CDN then returns 404 for the Extension iframe |
 | **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
 | **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
@@ -76,8 +76,11 @@ Add to `.env`:
 ```
 TWITCH_EXTENSION_CLIENT_ID=<Client ID from Extension Settings top-right>
 TWITCH_EXTENSION_SECRET=<Key from Extension Secrets table at bottom of Extension Settings>
+TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.1.7>
 TWITCH_DROP_MAX=20
 ```
+
+Update `TWITCH_EXTENSION_VERSION` whenever a new extension version is installed on the channel; without it, chat announcements are skipped.
 
 `TWITCH_EXTENSION_SECRET` is the **base64 key** from the Extension Secrets table. It is not the "Twitch API Client Secret" that appears mid-page.
 
@@ -92,7 +95,7 @@ Leave it unset in production. See `reference/security-headers.md`.
 The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
 
 ```bash
-bash twitch-extension/package.sh 1.1.6
+bash twitch-extension/package.sh 1.1.7
 ```
 
 The script refuses to run without a version, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. On success it prints the Asset Hosting paths and URL Fetching allowlist entry to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
@@ -143,10 +146,16 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 ### Flow
 
 1. Broadcaster clicks **"Select match MVP"**
-2. The 5 most recently played series (regardless of week boundaries) are listed
-3. Broadcaster selects the series (team1 vs team2), then the specific match (Match 1, Match 2…)
-4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**
-5. MVP is saved; tokens drop automatically to the presence pool
+2. The 5 most recently played series (regardless of week boundaries) are listed. A match appears
+   as soon as OpenDota's live feed shows it, before its stats are ingested
+3. Broadcaster selects the series (team1 vs team2), then the specific match (Match 1, Match 2…).
+   A match without ingested stats is marked **Live** while the game runs, otherwise
+   **Stats pending**
+4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**.
+   Tiles of a Live / Stats pending match show the team name without points
+5. MVP is saved; tokens drop automatically to the presence pool. On a Live / Stats pending match
+   the banner adds that the fantasy bonus is applied when the stats arrive (see
+   `reference/early-mvp-selection.md`)
 
 ### Token drop rules
 - Fires on MVP confirmation — no separate trigger
@@ -191,14 +200,51 @@ open):
 ```
 POST https://api.twitch.tv/helix/extensions/chat?broadcaster_id={channel_id}
 ```
-with an extension-signed JWT (`role: external`) — no bot account is required. Message text
-follows the pattern `"Match MVP: {player_name}!"`, appended with
+with an extension-signed JWT (`role: external`, `user_id` and `channel_id` both set to the
+broadcaster's channel; Twitch rejects the call if `broadcaster_id` differs from `channel_id`)
+— no bot account is required. The JSON body carries the three fields Twitch requires:
+
+| Field | Value |
+|---|---|
+| `text` | The announcement, kept within 280 characters (see below) |
+| `extension_id` | `TWITCH_EXTENSION_CLIENT_ID` |
+| `extension_version` | `TWITCH_EXTENSION_VERSION`, the version installed on the channel |
+
+Message text (built by `_mvp_chat_text` in `backend/twitch.py`) follows the pattern
+`"Match MVP: {player_name}!"`, appended with
 `" Token drop winners (+1 {TOKEN_NAME}): {names}"` when viewers received tokens, or
-`" (No linked viewers in the drop pool.)"` when the pool was empty. Requires the **Chat**
-capability to be enabled for the extension in the Twitch developer console (Extension
-Settings → Capabilities), in addition to the Configuration Service setup in Step 2 below.
-Like PubSub, this call is skipped (logged instead) when `TWITCH_LOCAL_DEV=true`, and silently
-skipped entirely if `TWITCH_EXTENSION_SECRET`/`TWITCH_EXTENSION_CLIENT_ID` are unset.
+`" (No linked viewers in the drop pool.)"` when the pool was empty. When no tokens were dropped
+for another reason (a re-selection on a match that already dropped, or no pooled viewer resolved to
+a user), the message is just `"Match MVP: {player_name}!"`. Twitch caps a message at
+**280 characters**: winners are listed until the next one would pass the limit, followed by
+`", and N more"`; if not even one name fits, the winners become
+`"Match MVP: {player_name}! {N} viewers won +1 {TOKEN_NAME}."`. The MVP name is always kept in
+full, so only an MVP name of about 260+ characters could exceed the limit (Dota names are far
+shorter). Twitch also allows **12 messages per
+minute per channel**; one MVP confirmation sends one message.
+
+Requires the **Chat** capability to be enabled on the installed extension version in the
+Twitch developer console (Extension Settings → Capabilities), in addition to the
+Configuration Service setup in Step 2 below.
+
+Chat is best-effort: `POST /twitch/mvp` never fails because of it, and the MVP, bonus and
+token drop are saved before the call. The call is skipped (logged instead) when
+`TWITCH_LOCAL_DEV=true`, skipped silently if `TWITCH_EXTENSION_SECRET`/`TWITCH_EXTENSION_CLIENT_ID`
+are unset, and skipped with one warning per process
+(`Twitch chat skipped: TWITCH_EXTENSION_VERSION is not set`) when `TWITCH_EXTENSION_VERSION`
+is unset. A response other than 2xx logs `Twitch chat failed: <status> <body>` (PubSub:
+`Twitch PubSub broadcast failed: <status> <body>`), with Twitch's response body truncated to
+300 characters; the JWT is never logged. Timeouts and connection errors are logged with a
+traceback.
+
+### Troubleshooting
+
+| Twitch status | Likely cause |
+|---|---|
+| 400 | Missing field or message too long |
+| 401 | JWT or client ID wrong, or `broadcaster_id` ≠ `channel_id` |
+| 403 | Chat capability not enabled on that version, or the extension isn't activated on the channel |
+| 429 | More than 12 messages per minute on the channel |
 
 ---
 
@@ -229,8 +275,9 @@ Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
 
 ### `GET /twitch/matches/current`
 Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
-data, regardless of week boundaries, with per-match player lists. See
-`reference/twitch-mvp-series-window.md`. The series selection lives in
+data, regardless of week boundaries, with per-match player lists. Games seen in OpenDota's live
+feed but not yet ingested are included with `"provisional": true` and a `live` flag (issue
+#139). See `reference/twitch-mvp-series-window.md` and `reference/early-mvp-selection.md`. The series selection lives in
 `twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
@@ -242,13 +289,18 @@ pass these checks in order (issue #135):
 | Check | Failure |
 |---|---|
 | When `TWITCH_MVP_CHANNEL_IDS` is set, the calling channel is in it (checked first, so other channels learn nothing about IDs) | 403 |
-| The match exists | 404 `Match not found` |
-| The match is one `GET /twitch/matches/current` offers: started, has ingested stats, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
-| The player has a stat row for that match | 404 |
+| The match exists: an ingested match or a stored live match (`live_matches`) | 404 `Match not found` |
+| The match is one `GET /twitch/matches/current` offers: started, has ingested stats or is a stored live match, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
+| The player has a stat row for that match, or for a provisional match is one of its stored live players | 404 `Player did not play in this match` |
 
 Without these checks any channel with the extension installed could mint token drops and change
 scores for arbitrary match IDs. The admin MVP endpoint (`POST /admin/matches/{match_id}/mvp`)
 is not restricted to the series window.
+
+On a provisional match (no stats yet) no score bonus is applied at confirm time; ingest applies
+it when the match arrives (`ingest._reapply_mvp_bonus`), and the audit detail carries
+`provisional=True`. The player's display name is the known `players` name, else the live feed
+name, else `Player {account_id}`.
 
 On success it upserts the MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
 
@@ -261,6 +313,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `twitch_link_codes` | Temporary 6-char codes with 10-min TTL |
 | `twitch_presence` | Viewer heartbeat timestamps for pool eligibility |
 | `twitch_mvp` | One MVP selection per match, broadcaster-updatable. Unique on `match_id`; both MVP paths write through `twitch.upsert_mvp()` (`INSERT ... ON CONFLICT DO UPDATE`), so simultaneous confirmations update one row |
+| `live_matches` | Monitored-league games seen in OpenDota's `/live`, kept until their stats are ingested (or 24 h after last seen) so the MVP panel can offer them early. See `reference/early-mvp-selection.md` |
 | `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. Unique on `(channel_id, series_id)`: `_claim_drop()` inserts this row (`ON CONFLICT DO NOTHING`) before any tokens are granted, and only the request whose insert lands pays out, so two simultaneous confirmations cannot drop twice. Migration `026_twitch_mvp_drop_unique` removed pre-existing duplicates and added both unique indexes. |
 
 `users.twitch_user_id` stores the Twitch opaque user ID once linked.
@@ -273,10 +326,11 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 |---|---|---|
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
+| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.1.7`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
 | `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
-| `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation and PubSub HTTP calls. Never set in production. |
+| `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `*.ext-twitch.tv`; `http://localhost:8080` for Local Test |
 | `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |
 

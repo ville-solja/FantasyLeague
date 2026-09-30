@@ -366,8 +366,9 @@ async function loadDeck() {
       document.getElementById(`deck-${r}`).textContent = `${rates[r]}%`;
     }
 
-    const total = _tokenBalance ?? 0;
-    setStatus("deckStatus", activeUserId && total > 0 ? `${total} draws available` : "No draws available");
+    // The token balance is shown once, in #drawCounter. #deckStatus only carries
+    // errors, so a successful reload clears any previous one.
+    setStatus("deckStatus", "");
   } catch (e) {
     setStatus("deckStatus", e.message, false);
   }

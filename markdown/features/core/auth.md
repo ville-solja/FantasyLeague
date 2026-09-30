@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the Kana Cards app. Sessions are server-side, stored in a signed cookie managed by Starlette's `SessionMiddleware`.
+User accounts, sessions, and profile management for the Kana Cards app. Sessions are signed cookies managed by Starlette's `SessionMiddleware`, with no server-side session store. A per-user session version makes them revocable (see Session Validation and Revocation below).
 
 ---
 
@@ -54,10 +54,17 @@ Authenticates with username and password.
   path sets these fields anymore. See `reference/temp-password-expiry.md`.
 - Returns `{ "username", "is_admin", "tokens" }` and sets the session cookie. (`must_change_password` is only returned by `GET /me`.)
 - Records a `user_login` audit log entry.
+- Stores the user's current `session_version` in the session as `sv` (`POST /register` does the same).
 
 ### `POST /logout`
 
 Clears the session cookie. No request body required. Always returns `{ "status": "ok" }`.
+
+### `POST /logout-everywhere`
+
+Login required (401 without a session). Increments the caller's `session_version`, which ends every
+session of that user on every device, then clears the current session. Writes a
+`user_logout_everywhere` audit entry and returns `{ "status": "ok" }`.
 
 ### `GET /me`
 
@@ -166,6 +173,9 @@ Changes the authenticated user's password. Requires login and the current passwo
   `current_password` is not byte-capped.
 - Clears the `must_change_password` flag if set.
 - Deletes the user's outstanding password-reset tokens, so an old reset link stops working.
+- Increments `session_version` and writes the new value into the requester's session: the
+  requester stays logged in and every other session of the user gets 401 on its next request.
+  A rejected change (wrong current password) changes nothing.
 
 ---
 
@@ -226,11 +236,31 @@ authentication required (the token itself is the credential).
   1. Sets `user.password_hash` to the new password.
   2. Clears any legacy `must_change_password`/`temp_password_expires_at` state on the account
      (cleanup matching what `PUT /profile/password` already does).
-  3. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
-  4. Records a `password_reset_completed` audit log entry.
-  5. Returns `{"status": "ok"}`.
+  3. Increments `session_version`, so every existing session of the user gets 401.
+  4. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
+  5. Records a `password_reset_completed` audit log entry (detail `all sessions revoked`).
+  6. Returns `{"status": "ok"}`.
 
 Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next returns 429.
+
+---
+
+## Session Validation and Revocation
+
+Every route that needs login goes through `get_current_user` (`backend/deps.py`). It loads the user
+row and accepts the session only when the cookie's `sv` equals `users.session_version`. A cookie
+with no `sv`, a different `sv`, or a user id that no longer exists is cleared and gets 401, the same
+as a logged-out request. The returned `user_id`, `username` and `is_admin` come from the database
+row, not the cookie. `POST /twitch/link-code` uses the same check, and the optional-login routes
+`GET /deck` and `GET /deck/booster` treat a revoked session as logged out
+(`session_user_or_none`).
+
+`session_version` is incremented by `PUT /profile/password` (keeps the requester's session),
+`POST /reset-password`, `POST /logout-everywhere` and the admin-only
+`POST /users/{user_id}/force-logout` (see `core/admin.md`). Cookies issued before this feature have
+no `sv`, so every user logs in once after that release. When `GET /me` returns 401 the frontend
+clears its stored username and admin flag and shows the logged-out state. Design and trade-offs:
+`reference/session-revocation.md`.
 
 ---
 
@@ -243,6 +273,10 @@ equivalent local-dev bypasses at startup, `backend/main.py`). Conversely, settin
 that combination would silently accept the insecure Twitch JWT bypass in what looks like a
 production config, so the app refuses to boot rather than risk it.
 
+The cookie lives for `SESSION_MAX_AGE_SECONDS` (default `86400`, 24 hours). A non-integer or
+non-positive value stops the app at startup. Session revocation (above) makes a longer value, as
+proposed in issue #117, safe to use.
+
 Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie. It is required outside local dev: the app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset; issue #118, see `reference/https-enforcement.md`).
 
 ---
@@ -253,6 +287,7 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 |---|---|---|
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
 | `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy — **must be `true` in production**; startup fails without it unless `DEBUG`/`TWITCH_LOCAL_DEV` is set (`TWITCH_LOCAL_DEV` only with `SECRET_KEY` unset) |
+| `SESSION_MAX_AGE_SECONDS` | `86400` | Session cookie lifetime in seconds; must be a positive integer. Revocation makes a longer value safe |
 | `DEBUG` | `false` | Bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |

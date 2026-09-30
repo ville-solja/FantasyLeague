@@ -3,20 +3,18 @@
 
 Player-level scoring (scoring.fantasy_score() + scoring.apply_mvp_bonus_to_row(),
 written to PlayerMatchStats.fantasy_points) and card-level scoring
-(card_utils.card_fantasy_score()/_compute_card_points(), recomputed from raw
-per-stat aggregates via _build_roster_response()/leaderboard queries) are two
-structurally independent pipelines. The card path scales the death pool by
-match_count (max(0, pool*games - deaths*deduction)), which equals the sum of
-per-match death terms unless a single game floors out at 0 — see
-markdown/features/reference/mvp-fantasy-bonus.md.
+(card_utils.card_fantasy_score()/_compute_card_points(), stored per match in
+card_match_points by card_points.py and summed by _build_roster_response() and the
+leaderboard queries) are two structurally independent pipelines. Since issue #141
+both floor the death term per match — see
+markdown/features/reference/stored-card-points.md.
 
 For the one case where they must always agree exactly — a card backed by a
 single match, common rarity (0% bonus), no card modifiers, so the aggregate
 degenerates to that one match's own numbers — this test locks in that the two
-pipelines stay in sync. It is not a general parity guarantee: multi-match
-cards are expected to differ (see test_mvp_card_scoring_parity.py's death-pool
-regression case), and any new player-level-only bonus needs its own extension
-here. What it buys is turning the specific bug fixed this session (MVP bonus
+pipelines stay in sync. It is not a general parity guarantee: cards with
+modifiers or a rarity bonus are expected to differ from the player-level points,
+and any new player-level-only bonus needs its own extension here. What it buys is turning the specific bug fixed this session (MVP bonus
 computed at the player level but never reaching card/roster/leaderboard
 totals) into a fast, obvious CI failure if it ever regresses, instead of a
 silent divergence discovered sessions later.
@@ -29,6 +27,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 
+import card_points
 from models import Card, Match, Player, PlayerMatchStats, Team, User, Week, WeeklyRosterEntry, Weight
 from routers.cards import _build_roster_response
 from scoring import apply_mvp_bonus_to_row
@@ -61,6 +60,7 @@ def _seed_single_match_card(db, is_mvp: bool) -> PlayerMatchStats:
 
     apply_mvp_bonus_to_row(stat, _WEIGHTS, apply=is_mvp)
     db.commit()
+    card_points.rebuild_all(db)
     return stat
 
 

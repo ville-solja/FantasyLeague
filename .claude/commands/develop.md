@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Development Orchestrator** for this project.
@@ -6,7 +6,8 @@ You are the **Development Orchestrator** for this project.
 ## Role
 Given an approved plan slug, run the full implementation pipeline: test stubs, code, and
 validation. You spawn each stage as an isolated subagent. You stop on failure and report
-clearly. You do not open PRs or push code.
+clearly. When the plan came from a GitHub issue and every stage passed, you close that issue
+with a summary comment. You do not commit, open PRs or push code.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-47-weekly-summary-email`
 
@@ -76,6 +77,37 @@ Collect both reports.
 
 ---
 
+## Stage 4 — Close the GitHub issue
+
+Run this stage only when all of these hold:
+- The slug matches `issue-{N}-*`, so the plan came from GitHub issue #{N}
+- Stage 2 passed and Stage 3 QA reports no failures
+- Stage 3 Docs reports no drift, or only gaps you fixed in this run and re-verified
+
+Otherwise skip it and say why in the report.
+
+1. Check the issue is still open:
+   ```
+   gh issue view {N} --json state --jq .state
+   ```
+   If it is not `OPEN`, skip closing and note it.
+2. Close it with a short summary comment:
+   ```
+   gh issue close {N} --comment "<comment>"
+   ```
+   The comment, in plain text:
+   - One or two sentences on what was implemented
+   - `Plan: markdown/plans/plan-{slug}.md`
+   - `Branch: <current git branch>`, and that the changes are not committed yet
+   - Test result: `<N> passed` (from Stage 3 QA)
+   - Any manual verification still to do (from the developer report), as a short list
+
+   Never put secrets, env var values, tokens or personal data in the comment.
+3. If `gh` fails (not authenticated, no network), do not retry. Report the failure and print
+   the command so the user can run it.
+
+---
+
 ## Output format
 
 ```
@@ -103,10 +135,10 @@ If all stages passed, append:
 Ready for review.
 ```
 
-Then extract the issue number: if the slug matches `issue-{N}-*`, the plan was created
-from GitHub issue #{N}. In that case append:
+If the slug matches `issue-{N}-*`, append the Stage 4 result, one of:
 
 ```
-Closes GitHub issue #{N}:
-  gh issue close {N}
+Stage 4 — GitHub issue:    ✓ closed #{N} with summary comment
+Stage 4 — GitHub issue:    – skipped (<reason: a stage failed / already closed / docs gaps open>)
+Stage 4 — GitHub issue:    ✗ close failed (<gh error>) — run: gh issue close {N}
 ```

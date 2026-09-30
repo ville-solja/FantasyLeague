@@ -9,6 +9,38 @@ Format:
 
 ---
 
+### 2026-09-30 — developer — scoring
+**Problem:** The 2026-09-25 entry below says card points are recomputed from aggregate stat sums with a death pool that scales with `match_count`, so a match's contribution to a card is not its own points. Issue #141 superseded that premise: card points are now stored per (card, match) in `card_match_points`, computed one match at a time (`match_count=1`, death bonus floored per match), and every reader sums the stored rows. The aggregate `match_count` path in `card_fantasy_score`/`_compute_card_points` survives only for API compatibility. Separately, `POST /recalculate` used to lose its `fantasy_points` pass when `rebuild_all` failed, because `rebuild_all` rolls back the whole session on error.
+**Solution:** A match's contribution to a card is now exactly its stored `card_match_points.points` row; the older entry's excluded/cleared/deleted comparison still works but is no longer required. Before calling `card_points.rebuild_all(db)` after other writes, commit those writes first, since its rollback would discard them.
+
+### 2026-09-30 — developer — testing
+**Problem:** Since issue #141, My Team, the weekly and season leaderboards and End Season sum stored `card_match_points` rows. A test (or script such as `scripts/bench_leaderboards.py`) that seeds `PlayerMatchStats`/`Card` rows directly, or deletes stat rows with `db.delete`, reads zero or stale card totals, because only the app's write paths (ingest, MVP, draw, reroll, recalculate) refresh the stored rows. Separately, on SQLite, grouping the wide joined rows (users × roster × stored points, with username/player-name text columns in the GROUP BY) was about 3× slower than summing per (user, card) in an integer-keyed subquery and joining names afterwards.
+**Solution:** After seeding, call `card_points.rebuild_all(db)`; after changing stats or MVP flags directly, call `card_points.refresh_card_points(db, match_ids=[...])` (it also drops rows whose stat row is gone). For leaderboard SQL, aggregate in a subquery on integer keys, then join display columns; check with `EXPLAIN QUERY PLAN` and the bench script.
+
+### 2026-09-30 — technical-writer — docs
+**Problem:** A README draft led with "Kana Cards" and "Kanaliiga", but those are the branding of one deployment; the project itself (Fantasy League) is league-agnostic.
+**Solution:** In repo-level docs (README, setup and deployment text), describe the product generically and use neutral examples (`https://your-deployment.example.com`). Kanaliiga and Kana Cards names belong only in deployment-specific content such as the in-app text, the Twitch extension and hoster notes.
+
+### 2026-09-30 — technical-writer — docs
+**Problem:** Treating "concise" as "shorter" produced a trimmed draft for the How to Play → Developers subtab, but the maintainer wants developer-facing overview pages to be fuller: how the system fits together, why each choice was made, and its trade-offs.
+**Solution:** For developer and architecture overviews, aim for complete and well structured rather than short; still leave code-level detail to the README and `markdown/features/` and link to them. Ask about depth up front when the audience is developers.
+
+### 2026-09-30 — technical-writer — docs
+**Problem:** In-app help text in `frontend/index.html` (How to Play) is pinned by phrase-level assertions in `test_how_to_play_role_subtabs.py` and `test_issue_103_team_draw_explanation.py` ("Draw a card", "5 cards", "locks automatically", the whole team-draw bullet), so a pure rewording breaks the suite.
+**Solution:** Before rewording UI copy, grep `backend/tests/` for the panel id and quoted phrases; keep pinned phrases or propose the test change as a separate choice.
+
+### 2026-09-30 — developer — file-paths
+**Problem:** `twitch-extension/*.zip` is gitignored, so building a zip with `package.sh` does not record an extension version bump. The submitted version is tracked in `markdown/features/reference/twitch-extension-review-submission.md` (header and checklist), and `backend/tests/test_twitch_review_resubmission.py::test_submission_doc_references_current_version` asserts that exact version.
+**Solution:** To bump the extension version, update the submission doc's header, checklist and review-history change log, the `package.sh` usage example, the `package.sh <version>` line in `markdown/features/core/twitch-extension.md`, and that test's expected version. The operator builds the zip with `bash twitch-extension/package.sh <version>` at release time.
+
+---
+
+### 2026-09-29 — developer — testing
+**Problem:** After issue #119 (session revocation), a session is valid only when it carries `"sv"` equal to `users.session_version`. Tests that build sessions by hand, without going through `/login` or `/register`, broke silently into 401s or logged-out behaviour. Examples were `FakeRequest`/`AuthRequest` classes with `session = {"user_id": ...}` in `test_team_booster_draws.py` and the `/_test/login/{user_id}` helper in `test_issue_135_security_review_fixes.py`.
+**Solution:** Any hand-built session must include `"sv": user.session_version or 0` (`deps.SESSION_VERSION_KEY`). A signed test cookie needs it too. Better still, log in through `POST /login`. `deps.get_current_user(request)` can still be called with only a logged-out request, because it returns 401 before touching `db`.
+
+---
+
 ### 2026-09-28 — security-patcher — testing
 **Problem:** CodeQL `py/bad-tag-filter` (CWE-20/116/185/186) flags any regex that matches HTML tags, e.g. `re.findall(r"<script\b[^>]*>", html)`, including in static-check tests (alerts #26 and #27 in `test_issue_135_security_review_fixes.py`). Such a regex really does miss `<SCRIPT>`, single-quoted attributes and `>` inside attribute values.
 **Solution:** Parse the HTML with the standard library's `html.parser.HTMLParser` (lower-cases tag and attribute names, handles quoting) and inspect the attribute dicts (see `_script_tags()` / `_external_scripts()`). Don't just add `re.IGNORECASE`, which leaves the other regex gaps and can draw the same alert again.

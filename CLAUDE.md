@@ -198,13 +198,14 @@ Reads an approved plan and writes failing pytest stubs to `backend/tests/test_{s
 
 ### `/develop`
 **Role: Development Orchestrator**
-Runs the full post-approval pipeline in three sequential stages using isolated subagents: test stubs → implementation → QA + docs validation. Stops and reports clearly if any stage fails.
+Runs the full post-approval pipeline in sequential stages using isolated subagents: test stubs → implementation → QA + docs validation → issue close. Stops and reports clearly if any stage fails.
 
 1. **Stage 1 — Test stubs:** spawns test-planner to write failing stubs
 2. **Stage 2 — Implementation:** spawns developer to implement the plan and make stubs pass
 3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel
+4. **Stage 4 — Close issue:** if the plan came from GitHub issue #N and every stage passed, closes the issue with a summary comment (`gh issue close N --comment …`)
 
-Produces a consolidated report including `gh issue close N` if the plan was created from a GitHub issue.
+Produces a consolidated report including the Stage 4 result.
 
 **When to run:** After reviewing a plan file and deciding to implement it. Replaces running `/test-planner`, `/developer`, `/qa-engineer`, and `/documentation-steward` individually.
 
@@ -268,15 +269,15 @@ This runs three stages automatically: test stubs → implementation → QA + doc
 
 For ad-hoc work, bug fixes, or situations where the full pipeline is overkill, the individual agents remain directly invokable: `/test-planner`, `/developer`, `/qa-engineer`, `/documentation-steward`.
 
-### [HUMAN GATE 2] — Review report and close issue
+### [HUMAN GATE 2] — Review report
 
-Read the consolidated report from `/develop`. If the implementation is correct:
+Read the consolidated report from `/develop`. When the plan came from a GitHub issue and every stage passed, `/develop` has already closed the issue with a summary comment. If the review finds a problem, reopen it:
 
 ```
-gh issue close <N>
+gh issue reopen <N>
 ```
 
-(The `gh issue close` command appears in the report when the plan slug contains an issue number.)
+If Stage 4 was skipped or failed, the report says why; close the issue yourself once the problem is fixed (`gh issue close <N>`).
 
 ### Review gates (run after any implementation)
 

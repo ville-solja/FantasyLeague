@@ -39,6 +39,7 @@ function _renderUsers(rows) {
         <button class="ghost" style="font-size:0.8rem;" onclick="toggleTester(${u.id})">${u.is_tester ? "Unmark tester" : "Mark tester"}</button>
         ${adminToggleBtn}
         <button class="ghost" style="font-size:0.8rem;" onclick="openTagManager(${u.id})">Manage tags</button>
+        <button class="ghost" style="font-size:0.8rem;" onclick="forceLogout(${u.id})">Force logout</button>
       </td>
     </tr>`;
   }).join("");
@@ -184,6 +185,22 @@ async function toggleAdmin(userId) {
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", `${data.username} ${data.is_admin ? "promoted to admin" : "demoted from admin"}`);
     loadUsers();
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
+async function forceLogout(userId) {
+  const user = _cachedUsers.find(u => u.id === userId);
+  const name = user ? user.username : `user ${userId}`;
+  const self = userId === activeUserId ? " This includes your own session." : "";
+  if (!confirm(`Force logout ${name}? Every session of this user ends now.${self}`)) return;
+  try {
+    const res = await fetch(`${API}/users/${userId}/force-logout`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("usersStatus", data.detail, false);
+    if (userId === activeUserId) return _clearLocalAuthState();
+    setStatus("usersStatus", `${data.username} logged out of every session`);
   } catch (e) {
     setStatus("usersStatus", e.message, false);
   }

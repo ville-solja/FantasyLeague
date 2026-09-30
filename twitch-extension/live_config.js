@@ -34,7 +34,7 @@ function loadSeries() {
         _seriesData = (data && data.series) || [];
         var container = el("series-list");
         if (_seriesData.length === 0) {
-            container.innerHTML = '<p class="muted">No recent matches with stats found. Check back after the next ingest cycle.</p>';
+            container.innerHTML = '<p class="muted">No recent matches found. A match appears here as soon as it goes live.</p>';
             return;
         }
         container.innerHTML = "";
@@ -70,9 +70,10 @@ function selectSeries(idx) {
             month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
         });
         var mvpNote = match.mvp_player_name ? " · MVP: " + _escHtml(match.mvp_player_name) : "";
+        var statusNote = match.provisional ? " · " + (match.live ? "Live" : "Stats pending") : "";
         div.innerHTML =
             '<div style="font-weight:600">Match ' + match.match_number + "</div>" +
-            '<div class="meta">' + date + mvpNote + "</div>";
+            '<div class="meta">' + date + statusNote + mvpNote + "</div>";
         div.addEventListener("click", function() { selectMatch(match); });
         container.appendChild(div);
     });
@@ -93,7 +94,7 @@ function selectMatch(match) {
     grid.innerHTML = "";
 
     if (!match.players || match.players.length === 0) {
-        grid.innerHTML = '<p class="muted" style="grid-column:span 2">No player stats yet — check back after match data ingests.</p>';
+        grid.innerHTML = '<p class="muted" style="grid-column:span 2">No players found for this match yet.</p>';
         mvpGoTo(3);
         return;
     }
@@ -106,9 +107,13 @@ function selectMatch(match) {
         teams[teamName].forEach(function(p) {
             var div = document.createElement("div");
             div.className = "player-item" + (match.mvp_player_id === p.player_id ? " selected" : "");
+            // Provisional matches have no stats yet, so no points to show.
+            var ptag = match.provisional
+                ? _escHtml(teamName)
+                : _escHtml(teamName) + " · " + p.fantasy_points + " pts";
             div.innerHTML =
                 '<div class="pname">' + _escHtml(p.player_name) + "</div>" +
-                '<div class="ptag">' + _escHtml(teamName) + " · " + p.fantasy_points + " pts</div>";
+                '<div class="ptag">' + ptag + "</div>";
             div.addEventListener("click", function() { pickPlayer(p, div); });
             grid.appendChild(div);
         });
@@ -161,7 +166,8 @@ function confirmMVP() {
             dropMsg = " · No viewers in pool";
         }
 
-        showBanner(el("banner"), "MVP: " + data.player_name + dropMsg, false);
+        var bonusMsg = _selectedMatch.provisional ? " · Fantasy bonus is applied when the stats arrive" : "";
+        showBanner(el("banner"), "MVP: " + data.player_name + dropMsg + bonusMsg, false);
         mvpGoTo(0);
     }).catch(function() {
         showBanner(el("banner"), "Request failed", true);

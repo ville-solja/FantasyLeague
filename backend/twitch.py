@@ -15,6 +15,7 @@ import random
 import secrets
 import string
 import time
+from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,11 @@ from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 from sqlalchemy.orm import Session
 
+import card_points
 import clock
 from database import get_db
-from models import (AuditLog, Match, Player, PlayerMatchStats,
+from deps import get_current_user
+from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
                     Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
 from rate_limit import limiter
@@ -47,6 +50,10 @@ _TWITCH_DROP_MAX  = int(os.getenv("TWITCH_DROP_MAX", "20"))
 RATE_LIMIT_TWITCH_LINK = os.getenv("RATE_LIMIT_TWITCH_LINK", "10/minute")
 
 _LINK_CODE_ALPHABET = string.ascii_uppercase + string.digits
+
+_CHAT_TEXT_MAX         = 280  # Twitch Send Extension Chat Message limit
+_TWITCH_ERROR_BODY_MAX = 300  # chars of a failed Twitch response kept in the log
+_chat_version_warned   = False  # TWITCH_EXTENSION_VERSION warning logged once per process
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +132,7 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         algorithm="HS256",
     )
     try:
-        _requests.post(
+        resp = _requests.post(
             "https://api.twitch.tv/helix/extensions/pubsub",
             headers={
                 "Authorization": f"Bearer {token}",
@@ -140,23 +147,63 @@ def _pubsub_broadcast(channel_id: str, message: dict):
             },
             timeout=5,
         )
+        if not resp.ok:
+            logger.warning("Twitch PubSub broadcast failed: %s %s",
+                           resp.status_code, (resp.text or "")[:_TWITCH_ERROR_BODY_MAX])
     except Exception:
         logger.exception("Twitch PubSub broadcast failed")
+
+
+def _mvp_chat_text(player_name: str, winner_names: list[str], token_name: str,
+                   pool_empty: bool) -> str:
+    """Build the MVP chat announcement within Twitch's 280-character limit.
+
+    The MVP name is always kept in full; winners are listed until the next one
+    (plus ", and N more") would pass the limit.
+    """
+    base = f"Match MVP: {player_name}!"
+    if not winner_names:
+        return base + (" (No linked viewers in the drop pool.)" if pool_empty else "")
+    prefix = f"{base} Token drop winners (+1 {token_name}): "
+    full = prefix + ", ".join(winner_names)
+    if len(full) <= _CHAT_TEXT_MAX:
+        return full
+    listed: list[str] = []
+    for name in winner_names:
+        remaining = len(winner_names) - len(listed) - 1
+        candidate = prefix + ", ".join(listed + [name]) + f", and {remaining} more"
+        if len(candidate) > _CHAT_TEXT_MAX:
+            break
+        listed.append(name)
+    remaining = len(winner_names) - len(listed)
+    if not listed:
+        return f"{base} {remaining} viewers won +1 {token_name}."
+    return prefix + ", ".join(listed) + f", and {remaining} more"
 
 
 def _post_chat_message(channel_id: str, message: str):
     """Post a message to Twitch chat using the Extension Chat capability.
 
     Uses an extension-signed JWT (role=external) — no bot account required.
-    Requires the Chat capability to be enabled in the Twitch developer console.
-    Silently skips in local dev or when extension credentials are absent.
+    Twitch requires text, extension_id and extension_version in the body, and
+    the Chat capability enabled on that extension version in the developer
+    console. Logs instead of posting in local dev; skips when extension
+    credentials are absent, and skips with one warning per process when
+    TWITCH_EXTENSION_VERSION is unset. Never raises.
     """
+    global _chat_version_warned
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         logger.info("Twitch chat (dev): %s", message)
         return
     secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
     client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
     if not secret_b64 or not client_id:
+        return
+    version = os.getenv("TWITCH_EXTENSION_VERSION", "").strip()
+    if not version:
+        if not _chat_version_warned:
+            _chat_version_warned = True
+            logger.warning("Twitch chat skipped: TWITCH_EXTENSION_VERSION is not set")
         return
     padded = secret_b64 + "=" * (-len(secret_b64) % 4)
     token = pyjwt.encode(
@@ -170,16 +217,23 @@ def _post_chat_message(channel_id: str, message: str):
         algorithm="HS256",
     )
     try:
-        _requests.post(
+        resp = _requests.post(
             f"https://api.twitch.tv/helix/extensions/chat?broadcaster_id={channel_id}",
             headers={
                 "Authorization": f"Bearer {token}",
                 "Client-Id": client_id,
                 "Content-Type": "application/json",
             },
-            json={"text": message},
+            json={
+                "text": message,
+                "extension_id": client_id,
+                "extension_version": version,
+            },
             timeout=5,
         )
+        if not resp.ok:
+            logger.warning("Twitch chat failed: %s %s",
+                           resp.status_code, (resp.text or "")[:_TWITCH_ERROR_BODY_MAX])
     except Exception:
         logger.exception("Twitch chat message failed")
 
@@ -197,11 +251,9 @@ class LinkBody(BaseModel):
     code: str = Field(min_length=1, max_length=6)
 
 
-def get_session_user(request: Request) -> dict:
-    user_id = request.session.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"user_id": user_id}
+def get_session_user(current_user: dict = Depends(get_current_user)) -> dict:
+    """Session-cookie auth for the /twitch/* routes that do not use a Twitch JWT."""
+    return current_user
 
 
 @router.post("/link-code", response_model=LinkCodeResponse)
@@ -309,45 +361,89 @@ def viewer_status(
 _CURRENT_SERIES_LIMIT = 5
 
 
-def _current_series(db: Session) -> list[tuple[tuple[int, int], list[Match]]]:
+def _live_players(live_row: LiveMatch) -> list[dict]:
+    try:
+        players = json.loads(live_row.players_json or "[]")
+    except ValueError:
+        return []
+    return [p for p in players if isinstance(p, dict) and p.get("account_id")]
+
+
+def _live_display_name(account_id: int, live_name: str | None, known_names: dict[int, str]) -> str:
+    """Known players name, else the /live name, else "Player {account_id}"."""
+    return known_names.get(account_id) or live_name or f"Player {account_id}"
+
+
+def _known_player_names(db: Session, account_ids) -> dict[int, str]:
+    ids = set(account_ids)
+    if not ids:
+        return {}
+    return {pid: name for pid, name in db.query(Player.id, Player.name).filter(Player.id.in_(ids)).all() if name}
+
+
+def _current_series(db: Session) -> list[tuple[tuple, list]]:
     """The series GET /twitch/matches/current offers, most recently played first.
 
-    A series is the started matches with ingested stats that share a normalised
-    team pair, sorted by start_time. Only the 5 most recent series are returned.
-    POST /twitch/mvp uses the same selection (via _eligible_mvp_match_ids) so a
-    broadcaster can only pick an MVP for a match the extension actually offers.
+    A series is the started matches that share a normalised team pair, sorted by
+    start_time. Matches with ingested stats are Match rows; a stored live match
+    (live_matches) with no stats yet is added as a provisional stand-in whose
+    start_time is when it was first seen live. Provisional matches with no team
+    ids are grouped by their team names instead. Only the 5 most recent series
+    are returned. POST /twitch/mvp uses the same selection (via
+    _eligible_mvp_match_ids) so a broadcaster can only pick an MVP for a match
+    the extension actually offers.
     """
     now = clock.now(db)
 
-    ingested_match_ids = [
+    ingested_match_ids = {
         r.match_id
         for r in db.query(PlayerMatchStats.match_id).distinct().all()
-    ]
-    if not ingested_match_ids:
-        return []
+    }
 
-    matches = (
-        db.query(Match)
-        .filter(
-            Match.match_id.in_(ingested_match_ids),
-            Match.start_time <= now,
+    matches: list = []
+    if ingested_match_ids:
+        matches = (
+            db.query(Match)
+            .filter(
+                Match.match_id.in_(ingested_match_ids),
+                Match.start_time <= now,
+            )
+            .all()
         )
-        .order_by(Match.start_time)
-        .all()
-    )
+
+    for row in db.query(LiveMatch).all():
+        if row.match_id in ingested_match_ids:
+            continue
+        matches.append(SimpleNamespace(
+            match_id=row.match_id,
+            radiant_team_id=row.radiant_team_id,
+            dire_team_id=row.dire_team_id,
+            start_time=row.first_seen_at,
+            provisional=True,
+            live=row.ended_at is None,
+            live_row=row,
+        ))
 
     # Group by normalised team pair so Bo2/Bo3 games appear as one series
     series_map: dict = {}
     for m in matches:
         t1 = m.radiant_team_id or 0
         t2 = m.dire_team_id or 0
+        if not t1 and not t2 and getattr(m, "provisional", False):
+            n1 = m.live_row.radiant_name or ""
+            n2 = m.live_row.dire_name or ""
+            if n1 or n2:
+                t1, t2 = n1, n2
         key = (min(t1, t2), max(t1, t2))
         series_map.setdefault(key, []).append(m)
+
+    for series_matches in series_map.values():
+        series_matches.sort(key=lambda m: m.start_time or 0)
 
     # Most-recently-played series first
     ordered = sorted(
         series_map.items(),
-        key=lambda item: item[1][-1].start_time if item[1] else 0,
+        key=lambda item: (item[1][-1].start_time or 0) if item[1] else 0,
         reverse=True,
     )
     return ordered[:_CURRENT_SERIES_LIMIT]
@@ -363,18 +459,37 @@ def current_matches(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return the 5 most recent series that have ingested match data, across any week."""
+    """Return the 5 most recent series with ingested or live match data, across any week."""
     series = _current_series(db)
     if not series:
         return {"series": []}
     series_map = dict(series)
     matches = [m for _, series_matches in series for m in series_matches]
+    provisional = [m for m in matches if getattr(m, "provisional", False)]
+    live_players_by_match = {m.match_id: _live_players(m.live_row) for m in provisional}
 
     # Bulk-fetch all teams and MVPs needed for this week in two queries
-    all_team_ids = {tid for pair in series_map for tid in pair if tid}
+    all_team_ids = {tid for pair in series_map for tid in pair if tid and isinstance(tid, int)}
+    all_team_ids |= {tid for m in provisional for tid in (m.radiant_team_id, m.dire_team_id) if tid}
     teams_by_id: dict[int, Team] = {
         t.id: t for t in db.query(Team).filter(Team.id.in_(all_team_ids)).all()
     } if all_team_ids else {}
+
+    # Team names seen live, for teams not in the teams table yet
+    live_team_names: dict[int, str] = {}
+    for m in provisional:
+        for tid, name in ((m.radiant_team_id, m.live_row.radiant_name),
+                          (m.dire_team_id, m.live_row.dire_name)):
+            if tid and name:
+                live_team_names.setdefault(tid, name)
+
+    def _team_name(tid) -> str:
+        if isinstance(tid, str):
+            return tid or "TBD"
+        team = teams_by_id.get(tid) if tid else None
+        if team:
+            return team.name
+        return live_team_names.get(tid) or f"Team {tid}"
 
     match_ids = [m.match_id for m in matches]
     mvps_by_match: dict[int, TwitchMVP] = {
@@ -383,9 +498,8 @@ def current_matches(
     } if match_ids else {}
 
     mvp_player_ids = {mv.player_id for mv in mvps_by_match.values()}
-    mvp_players_by_id: dict[int, Player] = {
-        p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
-    } if mvp_player_ids else {}
+    live_account_ids = {p["account_id"] for players in live_players_by_match.values() for p in players}
+    known_names = _known_player_names(db, mvp_player_ids | live_account_ids)
 
     # Bulk-fetch all player stats for the window's matches in one query
     stats_by_match: dict[int, list] = {}
@@ -402,35 +516,56 @@ def current_matches(
 
     result_series = []
     for (tid_lo, tid_hi), series_matches in series_map.items():
-        team1 = teams_by_id.get(tid_lo) if tid_lo else None
-        team2 = teams_by_id.get(tid_hi) if tid_hi else None
-
         match_list = []
         for i, m in enumerate(series_matches):  # already sorted by start_time
-            stats = stats_by_match.get(m.match_id, [])
-            players = [
-                {
-                    "player_id": pms.player_id,
-                    "player_name": p.name,
-                    "team_name": t.name,
-                    "fantasy_points": round(pms.fantasy_points or 0, 1),
-                }
-                for pms, p, t in stats
-            ]
             existing_mvp = mvps_by_match.get(m.match_id)
-            mvp_player = mvp_players_by_id.get(existing_mvp.player_id) if existing_mvp else None
+            is_provisional = getattr(m, "provisional", False)
+            if is_provisional:
+                side_names = {
+                    "radiant": m.live_row.radiant_name or (_team_name(m.radiant_team_id) if m.radiant_team_id else "Radiant"),
+                    "dire": m.live_row.dire_name or (_team_name(m.dire_team_id) if m.dire_team_id else "Dire"),
+                }
+                live_players = live_players_by_match.get(m.match_id, [])
+                players = [
+                    {
+                        "player_id": p["account_id"],
+                        "player_name": _live_display_name(p["account_id"], p.get("name"), known_names),
+                        "team_name": side_names.get(p.get("side"), ""),
+                        "fantasy_points": 0,
+                    }
+                    for p in live_players
+                ]
+                mvp_name = None
+                if existing_mvp:
+                    live_name = next((p.get("name") for p in live_players
+                                      if p["account_id"] == existing_mvp.player_id), None)
+                    mvp_name = _live_display_name(existing_mvp.player_id, live_name, known_names)
+            else:
+                stats = stats_by_match.get(m.match_id, [])
+                players = [
+                    {
+                        "player_id": pms.player_id,
+                        "player_name": p.name,
+                        "team_name": t.name,
+                        "fantasy_points": round(pms.fantasy_points or 0, 1),
+                    }
+                    for pms, p, t in stats
+                ]
+                mvp_name = known_names.get(existing_mvp.player_id) if existing_mvp else None
             match_list.append({
                 "match_id": m.match_id,
                 "match_number": i + 1,
                 "start_time": m.start_time,
+                "provisional": is_provisional,
+                "live": bool(getattr(m, "live", False)),
                 "players": players,
                 "mvp_player_id": existing_mvp.player_id if existing_mvp else None,
-                "mvp_player_name": mvp_player.name if mvp_player else None,
+                "mvp_player_name": mvp_name,
             })
 
         result_series.append({
-            "team1_name": team1.name if team1 else f"Team {tid_lo}",
-            "team2_name": team2.name if team2 else f"Team {tid_hi}",
+            "team1_name": _team_name(tid_lo),
+            "team2_name": _team_name(tid_hi),
             "matches": match_list,
         })
 
@@ -589,29 +724,47 @@ def set_mvp(
     allowed_channels = _mvp_allowed_channels()
     if allowed_channels and channel_id not in allowed_channels:
         raise HTTPException(status_code=403, detail="This channel cannot set match MVPs")
-    if not db.get(Match, body.match_id):
+    match = db.get(Match, body.match_id)
+    live_row = db.get(LiveMatch, body.match_id)
+    if not match and not live_row:
         raise HTTPException(status_code=404, detail="Match not found")
     if body.match_id not in _eligible_mvp_match_ids(db):
         raise HTTPException(status_code=403, detail="Match is not in the current series window")
-    played = db.query(PlayerMatchStats.id).filter_by(
-        match_id=body.match_id, player_id=body.player_id).first()
-    if not played:
-        raise HTTPException(status_code=404, detail="Player did not play in this match")
 
-    player = db.query(Player).filter_by(id=body.player_id).first()
-    if not player:
-        raise HTTPException(status_code=404, detail="Player not found")
+    # A stored live match with no ingested stats yet: the player must be one of
+    # its /live players, and the bonus is applied later by ingest._reapply_mvp_bonus.
+    has_stats = db.query(PlayerMatchStats.id).filter_by(match_id=body.match_id).first() is not None
+    provisional = live_row is not None and not has_stats
+    if provisional:
+        live_player = next((p for p in _live_players(live_row)
+                            if p["account_id"] == body.player_id), None)
+        if not live_player:
+            raise HTTPException(status_code=404, detail="Player did not play in this match")
+        player_name = _live_display_name(
+            body.player_id, live_player.get("name"), _known_player_names(db, [body.player_id]))
+    else:
+        played = db.query(PlayerMatchStats.id).filter_by(
+            match_id=body.match_id, player_id=body.player_id).first()
+        if not played:
+            raise HTTPException(status_code=404, detail="Player did not play in this match")
+
+        player = db.query(Player).filter_by(id=body.player_id).first()
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        player_name = player.name
 
     weights = {w.key: w.value for w in db.query(Weight).all()}
 
     old_player_id = upsert_mvp(db, body.match_id, body.player_id, channel_id)
     existing = old_player_id is not None
 
-    # Clear bonus from previous MVP if different player
-    if old_player_id and old_player_id != body.player_id:
-        _apply_mvp_bonus(db, old_player_id, body.match_id, apply=False, weights=weights)
-    # Apply bonus to new MVP
-    _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
+    if not provisional:
+        # Clear bonus from previous MVP if different player
+        if old_player_id and old_player_id != body.player_id:
+            _apply_mvp_bonus(db, old_player_id, body.match_id, apply=False, weights=weights)
+        # Apply bonus to new MVP
+        _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
+        card_points.refresh_card_points(db, match_ids=[body.match_id])
 
     # Token drop — once per match
     winner_names, pool_size, already_dropped = _execute_token_drop(
@@ -623,30 +776,27 @@ def set_mvp(
         actor_id=None,
         actor_username="twitch",
         action="twitch_mvp_set",
-        detail=f"channel={channel_id} match={body.match_id} player={player.name} re_select={bool(existing)}",
+        detail=(f"channel={channel_id} match={body.match_id} player={player_name} re_select={bool(existing)}"
+                + (" provisional=True" if provisional else "")),
     ))
     db.commit()
     bust_cache()
     _pubsub_broadcast(channel_id, {
         "type": "mvp",
-        "player_name": player.name,
+        "player_name": player_name,
         "match_id": body.match_id,
         "token_drop_winners": winner_names,
     })
 
     token_name = os.getenv("TOKEN_NAME", "tokens")
-    chat_msg = f"Match MVP: {player.name}!"
-    if winner_names:
-        winners_str = ", ".join(winner_names)
-        chat_msg += f" Token drop winners (+1 {token_name}): {winners_str}"
-    elif not already_dropped and pool_size == 0:
-        chat_msg += " (No linked viewers in the drop pool.)"
+    chat_msg = _mvp_chat_text(player_name, winner_names, token_name,
+                              pool_empty=not already_dropped and pool_size == 0)
     _post_chat_message(channel_id, chat_msg)
 
     return {
         "match_id": body.match_id,
         "player_id": body.player_id,
-        "player_name": player.name,
+        "player_name": player_name,
         "token_drop": {
             "winners": winner_names,
             "pool_size": pool_size,

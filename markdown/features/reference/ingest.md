@@ -56,7 +56,7 @@ The ingest pipeline runs in a background daemon thread on a configurable, three-
 
 - **Default interval:** 900 seconds (15 minutes) — `INGEST_POLL_INTERVAL`
 - **Active-week interval:** 120 seconds (2 minutes) — `INGEST_LIVE_POLL_INTERVAL`, used whenever an unlocked week's match window is currently open
-- **Live-match interval:** 30 seconds — `INGEST_LIVE_MATCH_POLL_INTERVAL`, used whenever any monitored league has a match currently in progress (see below); takes priority over the active-week interval since it's a stronger, more specific signal
+- **Live-match interval:** 30 seconds — `INGEST_LIVE_MATCH_POLL_INTERVAL`, used whenever any monitored league has a match currently in progress (see below); takes priority over the active-week interval since it's a stronger, more specific signal. It is also kept for `INGEST_POST_MATCH_FAST_POLL_MINUTES` (default 20) after a monitored game ends, until that match is ingested (see `reference/early-mvp-selection.md`)
 - **Leagues polled:** whichever leagues are marked `is_monitored=true`, managed at runtime via the admin League Management panel (see `reference/monitored-leagues-admin.md`) — no env var or restart needed
 
 Each cycle runs all ingest stages in sequence (match ingest per league, then the parse retry
@@ -68,7 +68,9 @@ deploying the parse-retry step backfills any recent unparsed matches without fur
 
 See `reference/opendota-query-prioritization.md` for the full mechanism. Each poll cycle, if any
 monitored league has a currently-live match, `_ingest_poll_loop` makes one `GET /live` call
-(`ingest.py::get_live_match_league_ids()`) to find out. Match ingestion always runs regardless,
+(`ingest.py::get_live_matches()`) to find out. The same response is stored in `live_matches`
+(`ingest.py::store_live_matches()`) so the Twitch MVP panel can list a game before its stats
+are ingested — see `reference/early-mvp-selection.md`. Match ingestion always runs regardless,
 but low-priority player name/avatar enrichment (`run_enrichment()`) is skipped for that cycle so
 it doesn't compete with match ingestion for OpenDota's shared rate limit exactly when a
 broadcaster is waiting on a finished match. The check itself is skipped entirely when no league

@@ -75,7 +75,7 @@ as a systemic backstop for any future unhandled exception.
 
 ## Session Cookie
 
-`SessionMiddleware` is configured with `same_site="lax"` and `max_age=86400` (24 hours), in
-addition to the `HTTPS_ONLY`-gated `Secure` flag described above. See `core/auth.md`'s
+`SessionMiddleware` is configured with `same_site="lax"` and `max_age` from
+`SESSION_MAX_AGE_SECONDS` (default 86400, 24 hours), in addition to the `HTTPS_ONLY`-gated `Secure` flag described above. See `core/auth.md`'s
 "Session Cookie" section for the `SECRET_KEY` requirement.
 

@@ -13,9 +13,9 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 | Epic | 10% | +2% | 2 |
 | Legendary | 5% | +3% | 3 |
 
-**Draw rates** are relative weights (`draw_rate_common`, `draw_rate_rare`, `draw_rate_epic`, `draw_rate_legendary`) configurable in the admin panel under Scoring Weights. They do not need to sum to 100 — proportions are used. Defaults approximate 8:4:2:1 ratios from the old pool model.
+**Draw rates** are relative weights (`draw_rate_common`, `draw_rate_rare`, `draw_rate_epic`, `draw_rate_legendary`) set through `WEIGHTS_JSON` (shown read-only in the admin panel under Scoring Weights). They do not need to sum to 100 — proportions are used. Defaults approximate 8:4:2:1 ratios from the old pool model.
 
-**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations. It is configurable via `rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`.
+**Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations. It is configurable via the weights `rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`, which are percents (`rarity_rare = 1.0` means +1%). In code, `card_utils._load_weights` turns each into the fraction `mod_<type>` (weight / 100), and the multiplier is `1 + mod_<type>`.
 
 ## Drawing Cards
 
@@ -47,6 +47,7 @@ Fantasy points for a card are derived from the real-life player's match stats du
 
 ```
 points = kills                   × kill_weight
+       + assists                 × assists_weight
        + last_hits               × last_hits_weight
        + denies                  × denies_weight
        + gold_per_min            × gpm_weight
@@ -63,9 +64,11 @@ points = kills                   × kill_weight
 
 The death contribution awards `death_pool` points (default 3.0) for surviving with 0 deaths, deducting `death_deduction` (default 0.3) per death, floored at 0. A player with 10 or more deaths scores 0 from this component.
 
-When a card's points are aggregated over several games (weekly and season totals), the pool is credited per game: `max(0, death_pool × games − total_deaths × death_deduction)`. A card with two games therefore has a 6.0-point pool and only zeroes out at 20 total deaths, so the death term scales with games played the same way every other stat does.
+Card points are defined **per match**: the death term is floored at 0 in each match separately, so one bad game cannot eat another game's survival points. This matches the Players tab's per-match `fantasy_points`. A card's week total is the sum of its per-match points for the scored matches in the week, and its season total is the sum of its week totals over the locked weeks it was rostered in.
 
-All weights are configured by the admin under **Scoring Weights** in the admin panel. Changes apply to future recalculations only.
+Each card's per-match points are stored in `card_match_points` when their inputs change, and My Team, the weekly and season leaderboards and End Season all sum the stored values. See [Stored Card Points](../reference/stored-card-points.md).
+
+Weights come from `backend/seed.py` defaults plus any `WEIGHTS_JSON` overrides, applied by `seed_weights()` at startup. The admin panel's **Scoring Weights** table is read-only. When the weights differ from the ones the stored card points were built with, the startup check rebuilds the stored points automatically; `POST /recalculate` (Admin → Recalculate) also rebuilds them.
 
 ## Card Modifiers
 
@@ -75,30 +78,37 @@ Card modifiers are per-stat bonuses assigned to a card at draw time. They boost 
 
 Each modifier targets one of the scoring stats and carries a `bonus_pct` percentage value.
 
-Valid modifier targets: `kills`, `deaths`, `gold_per_min`, `obs_placed`, `last_hits`, `denies`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
+Valid modifier targets: `kills`, `assists`, `deaths`, `gold_per_min`, `obs_placed`, `last_hits`, `denies`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
 
 The modifier always benefits the card owner:
 - For **standard stats** (all except deaths):  
   `contribution = stat_value × weight × (1 + bonus_pct / 100)`
 - For **deaths**:  
-  `contribution = max(0, death_pool × games − deaths × death_deduction) × (1 + bonus_pct / 100)` — the survival bonus is amplified. This modifier is most valuable on players who rarely die; it has no effect when the death contribution is already 0.
+  `contribution = max(0, death_pool − deaths × death_deduction) × (1 + bonus_pct / 100)`, per match — the survival bonus is amplified. This modifier is most valuable on players who rarely die; it has no effect when the death contribution is already 0.
 
 ### Full scoring formula with modifiers
 
 ```
-For each standard stat (kills, last_hits, denies, gpm, obs, towers, roshan,
+For each standard stat (kills, assists, last_hits, denies, gpm, obs, towers, roshan,
                         participation, stacks, runes, firstblood, stuns):
   base = stat_value × stat_weight
   points += base × (1 + modifier_bonus_pct / 100)   if modifier present
   points += base                                      if no modifier
 
-For deaths (games = matches aggregated into the card's window):
-  base = max(0, death_pool × games − deaths × death_deduction)
+For deaths (one match):
+  base = max(0, death_pool − deaths × death_deduction)
   points += base × (1 + modifier_bonus_pct / 100)   if modifier present
   points += base                                      if no modifier
 
+If the player was that match's MVP, add the MVP bonus
+(the match's own fantasy_score × mvp_bonus_pct / 100).
+
 After summing all contributions:
-  card_points = stat_total × (1 + rarity_bonus_pct / 100)
+  match_points = stat_total × (1 + rarity_bonus_pct / 100)
+  (rarity_bonus_pct is the rarity_<type> weight; 1 + mod_<type> in code)
+
+A card's week or season points are the sum of its stored match_points
+(the card_match_points.points column) over the scored matches in scope.
 ```
 
 ### Modifier assignment at draw time
@@ -106,10 +116,10 @@ After summing all contributions:
 When a card is drawn from the deck, modifiers are randomly assigned:
 
 1. **How many**: determined by `modifier_count_<rarity>` weight (e.g. `modifier_count_rare = 1` → 1 modifier on a rare card).
-2. **Which stats**: randomly sampled without replacement from the 13 valid stat keys (12 scoring stats + `deaths`).
+2. **Which stats**: randomly sampled without replacement from the 14 valid stat keys (the 13 scoring stats in `SCORING_STATS` + `deaths`).
 3. **Bonus %**: all modifiers on a card share the same `modifier_bonus_pct` value.
 
-All three settings are configurable in the admin panel under Scoring Weights.
+All three settings are weights set through `WEIGHTS_JSON` (shown read-only in the admin panel under Scoring Weights).
 
 ### Modifier visibility
 
