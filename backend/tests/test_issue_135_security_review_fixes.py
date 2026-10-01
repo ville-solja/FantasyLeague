@@ -134,8 +134,9 @@ def _build_app(router_module_names, *, rate_limited=False, admin_override=False)
     @limiter.limit decorators are bound to (test_issue_121/124 precedent).
     When rate_limited is False the fresh limiter is disabled.
 
-    Adds a test-only POST /_test/login/{user_id} that writes the session the
-    way /login does, and GET /_test/session that echoes it back.
+    Adds a test-only POST /_test/login/{user_id} that starts a session the way
+    /login does (a server-side user_sessions row; the cookie holds only {"sid"},
+    issue #117), and GET /_test/session that echoes the cookie payload back.
     """
     engine = create_engine("sqlite:///:memory:",
                            connect_args={"check_same_thread": False},
@@ -170,14 +171,13 @@ def _build_app(router_module_names, *, rate_limited=False, admin_override=False)
 
     @app.post("/_test/login/{user_id}")
     def _test_login(user_id: int, request: Request):
+        import sessions
         db = Session()
         try:
             user = db.get(User, user_id)
-            request.session["user_id"] = user_id
-            request.session["username"] = user.username if user else f"user{user_id}"
-            request.session["is_admin"] = False
-            # Session revocation (issue #119): a session is valid only with the user's current version.
-            request.session["sv"] = (user.session_version or 0) if user else 0
+            assert user is not None, f"seed user {user_id} before logging in"
+            sessions.start_session(request, db, user)
+            db.commit()
         finally:
             db.close()
         return {"ok": True}
@@ -1062,12 +1062,14 @@ def _profile_client():
 
 
 def test_update_username_refreshes_session_username(db):
-    """PUT /profile/username updates the session's username so later requests see the new name."""
+    """PUT /profile/username takes effect for the same session at once: GET /me reports the new name (the username comes from the DB, not the cookie, since #119/#117)."""
     client, _ = _profile_client()
-    assert client.get("/_test/session").json()["username"] == "alice"
+    assert client.get("/me").json()["username"] == "alice"
     resp = client.put("/profile/username", json={"username": "alice2"})
     assert resp.status_code == 200
-    assert client.get("/_test/session").json()["username"] == "alice2"
+    assert client.get("/me").json()["username"] == "alice2"
+    # The cookie carries only the session ID, never the username.
+    assert set(client.get("/_test/session").json()) == {"sid"}
 
 
 def test_update_username_writes_username_changed_audit(db):
@@ -1081,11 +1083,11 @@ def test_update_username_writes_username_changed_audit(db):
 
 
 def test_update_username_taken_name_no_session_change_or_audit(db):
-    """A rejected rename (name already taken) leaves the session username unchanged and writes no audit entry."""
+    """A rejected rename (name already taken) leaves the session's username (GET /me) unchanged and writes no audit entry."""
     client, Session = _profile_client()
     resp = client.put("/profile/username", json={"username": "taken"})
     assert resp.status_code == 409
-    assert client.get("/_test/session").json()["username"] == "alice"
+    assert client.get("/me").json()["username"] == "alice"
     with Session() as s:
         assert s.query(AuditLog).filter_by(action="username_changed").count() == 0
         assert s.get(User, 1).username == "alice"

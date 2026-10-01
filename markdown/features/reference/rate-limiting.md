@@ -55,13 +55,17 @@ host, so the port is not reachable from outside at all. Covered by
   username exists — the failed-attempt counter is keyed by the submitted username string itself,
   so a nonexistent username accumulates and locks out identically to a real one. A successful
   login clears that username's counter.
+- `POST /reauth` (issue #117) — shares `RATE_LIMIT_LOGIN` and the same per-username lockout as
+  `/login`: a wrong password counts as a failed attempt, a locked-out username gets the same
+  429, and a correct password clears the counter.
 - `POST /register` — stricter per-IP limit (`RATE_LIMIT_REGISTER`)
 - `POST /forgot-password` — stricter per-IP limit (`RATE_LIMIT_FORGOT_PASSWORD`); its existing
   enumeration-safe behavior (`{"status": "ok"}` always, bcrypt timing equalization) is unchanged
 - `POST /reset-password` — per-IP limit (`RATE_LIMIT_RESET_PASSWORD`, issue #135) against
   reset-code guessing
 - `POST /redeem` — per-user limit (`RATE_LIMIT_REDEEM`, issue #135) against promo-code guessing,
-  keyed by session `user_id` via `key_by_user_or_ip`
+  keyed by user via `key_by_user_or_ip` (`user:{id}`, from `request.state.session_user_id`,
+  which `get_current_user` sets; the cookie carries only a session ID since #117)
 - `GET /cards/{card_id}/image` — per-IP limit (`RATE_LIMIT_CARD_IMAGE`, issue #135); the endpoint
   is public and renders a PNG with Pillow on every call
 - `POST /twitch/link` — per-IP limit (`RATE_LIMIT_TWITCH_LINK`, issue #135) against link-code

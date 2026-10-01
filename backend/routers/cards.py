@@ -15,11 +15,11 @@ from card_utils import (
     _activate_card_atomic, _swap_roster_atomic,
 )
 from database import get_db, spend_tokens
-from match_scoring import scored_match_sql
+from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import limiter, key_by_user_or_ip
-from weeks import get_next_editable_week
+from weeks import get_next_editable_week, substitution_delay_hours
 
 router = APIRouter()
 
@@ -72,6 +72,10 @@ _WEEK_WINDOW_SQL = ("(m.week_override_id = :week_id OR "
                     "(m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))")
 
 
+def _slot_key(c: dict):
+    return (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"])
+
+
 def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     """Compute roster data for a user, scoped to the given week (or next editable week).
 
@@ -90,8 +94,15 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                 AND {_WEEK_WINDOW_SQL}"""
 
     if week and week.is_locked:
+        # Snapshot rows (issue #129): counted entries are the roster, the rest (saved
+        # bench and subbed-out cards) the bench.
         results = db.execute(text(f"""
-            SELECT c.id, c.card_type, 1 as is_active, c.slot_index,
+            SELECT c.id, c.card_type,
+                   CASE WHEN {counted_roster_entry_sql()} THEN 1 ELSE 0 END as is_active,
+                   c.slot_index,
+                   wre.id as entry_id, wre.bench_order, wre.subbed_for_entry_id,
+                   COALESCE(wre.subbed_in, 0) as subbed_in,
+                   COALESCE(wre.subbed_out, 0) as subbed_out,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
@@ -101,11 +112,29 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
+            GROUP BY wre.id, c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
-        active, bench = cards, []
+        by_entry = {c["entry_id"]: c for c in cards}
+        replaced_of = {}
+        for c in cards:
+            c["subbed_in"] = bool(c["subbed_in"])
+            c["subbed_out"] = bool(c["subbed_out"])
+            replaced = by_entry.get(c.pop("subbed_for_entry_id")) if c["subbed_in"] else None
+            c["subbed_in_for"] = replaced["player_name"] if replaced else None
+            if replaced:
+                replaced_of[c["entry_id"]] = replaced
+                c["slot_index"] = replaced["slot_index"]  # shown in the replaced card's slot
+        active = [c for c in cards if c["is_active"]]
+        bench  = [c for c in cards if not c["is_active"]]
+        # A subbed-in card takes the slot of the card it replaced; subbed-out cards
+        # lead the bench, then the saved bench in its lock-time order.
+        active.sort(key=lambda c: (_slot_key(c)[:2], c["entry_id"] not in replaced_of, c["id"]))
+        bench.sort(key=lambda c: (not c["subbed_out"], c["bench_order"] is None,
+                                  c["bench_order"] or 0, c["entry_id"]))
+        for c in cards:
+            del c["entry_id"], c["bench_order"]
     else:
         ws = week.start_time if week else 0
         we = week.end_time if week else now
@@ -123,16 +152,18 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
+        for c in cards:
+            c["subbed_in"] = c["subbed_out"] = False
+            c["subbed_in_for"] = None
         active = [c for c in cards if c["is_active"]]
         bench  = [c for c in cards if not c["is_active"]]
+        active.sort(key=_slot_key)
+        bench.sort(key=_slot_key)
 
     modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
     for c in cards:
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
         c["total_points"] = float(c["total_points"] or 0.0)
-
-    active.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
-    bench.sort(key=lambda c: (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"]))
 
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
@@ -145,7 +176,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         JOIN matches m ON m.match_id = cmp.match_id AND {scored_match_sql()}
             AND (m.week_override_id = wk.id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
-        WHERE wre.user_id = :user_id
+        WHERE wre.user_id = :user_id AND {counted_roster_entry_sql()}
     """), {"user_id": user_id}).scalar() or 0.0
 
     return {
@@ -154,7 +185,10 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         "tokens": tokens,
         "season_points": float(season_points),
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
-                 "start_time": week.start_time, "end_time": week.end_time} if week else None,
+                 "start_time": week.start_time, "end_time": week.end_time,
+                 "substitutions_done": week.substitutions_at is not None} if week else None,
+        "substitutions_done": bool(week and week.substitutions_at is not None),
+        "substitution_delay_hours": substitution_delay_hours(),
     }
 
 

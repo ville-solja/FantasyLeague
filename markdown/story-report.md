@@ -23,7 +23,7 @@ _Last updated: 2026-04-08 14:35 UTC_
 | 3.4 | Card Rarity | ✅ Aligned | Rarity set at deck creation (card_type column); shown in reveal modal and roster views. |
 | 3.5 | Assign Randomized Modifiers | ✅ Aligned | `_assign_modifiers` assigns random stat modifiers at draw time; stored in `card_modifiers` table; visible on card. |
 | 3.6 | Modifier Management | ⚠️ Diverged | Modifier weights (count per rarity, bonus_pct) are in the `weights` DB table seeded from `seed_weights`, not purely from environment variables as story requires. Recalculate does not recompute card modifier effects retroactively. |
-| 3.7 | View Seasonal Reserve Cards | ✅ Aligned | Bench shown in My Team tab with player/rarity/points; bench hidden for locked past weeks (snapshot view). |
+| 3.7 | View Seasonal Reserve Cards | ✅ Aligned | Bench shown in My Team tab with player/rarity/points; locked weeks show their saved bench read-only (subbed-out cards first), hidden only when the week has no saved bench. |
 | 3.8 | View Permanent Collection | 🔲 Not implemented | Post-MVP; no cross-season collection feature. |
 | 4.1 | Place Cards into Active Slots | ✅ Aligned | 5-slot limit enforced; activate/deactivate endpoints; duplicate player check; changes only on current/upcoming week. |
 | 4.2 | Lock Active Cards | ⚠️ Diverged | `auto_lock_weeks` runs periodically, but locking logic is in `weeks.py` (not provided). Frontend shows lock banner and date. Story says "every Sunday end of day UTC" — cannot confirm exact timing without `weeks.py`. |

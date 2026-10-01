@@ -64,7 +64,7 @@ points = kills                   × kill_weight
 
 The death contribution awards `death_pool` points (default 3.0) for surviving with 0 deaths, deducting `death_deduction` (default 0.3) per death, floored at 0. A player with 10 or more deaths scores 0 from this component.
 
-Card points are defined **per match**: the death term is floored at 0 in each match separately, so one bad game cannot eat another game's survival points. This matches the Players tab's per-match `fantasy_points`. A card's week total is the sum of its per-match points for the scored matches in the week, and its season total is the sum of its week totals over the locked weeks it was rostered in.
+Card points are defined **per match**: the death term is floored at 0 in each match separately, so one bad game cannot eat another game's survival points. This matches the Players tab's per-match `fantasy_points`. A card's week total is the sum of its per-match points for the scored matches in the week, and its season total is the sum of its week totals over the locked weeks in which it counted (after bench substitution: an active entry not subbed out, or a subbed-in bench entry).
 
 Each card's per-match points are stored in `card_match_points` when their inputs change, and My Team, the weekly and season leaderboards and End Season all sum the stored values. See [Stored Card Points](../reference/stored-card-points.md).
 
@@ -185,18 +185,27 @@ Returns the calling user's cards split into `active` and `bench` lists, with per
 
 **Query parameter:** `week_id` (optional integer). Omit to use the current editable week.
 
-- For a **locked** week: returns the immutable `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window.
-- For the **current editable** week: returns all owned cards from the `cards` table, split by `is_active`, with running points accumulated so far.
+- For a **locked** week: returns the `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window. `active` holds the counted entries (active not subbed out, plus subbed-in bench cards, each shown in the `slot_index` of the card it replaced). `bench` holds the rest: subbed-out cards first, then the saved bench in its lock-time `bench_order`. A week locked before the bench was saved (issue #129) has an empty `bench`.
+- For the **current editable** week: returns all owned cards of active players from the `cards` table, split by `is_active`, with running points accumulated so far.
+
+Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
 
 ```json
 {
-  "active": [{ "id": 42, "card_type": "rare", "player_name": "SomePlayer", "total_points": 34.5, "modifiers": [...], ... }],
+  "active": [{ "id": 42, "card_type": "rare", "player_name": "SomePlayer", "total_points": 34.5, "modifiers": [...],
+               "subbed_in": false, "subbed_out": false, "subbed_in_for": null, ... }],
   "bench":  [...],
   "combined_value": 130.2,
   "season_points": 420.0,
-  "tokens": 4
+  "tokens": 4,
+  "week": { "id": 7, "label": "Week 7", "is_locked": true, "start_time": 1760000000, "end_time": 1760600000,
+            "substitutions_done": false },
+  "substitutions_done": false,
+  "substitution_delay_hours": 24.0
 }
 ```
+
+`week` is null when there is no requested or upcoming week.
 
 Requires authentication. Returns 403 `"Cannot view another user's roster"` if `user_id` doesn't
 match the caller's own ID, unless the caller is an admin (admins can view any user's roster).

@@ -75,7 +75,8 @@ async function loadRoster(weekId = null) {
       : `${API}/roster/${activeUserId}`;
     const res = await fetch(url);
     const data = await res.json();
-    const { active, bench, combined_value, tokens, season_points, week } = data;
+    const { active, bench, combined_value, tokens, season_points, week,
+            substitutions_done, substitution_delay_hours } = data;
     const isLocked = week?.is_locked ?? false;
     _rosterLocked = isLocked;
 
@@ -142,9 +143,25 @@ async function loadRoster(weekId = null) {
 
     document.getElementById("rosterCombined").textContent = Number(combined_value).toFixed(1);
 
+    // Issue #129 — bench substitutions run a set delay after a locked week ends.
+    const subsNote = document.getElementById("rosterSubsNote");
+    if (subsNote) {
+      if (isLocked && !substitutions_done) {
+        const hours = Number(substitution_delay_hours ?? 24);
+        subsNote.textContent = `Substitutions are made ${hours} hours after the week ends`;
+        subsNote.style.display = "";
+      } else {
+        subsNote.style.display = "none";
+      }
+    }
+
     const benchSection = document.getElementById("benchSection");
     const benchGrid = document.getElementById("benchGrid");
-    if (!isLocked) {
+    if (isLocked && bench.length) {
+      // Locked week: the saved bench (and any subbed-out cards), read-only.
+      benchSection.style.display = "";
+      benchGrid.innerHTML = bench.map(c => _cardSlotHTML(c, null)).join("");
+    } else if (!isLocked) {
       benchSection.style.display = "";
       const rosterFull = active.length >= 5;
       if (bench.length) {
@@ -193,8 +210,18 @@ function _cardSlotHTML(c, action) {
            onclick="if(!window._rosterDragging)showRosterCard(${c.id})"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&!window._rosterDragging&&!_rosterLocked){event.preventDefault();toggleCardZone(${c.id},${isActiveCard})}"
            onerror="_cardImgFallback(this)" />
-      <div class="card-slot-pts">${pts} pts</div>
+      <div class="card-slot-pts">${pts} pts</div>${_subLabelHTML(c)}
     </div>`;
+}
+
+/** Substitution label for a locked-week card (issue #129). */
+function _subLabelHTML(c) {
+  if (c.subbed_in) {
+    const who = c.subbed_in_for ? ` ${_escHtml(c.subbed_in_for)}` : "";
+    return `<div class="card-slot-note">Subbed in for${who}</div>`;
+  }
+  if (c.subbed_out) return `<div class="card-slot-note">Did not play</div>`;
+  return "";
 }
 
 /** Image-load fallback: swap the <img> for a text placeholder built with

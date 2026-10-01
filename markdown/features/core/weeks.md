@@ -30,7 +30,7 @@ background maintenance thread — see Week Structure above; there is no fixed we
 cadence, since weeks are created manually with arbitrary start dates). Locking is irreversible and
 has three effects:
 
-1. **Roster snapshot** — Each user's current active roster (up to 5 cards) is copied into `WeeklyRosterEntry` records. This snapshot is immutable for the rest of the week and is used for all scoring calculations for that week.
+1. **Roster snapshot** — Each user's current active roster (up to 5 cards) is copied into `WeeklyRosterEntry` records (`is_bench = 0`, inserted in roster slot order). The bench is saved too (`is_bench = 1`, `bench_order` 0..n in My Team's bench order: `slot_index` ascending with NULL last, then card id), leaving out cards of deactivated players. The snapshot is immutable for the rest of the week; the only later change is the [bench substitution](../reference/automatic-bench-substitution.md) flags.
 2. **Week marked locked** — `weeks.is_locked = true`. The roster for that week can no longer be changed.
 3. **Token grant** — Every registered user receives +1 token automatically.
 
@@ -47,7 +47,8 @@ Points for a week are sums over the locked snapshot of each card's stored per-ma
 (`card_match_points`, see [Stored Card Points](../reference/stored-card-points.md)):
 
 ```
-For each card in the user's WeeklyRosterEntry for that week:
+For each counted card in the user's WeeklyRosterEntry for that week
+(is_bench = 0 AND subbed_out = 0, or subbed_in = 1):
   for each stored card_match_points row for that card
   whose match counts for this week (week_override_id = week, or no override and
   start_time within [start_time, end_time]) and is not excluded from scoring:
@@ -58,15 +59,21 @@ Each stored row is the card's points for one match: stat weights with card modif
 the MVP bonus when the player was that match's MVP, times the rarity bonus. The death term
 is floored at 0 per match, so a week's value is always the sum of its matches.
 
+Saved bench entries count only once [bench substitution](../reference/automatic-bench-substitution.md) has subbed them in. Every reader (My Team, the weekly and season leaderboards, End Season, the Weekly Report's "on roster" marks) uses the shared condition `match_scoring.counted_roster_entry_sql()`.
+
+## Bench Substitution
+
+`SUBSTITUTION_DELAY_HOURS` (default 24) after a locked week's `end_time`, the maintenance thread runs `weeks.due_substitutions()` (called before `generate_weekly_summaries()`, which matters only when both fall due in the same tick; normally the Weekly Report opens at week end with a "substitutions pending" note and its "on roster" marks update once substitutions run). For each user, an active card whose player played no scored match that week is marked `subbed_out`, and the first bench card whose player did play (and isn't a duplicate of a counted player) is marked `subbed_in`. Empty roster slots are never filled. `weeks.substitutions_at` records the run so it happens once; an admin can re-run it with `POST /admin/weeks/{week_id}/substitutions`. Full rule: [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
+
 Only matches assigned to the week contribute: those played during the week's window, or with a `week_override_id` pointing at it. Matches with a `week_override_id` pointing to a different week do not count. Exclusion and week assignment are applied when reading, so changing them updates totals immediately.
 
 ## Leaderboards
 
 ### Season Leaderboard (`GET /leaderboard/season`)
-Aggregates points from all locked weekly roster entries across the entire season. Each user's score is the sum of their weekly points from all locked weeks combined. Each card chip carries `"scope": "season"` and shows the card's total over every locked week it was rostered in; the frontend labels it as season points.
+Aggregates points from the counted roster entries of every locked week across the season (after bench substitution: active entries not subbed out, plus subbed-in bench entries). Each user's score is the sum of their weekly points from all locked weeks combined. Each card chip carries `"scope": "season"` and shows the card's total over every locked week in which it was counted; the frontend labels it as season points.
 
 ### Weekly Leaderboard (`GET /leaderboard/weekly?week_id=N`)
-Points for a single specified week only, using the snapshot for that week.
+Points for a single specified week only, using the counted entries of that week's snapshot (after any bench substitution).
 
 ### Player Performance Leaderboard (`GET /leaderboard`)
 Shows individual Dota players ranked by average fantasy points per match, across all ingested matches in the season. Not tied to user rosters.
@@ -107,3 +114,4 @@ Returns all week records sorted by start time:
 | Variable | Default | Effect |
 |---|---|---|
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between auto-lock maintenance checks |
+| `SUBSTITUTION_DELAY_HOURS` | `24` | Hours after a locked week's `end_time` before its bench substitutions run |

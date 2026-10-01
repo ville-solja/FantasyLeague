@@ -25,7 +25,7 @@ async function endSeason() {
   const label = document.getElementById("endSeasonLabel").value.trim();
   if (!label) return setStatus("seasonLifecycleStatus", "Enter a season label", false);
   try {
-    const res = await fetch(`${API}/admin/season/end`, {
+    const res = await adminFetch(`${API}/admin/season/end`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({season_label: label}),
     });
@@ -56,7 +56,7 @@ async function confirmSeasonReset() {
     return;
   }
   try {
-    const res = await fetch(`${API}/admin/season/reset`, {
+    const res = await adminFetch(`${API}/admin/season/reset`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({force: false}),
     });

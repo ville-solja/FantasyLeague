@@ -57,7 +57,7 @@ Player removal (`POST /admin/players/remove`) only deactivates cards, so their r
 
 Every view sums stored rows with the same joins as before; no view calls `card_fantasy_score` per request:
 
-- **My Team** (`GET /roster/{user_id}`, `_build_roster_response`): per card, `SUM(points)` over rows whose match is in the week window (or has `week_override_id` = the week) and passes `scored_match_sql()`. A locked week uses the roster snapshot; an unlocked week uses the user's current cards. `season_points` sums the same over every locked week the card was rostered in.
+- **My Team** (`GET /roster/{user_id}`, `_build_roster_response`): per card, `SUM(points)` over rows whose match is in the week window (or has `week_override_id` = the week) and passes `scored_match_sql()`. A locked week uses the roster snapshot; an unlocked week uses the user's current cards. `season_points` sums the same over every locked week in which the card's entry counted (after bench substitution: active and not subbed out, or subbed in; `counted_roster_entry_sql()`).
 - **Weekly leaderboard** (`GET /leaderboard/weekly`): the same week sum per rostered card and user.
 - **Season leaderboard and End Season** (`compute_season_standings`): a grouped subquery sums rows per (user, card) over locked weeks, then names are joined on. Card chips carry `"scope": "season"`, but the season view in the frontend shows totals only (no card chips). The weekly leaderboard's chips and My Team show the same stored week value for a card.
 

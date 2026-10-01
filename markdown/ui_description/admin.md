@@ -2,6 +2,10 @@
 
 Visible only to admin users. All actions require an active admin session cookie — client-side `is_admin` alone is not sufficient.
 
+## Password re-entry prompt
+
+Destructive actions (End Season, Reset Season, league data purge, every Database Backups action, Promote/Demote admin) need the admin's password again if it was not confirmed on this device in the last 10 minutes. The server answers 403 `reauth_required`; `adminFetch()` then opens an in-page **Confirm your password** modal (password field, **Confirm** and **Cancel**, never a browser `confirm()`/`prompt()`). Confirm calls `POST /reauth`; on success the modal closes and the action is retried once. A wrong password shows the error in the modal's status line and keeps it open. Cancel (or Escape, or a backdrop click) closes it and the action reports the 403 in its usual status line. The modal stacks above the Season Reset confirmation.
+
 ## Ingest League panel
 
 - Input field for an OpenDota league ID.
@@ -22,7 +26,8 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 - Explanatory line: "Backups are stored on the server and deleted automatically after N days. Download a copy before deploying if you need to keep it." — N comes from `retention_days` in `GET /admin/backups` (`DB_BACKUP_RETENTION_DAYS`).
 - **Create backup now** — calls `POST /admin/backups`. Disabled while the request is in flight. The status line shows "Created {filename}" or the error detail (e.g. the 60-second cooldown message on 429, or the non-SQLite message on 409). The table reloads only after a successful backup.
 - **Refresh** — reloads the table.
-- **Table** — columns Filename, Created (browser local time), Size (human-readable, e.g. `1.9 MB`), and a **Download** link per row (`GET /admin/backups/{filename}`, saved as an attachment). Newest first. Shows "No backups yet" when empty. Filenames are HTML-escaped.
+- **Table** — columns Filename, Created (browser local time), Size (human-readable, e.g. `1.9 MB`), and a **Download** button per row. It fetches `GET /admin/backups/{filename}` through `adminFetch()` (so it can ask for the password) and saves the file under its own name; errors appear in the panel's status line. Newest first. Shows "No backups yet" when empty. Filenames are HTML-escaped.
+- Loading, creating and downloading backups all need a recent password re-entry (see the prompt above), so opening the panel may show the prompt.
 - The list loads whenever the Settings admin sub-tab is activated.
 
 ## Promo Codes panel
@@ -49,3 +54,10 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 - **Scoring** has two checkboxes, **Unparseable** and **Not scored**. Each change sends `PATCH /admin/matches/{id}/scoring` with that single field, then the table reloads. On error, the checkbox reverts and the status line shows the error.
 - An **Unparseable only** checkbox in the panel header filters the table client-side to matches whose status is Unparseable. The empty state reads "No unparseable matches".
 - See `markdown/features/reference/unparseable-match-handling.md`.
+
+## Week Management panel
+
+- Form to create a week (label, start date, end date in `pp.kk.vvvv` format with a calendar picker), with **Create** and **Refresh** buttons.
+- Table columns: Label, Start, End, Locked, Rosters, and an unlabelled action column. **Rosters** is the number of active roster cards snapshotted at lock (saved bench cards are not counted).
+- Unlocked weeks are edited inline (label and dates) and saved with **Save Changes**; each has a **Delete** button with an inline confirmation row.
+- Locked weeks are read-only. Once a locked week is past its substitution time (`end_time + SUBSTITUTION_DELAY_HOURS`), its action cell has a **Re-run substitutions** button. It calls `POST /admin/weeks/{id}/substitutions` through `adminFetch` (no password re-entry: the action is not destructive), then the status line reports how many substitutions were made and the table reloads. See `markdown/features/reference/automatic-bench-substitution.md`.

@@ -263,8 +263,10 @@ class TestTeamBoosterDraw:
                               current_user={"user_id": user.id})
 
         # Now simulate the deck endpoint with user context
+        import sessions
+
         class AuthRequest:
-            session = {"user_id": user.id, "sv": user.session_version or 0}
+            session = {"sid": sessions.create_session(db, user)}
 
         after = get_booster_deck(request=AuthRequest(), db=db)
         after_remaining = next(r["remaining"] for r in after if r["team_id"] == team.id)
@@ -369,8 +371,10 @@ class TestBoosterDuplicatePrevention:
                     league_id=None, is_active=False, generation=1))
         db.flush()
 
+        import sessions
+
         class AuthRequest:
-            session = {"user_id": user.id, "sv": user.session_version or 0}
+            session = {"sid": sessions.create_session(db, user)}
 
         result = get_booster_deck(request=AuthRequest(), db=db)
         team_entry = next((r for r in result if r["team_id"] == team.id), None)

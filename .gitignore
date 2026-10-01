@@ -14,3 +14,6 @@ data/*.backup-*
 
 # Twitch extension build packages
 twitch-extension/*.zip
+
+# Local competitor research notes (not part of the app)
+competitor-analysis/

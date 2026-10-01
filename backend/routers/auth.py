@@ -8,10 +8,11 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+import sessions
 from database import get_db
-from deps import _audit, bump_session_version, get_current_user, start_session
+from deps import _audit, get_current_user
 from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
-                    NotificationDismissal, PasswordResetToken)
+                    NotificationDismissal, PasswordResetToken, UserSession)
 from auth import check_email, check_password_bytes, check_username, hash_password, verify_password
 from email_utils import email_configured, send_email
 from rate_limit import limiter, key_by_user_or_ip
@@ -93,6 +94,11 @@ class ForgotPasswordBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
 
 
+class ReauthBody(BaseModel):
+    # Uncapped like LoginBody: the password may predate the 72-byte cap.
+    password: str = Field(min_length=1, max_length=128)
+
+
 class ResetPasswordBody(BaseModel):
     token: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=6, max_length=128)
@@ -121,7 +127,8 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
                 status_code=401,
                 detail="Temporary password has expired. Please request a new password reset.",
             )
-    start_session(request, user)
+    # Always a new session ID at login (issue #117), even if a valid cookie was sent.
+    sessions.start_session(request, db, user)
     _clear_failed_logins(user.username)
     _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
     db.commit()
@@ -148,14 +155,16 @@ def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     db.add(user)
     db.flush()
     _audit(db, "user_register", actor_id=user.id, actor_username=user.username)
+    sessions.start_session(request, db, user)
     db.commit()
-    start_session(request, user)
     return {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
 
 
 @router.post("/logout")
-def logout(request: Request):
-    request.session.clear()
+def logout(request: Request, db=Depends(get_db)):
+    # Deleting the row ends the session on the server, so a copied cookie stops working.
+    sessions.end_current_session(request, db)
+    db.commit()
     return {"status": "ok"}
 
 
@@ -163,11 +172,73 @@ def logout(request: Request):
 def logout_everywhere(request: Request, db=Depends(get_db),
                       current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
-    bump_session_version(user)
+    sessions.delete_user_sessions(db, user.id)
     _audit(db, "user_logout_everywhere", actor_id=user.id, actor_username=user.username)
     db.commit()
     request.session.clear()
     return {"status": "ok"}
+
+
+@router.post("/reauth")
+@limiter.limit(RATE_LIMIT_LOGIN)
+def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
+           current_user: dict = Depends(get_current_user)):
+    """Confirm the current user's password for this session (issue #117). Destructive
+    admin endpoints (deps.require_recent_reauth) accept the session for
+    ADMIN_REAUTH_SECONDS afterwards. Shares the login lockout and rate limit."""
+    username = current_user["username"]
+    if _is_locked_out(username):
+        _audit(db, "admin_reauth", actor_id=current_user["user_id"], actor_username=username,
+               detail="failed: locked out")
+        db.commit()
+        raise HTTPException(status_code=429, detail=_LOGIN_LOCKOUT_MESSAGE)
+    user = db.get(User, current_user["user_id"])
+    row = sessions.current_row(request, db)
+    if row is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not verify_password(body.password, user.password_hash):
+        _record_failed_login(username)
+        _audit(db, "admin_reauth", actor_id=user.id, actor_username=username,
+               detail="failed: wrong password")
+        db.commit()
+        raise HTTPException(status_code=401, detail="Incorrect password")
+    row.reauth_at = sessions._now()
+    _clear_failed_logins(username)
+    _audit(db, "admin_reauth", actor_id=user.id, actor_username=username, detail="ok")
+    db.commit()
+    return {"status": "ok", "valid_seconds": sessions.ADMIN_REAUTH_SECONDS}
+
+
+@router.get("/sessions")
+def list_sessions(request: Request, db=Depends(get_db),
+                  current_user: dict = Depends(get_current_user)):
+    """The caller's sessions. Never returns a session ID or its hash, only the row id."""
+    user = db.get(User, current_user["user_id"])
+    current = sessions.current_row(request, db)
+    now = sessions._now()
+    rows = (db.query(UserSession).filter(UserSession.user_id == user.id)
+            .order_by(UserSession.last_seen_at.desc(), UserSession.id.desc()).all())
+    return [{"id": r.id, "created_at": r.created_at, "last_seen_at": r.last_seen_at,
+             "current": current is not None and r.id == current.id}
+            for r in rows if not sessions.is_expired(r, user, now)]
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(session_id: int, request: Request, db=Depends(get_db),
+                   current_user: dict = Depends(get_current_user)):
+    """End one of the caller's own sessions; any other id is 404."""
+    row = (db.query(UserSession)
+           .filter(UserSession.id == session_id,
+                   UserSession.user_id == current_user["user_id"]).first())
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    current = sessions.current_row(request, db)
+    is_current = current is not None and current.id == row.id
+    db.delete(row)
+    db.commit()
+    if is_current:
+        request.session.clear()
+    return {"status": "ok", "current": is_current}
 
 
 _DUMMY_HASH = hash_password("dummy-timing-equalizer")
@@ -267,7 +338,7 @@ def reset_password(request: Request, body: ResetPasswordBody, db=Depends(get_db)
     user.must_change_password = False
     user.temp_password_expires_at = None
     # A reset may follow a compromise: end every existing session of this user.
-    bump_session_version(user)
+    sessions.delete_user_sessions(db, user.id)
     db.delete(token_row)
     _audit(db, "password_reset_completed", actor_id=user.id, actor_username=user.username,
            detail="all sessions revoked")

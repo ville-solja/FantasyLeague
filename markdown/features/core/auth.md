@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the Kana Cards app. Sessions are signed cookies managed by Starlette's `SessionMiddleware`, with no server-side session store. A per-user session version makes them revocable (see Session Validation and Revocation below).
+User accounts, sessions, and profile management for the Kana Cards app. Sessions are server-side: each login creates a `user_sessions` row, and the signed cookie (Starlette's `SessionMiddleware`) carries only a random session ID. Idle and absolute limits depend on the role, and admins confirm their password before destructive actions (issue #117; see Session Validation and Revocation below and `reference/longer-sessions.md`).
 
 ---
 
@@ -54,17 +54,42 @@ Authenticates with username and password.
   path sets these fields anymore. See `reference/temp-password-expiry.md`.
 - Returns `{ "username", "is_admin", "tokens" }` and sets the session cookie. (`must_change_password` is only returned by `GET /me`.)
 - Records a `user_login` audit log entry.
-- Stores the user's current `session_version` in the session as `sv` (`POST /register` does the same).
+- Always starts a new session: a new `user_sessions` row and a new session ID in the cookie, even
+  when the request already carried a valid session (that older session of the browser is deleted).
+  `POST /register` does the same. The cookie payload is only `{"sid": "<token>"}`.
 
 ### `POST /logout`
 
-Clears the session cookie. No request body required. Always returns `{ "status": "ok" }`.
+Deletes the current session row and clears the cookie, so a copy of the cookie stops working.
+No request body required. Always returns `{ "status": "ok" }`. Other devices stay logged in.
 
 ### `POST /logout-everywhere`
 
-Login required (401 without a session). Increments the caller's `session_version`, which ends every
-session of that user on every device, then clears the current session. Writes a
-`user_logout_everywhere` audit entry and returns `{ "status": "ok" }`.
+Login required (401 without a session). Deletes every session row of the caller, which ends every
+session on every device, then clears the current cookie. Writes a `user_logout_everywhere` audit
+entry and returns `{ "status": "ok" }`.
+
+### `POST /reauth`
+
+Login required; open to any logged-in user, not only admins (the audit action is still
+`admin_reauth`). Body `{ "password" }`. Confirms the current user's password for this session and
+stores `reauth_at` on the session row; destructive admin endpoints then accept the session for
+`ADMIN_REAUTH_SECONDS` (default 600). Wrong password: 401 `"Incorrect password"`, counted toward
+the per-username login lockout (`LOGIN_LOCKOUT_THRESHOLD`); a locked-out username gets 429 with the
+same message as `/login`. If the current session row is missing (a defensive check), 401
+`"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an `admin_reauth` audit entry on
+success (`ok`) and on failure (`failed: …`).
+
+### `GET /sessions`
+
+Login required. Lists the caller's unexpired sessions as
+`[{ "id", "created_at", "last_seen_at", "current" }]`, newest activity first. `id` is an opaque
+row handle; the session ID and its hash are never returned.
+
+### `DELETE /sessions/{id}`
+
+Login required. Ends one of the caller's own sessions; any other id returns 404. Ending the current
+session also clears the cookie. Returns `{ "status": "ok", "current": <bool> }`.
 
 ### `GET /me`
 
@@ -136,8 +161,8 @@ Changes the authenticated user's display name. Requires login.
   letters, digits, `_` and `-` (see `reference/security-audit-3.md`). Surrounding whitespace
   is rejected rather than stripped; the profile form trims it before sending and shows the
   allowed characters under the field.
-- On success, updates the session's username and writes a `username_changed` audit entry
-  (`old=… new=…`).
+- On success, writes a `username_changed` audit entry (`old=… new=…`). The session cookie does not
+  carry the username; `GET /me` reads it from the database, so the change shows at once.
 
 ---
 
@@ -173,8 +198,8 @@ Changes the authenticated user's password. Requires login and the current passwo
   `current_password` is not byte-capped.
 - Clears the `must_change_password` flag if set.
 - Deletes the user's outstanding password-reset tokens, so an old reset link stops working.
-- Increments `session_version` and writes the new value into the requester's session: the
-  requester stays logged in and every other session of the user gets 401 on its next request.
+- Deletes every other session of the user and gives the requester's session a new ID (a new row
+  and cookie): the requester stays logged in and every other session gets 401 on its next request.
   A rejected change (wrong current password) changes nothing.
 
 ---
@@ -236,7 +261,7 @@ authentication required (the token itself is the credential).
   1. Sets `user.password_hash` to the new password.
   2. Clears any legacy `must_change_password`/`temp_password_expires_at` state on the account
      (cleanup matching what `PUT /profile/password` already does).
-  3. Increments `session_version`, so every existing session of the user gets 401.
+  3. Deletes every session row of the user, so every existing session gets 401.
   4. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
   5. Records a `password_reset_completed` audit log entry (detail `all sessions revoked`).
   6. Returns `{"status": "ok"}`.
@@ -247,20 +272,31 @@ Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next r
 
 ## Session Validation and Revocation
 
-Every route that needs login goes through `get_current_user` (`backend/deps.py`). It loads the user
-row and accepts the session only when the cookie's `sv` equals `users.session_version`. A cookie
-with no `sv`, a different `sv`, or a user id that no longer exists is cleared and gets 401, the same
-as a logged-out request. The returned `user_id`, `username` and `is_admin` come from the database
-row, not the cookie. `POST /twitch/link-code` uses the same check, and the optional-login routes
-`GET /deck` and `GET /deck/booster` treat a revoked session as logged out
-(`session_user_or_none`).
+Every route that needs login goes through `get_current_user` (`backend/deps.py`), which calls
+`sessions.validate_request` (`backend/sessions.py`). It looks up the `user_sessions` row by
+`sha256(sid)` and rejects the session (401, cookie cleared) when there is no row, the user no longer
+exists, or the row is past its role's limits:
 
-`session_version` is incremented by `PUT /profile/password` (keeps the requester's session),
-`POST /reset-password`, `POST /logout-everywhere` and the admin-only
-`POST /users/{user_id}/force-logout` (see `core/admin.md`). Cookies issued before this feature have
-no `sv`, so every user logs in once after that release. When `GET /me` returns 401 the frontend
-clears its stored username and admin flag and shows the logged-out state. Design and trade-offs:
-`reference/session-revocation.md`.
+| Account | Idle limit (`now - last_seen_at`) | Absolute limit (`now - created_at`) |
+|---|---|---|
+| Player | `SESSION_IDLE_SECONDS` (14 days) | `SESSION_ABSOLUTE_SECONDS` (30 days) |
+| Admin | `ADMIN_SESSION_IDLE_SECONDS` (2 hours) | `ADMIN_SESSION_ABSOLUTE_SECONDS` (12 hours) |
+
+An expired row is deleted on the spot, and the week maintenance loop deletes the rest on its first pass after
+the app starts and then once a day.
+`last_seen_at` is written at most once per `SESSION_TOUCH_SECONDS` (5 minutes). The returned
+`user_id`, `username` and `is_admin` come from the database row, not the cookie.
+`POST /twitch/link-code` uses the same check, and the optional-login routes `GET /deck` and
+`GET /deck/booster` treat an invalid session as logged out (`session_user_or_none`).
+
+Revocation deletes rows: `POST /logout` (this session), `PUT /profile/password` (all others; the
+requester gets a new ID), `POST /reset-password`, `POST /logout-everywhere`, the admin-only
+`POST /users/{user_id}/force-logout` and `POST /users/{user_id}/toggle-admin` (all of the target's
+sessions; see `core/admin.md`). `users.session_version` from issue #119 stays in the schema but is
+no longer read. Cookies issued before #117 carry no `sid`, so every user logs in once after that
+release. When `GET /me` returns 401 the frontend clears its stored username and admin flag and
+shows the logged-out state. Design, accepted risk and trade-offs: `reference/longer-sessions.md`
+and `reference/session-revocation.md`.
 
 ---
 
@@ -273,9 +309,21 @@ equivalent local-dev bypasses at startup, `backend/main.py`). Conversely, settin
 that combination would silently accept the insecure Twitch JWT bypass in what looks like a
 production config, so the app refuses to boot rather than risk it.
 
-The cookie lives for `SESSION_MAX_AGE_SECONDS` (default `86400`, 24 hours). A non-integer or
-non-positive value stops the app at startup. Session revocation (above) makes a longer value, as
-proposed in issue #117, safe to use.
+The cookie holds only the session ID. Its `Max-Age` is the larger absolute limit (default 30 days);
+the server enforces the actual limits above. Under `HTTPS_ONLY=true` the cookie is named
+`__Host-session` (`Secure`, `Path=/`, no `Domain`), which pins it to the exact host; without it
+(local dev) it is named `session`, since browsers reject the `__Host-` prefix without `Secure`.
+`HttpOnly` and `SameSite=Lax` are always set.
+
+The six session settings are validated at startup: a non-integer or non-positive value, an idle
+limit larger than its absolute limit, or `SESSION_TOUCH_SECONDS` not smaller than
+`ADMIN_SESSION_IDLE_SECONDS` stops the app with a `RuntimeError`. `SESSION_MAX_AGE_SECONDS` from
+issue #119 is still accepted as an alias for `SESSION_ABSOLUTE_SECONDS`, with a deprecation warning.
+
+**Accepted risk:** the 14-day player idle limit is longer than the OWASP Session Management Cheat
+Sheet's typical examples. It is accepted because player accounts hold no payment data, every session
+can be revoked on the server, and the 30-day absolute limit meets NIST SP 800-63B AAL1. Admins get
+much shorter limits plus re-authentication. See `reference/longer-sessions.md`.
 
 Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie. It is required outside local dev: the app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset; issue #118, see `reference/https-enforcement.md`).
 
@@ -287,7 +335,13 @@ Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Ca
 |---|---|---|
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production** |
 | `HTTPS_ONLY` | `false` | Enables `Secure` cookie flag when behind an HTTPS reverse proxy — **must be `true` in production**; startup fails without it unless `DEBUG`/`TWITCH_LOCAL_DEV` is set (`TWITCH_LOCAL_DEV` only with `SECRET_KEY` unset) |
-| `SESSION_MAX_AGE_SECONDS` | `86400` | Session cookie lifetime in seconds; must be a positive integer. Revocation makes a longer value safe |
+| `SESSION_IDLE_SECONDS` | `1209600` (14 days) | Player idle limit (accepted risk, see above) |
+| `SESSION_ABSOLUTE_SECONDS` | `2592000` (30 days) | Player limit from login; also the cookie `Max-Age` when it is the larger absolute limit |
+| `SESSION_TOUCH_SECONDS` | `300` | Minimum interval between `last_seen_at` writes; must be smaller than `ADMIN_SESSION_IDLE_SECONDS` |
+| `ADMIN_SESSION_IDLE_SECONDS` | `7200` (2 h) | Admin idle limit |
+| `ADMIN_SESSION_ABSOLUTE_SECONDS` | `43200` (12 h) | Admin limit from login |
+| `ADMIN_REAUTH_SECONDS` | `600` (10 min) | How long a `POST /reauth` covers destructive admin actions |
+| `SESSION_MAX_AGE_SECONDS` | *(unset)* | Deprecated alias for `SESSION_ABSOLUTE_SECONDS` (issue #119), with a startup warning; ignored when `SESSION_ABSOLUTE_SECONDS` is set. Session revocation is server-side row deletion |
 | `DEBUG` | `false` | Bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check for local dev — **never set in production** |
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |

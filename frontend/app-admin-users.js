@@ -180,7 +180,7 @@ async function toggleTester(userId) {
 
 async function toggleAdmin(userId) {
   try {
-    const res = await fetch(`${API}/users/${userId}/toggle-admin`, { method: "POST" });
+    const res = await adminFetch(`${API}/users/${userId}/toggle-admin`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", `${data.username} ${data.is_admin ? "promoted to admin" : "demoted from admin"}`);

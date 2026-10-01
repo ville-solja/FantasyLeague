@@ -11,7 +11,7 @@ from database import get_db
 from deps import require_admin, _audit
 from models import User
 from routers.cards import draw_card
-from weeks import auto_lock_weeks, generate_weekly_summaries
+from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
 
 router = APIRouter()
 
@@ -54,6 +54,7 @@ def set_demo_clock(body: DemoClockBody, db=Depends(get_db),
     _require_demo_mode()
     clock.set_override(db, body.timestamp)
     auto_lock_weeks(db)  # synchronous — make the lock transition observable immediately
+    due_substitutions(db)  # synchronous, before summaries — same order as the week maintenance loop
     generate_weekly_summaries(db)  # synchronous, same reason — see auto_lock_weeks above
     _audit(db, "admin_demo_clock_set", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"timestamp={body.timestamp}")

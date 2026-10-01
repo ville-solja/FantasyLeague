@@ -25,8 +25,68 @@ async function loadProfile() {
       gapHint.style.display = (tags.length > 0 && !data.player_id) ? "block" : "none";
     }
     _renderPastSeasons(data.past_seasons || []);
+    loadSessions();
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
+  }
+}
+
+// Sessions list (issue #117). Built with createElement/textContent only.
+async function loadSessions() {
+  const tbody = document.getElementById("profileSessionsBody");
+  if (!tbody) return;
+  try {
+    const res = await fetch(`${API}/sessions`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("profileSessionsStatus", data.detail, false);
+    _renderSessions(data);
+  } catch (e) {
+    setStatus("profileSessionsStatus", e.message, false);
+  }
+}
+
+function _renderSessions(rows) {
+  const tbody = document.getElementById("profileSessionsBody");
+  tbody.replaceChildren();
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 3;
+    td.textContent = "No active sessions";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  rows.forEach(s => {
+    const tr = document.createElement("tr");
+    const created = document.createElement("td");
+    created.textContent = new Date(Number(s.created_at) * 1000).toLocaleString();
+    const lastSeen = document.createElement("td");
+    lastSeen.textContent = new Date(Number(s.last_seen_at) * 1000).toLocaleString()
+      + (s.current ? " (this device)" : "");
+    const action = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.className = "secondary";
+    btn.textContent = "Sign out";
+    btn.addEventListener("click", () => signOutSession(s.id, s.current));
+    action.appendChild(btn);
+    tr.append(created, lastSeen, action);
+    tbody.appendChild(tr);
+  });
+}
+
+async function signOutSession(sessionId, isCurrent) {
+  try {
+    const res = await fetch(`${API}/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return setStatus("profileSessionsStatus", data.detail || "Could not sign out that session", false);
+    }
+    if (isCurrent) return _clearLocalAuthState();
+    setStatus("profileSessionsStatus", "Session signed out");
+    loadSessions();
+  } catch (e) {
+    setStatus("profileSessionsStatus", e.message, false);
   }
 }
 
@@ -124,6 +184,7 @@ async function changePassword() {
     setStatus("passwordStatus", "Password updated");
     activeMustChangePassword = false;
     _applyTempPasswordBanner();
+    loadSessions();  // other devices were signed out
   } catch (e) {
     setStatus("passwordStatus", e.message, false);
   }

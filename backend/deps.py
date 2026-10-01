@@ -2,25 +2,23 @@ import time
 
 from fastapi import Depends, HTTPException, Request
 
+import sessions
 from database import get_db
 from models import AuditLog, User
 
 
-SESSION_VERSION_KEY = "sv"
-
-
 def _session_user(request: Request, db):
-    """The User the session belongs to, or None. A session is valid only while its
-    stored version matches users.session_version; bumping that number revokes every
-    session of the user at once. An invalid session is cleared so the response drops
-    the stale cookie."""
-    user_id = request.session.get("user_id")
-    if not user_id:
-        return None
-    user = db.get(User, user_id)
-    if not user or request.session.get(SESSION_VERSION_KEY) != (user.session_version or 0):
-        request.session.clear()
-        return None
+    """The User the request's server-side session belongs to, or None (issue #117).
+    See sessions.validate_request: the cookie's session ID must have a
+    user_sessions row within the role's idle and absolute limits."""
+    user = sessions.validate_request(request, db)
+    if user is not None:
+        try:
+            # Per-user rate-limit key (rate_limit.key_by_user_or_ip); the cookie
+            # no longer carries the user id.
+            request.state.session_user_id = user.id
+        except AttributeError:
+            pass
     return user
 
 
@@ -38,20 +36,6 @@ def get_current_user(request: Request, db=Depends(get_db)) -> dict:
     return {"user_id": user.id, "username": user.username, "is_admin": bool(user.is_admin)}
 
 
-def start_session(request: Request, user: User) -> None:
-    """Write a freshly authenticated user into the session."""
-    request.session["user_id"] = user.id
-    request.session["username"] = user.username
-    request.session["is_admin"] = user.is_admin
-    request.session[SESSION_VERSION_KEY] = user.session_version or 0
-
-
-def bump_session_version(user: User) -> int:
-    """Invalidate every existing session of `user`. The caller commits."""
-    user.session_version = (user.session_version or 0) + 1
-    return user.session_version
-
-
 def is_admin_fresh(db, user_id: int) -> bool:
     """DB-authoritative admin check. Use this — not `current_user["is_admin"]` — for any
     "owner OR admin" access check outside require_admin, since the session's is_admin value
@@ -67,6 +51,16 @@ def require_admin(current_user: dict = Depends(get_current_user), db=Depends(get
     if not is_admin_fresh(db, current_user["user_id"]):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+def require_recent_reauth(request: Request, admin: dict = Depends(require_admin),
+                          db=Depends(get_db)):
+    """Destructive admin actions need a POST /reauth on this session within
+    ADMIN_REAUTH_SECONDS; otherwise 403 {"detail": "reauth_required"}. Add it as a
+    route-level dependency so direct function calls in tests are unaffected."""
+    if not sessions.reauth_is_recent(sessions.current_row(request, db)):
+        raise HTTPException(status_code=403, detail="reauth_required")
+    return admin
 
 
 def _audit(db, action: str, actor_id=None, actor_username=None, detail=None):

@@ -74,7 +74,7 @@ Static checks in the test file parse every `${...}` in these files and fail if a
 - `ReorderRequest.card_ids`: at most 500 items. The frontend sends the whole bench on every move and bench size is unlimited, so the cap is set well above any real collection. `RemovePlayersBody.player_ids`: at most 500. Larger lists get 422.
 - `POST /grant-tokens`: `amount` at most 10,000 (`GRANT_TOKENS_MAX`).
 - `GET /audit-logs`: `limit` between 1 and 1,000 (`AUDIT_LOG_LIMIT_MAX`).
-- `PUT /profile/username` updates `session["username"]` and writes a `username_changed` audit entry (`old=… new=…`) when the name changes.
+- `PUT /profile/username` writes a `username_changed` audit entry (`old=… new=…`) when the name changes. Since #117 the session cookie carries only a session ID, so the new name is read from the database (`GET /me`), not from the session.
 
 ## Hardening
 

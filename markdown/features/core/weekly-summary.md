@@ -33,7 +33,14 @@ Each week's tab in the popup has two states, gated per user:
 2. **After reveal** — clicking "Reveal results" permanently unlocks, for that user and that
    week only: every player per match grouped under their team, the match's MVP player with a
    highlighted portrait, and a points-earned number per player (neutral color if the player
-   wasn't on the viewing user's roster that week, accent color if they were).
+   wasn't on the viewing user's roster that week, accent color if they were). "On roster" means
+   a counted roster entry after [bench substitution](../reference/automatic-bench-substitution.md):
+   an active card not subbed out, or a subbed-in bench card.
+
+Bench substitutions run `SUBSTITUTION_DELAY_HOURS` (default 24) after the week ends, so the
+report normally opens before they have run. Until then a revealed week shows a muted note above
+its matches: "Bench substitutions are made {N} hours after the week ends; roster marks may
+change." The "on roster" marks update once substitutions have run.
 
 Reveal state does not affect other users or other weeks.
 
@@ -69,7 +76,10 @@ into `series`) with team names/logos/winner/VOD link always included; each match
 carries a `players` list (`player_id`, `name`, `avatar_url`, `team_id`, `points`, `is_mvp`,
 `on_roster`) only if the caller has revealed that week. Each match also carries
 `excluded_from_scoring`. On an excluded match, every player's `points` is `null` (see
-`reference/unparseable-match-handling.md`).
+`reference/unparseable-match-handling.md`). `on_roster` uses `counted_roster_entry_sql()`, so it
+reflects bench substitution. The response also carries `substitutions_pending` (true while the
+week's `substitutions_at` is null), `substitutions_at` (unix seconds or null) and
+`substitution_delay_hours`.
 
 ### `POST /weekly-summary/{week_id}/reveal`
 Auth required. Idempotently inserts a `WeeklySummaryReveal` row for `(week_id, current user)`,

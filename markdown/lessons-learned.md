@@ -9,6 +9,14 @@ Format:
 
 ---
 
+### 2026-10-01 — developer — testing
+**Problem:** A migration test that seeds legacy rows into `weekly_roster_entries` and then calls `migrate.run_migrations` on a fresh engine finds the table empty: migration `010_weeks_epoch0_reset` runs first (nothing is recorded in `schema_migrations` yet) and deletes every roster entry. Separately, since issue #129 `weekly_roster_entries` also holds saved bench rows (`is_bench = 1`), so any new query over it that counts or sums roster cards must apply `match_scoring.counted_roster_entry_sql()` (or `is_bench = 0` for plain counts).
+**Solution:** In such a test, call `migrate._ensure_migrations_table(conn)` and `migrate._record(conn, id)` for every earlier migration before running, as a production DB would have them applied (see `_legacy_engine` in `test_issue_129_automatic_bench_substitution.py`).
+
+### 2026-10-01 — developer — testing
+**Problem:** Since issue #117 a session is valid only when the cookie's `{"sid"}` has a `user_sessions` row (sha256 hash) within the role's limits, so the 2026-09-29 advice below (add `"sv"` to hand-built sessions) no longer works. Also, the cookie no longer carries `user_id`, so `rate_limit.key_by_user_or_ip` silently fell back to per-IP keys until it was changed to read `request.state.session_user_id`, which `get_current_user` sets before slowapi checks the limit.
+**Solution:** For a hand-built session use `session = {"sid": sessions.create_session(db, user)}` (flushes a row in the same `db`), or `sessions.start_session(request, db, user)` plus a commit in a test-only login route; better still, `POST /login`. To control session time, monkeypatch `sessions._now`. Destructive admin endpoints carry `require_recent_reauth` as a route-level dependency, so HTTP tests must `POST /reauth` first, while direct function calls are unaffected.
+
 ### 2026-09-30 — developer — scoring
 **Problem:** The 2026-09-25 entry below says card points are recomputed from aggregate stat sums with a death pool that scales with `match_count`, so a match's contribution to a card is not its own points. Issue #141 superseded that premise: card points are now stored per (card, match) in `card_match_points`, computed one match at a time (`match_count=1`, death bonus floored per match), and every reader sums the stored rows. The aggregate `match_count` path in `card_fantasy_score`/`_compute_card_points` survives only for API compatibility. Separately, `POST /recalculate` used to lose its `fantasy_points` pass when `rebuild_all` failed, because `rebuild_all` rolls back the whole session on error.
 **Solution:** A match's contribution to a card is now exactly its stored `card_match_points.points` row; the older entry's excluded/cleared/deleted comparison still works but is no longer required. Before calling `card_points.rebuild_all(db)` after other writes, commit those writes first, since its rollback would discard them.

@@ -14,7 +14,9 @@ immediately followed by an expensive full-roster refetch) could meaningfully loa
 Reuses the shared `slowapi` `Limiter` built for issue #121 (`backend/rate_limit.py`) rather
 than introducing a second rate-limiting mechanism. Unlike #121's endpoints (which key by
 source IP, `slowapi.util.get_remote_address`), these four routes all require login, so they're
-keyed by session `user_id` instead — `key_by_user_or_ip()` in `backend/rate_limit.py`, falling
+keyed by user instead — `key_by_user_or_ip()` in `backend/rate_limit.py` returns `user:{id}`
+from `request.state.session_user_id` (set by `get_current_user`; since #117 the session cookie
+carries only a session ID), falling
 back to `get_remote_address()` only if somehow called unauthenticated.
 
 The backend mutation endpoints already return lightweight confirmations, not the full roster —

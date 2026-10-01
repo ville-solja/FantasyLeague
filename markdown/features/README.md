@@ -90,6 +90,7 @@ Implementation details, integrations, and operator tooling.
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
+| [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
 | [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
@@ -98,9 +99,11 @@ Implementation details, integrations, and operator tooling.
 | [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
 | [Stored Card Points](reference/stored-card-points.md) | Card points stored per match and summed by every view, so My Team and the leaderboards agree and pages stop recalculating per request |
+| [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |
-| [Session Revocation](reference/session-revocation.md) | Per-user session version checked on every request: password change/reset, log out everywhere and admin force-logout end existing sessions; configurable session lifetime |
+| [Session Revocation](reference/session-revocation.md) | Password change/reset, log out everywhere and admin force-logout end existing sessions (first via a per-user session version, now by deleting server-side session rows; see Longer Sessions) |
+| [Longer Sessions](reference/longer-sessions.md) | Server-side sessions (hashed random IDs) with 14-day idle / 30-day absolute limits for players, 2 h / 12 h plus password re-entry for destructive actions for admins, real logout, and a sessions list on Profile |
 | [HTTPS Enforcement](reference/https-enforcement.md) | Fails loudly at startup if `HTTPS_ONLY` isn't set outside local dev, and documents the TLS/reverse-proxy requirement for production prominently |
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |

@@ -54,7 +54,7 @@ As the operator, I want brute-forceable and expensive endpoints to be rate-limit
 - `GET /cards/{card_id}/image` is limited to 60 requests a minute per IP
 - `ReorderRequest.card_ids` accepts at most 500 items (the frontend sends the whole bench, which has no size limit) and `RemovePlayersBody.player_ids` at most 500; larger lists get 422
 - `POST /grant-tokens` rejects amounts over 10,000, and `GET /audit-logs` caps `limit` at 1,000
-- `PUT /profile/username` updates the session's username and writes a `username_changed` audit entry
+- `PUT /profile/username` writes a `username_changed` audit entry; the new name is read from the database via `GET /me` (since #117 the session cookie carries only a session ID)
 
 
 ---

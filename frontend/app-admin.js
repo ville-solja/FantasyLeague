@@ -13,8 +13,9 @@
 //   app-admin-season.js        Season Lifecycle (End Season / Season Reset)
 //   app-admin-backups.js       Database Backups (create / list / download)
 //   app-admin-demo.js          Demo Mode panel (DEMO_MODE-gated)
-// This file only owns the tab bar itself, since every other file needs it
-// loaded first for initWeekDateInputs()/switchAdminTab() to exist.
+// This file owns the tab bar itself, since every other file needs it
+// loaded first for initWeekDateInputs()/switchAdminTab() to exist, and the
+// shared adminFetch() re-authentication wrapper at the bottom.
 // ---------------------------------------------------------------------------
 
 function initAdminTabs() {
@@ -49,4 +50,70 @@ function switchAdminTab(tabName) {
   // Lazily load data for the matches tab on first activation
   if (tabName === 'matches') loadAdminMatches();
   if (tabName === 'settings') loadBackups();
+}
+
+// ---------------------------------------------------------------------------
+// Admin re-authentication (issue #117)
+//
+// Destructive admin endpoints answer 403 {"detail": "reauth_required"} unless
+// this session confirmed the password recently (POST /reauth). adminFetch()
+// shows the in-page password prompt (#reauthModal), and once the password is
+// confirmed it retries the original request exactly once. Cancelling returns
+// the original 403 response to the caller.
+// ---------------------------------------------------------------------------
+
+let _reauthResolve = null;
+
+async function adminFetch(url, options) {
+  const res = await fetch(url, options);
+  if (res.status !== 403) return res;
+  const data = await res.clone().json().catch(() => ({}));
+  if (data.detail !== "reauth_required") return res;
+  const confirmed = await _promptReauth();
+  if (!confirmed) return res;
+  return fetch(url, options);
+}
+
+function _promptReauth() {
+  if (_reauthResolve) _finishReauth(false);
+  document.getElementById("reauthPassword").value = "";
+  document.getElementById("reauthStatus").textContent = "";
+  document.getElementById("reauthModal").classList.remove("hidden");
+  return new Promise(resolve => { _reauthResolve = resolve; });
+}
+
+function _finishReauth(confirmed) {
+  document.getElementById("reauthModal").classList.add("hidden");
+  document.getElementById("reauthPassword").value = "";
+  const resolve = _reauthResolve;
+  _reauthResolve = null;
+  if (resolve) resolve(confirmed);
+}
+
+function closeReauthModal() {
+  _finishReauth(false);
+}
+
+async function submitReauth() {
+  const input = document.getElementById("reauthPassword");
+  const status = document.getElementById("reauthStatus");
+  if (!input.value) {
+    status.textContent = "Enter your password.";
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/reauth`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({password: input.value}),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      status.textContent = typeof data.detail === "string" ? data.detail : "Password check failed";
+      input.value = "";
+      return;
+    }
+    _finishReauth(true);
+  } catch (e) {
+    status.textContent = e.message;
+  }
 }

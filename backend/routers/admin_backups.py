@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from database import _sqlite_db_path, backup_retention_days, backup_sqlite_db, get_db, list_sqlite_backups
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, _audit
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ def _backup_info(path) -> dict:
     return {"filename": path.name, "size_bytes": st.st_size, "created_at": int(st.st_mtime)}
 
 
-@router.post("/admin/backups")
+@router.post("/admin/backups", dependencies=[Depends(require_recent_reauth)])
 def create_backup(db=Depends(get_db), admin: dict = Depends(require_admin)):
     """Take an online backup of the live SQLite DB via backup_sqlite_db()."""
     if _sqlite_db_path() is None:
@@ -47,7 +47,7 @@ def create_backup(db=Depends(get_db), admin: dict = Depends(require_admin)):
     return info
 
 
-@router.get("/admin/backups")
+@router.get("/admin/backups", dependencies=[Depends(require_recent_reauth)])
 def list_backups(admin: dict = Depends(require_admin)):
     backups = []
     for f in list_sqlite_backups():
@@ -58,7 +58,7 @@ def list_backups(admin: dict = Depends(require_admin)):
     return {"retention_days": backup_retention_days(), "backups": backups}
 
 
-@router.get("/admin/backups/{filename}")
+@router.get("/admin/backups/{filename}", dependencies=[Depends(require_recent_reauth)])
 def download_backup(filename: str, db=Depends(get_db),
                     admin: dict = Depends(require_admin)):
     """Stream a backup as an attachment. The filename is only ever matched

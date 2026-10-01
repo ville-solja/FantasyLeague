@@ -48,7 +48,7 @@ As a user, I want to browse my roster and bench.
 - All benched cards are shown in the My Team tab
 - Cards are either in the currently active roster for the upcoming week, or in the bench
 - Shows player, rarity, and points accumulated during the current week
-- Bench is hidden for locked past weeks (read-only snapshot view)
+- For a locked week, the bench saved at lock is shown read-only, with any subbed-out cards first; it is hidden only when the week has no saved bench (weeks locked before bench snapshots existed)
 
 ---
 
