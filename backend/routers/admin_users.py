@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 
+import sessions
 from database import get_db
-from deps import bump_session_version, get_current_user, require_admin, _audit
+from deps import get_current_user, require_admin, require_recent_reauth, _audit
 from models import PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
 from rate_limit import limiter, key_by_user_or_ip
 
@@ -76,7 +77,7 @@ def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends
     return {"user_id": user.id, "username": user.username, "is_tester": user.is_tester}
 
 
-@router.post("/users/{user_id}/toggle-admin")
+@router.post("/users/{user_id}/toggle-admin", dependencies=[Depends(require_recent_reauth)])
 def toggle_admin(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
     if user_id == admin["user_id"]:
         raise HTTPException(status_code=409, detail="Cannot change your own admin status")
@@ -86,6 +87,9 @@ def toggle_admin(user_id: int, admin: dict = Depends(require_admin), db=Depends(
     if user.is_admin and db.query(User).filter_by(is_admin=True).count() <= 1:
         raise HTTPException(status_code=409, detail="Cannot demote the last remaining admin")
     user.is_admin = not bool(user.is_admin)
+    # Privilege change: end the target's sessions so the next login gets a new
+    # session ID and the limits of the new role (issue #117).
+    sessions.delete_user_sessions(db, user.id)
     _audit(db, "admin_toggle_admin", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"{user.username} is_admin={user.is_admin}")
     db.commit()
@@ -97,7 +101,7 @@ def force_logout(user_id: int, admin: dict = Depends(require_admin), db=Depends(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    bump_session_version(user)
+    sessions.delete_user_sessions(db, user.id)
     _audit(db, "admin_force_logout", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"target={user.username} user_id={user.id}")
     db.commit()

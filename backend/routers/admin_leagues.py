@@ -3,7 +3,7 @@ from sqlalchemy import func, text
 
 import card_points
 from database import get_db
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, _audit
 from models import League, Match, MatchBan, PlayerMatchStats
 
 router = APIRouter()
@@ -60,7 +60,7 @@ def remove_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(re
     return {"status": "ok", "league_id": league_id}
 
 
-@router.delete("/admin/leagues/{league_id}/data")
+@router.delete("/admin/leagues/{league_id}/data", dependencies=[Depends(require_recent_reauth)])
 def purge_league_data(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
     match_ids = [r[0] for r in db.execute(
         text("SELECT match_id FROM matches WHERE league_id = :lid"), {"lid": league_id}

@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
+import clock
 from database import get_db
 from deps import require_admin, _audit
 from models import Week, WeeklyRosterEntry
+from weeks import run_substitutions, substitution_time
 
 router = APIRouter()
 
@@ -77,16 +79,21 @@ def _check_week_overlap(db, start_time: int, end_time: int, exclude_week_id: int
 @router.get("/admin/weeks")
 def list_weeks_admin(db=Depends(get_db), _: dict = Depends(require_admin)):
     weeks = db.query(Week).order_by(Week.start_time).all()
+    # Active entries only: saved bench rows (issue #129) are not roster cards.
     roster_counts = {
         row[0]: row[1]
         for row in db.query(WeeklyRosterEntry.week_id, func.count(WeeklyRosterEntry.id))
+                     .filter(WeeklyRosterEntry.is_bench == False)  # noqa: E712
                      .group_by(WeeklyRosterEntry.week_id).all()
     }
+    now = clock.now(db)
     return [
         {
             "id": w.id, "label": w.label,
             "start_time": w.start_time, "end_time": w.end_time,
             "is_locked": w.is_locked, "roster_count": roster_counts.get(w.id, 0),
+            "substitutions_at": w.substitutions_at,
+            "substitutions_due": bool(w.is_locked) and now >= substitution_time(w),
         }
         for w in weeks
     ]
@@ -163,3 +170,24 @@ def delete_week(week_id: int, db=Depends(get_db),
     db.delete(w)
     db.commit()
     return {"ok": True}
+
+
+@router.post("/admin/weeks/{week_id}/substitutions")
+def rerun_substitutions(week_id: int, db=Depends(get_db),
+                        admin: dict = Depends(require_admin)):
+    """Reset and recompute a finished week's bench substitutions (issue #129). Not
+    destructive (deterministic from roster snapshot + match data), so no re-auth."""
+    w = db.get(Week, week_id)
+    if not w:
+        raise HTTPException(status_code=404, detail="Week not found")
+    if not w.is_locked:
+        raise HTTPException(status_code=409, detail="Week is not locked")
+    if clock.now(db) < substitution_time(w):
+        raise HTTPException(status_code=409,
+                            detail="Substitution time for this week has not been reached")
+    count = run_substitutions(db, w)
+    _audit(db, "admin_substitutions_rerun", actor_id=admin["user_id"],
+           actor_username=admin["username"],
+           detail=f"id={w.id} label={w.label} substitutions={count}")
+    db.commit()
+    return {"week_id": w.id, "substitutions": count, "substitutions_at": w.substitutions_at}

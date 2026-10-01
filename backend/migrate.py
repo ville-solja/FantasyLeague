@@ -470,6 +470,24 @@ def _m028_users_session_version(conn):
         logger.info("Migration: users — added session_version column")
 
 
+def _m029_weekly_roster_entries_substitution(conn):
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(weekly_roster_entries)")).fetchall()}
+    for name, ddl in (
+        ("is_bench",            "BOOLEAN NOT NULL DEFAULT 0"),
+        ("bench_order",         "INTEGER"),
+        ("subbed_in",           "BOOLEAN NOT NULL DEFAULT 0"),
+        ("subbed_out",          "BOOLEAN NOT NULL DEFAULT 0"),
+        ("subbed_for_entry_id", "INTEGER"),
+    ):
+        if name not in cols:
+            conn.execute(text(f"ALTER TABLE weekly_roster_entries ADD COLUMN {name} {ddl}"))
+    week_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(weeks)")).fetchall()}
+    if "substitutions_at" not in week_cols:
+        conn.execute(text("ALTER TABLE weeks ADD COLUMN substitutions_at INTEGER"))
+    conn.commit()
+    logger.info("Migration: weekly_roster_entries/weeks — added bench substitution columns")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -522,6 +540,7 @@ MIGRATIONS = [
     ("026_twitch_mvp_drop_unique",   _m026_twitch_mvp_drop_unique),
     ("027_match_parse_status",       _m027_match_parse_status),
     ("028_users_session_version",    _m028_users_session_version),
+    ("029_weekly_roster_entries_substitution", _m029_weekly_roster_entries_substitution),
 ]
 
 

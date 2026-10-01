@@ -30,29 +30,30 @@ A dropdown listing all season weeks. Locked past weeks are labelled with a check
 
 ### Roster locked banner
 
-Shown for locked past weeks only. Displays the week label and a message confirming the roster is a read-only snapshot.
+Shown for locked weeks only: "Roster locked — {week label} snapshot".
 
-### Active table
+### Active roster grid
 
-Columns: Player (avatar + name), Rarity badge, Weekly pts, Action.
+Five fixed card positions (`#rosterActiveGrid`), each showing the card image with its weekly points ("{pts} pts") underneath. Cards sit in their `slot_index` position, so gaps are kept; an empty position shows an "empty slot" placeholder. Clicking a card image opens the card view.
 
-- For the editable week: each row has a **Bench** button to move the card off the active roster.
-- For locked weeks: the Action column is empty (read-only).
-- Empty slots (fewer than 5 active cards) are shown as greyed-out "— empty slot —" rows.
+- For the editable week: drag a card to rearrange or move it. Dropping a roster card on another roster card moves it to that position; on an empty slot, it moves there. Dropping a roster card on the bench benches it (placed at the front of the bench). Dropping a bench card on a roster card swaps the two; on an empty slot, it activates the card in that slot. Dropping a bench card on another bench card reorders the bench. A focused card image toggles between roster and bench with Enter or Space. Errors (for example a full roster or a duplicate player) appear in the status line.
+- For locked weeks: read-only; no dragging or keyboard toggling.
+- After bench substitution has run for a locked week, a bench card that was swapped in sits in the slot of the card it replaced, with a **"Subbed in for {player}"** label under its points.
 
-### Roster totals (table footer)
+### Roster totals
 
-- **This week** — sum of fantasy points earned by active cards during the current week's matches.
-- **Season total** — cumulative fantasy points earned across all locked weeks (only counting cards that were in the active roster snapshot for each week).
+A line under the grid:
+
+- **This week** — sum of fantasy points earned by the roster cards during the selected week's matches.
+- **Season** — cumulative fantasy points earned across all locked weeks (only counting cards that were in the active roster snapshot for each week, after any bench substitution).
+- **Status** (`#rosterStatus`) — "{n}/5 active" for the editable week; empty for locked weeks; shows the error when a roster change fails.
+- **Substitution note** (`#rosterSubsNote`) — for a locked week whose substitutions haven't run yet: "Substitutions are made {N} hours after the week ends" (N from `substitution_delay_hours`). Hidden otherwise.
 
 ### Bench section
 
-Shown only for the editable (upcoming) week. Hidden for locked past weeks.
+A card grid (`#benchGrid`) under a **Bench** heading, in the same card style as the roster. For the editable (upcoming) week: the user's bench, ordered left to right; bench order decides which card comes in first in a bench substitution. For a locked week: the bench saved at lock, read-only, with any subbed-out card first, labelled **"Did not play"**. Hidden for a locked week with no saved bench (weeks locked before bench snapshots existed).
 
-Columns: Player, Rarity, Weekly pts, Action.
-
-- Each bench card has an **Activate** button (or a "Roster full" label if 5 cards are already active).
-- If the user owns cards but none are on the bench, shows "No cards on bench".
+- If the user has no cards on the bench for the editable week, shows "No cards on bench — draw some!".
 
 ### Week status label
 

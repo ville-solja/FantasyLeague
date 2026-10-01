@@ -114,7 +114,8 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles (off-season) |
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
 | `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Seconds between ingest cycles when a monitored league has a match currently in progress (per `GET /live`) — takes priority over `INGEST_LIVE_POLL_INTERVAL` |
-| `WEEK_CHECK_INTERVAL` | `300` | Seconds between week auto-lock maintenance checks (weeks themselves are admin-created, see `reference/season-lifecycle.md`) |
+| `WEEK_CHECK_INTERVAL` | `300` | Seconds between week auto-lock maintenance checks (weeks themselves are admin-created, see `reference/season-lifecycle.md`). The same loop deletes expired login sessions on its first pass after startup and then once a day |
+| `SUBSTITUTION_DELAY_HOURS` | `24` | Hours after a locked week's `end_time` before its automatic bench substitutions run (see `reference/automatic-bench-substitution.md`) |
 | `SCHEDULE_FIXTURES_URL` | *(empty)* | Structured JSON fixtures feed URL for the match schedule. Preferred over `SCHEDULE_SHEET_URL` when both are set; unset falls back to the CSV sheet. See `reference/schedule-fixtures-api.md` |
 | `SCHEDULE_SHEET_URL` | *(empty)* | Google Sheets CSV export URL for the match schedule. Fallback when `SCHEDULE_FIXTURES_URL` is unset. No built-in default — leave both empty to disable the schedule tab (e.g. a fresh instance for another league); Kanaliiga deployments must set one explicitly |
 | `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
@@ -130,6 +131,13 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SECRET_KEY` | *(insecure dev default)* | Session signing key — **must be set in production**; with `ENV=production` it must be at least 32 characters |
 | `DEBUG` | *(unset)* | Set to `true` for local dev: bypasses the `SECRET_KEY` requirement and the `HTTPS_ONLY` startup check — **never set in production**; with `ENV=production` startup refuses it. `docker-compose.dev.yml` and the backend test conftest set it |
 | `HTTPS_ONLY` | `false` | **Required in production.** Set to `true` behind an HTTPS reverse proxy; enables `Secure` flag on session cookies and HSTS. The app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset) |
+| `SESSION_IDLE_SECONDS` | `1209600` (14 days) | Player session idle limit. See `reference/longer-sessions.md` |
+| `SESSION_ABSOLUTE_SECONDS` | `2592000` (30 days) | Player session absolute limit (the cookie lifetime is the larger of this and `ADMIN_SESSION_ABSOLUTE_SECONDS`) |
+| `SESSION_MAX_AGE_SECONDS` | *(unset)* | Deprecated alias for `SESSION_ABSOLUTE_SECONDS`, used only when that is unset (logs a warning) |
+| `SESSION_TOUCH_SECONDS` | `300` (5 min) | Minimum interval between `last_seen_at` writes; must be smaller than `ADMIN_SESSION_IDLE_SECONDS` |
+| `ADMIN_SESSION_IDLE_SECONDS` | `7200` (2 hours) | Admin session idle limit |
+| `ADMIN_SESSION_ABSOLUTE_SECONDS` | `43200` (12 hours) | Admin session absolute limit |
+| `ADMIN_REAUTH_SECONDS` | `600` (10 min) | How long a `POST /reauth` covers destructive admin actions |
 | `SMTP_HOST` | *(empty)* | SMTP host for email (forgot-password). Disabled if unset. |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP username |

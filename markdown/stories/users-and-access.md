@@ -363,3 +363,77 @@ As an operator, I want to set the session lifetime so that longer sessions (issu
 - `SESSION_MAX_AGE_SECONDS` sets the session cookie `max_age`. Default `86400` (unchanged behaviour)
 - A non-integer or non-positive value fails startup with a clear error
 - The variable is documented in `.env.example` and the feature doc, with a note that revocation makes a longer value safe
+
+> Since issue #117 (Longer Sessions below), session checks use server-side `user_sessions` rows instead of the session version, and `SESSION_MAX_AGE_SECONDS` is a deprecated alias for `SESSION_ABSOLUTE_SECONDS` (default 30 days).
+
+---
+
+## Longer Sessions
+
+### Stay Logged In While Active
+**User story**
+As a player, I want to stay logged in while I keep using the site so that I don't have to log in again every day.
+
+**Acceptance criteria**
+- A player session stays valid until it has had no authenticated request for `SESSION_IDLE_SECONDS` (default `1209600`, 14 days), or until `SESSION_ABSOLUTE_SECONDS` (default `2592000`, 30 days) after login, whichever comes first
+- Both limits are checked on the server against the session row (`last_seen_at`, `created_at`), not only by the cookie's lifetime
+- `last_seen_at` is updated at most once per `SESSION_TOUCH_SECONDS` (default `300`)
+- A session past either limit gets 401 on its next request, and its row is deleted
+
+### Logout Ends the Session on the Server
+**User story**
+As a player, I want logging out to end my session for real so that a copy of my cookie can't be used afterwards.
+
+**Acceptance criteria**
+- Each login creates a `user_sessions` row with a new random session ID; the cookie holds only that ID
+- `user_sessions` stores the SHA-256 hash of the session ID, never the ID itself
+- `POST /logout` deletes the current session row and clears the cookie; replaying the old cookie afterwards gets 401
+- `POST /logout-everywhere`, a password change (all other sessions), a password reset (all sessions) and admin force logout delete the matching rows. Their behaviour stays as in #119
+- A cookie whose session ID has no row, including every cookie issued before this release, gets 401
+
+### New Session ID on Login and Privilege Change
+**User story**
+As an operator, I want a fresh session ID whenever a user's privileges or credentials change so that an old or planted cookie can't inherit them.
+
+**Acceptance criteria**
+- Login and register always create a new session row and cookie, even if a valid session cookie was sent
+- Changing your own password replaces the current session with a new one (new ID) and deletes all others
+- Toggling a user's admin flag deletes all of that user's sessions, so their next login starts with the limits for their new role
+- The cookie is named `__Host-session` when `HTTPS_ONLY=true` (`Secure`, `Path=/`, no `Domain`), and `session` otherwise for local development. `HttpOnly` and `SameSite=Lax` stay
+
+### Shorter Sessions and Re-Authentication for Admins
+**User story**
+As an operator, I want admin sessions to be short and destructive admin actions to ask for the password again so that a stolen admin cookie is worth very little.
+
+**Acceptance criteria**
+- An admin's session uses `ADMIN_SESSION_IDLE_SECONDS` (default `7200`, 2 hours) and `ADMIN_SESSION_ABSOLUTE_SECONDS` (default `43200`, 12 hours) instead of the player limits
+- `POST /reauth` with `{"password"}` checks the current user's password and stores `reauth_at` on the session row. It shares the login lockout and rate limit, and writes an `admin_reauth` audit entry on success and on failure
+- These endpoints need a `reauth_at` within `ADMIN_REAUTH_SECONDS` (default `600`, 10 minutes), and otherwise return 403 with `{"detail": "reauth_required"}`:
+  - `POST /admin/season/end` and `POST /admin/season/reset`
+  - `DELETE /admin/leagues/{league_id}/data`
+  - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
+  - `POST /users/{user_id}/toggle-admin`
+- On `reauth_required` the admin panel shows an in-page password prompt, retries the action once confirmed, and shows the error if the password is wrong. It never uses `confirm()` or `prompt()`
+- Non-destructive admin endpoints keep working without re-authentication
+
+### See and End My Sessions
+**User story**
+As a player, I want to see where I'm signed in and end a session I don't recognise so that I stay in control of my account.
+
+**Acceptance criteria**
+- `GET /sessions` lists the caller's sessions with created time, last active time, and which one is the current device. It never returns the session ID or its hash, only an opaque row handle
+- `DELETE /sessions/{id}` ends one of the caller's own sessions; another user's session id returns 404
+- The Profile tab lists the sessions with a "Sign out" button per row, next to "Log out everywhere"
+- Expired session rows are deleted by the daily maintenance loop
+
+### Operators Can Tune and Audit the Limits
+**User story**
+As an operator, I want every limit configurable and documented so that I can match them to my deployment's risk.
+
+**Acceptance criteria**
+- `.env.example`, `markdown/features/core/auth.md` and the feature doc describe:
+  - `SESSION_IDLE_SECONDS`, `SESSION_ABSOLUTE_SECONDS` and `SESSION_TOUCH_SECONDS`
+  - `ADMIN_SESSION_IDLE_SECONDS`, `ADMIN_SESSION_ABSOLUTE_SECONDS` and `ADMIN_REAUTH_SECONDS`
+  - their defaults, and the accepted-risk note for the 14-day player idle limit
+- Startup fails with a clear error when a value is not a positive integer, when an idle limit is larger than its absolute limit, or when `SESSION_TOUCH_SECONDS` is not smaller than the admin idle limit
+- `SESSION_MAX_AGE_SECONDS` from #119 is still accepted as an alias for `SESSION_ABSOLUTE_SECONDS`, with a startup warning

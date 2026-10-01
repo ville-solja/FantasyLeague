@@ -34,7 +34,7 @@
 
 **Weekly Roster Entry** — An immutable snapshot of a user's active cards for a specific week, created at lock time. Used for scoring and for historical week review.
 
-**Season Points** — The cumulative fantasy points a user has earned across all locked weekly roster entries during the season. Visible in the season leaderboard and on the My Team tab.
+**Season Points** — The cumulative fantasy points a user has earned across the counted roster entries of every locked week in the season (after bench substitution: active entries not subbed out, plus subbed-in bench entries). Visible in the season leaderboard and on the My Team tab.
 
 **Promo Code** — An admin-created alphanumeric code that grants a configurable number of tokens to each user who redeems it. Each code can be used once per user.
 

@@ -23,6 +23,8 @@ Backups live on the same disk as the database. Download a copy to keep one off t
 
 ## Endpoints
 
+All three endpoints also need a recent password re-entry on this session (`require_recent_reauth`): without a `POST /reauth` in the last `ADMIN_REAUTH_SECONDS` (default 600) they return 403 `{"detail": "reauth_required"}`. See `reference/longer-sessions.md`.
+
 ### `POST /admin/backups`
 Admin only. Creates a backup now and returns `{filename, size_bytes, created_at}`. Returns 429 if the newest backup is less than 60 seconds old, and 409 if the database is not a local SQLite file. The audit log records it as `admin_db_backup`.
 
@@ -34,13 +36,13 @@ Admin only. Downloads one backup as an attachment. The filename must exactly mat
 
 ## Implementation
 
-- `backend/routers/admin_backups.py` — the three endpoints, all `Depends(require_admin)`. The 60-second cooldown is `BACKUP_COOLDOWN_SECONDS`.
+- `backend/routers/admin_backups.py` — the three endpoints, all `Depends(require_admin)` plus the route-level `Depends(require_recent_reauth)`. The 60-second cooldown is `BACKUP_COOLDOWN_SECONDS`.
 - `backend/database.py`:
   - `list_sqlite_backups()` returns backup paths next to the live DB, newest first by mtime, or `[]` for a non-SQLite `DATABASE_URL`. `cleanup_old_backups()` uses the same helper, so listing and pruning share one definition of what counts as a backup.
   - `backup_retention_days()` reads `DB_BACKUP_RETENTION_DAYS` (default `DEFAULT_BACKUP_RETENTION_DAYS = 14`). `main.py`'s backup loop and `GET /admin/backups` both call it.
 - Download safety: the requested filename is compared against the basenames returned by `list_sqlite_backups()`; the matched `Path` from the listing is served. The user-supplied value is never joined onto a directory, so `../fantasy.db`, the live DB name, and its `-wal`/`-shm` files all 404. Responses carry `Cache-Control: no-store`.
 - `created_at` is the file's mtime as a Unix timestamp (seconds).
-- Frontend: `frontend/app-admin-backups.js` (`loadBackups()`, `createBackup()`), panel markup in the Settings admin sub-tab of `frontend/index.html`. Filenames are escaped with `_escHtml()`. See `markdown/ui_description/admin.md`.
+- Frontend: `frontend/app-admin-backups.js` (`loadBackups()`, `createBackup()`, `downloadBackup()`). All calls go through `adminFetch()`, which shows the password re-entry prompt on `reauth_required`; a download is fetched with `adminFetch()` and saved as a blob, because a plain link could not answer the prompt. Panel markup in the Settings admin sub-tab of `frontend/index.html`. Filenames are escaped with `_escHtml()`. See `markdown/ui_description/admin.md`.
 
 ## Configuration
 

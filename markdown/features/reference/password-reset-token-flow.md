@@ -60,8 +60,8 @@ Never sets `user.password_hash`, `must_change_password`, or `temp_password_expir
      matching `PUT /profile/password`).
   3. The token row is deleted — resubmitting it afterward returns 400 (single-use, enforced by
      the row simply no longer existing).
-  4. `users.session_version` is incremented, ending every existing session of the user
-     (issue #119, see `session-revocation.md`).
+  4. Every `user_sessions` row of the user is deleted, ending every existing session
+     (issue #119, server-side since #117; see `session-revocation.md`).
   5. A `password_reset_completed` audit log entry is written, with detail `all sessions revoked`.
   6. Returns `{"status": "ok"}`.
 
@@ -75,8 +75,6 @@ No authentication required for either endpoint — the token itself is the crede
   again going forward; `/login`'s existing expiry check and the frontend's must-change-password
   redirect remain in place for whatever accounts still hold an outstanding pre-fix temp
   password until it's used or expires. See `reference/temp-password-expiry.md`.
-- **Session revocation**: a session created before a password reset is not invalidated by the
-  reset. This is the general gap tracked in issue #119, not solved narrowly here.
 - **Rate-limiting `POST /reset-password` itself**: the token has 256 bits of entropy
   (`secrets.token_urlsafe(32)`) and is single-use; the app-wide `RATE_LIMIT_GLOBAL` baseline
   already applies automatically with no per-route opt-in needed.

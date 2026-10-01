@@ -24,6 +24,16 @@ async function loadAdminWeeks() {
           <td>${w.roster_count}</td>
           <td>—</td>`;
         tr.cells[0].textContent = w.label;
+        if (w.substitutions_due) {
+          // Finished week (issue #129): re-run bench substitutions after fixing match data.
+          const rerunBtn = document.createElement("button");
+          rerunBtn.className = "secondary";
+          rerunBtn.style.cssText = "padding:2px 7px;";
+          rerunBtn.textContent = "Re-run substitutions";
+          rerunBtn.addEventListener("click", () => rerunWeekSubstitutions(w.id, rerunBtn));
+          tr.cells[5].textContent = "";
+          tr.cells[5].appendChild(rerunBtn);
+        }
         tbody.appendChild(tr);
         return;
       }
@@ -138,6 +148,21 @@ async function saveWeekChanges() {
     : `${updated} updated`;
   setStatus("weeksAdminStatus", summary, failures.length === 0);
   loadAdminWeeks();
+}
+
+async function rerunWeekSubstitutions(weekId, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API}/admin/weeks/${weekId}/substitutions`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return setStatus("weeksAdminStatus", d.detail || "Re-run failed", false);
+    setStatus("weeksAdminStatus", `Substitutions re-run: ${Number(d.substitutions) || 0} made`);
+    loadAdminWeeks();
+  } catch (e) {
+    setStatus("weeksAdminStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function deleteAdminWeek(weekId) {

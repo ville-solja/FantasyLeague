@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+import sessions
 from database import get_db
-from deps import SESSION_VERSION_KEY, _audit, bump_session_version, get_current_user
+from deps import _audit, get_current_user
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
 from auth import check_password_bytes, check_username, hash_password, verify_password
 
@@ -71,7 +72,7 @@ def get_profile(user_id: int, db=Depends(get_db),
 
 
 @router.put("/profile/username")
-def update_username(request: Request, body: UpdateUsernameBody, db=Depends(get_db),
+def update_username(body: UpdateUsernameBody, db=Depends(get_db),
                     current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -89,7 +90,6 @@ def update_username(request: Request, body: UpdateUsernameBody, db=Depends(get_d
         _audit(db, "username_changed", actor_id=user.id, actor_username=username,
                detail=f"old={old_username} new={username}")
     db.commit()
-    request.session["username"] = username
     return {"username": username}
 
 
@@ -125,8 +125,9 @@ def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_d
     user.temp_password_expires_at = None
     # A password change supersedes any reset link still sitting in the inbox.
     db.query(PasswordResetToken).filter_by(user_id=user.id).delete()
-    # Log out every other session; the requester's session moves to the new version.
-    new_version = bump_session_version(user)
+    # Log out every other session, and give the requester's session a new ID.
+    current = sessions.current_row(request, db)
+    sessions.delete_user_sessions(db, user.id, keep_id=current.id if current else None)
+    sessions.start_session(request, db, user)
     db.commit()
-    request.session[SESSION_VERSION_KEY] = new_version
     return {"status": "ok"}

@@ -96,7 +96,7 @@ function closePurgeLeagueModal() {
 }
 async function confirmPurgeLeague() {
   if (!_purgeTargetLeagueId) return;
-  const res = await fetch(`${API}/admin/leagues/${_purgeTargetLeagueId}/data`, { method: 'DELETE' });
+  const res = await adminFetch(`${API}/admin/leagues/${_purgeTargetLeagueId}/data`, { method: 'DELETE' });
   const data = await res.json();
   closePurgeLeagueModal();
   if (!res.ok) { setStatus('leaguesStatus', data.detail, false); return; }

@@ -5,7 +5,7 @@
 ### Season Leaderboard
 **Acceptance criteria**
 - Users ranked by cumulative fantasy points across all locked weeks
-- Points only counted for cards in the user's active roster snapshot for each week
+- Points only counted for cards in the user's active roster snapshot for each week, after bench substitution (subbed-in bench cards count, subbed-out cards don't)
 - Rarity and card modifiers applied
 - Tester accounts excluded from all public views
 

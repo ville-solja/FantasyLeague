@@ -160,6 +160,16 @@ function renderWeeklySummaryContent(data) {
       </div>`).join('');
   }
   content.innerHTML = html;
+  // Issue #129: bench substitutions run some hours after the week ends; until then
+  // the "on roster" marks may still change.
+  if (data.revealed && data.substitutions_pending) {
+    const note = document.createElement('p');
+    note.className = 'weekly-summary-subs-pending';
+    note.style.color = '#888';
+    note.style.fontSize = '0.85rem';
+    note.textContent = `Bench substitutions are made ${data.substitution_delay_hours} hours after the week ends; roster marks may change.`;
+    content.prepend(note);
+  }
 }
 
 // Shows the docked reveal footer whenever at least one currently-listed week is

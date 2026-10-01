@@ -11,7 +11,7 @@ async function loadBackups() {
   const tbody = document.getElementById("dbBackupsBody");
   if (!tbody) return;
   try {
-    const res = await fetch(`${API}/admin/backups`);
+    const res = await adminFetch(`${API}/admin/backups`);
     const data = await res.json();
     if (!res.ok) return setStatus("dbBackupsStatus", data.detail, false);
     document.getElementById("dbBackupsRetention").textContent = data.retention_days;
@@ -21,10 +21,10 @@ async function loadBackups() {
     }
     tbody.innerHTML = data.backups.map(b => {
       const name = _escHtml(b.filename);
-      const href = _escHtml(`${API}/admin/backups/${encodeURIComponent(b.filename)}`);
       const created = new Date(b.created_at * 1000).toLocaleString();
+      // A plain link could not answer a re-auth prompt, so the download goes through adminFetch.
       return `<tr><td style="font-size:0.8rem;">${name}</td><td style="font-size:0.8rem;">${_escHtml(created)}</td>`
-        + `<td>${_formatBytes(b.size_bytes)}</td><td><a href="${href}" download="${name}">Download</a></td></tr>`;
+        + `<td>${_formatBytes(b.size_bytes)}</td><td><button class="secondary" data-filename="${name}" onclick="downloadBackup(this.dataset.filename)">Download</button></td></tr>`;
     }).join("");
   } catch (e) {
     setStatus("dbBackupsStatus", e.message, false);
@@ -35,7 +35,7 @@ async function createBackup() {
   const btn = document.getElementById("createBackupBtn");
   btn.disabled = true;
   try {
-    const res = await fetch(`${API}/admin/backups`, {method: "POST"});
+    const res = await adminFetch(`${API}/admin/backups`, {method: "POST"});
     const data = await res.json();
     if (!res.ok) return setStatus("dbBackupsStatus", data.detail, false);
     setStatus("dbBackupsStatus", `Created ${data.filename}`);
@@ -44,5 +44,25 @@ async function createBackup() {
     setStatus("dbBackupsStatus", e.message, false);
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function downloadBackup(filename) {
+  try {
+    const res = await adminFetch(`${API}/admin/backups/${encodeURIComponent(filename)}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return setStatus("dbBackupsStatus", data.detail || "Download failed", false);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    setStatus("dbBackupsStatus", e.message, false);
   }
 }

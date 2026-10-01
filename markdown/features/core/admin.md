@@ -4,6 +4,27 @@ Admin users have access to a set of management endpoints not available to regula
 
 All admin endpoints require an active admin session. Unauthorized requests receive a 403 response.
 
+Admin sessions are short: 2 hours idle and 12 hours from login by default
+(`ADMIN_SESSION_IDLE_SECONDS`, `ADMIN_SESSION_ABSOLUTE_SECONDS`; issue #117, see
+`reference/longer-sessions.md`).
+
+### Re-authentication for destructive actions
+
+These endpoints also need a password re-entry (`POST /reauth`, see `core/auth.md`) on the same
+session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they return 403
+`{"detail": "reauth_required"}` and do nothing:
+
+- `POST /admin/season/end` and `POST /admin/season/reset`
+- `DELETE /admin/leagues/{league_id}/data`
+- `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
+- `POST /users/{user_id}/toggle-admin`
+
+The check is the `require_recent_reauth` dependency (`backend/deps.py`), added at route level so
+the endpoint functions themselves are unchanged. In the admin panel these calls go through
+`adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
+`reauth_required`, calls `POST /reauth`, and retries the action once. All other admin endpoints
+work without re-authentication.
+
 ---
 
 ## User Management
@@ -16,7 +37,8 @@ Flips the `is_tester` flag for the given user. Tester accounts are excluded from
 
 ### `POST /users/{user_id}/toggle-admin`
 Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_admin }`. Logged
-as `admin_toggle_admin`. Two guards prevent the app from ever ending up with zero admins: an
+as `admin_toggle_admin`. Requires a recent re-authentication (see above). Deletes all of the
+target's sessions, so their next login gets a new session ID and the limits of the new role. Two guards prevent the app from ever ending up with zero admins: an
 admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
 the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
 Admin status is read from the database on every request (`get_current_user` and
@@ -25,7 +47,7 @@ request. The frontend's Admin tab visibility (`activeIsAdmin`) comes from `GET /
 on each page load, so it updates on the next reload.
 
 ### `POST /users/{user_id}/force-logout`
-Ends every session of the given user by incrementing their `session_version` (see
+Ends every session of the given user by deleting their `user_sessions` rows (see
 `core/auth.md`, Session Validation and Revocation). Returns `{ user_id, username }`. Logged as
 `admin_force_logout` with the target's username and id in the detail. 404 for an unknown user,
 403 for a non-admin. An admin may force their own logout, which ends their own sessions too.
@@ -190,10 +212,12 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `token_redeem` | User redeemed a code |
 | `token_grant_event_claim` | User auto-claimed tokens during an active token grant event |
 | `weekly_token_grant` | Automatic token grant at week lock |
+| `weekly_substitutions` | Automatic (or re-run) bench substitution pass for a week (`detail` has the week and `substitutions=N`) |
 | `admin_grant_tokens` | Admin granted tokens to a user |
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_toggle_admin` | Admin toggled admin flag on a user |
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
+| `admin_reauth` | User confirmed their password via `POST /reauth` (`detail` is `ok` or `failed: …`) |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
@@ -214,6 +238,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_week_created` | Admin created a week (Week Management tab) |
 | `admin_week_edited` | Admin edited an unlocked week |
 | `admin_week_deleted` | Admin deleted an unlocked, roster-free week |
+| `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`) |
 | `admin_token_grant_event_created` | Admin created a token grant event |
 | `admin_token_grant_event_deleted` | Admin deleted a token grant event |
 | `admin_notification_created` | Admin created a broadcast notification |
@@ -280,6 +305,7 @@ These features have dedicated reference documents:
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
+| Bench Substitution Re-run | `POST /admin/weeks/{week_id}/substitutions` | `reference/automatic-bench-substitution.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |

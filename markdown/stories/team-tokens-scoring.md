@@ -474,3 +474,60 @@ As a player, I want My Team and the leaderboards to load quickly as the season g
 - Each leaderboard and roster request runs a fixed number of queries, independent of the number of users and cards (no per-card Python scoring loop)
 - `scripts/bench_leaderboards.py --compare scripts/bench-leaderboards-baseline.json` (60 users, 10 locked weeks, 20 matches per player) shows the season leaderboard at least 5× faster than the pre-#141 baseline of 112.5 ms median, and the weekly leaderboard no slower than its 18.3 ms baseline
 - At `--weeks 20 --games 3` (240 matches, 6,000 roster entries) the season leaderboard stays under 100 ms median, against 584 ms before #141
+
+---
+
+## Automatic Bench Substitution
+
+### Bench Saved at Lock
+**User story**
+As a player, I want my bench order saved when the week locks so that substitutions follow the order I set.
+
+**Acceptance criteria**
+- When a week locks, every card on each user's bench is saved to `weekly_roster_entries` with `is_bench = 1` and `bench_order` taken from the bench order on My Team (`slot_index` ascending with NULL last, then card id), alongside the active cards (`is_bench = 0`)
+- Bench cards of deactivated players (`players.is_active = 0`) are not saved
+- Saved bench entries don't count towards any points total unless substituted in
+- Migration `029_weekly_roster_entries_substitution` adds `is_bench`, `bench_order`, `subbed_in`, `subbed_out` and `subbed_for_entry_id` to `weekly_roster_entries` and `substitutions_at` to `weeks`, all defaulting so existing rows remain active, non-substituted entries
+
+### Automatic Substitution After the Week
+**User story**
+As a player, I want an active card whose player didn't play to be replaced by my highest bench card whose player did play so that rotation doesn't cost me the week.
+
+**Acceptance criteria**
+- `SUBSTITUTION_DELAY_HOURS` (default 24) after a locked week's `end_time`, its substitutions run once for every user
+- Active cards are checked in roster slot order. Each one whose player has 0 scored matches in the week's window is marked `subbed_out`
+- For each card marked `subbed_out`, the first bench entry (in `bench_order`) that qualifies is marked `subbed_in`: its player played at least one scored match that week, it isn't already subbed in, and its player isn't already counted on that week's roster
+- If no bench card qualifies, the slot stays without points, as today
+- An active card whose player played is never replaced, however few points it scored
+- Each run writes one `weekly_substitutions` audit entry per week with the number of substitutions made
+- Running it again for a week with no data changes gives the same result
+
+### Points Count the Substituted Roster
+**User story**
+As a player, I want my week and season points to use the substituted roster so that the leaderboard reflects the swap.
+
+**Acceptance criteria**
+- A roster entry counts for a week when it is active and not `subbed_out`, or when it is `subbed_in`
+- My Team for a locked week, the weekly leaderboard, the season leaderboard and End Season (`compute_season_standings`) all use that rule, as do the Weekly Report's "on roster" marks and the admin Week Management roster count (active entries only)
+- Before substitution runs for a week, totals are exactly as today
+
+### See What Was Substituted
+**User story**
+As a player, I want to see which cards were swapped so that a points change isn't a surprise.
+
+**Acceptance criteria**
+- My Team for a substituted week shows the subbed-in card on the roster with a "Subbed in for {player}" label, and the subbed-out card on the bench with a "Did not play" label
+- `GET /roster/{user_id}?week_id=…` returns `subbed_in` / `subbed_out` per card and a `substitutions_done` flag for the week
+- Before substitution has run, a locked week shows "Substitutions are made {N} hours after the week ends" under the roster
+- The Weekly Report still opens when the week ends. Until that week's substitutions have run, a revealed week shows "Bench substitutions are made {N} hours after the week ends; roster marks may change.", and its "on roster" marks update once they run (`GET /weekly-summary/{week_id}` returns `substitutions_pending`)
+- The How to Play Users subtab explains the rule in one bullet under Roster & Weekly Lock: bench order matters, left first
+
+### Admin Re-Run
+**User story**
+As an admin, I want to re-run a week's substitutions after correcting match data so that the swaps match the final results.
+
+**Acceptance criteria**
+- `POST /admin/weeks/{week_id}/substitutions` (admin only) resets `subbed_in`, `subbed_out` and `subbed_for_entry_id` for that week and runs substitution again, returning the number of substitutions made
+- It returns 409 for a week that isn't locked, or whose substitution time hasn't been reached
+- It writes an `admin_substitutions_rerun` audit entry
+- The admin Week Management table has a "Re-run substitutions" action on locked weeks once `end_time + SUBSTITUTION_DELAY_HOURS` has passed

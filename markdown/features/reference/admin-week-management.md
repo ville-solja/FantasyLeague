@@ -69,7 +69,9 @@ in the meantime.
 
 ### `GET /admin/weeks`
 Returns all weeks ordered by start time. Each row includes `roster_count` — the number
-of weekly roster entry snapshots taken for that week.
+of active roster entries snapshotted for that week (saved bench rows are not counted),
+`substitutions_at` (when bench substitutions last ran, or null) and `substitutions_due`
+(locked and past `end_time + SUBSTITUTION_DELAY_HOURS`).
 
 ### `POST /admin/weeks`
 Body: `{ label: str, start_date: str, end_date: str }` (ISO `YYYY-MM-DD`). Admin only.
@@ -87,6 +89,11 @@ overlaps any other week's range (the week being edited itself is excluded from t
 ### `DELETE /admin/weeks/{id}`
 Admin only. Deletes an unlocked week with zero roster entries. Returns 409 if locked or
 has roster snapshots. Returns 404 if not found.
+
+### `POST /admin/weeks/{id}/substitutions`
+Admin only, no re-auth. Resets and re-runs the week's bench substitutions; returns
+`{week_id, substitutions, substitutions_at}`. 409 if the week isn't locked or its
+substitution time hasn't been reached. See `reference/automatic-bench-substitution.md`.
 
 ---
 

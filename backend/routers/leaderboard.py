@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import get_db
-from match_scoring import scored_match_sql, scored_stat_sql
+from match_scoring import counted_roster_entry_sql, scored_match_sql, scored_stat_sql
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
 from scoring import fantasy_score, SCORING_STATS
 
@@ -160,7 +160,8 @@ def compute_season_standings(db) -> list[dict]:
                COALESCE(agg.match_count, 0) as match_count,
                COALESCE(agg.points, 0) as points
         FROM users u
-        LEFT JOIN (SELECT DISTINCT user_id, card_id FROM weekly_roster_entries) rc
+        LEFT JOIN (SELECT DISTINCT wre.user_id, wre.card_id FROM weekly_roster_entries wre
+                   WHERE {counted_roster_entry_sql()}) rc
             ON rc.user_id = u.id
         LEFT JOIN cards c ON c.id = rc.card_id
         LEFT JOIN players p ON p.id = c.player_id
@@ -174,6 +175,7 @@ def compute_season_standings(db) -> list[dict]:
                 AND {scored_match_sql()}
                 AND (m.week_override_id = wk.id
                      OR (m.week_override_id IS NULL AND m.start_time BETWEEN wk.start_time AND wk.end_time))
+            WHERE {counted_roster_entry_sql()}
             GROUP BY wre.user_id, wre.card_id
         ) agg ON agg.user_id = u.id AND agg.card_id = c.id
         WHERE u.is_tester = 0
@@ -244,6 +246,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
                {_STORED_POINT_SUMS}
         FROM users u
         LEFT JOIN weekly_roster_entries wre ON wre.user_id = u.id AND wre.week_id = :week_id
+            AND {counted_roster_entry_sql()}
         LEFT JOIN cards c ON c.id = wre.card_id
         LEFT JOIN players p ON p.id = c.player_id
         LEFT JOIN card_match_points cmp ON cmp.card_id = c.id

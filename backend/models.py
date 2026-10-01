@@ -111,7 +111,7 @@ class User(Base):
     must_change_password = Column(Boolean, default=False)  # True after a temp password is issued
     temp_password_expires_at = Column(Integer, nullable=True)  # Unix timestamp; NULL when no temp password is active
     twitch_user_id = Column(String, nullable=True, unique=True)  # opaque Twitch user ID from extension JWT
-    session_version = Column(Integer, nullable=False, default=0)  # bumped to revoke every session of this user
+    session_version = Column(Integer, nullable=False, default=0)  # issue #119; no longer read since #117 (see UserSession)
 
 
 class League(Base):
@@ -138,15 +138,25 @@ class Week(Base):
     start_time = Column(Integer)  # Unix timestamp — admin-defined, no fixed weekly cadence
     end_time   = Column(Integer)  # Unix timestamp — admin-defined
     is_locked  = Column(Boolean, default=False)
+    substitutions_at = Column(Integer, nullable=True)  # when bench substitutions last ran (issue #129)
 
 
 class WeeklyRosterEntry(Base):
+    """Lock-time roster snapshot. Active cards have is_bench=0 and are inserted in
+    roster slot order; bench cards have is_bench=1 and bench_order 0..n. An entry
+    counts for points when (is_bench=0 AND subbed_out=0) OR subbed_in=1 — see
+    match_scoring.counted_roster_entry_sql() (issue #129)."""
     __tablename__ = "weekly_roster_entries"
 
     id      = Column(Integer, primary_key=True, autoincrement=True)
     week_id = Column(Integer, ForeignKey("weeks.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     card_id = Column(Integer, ForeignKey("cards.id"))
+    is_bench    = Column(Boolean, default=False, nullable=False, server_default="0")
+    bench_order = Column(Integer, nullable=True)
+    subbed_in   = Column(Boolean, default=False, nullable=False, server_default="0")
+    subbed_out  = Column(Boolean, default=False, nullable=False, server_default="0")
+    subbed_for_entry_id = Column(Integer, nullable=True)  # on a subbed_in entry: the subbed_out entry it replaced
 
 
 class WeeklySummary(Base):
@@ -247,6 +257,21 @@ class PasswordResetToken(Base):
     token      = Column(String, primary_key=True)
     user_id    = Column(Integer, ForeignKey("users.id"))
     expires_at = Column(Integer)                         # Unix timestamp
+
+
+class UserSession(Base):
+    """One server-side login session (issue #117). The cookie carries only a random
+    session ID; this row stores its SHA-256 hash, so a database leak exposes no live
+    session IDs. Deleting the row ends the session. `id` is the opaque handle that
+    GET/DELETE /sessions use."""
+    __tablename__ = "user_sessions"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    sid_hash     = Column(String(64), unique=True, nullable=False)
+    user_id      = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    created_at   = Column(Integer, nullable=False)   # Unix timestamp of login (absolute limit)
+    last_seen_at = Column(Integer, nullable=False)   # Unix timestamp of last touch (idle limit)
+    reauth_at    = Column(Integer, nullable=True)    # Unix timestamp of last POST /reauth
 
 
 class CardMatchPoints(Base):

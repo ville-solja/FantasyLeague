@@ -8,6 +8,8 @@ from database import get_db
 from deps import get_current_user
 from dotabuff_league_logos import resolve_local_team_logo_path
 from image import _ASSETS_DIR
+from match_scoring import counted_roster_entry_sql
+from weeks import substitution_delay_hours
 from models import (
     Card, Player, PlayerMatchStats, Team, Week, WeeklyRosterEntry,
     WeeklySummary, WeeklySummaryReveal, WeeklySummarySeen,
@@ -85,7 +87,8 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
             db.query(Card.player_id)
               .join(WeeklyRosterEntry, WeeklyRosterEntry.card_id == Card.id)
               .filter(WeeklyRosterEntry.week_id == week.id,
-                      WeeklyRosterEntry.user_id == user_id)
+                      WeeklyRosterEntry.user_id == user_id,
+                      text(counted_roster_entry_sql("weekly_roster_entries")))
               .all()
         }
 
@@ -135,6 +138,11 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
         "label": week.label,
         "revealed": revealed,
         "series": _group_into_series(matches),
+        # Issue #129: the report opens at week end, but bench substitutions run
+        # SUBSTITUTION_DELAY_HOURS later; until then on_roster marks may change.
+        "substitutions_pending": week.substitutions_at is None,
+        "substitutions_at": week.substitutions_at,
+        "substitution_delay_hours": substitution_delay_hours(),
     }
 
 

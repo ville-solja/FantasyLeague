@@ -52,7 +52,9 @@ Returns `{"override_timestamp": <unix or null>, "effective_now": <unix>}`.
 ### `POST /admin/demo/clock`
 Body: `{"timestamp": <unix>}`. Sets the demo clock override and synchronously re-runs the
 week auto-lock pass, so any week whose `start_time` is now in the past locks immediately —
-no waiting for the background maintenance interval. Logged as `admin_demo_clock_set`.
+no waiting for the background maintenance interval. It then runs due bench substitutions
+(`weeks.due_substitutions`, see `reference/automatic-bench-substitution.md`) and the Weekly
+Report pass, in the same order as the maintenance loop. Logged as `admin_demo_clock_set`.
 
 ### `DELETE /admin/demo/clock`
 Clears the override; the app falls back to real wall-clock time. Logged as

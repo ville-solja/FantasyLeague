@@ -349,6 +349,12 @@
         <p style="font-size:0.75rem;color:#888;margin:16px 0 8px;">Changing your password logs out your other devices. To end every session now, including this one:</p>
         <button class="secondary" onclick="logoutEverywhere()">Log out everywhere</button>
         <div class="status" id="logoutEverywhereStatus"></div>
+        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin:20px 0 6px;">Signed-in devices</div>
+        <table id="profileSessionsTable">
+          <thead><tr><th>Signed in</th><th>Last active</th><th></th></tr></thead>
+          <tbody id="profileSessionsBody"></tbody>
+        </table>
+        <div class="status" id="profileSessionsStatus"></div>
       </div>
     </div>
 
@@ -421,6 +427,7 @@
         <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
         <span id="rosterStatus" style="color:#555;"></span>
       </div>
+      <div id="rosterSubsNote" class="card-slot-note" style="display:none;margin-top:6px;text-align:left;"></div>
 
       <!-- Bench: scrollable card strip -->
       <div id="benchSection" style="margin-top:24px;display:none;">
@@ -626,9 +633,10 @@
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Roster &amp; Weekly Lock</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Put up to <strong>5 cards</strong> on your active roster. Cards on the bench don't score.</li>
+        <li>Put up to <strong>5 cards</strong> on your active roster. Cards on the bench don't score unless subbed in.</li>
         <li>Change your roster freely until the week <strong>locks automatically</strong>. After that, it is fixed for the rest of the week.</li>
         <li>Locked cards earn points from every league match played that week.</li>
+        <li><strong>Bench substitution:</strong> after the week ends, a roster card whose player didn't play is swapped for your first bench card whose player did. Bench order matters: the leftmost bench card comes in first.</li>
       </ul>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Earning Tokens</h3>
@@ -1120,6 +1128,23 @@
       <button class="secondary" onclick="closeSeasonResetConfirm()">Cancel</button>
     </div>
     <div class="status" id="seasonResetModalStatus" style="margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- Admin re-authentication prompt (issue #117); last overlay so it stacks above other modals -->
+<div class="modal-overlay hidden" id="reauthModal" role="dialog" aria-modal="true" aria-labelledby="reauthTitle" data-close="closeReauthModal" onclick="if(event.target===this)closeReauthModal()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 id="reauthTitle" style="margin:0;">Confirm your password</h2>
+      <button class="ghost" onclick="closeReauthModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:12px;">This admin action needs your password again. It stays confirmed on this device for a few minutes.</p>
+    <input id="reauthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:12px;" onkeydown="if(event.key==='Enter') submitReauth()" />
+    <div style="display:flex;gap:8px;">
+      <button style="flex:1;" onclick="submitReauth()">Confirm</button>
+      <button class="secondary" onclick="closeReauthModal()">Cancel</button>
+    </div>
+    <div class="status err" id="reauthStatus" style="margin-top:8px;"></div>
   </div>
 </div>
 

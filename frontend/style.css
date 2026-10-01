@@ -766,6 +766,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   text-transform: uppercase;
 }
 .card-slot-pts { font-size: var(--fs-xs); color: var(--fg-dim); text-align: center; }
+.card-slot-note { font-size: var(--fs-xs); color: var(--fg-muted, var(--fg-dim)); text-align: center; text-transform: uppercase; letter-spacing: 0.04em; }
 
 /* Rarity glows on card slots */
 .card-slot[data-rarity="rare"]      .card-img { box-shadow: var(--sh-glow-rare); }
