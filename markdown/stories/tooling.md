@@ -248,3 +248,57 @@ As a maintainer, I want the new command registered like every other agent so tha
 - The command is listed in `CLAUDE.md` under Developer Agents and in `.claude/commands/README.md` under Maintenance agents
 - The command reads `markdown/lessons-learned.md` at the start of a run and appends an entry when it finds a novel documentation pitfall
 - `/agent-steward` reports no missing headers or broken file references for the new command
+
+---
+
+## Testing Tooling: Season Scenarios and Mock OpenDota
+
+### Load a Season Scenario
+**User story**
+As a developer testing on a dev or test server, I want to reset the app to a named, realistic season state in one action so that I can test mid-season features without building the state by hand.
+
+**Acceptance criteria**
+- `POST /admin/demo/scenario` with `{"name": "pre-season" | "mid-season" | "season-end"}` (admin, `DEMO_MODE` only, otherwise 404) replaces all game data with the named scenario and sets the demo clock to match
+- **mid-season:** 10 weeks, 5 locked and scored, week 6 open for edits. 8 teams of 5 synthetic players, 1 admin and 5 player accounts with 10–15 cards each, rosters with benches, at least one bench substitution, MVPs set on most matches, one unparsed match and one excluded match
+- **pre-season:** weeks created, none locked, accounts with starter tokens and a few cards. **season-end:** all weeks locked and scored, ready for End Season
+- The same scenario name always produces the same data: same seed, same totals
+- The loader refuses to run without `DEMO_ACCOUNT_PASSWORD`, and writes a `demo_scenario_loaded` audit entry
+- Stored card points (#141) are rebuilt, and substitutions (#129) are run for finished weeks, so every page shows consistent numbers right after loading
+- The admin Demo panel shows a scenario picker with a confirmation step in the page; it never uses `confirm()`
+
+### Drive Ingest with a Mock OpenDota
+**User story**
+As a developer, I want the app to ingest matches from a local mock OpenDota so that I can test ingest, live polling, parse retry and early MVP selection exactly as they run in production.
+
+**Acceptance criteria**
+- `OPENDOTA_BASE_URL` (default `https://api.opendota.com/api`) replaces the hard-coded address; every OpenDota call uses it
+- `tools/mock_opendota/` serves the endpoints the app calls: `/leagues/{id}`, `/leagues/{id}/matchIds`, `/matches/{id}`, `/live`, `POST /request/{id}` and `/constants/heroes`. Responses follow the field shapes the app reads, including `/live` with a string `match_id` and players without names
+- The mock's control endpoints let a tester:
+  - `POST /_control/next-match`: release the next scripted match
+  - `POST /_control/live`: make a scripted game live for N minutes
+  - `POST /_control/parse/{id}`: turn an unparsed match into a parsed one
+  - `POST /_control/reset`: reset the script
+- The script matches the mid-season scenario's teams and players, so mock matches score against scenario rosters
+- `docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mock up` starts the app with the mock and `OPENDOTA_BASE_URL` pointing at it. Ingest polling runs normally in that profile
+- With `ENV=production`, startup refuses an `OPENDOTA_BASE_URL` that isn't https
+
+### Save and Restore a Test Snapshot
+**User story**
+As a tester, I want to save the test database and restore it later so that I can repeat a manual test from the same starting point.
+
+**Acceptance criteria**
+- `POST /admin/demo/snapshots` with `{"name"}` (letters, digits, hyphen; 1–40 characters) saves a copy of the live database to `data/demo-snapshots/{name}.db`
+- `GET /admin/demo/snapshots` lists the saved snapshots with name, size and time
+- `POST /admin/demo/snapshots/{name}/restore` restores one into the live database while the app keeps running, then rebuilds stored card points
+- All three are admin and `DEMO_MODE` only (404 otherwise), and need the admin password re-entry from #117, since restore overwrites everything
+- Snapshot names never become paths outside `data/demo-snapshots/`; anything else gets 422
+- Restoring keeps the restoring admin logged in: their user row is in the snapshot, and the session table is preserved across the restore. Every other session ends
+
+### Demo Mode Can Never Reach Production
+**User story**
+As an operator, I want the test tools impossible to switch on in production so that a misconfiguration can't wipe real data.
+
+**Acceptance criteria**
+- With `ENV=production`, startup fails when `DEMO_MODE=true`, with a clear `[SECURITY]` message
+- Every scenario and snapshot endpoint returns 404 when `DEMO_MODE` is off, before any admin check, as the existing demo endpoints do
+- The docs list the test setup for `test.kana-cards.com`: `DEMO_MODE=true`, `DEMO_ACCOUNT_PASSWORD` set, `ENV` unset
