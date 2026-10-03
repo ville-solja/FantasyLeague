@@ -1,0 +1,25 @@
+# The image only needs backend/, frontend/ and assets/ (see Dockerfile).
+# Keep the database, its backups (root-owned, mode 600 when written by the
+# container) and secrets out of the build context.
+data/
+backups/
+*.db
+*.db-*
+*.db.backup-*
+.env
+.env.*
+!.env.example
+
+# Repo-only material
+.git/
+.github/
+.claude/
+markdown/
+competitor-analysis/
+twitch-extension/
+
+# Local caches
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+node_modules/

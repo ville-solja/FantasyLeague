@@ -10,6 +10,7 @@ except ImportError:
     PIL_AVAILABLE = False
 
 from dotabuff_league_logos import resolve_local_team_logo_path
+from scoring import STAT_LABELS
 
 
 def _resolve_assets_dir() -> str:
@@ -63,23 +64,6 @@ _MODIFIER_MAX_WIDTH = 500
 # Epic/Legendary templates' cutouts/plates sit slightly higher than common/rare — nudge content down.
 _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
 
-# Human-readable stat names (must match frontend roster copy / SCORING_STATS)
-_STAT_LABELS_CARD = {
-    # Must stay aligned with `SCORING_STATS` + deaths (card modifier pool)
-    "kills": "Kills",
-    "last_hits": "Last hits",
-    "denies": "Denies",
-    "deaths": "Deaths",
-    "gold_per_min": "GPM",
-    "obs_placed": "Observer wards",
-    "towers_killed": "Towers",
-    "roshan_kills": "Roshan",
-    "teamfight_participation": "Teamfight",
-    "camps_stacked": "Camps stacked",
-    "rune_pickups": "Runes",
-    "firstblood_claimed": "First blood",
-    "stuns": "Stuns",
-}
 
 STICKER_DIR = os.path.join(_ASSETS_DIR, "stickers")
 STICKER_SIZE = (60, 60)
@@ -226,7 +210,7 @@ def _modifier_lines_from_map(mods: dict) -> list[str]:
         return []
     lines: list[str] = []
     for stat_key, bonus in sorted(mods.items()):
-        label = _STAT_LABELS_CARD.get(stat_key, stat_key.replace("_", " ")).upper()
+        label = STAT_LABELS.get(stat_key, stat_key.replace("_", " ")).upper()
         pct = int(bonus) if float(bonus).is_integer() else bonus
         lines.append(f"{label} +{pct}%")
     return lines

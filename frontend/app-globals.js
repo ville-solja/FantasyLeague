@@ -7,6 +7,7 @@ let activeMustChangePassword = false;
 let _tokenName        = "Tokens";
 let _tokenBalance     = null;
 let _teamBoosterCost  = 3;
+let _tourAutostart    = false;
 let _weeks         = [];
 /** Increments on modifier reroll so every PNG URL is unique (Date.now() can collide in the same ms). */
 let _cardImageBustSeq = 0;
@@ -27,6 +28,7 @@ async function loadConfig() {
       const cfg = await res.json();
       _tokenName = cfg.token_name || "Tokens";
       if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
+      _tourAutostart = cfg.tour_autostart === true;
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
       const hintCostEl = document.getElementById("boosterHintCost");
@@ -82,7 +84,13 @@ function switchTab(name) {
   if (btn) btn.classList.add("active");
 
   if (name === "profile")  { if (!activeUserId) return; loadProfile(); }
-  if (name === "team")     { if (!activeUserId) return; loadDeck(); loadWeeks().then(() => loadRoster(_rosterWeekId)); }
+  if (name === "team")     {
+    if (!activeUserId) return;
+    loadDeck();
+    loadWeeks()
+      .then(() => loadRoster(_rosterWeekId))
+      .then(() => { if (typeof maybeStartMyTeamTour === "function") maybeStartMyTeamTour(); });
+  }
   if (name === "leaderboard") {
     loadSeasonLeaderboard();
     loadWeeks().then(() => {

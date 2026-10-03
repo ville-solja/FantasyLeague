@@ -197,38 +197,6 @@ def _set_mvp(db, match_id, player_id, admin_user_id=1, admin_username="admin"):
 # ---------------------------------------------------------------------------
 
 class TestAdminTabNavigation:
-    def test_tab_bar_renders_five_named_tabs(self):
-        # frontend-only: tab bar markup lives in frontend/index.html
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify that index.html contains tab buttons for Week Management, "
-            "Player Pool, Audit Log, Settings, and Matches"
-        )
-
-    def test_clicking_tab_shows_only_that_section(self):
-        # frontend-only: tab switching logic lives in frontend/app-admin.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify that initAdminTabs() hides all [data-admin-tab] divs "
-            "and shows only the clicked tab's div"
-        )
-
-    def test_active_tab_is_visually_highlighted(self):
-        # frontend-only: CSS class toggling in frontend/app-admin.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify that the active tab button receives the 'active' class "
-            "and non-active buttons do not"
-        )
-
-    def test_tab_selection_persisted_in_session_storage(self):
-        # frontend-only: sessionStorage access in frontend/app-admin.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify that initAdminTabs() writes the active tab to sessionStorage "
-            "and reads it back on re-render so the selection survives navigation"
-        )
-
     def test_non_admin_does_not_see_tab_navigation(self, db):
         # The backend admin check (require_admin) gates all /admin/* endpoints.
         # A non-admin user must not receive 200 from any admin/matches endpoint,
@@ -463,11 +431,3 @@ class TestAdminMVPSelection:
             source = f.read()
         assert "require_admin" in source
         assert "matches/{match_id}/mvp" in source
-
-    def test_mvp_column_update_after_set(self):
-        # frontend-only: the row's MVP cell re-renders after a successful POST
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify that loadAdminMatches() or inline cell update reflects "
-            "the new player name in the MVP column after a successful POST"
-        )

@@ -36,7 +36,7 @@ from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
                     TwitchTokenDrop, User, Week, Weight)
 from rate_limit import limiter
 from schedule import bust_cache
-from scoring import apply_mvp_bonus_to_row
+from scoring import apply_mvp_bonus_to_row, display_points
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
 
@@ -547,7 +547,7 @@ def current_matches(
                         "player_id": pms.player_id,
                         "player_name": p.name,
                         "team_name": t.name,
-                        "fantasy_points": round(pms.fantasy_points or 0, 1),
+                        "fantasy_points": display_points(pms.fantasy_points),
                     }
                     for pms, p, t in stats
                 ]

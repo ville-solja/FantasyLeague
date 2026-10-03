@@ -550,6 +550,8 @@ def get_config(db=Depends(get_db)):
         # Read live (not the startup-frozen _DEMO_MODE) so tests toggling the env
         # var per-case observe the current value without reimporting the module.
         "demo_mode": os.getenv("DEMO_MODE", "").lower() == "true",
+        # Issue #144 — automatic first-visit guided tour; off unless exactly "true".
+        "tour_autostart": os.getenv("GUIDED_TOUR_AUTOSTART", "false").strip().lower() == "true",
     }
 
 

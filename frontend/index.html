@@ -27,16 +27,54 @@
   </div>
 </div>
 
-<div class="modal-overlay hidden" id="weeklySummaryModal" role="dialog" aria-modal="true" data-close="closeWeeklySummary" onclick="if(event.target===this)closeWeeklySummary()">
-  <div class="modal" style="max-width:860px;width:95vw;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="margin-bottom:0;">Weekly Report</h2>
-      <button class="ghost" onclick="closeWeeklySummary()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+<div class="modal-overlay hidden" id="weeklySummaryModal" role="dialog" aria-modal="true" aria-labelledby="weeklySummaryTitle" data-close="closeWeeklySummary" onclick="if(event.target===this)closeWeeklySummary()">
+  <div class="modal weekly-summary-modal k-scroll">
+    <div class="weekly-summary-titlebar">
+      <h2 id="weeklySummaryTitle">Weekly Report</h2>
+      <button class="ghost weekly-summary-x" onclick="closeWeeklySummary()" aria-label="Close">&#x2715;</button>
     </div>
-    <div id="weeklySummaryTabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;"></div>
-    <div id="weeklySummaryContent" style="max-height:60vh;overflow-y:auto;"></div>
+    <div id="weeklySummaryTabs" class="weekly-summary-tabs"></div>
+    <div class="weekly-summary-columns">
+      <section class="weekly-summary-col weekly-summary-col-roster" aria-labelledby="weeklySummaryRosterTitle">
+        <div class="weekly-summary-col-head">
+          <div class="weekly-summary-col-title-row">
+            <h3 class="weekly-summary-col-title" id="weeklySummaryRosterTitle">My roster</h3>
+            <div class="weekly-recap-controls">
+              <button type="button" class="ghost weekly-recap-btn hidden" id="weeklyRecapSkip" onclick="skipWeeklyRecap()">Skip</button>
+              <button type="button" class="ghost weekly-recap-btn hidden" id="weeklyRecapReplay" onclick="replayWeeklyRecap()">Replay</button>
+            </div>
+            <span class="weekly-summary-col-total" id="weeklySummaryRosterTotal"></span>
+          </div>
+          <div class="weekly-summary-col-meta" id="weeklySummaryRosterMeta"></div>
+        </div>
+        <div class="k-scroll weekly-summary-col-body" id="weeklySummaryRoster"></div>
+      </section>
+      <section class="weekly-summary-col weekly-summary-col-results" aria-labelledby="weeklySummaryResultsTitle">
+        <div class="weekly-summary-col-head">
+          <div class="weekly-summary-col-title-row">
+            <h3 class="weekly-summary-col-title" id="weeklySummaryResultsTitle">Match results</h3>
+          </div>
+          <div class="weekly-summary-col-meta" id="weeklySummaryResultsMeta"></div>
+        </div>
+        <div class="k-scroll weekly-summary-col-body" id="weeklySummaryContent"></div>
+      </section>
+    </div>
     <div id="weeklySummaryRevealFooter" class="weekly-summary-reveal-footer hidden">
       <button onclick="revealAllWeeklySummaries()">Reveal results</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="weeklyRecapPrompt" role="dialog" aria-modal="true" aria-labelledby="weeklyRecapPromptTitle" aria-describedby="weeklyRecapPromptText" data-close="dismissWeeklyRecapPrompt" onclick="if(event.target===this)dismissWeeklyRecapPrompt()">
+  <div class="modal weekly-recap-prompt">
+    <button class="ghost weekly-summary-x weekly-recap-prompt-x" onclick="dismissWeeklyRecapPrompt()" aria-label="Close">&#x2715;</button>
+    <div class="weekly-recap-prompt-eyebrow">Weekly Report</div>
+    <h2 class="weekly-recap-prompt-title" id="weeklyRecapPromptTitle">Week recap is ready</h2>
+    <p class="weekly-recap-prompt-text" id="weeklyRecapPromptText">See what your cards scored and how the matches went</p>
+    <p class="weekly-recap-prompt-note">You can also find every recap under Weekly Report at the top right.</p>
+    <div class="weekly-recap-prompt-actions">
+      <button id="weeklyRecapPromptOpen" onclick="openWeeklyRecapFromPrompt()">Open recap</button>
+      <button class="secondary" id="weeklyRecapPromptClose" onclick="dismissWeeklyRecapPrompt()">Close</button>
     </div>
   </div>
 </div>
@@ -421,8 +459,8 @@
       <div id="rosterLockedBanner" style="display:none;background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:0.85rem;color:#888;"></div>
 
       <!-- Active roster: card image grid -->
-      <div id="rosterActiveGrid" class="card-grid"></div>
-      <div style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
+      <div id="rosterActiveGrid" class="card-grid k-scroll"></div>
+      <div id="rosterTotals" style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
         <span>This week: <strong id="rosterCombined" style="color:#aaa;">—</strong> pts</span>
         <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
         <span id="rosterStatus" style="color:#555;"></span>
@@ -432,7 +470,7 @@
       <!-- Bench: scrollable card strip -->
       <div id="benchSection" style="margin-top:24px;display:none;">
         <h2 style="margin-bottom:8px;">Bench</h2>
-        <div id="benchGrid" class="card-grid"></div>
+        <div id="benchGrid" class="card-grid k-scroll"></div>
       </div>
     </div>
 
@@ -623,6 +661,11 @@
 
       <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kana Cards is a fan-made card game built on the Finnish Dota 2 league. Draw player cards, put up to 5 on your roster, and score points from how those players perform in real league matches each week.</p>
 
+      <div class="tour-cta">
+        <button id="htpTourBtn" type="button" class="secondary" onclick="startTourFromHowToPlay()">Show the tour</button>
+        <span class="tour-cta-note">A short walk through drawing, your roster, points and the Weekly Report on My Team.</span>
+      </div>
+
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Each card is a real league player in one of four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
@@ -695,6 +738,8 @@
       </div>
 
       <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">The match MVP confirmed by the streamer (see the <strong>Streamers</strong> subtab) gets an extra bonus for that match. It is added after the fact and shows in every leaderboard and roster total. Current MVP bonus: <strong id="howtoplay-mvp-bonus">—</strong>.</p>
+
+      <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">Points are shown to one decimal. Totals are rounded from exact points, so card values may differ by 0.1 in sum.</p>
 
       <p style="color:#999;font-size:0.8rem;">Admins set these values and may change them between seasons. The tables always show the current values.</p>
     </div>
@@ -1169,6 +1214,7 @@
 <script src="/app-admin.js"></script>
 <script src="/app-profile.js"></script>
 <script src="/app-weekly-summary.js"></script>
+<script src="/app-tour.js"></script>
 <script src="/app-init.js"></script>
 </body>
 </html>

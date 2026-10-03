@@ -28,6 +28,7 @@ import card_points
 from models import Card, Match, Player, PlayerMatchStats, Team, User, Week, WeeklyRosterEntry, Weight
 from routers.cards import _build_roster_response
 from routers.leaderboard import compute_season_standings, weekly_leaderboard
+from scoring import display_points
 
 _WEIGHTS = {
     "kills": 0.3,
@@ -71,7 +72,8 @@ def _seed(db):
 # base = 3.9 + 1.5 = 5.4
 # + mvp bonus delta (from match 5001 alone) = 0.39
 # rarity_mod = 1 (no rarity_common weight configured -> defaults to 0%)
-_EXPECTED_CARD_TOTAL = pytest.approx(5.79, abs=1e-6)
+# Exact total 5.79; every reader shows it rounded once to one decimal (issue #149).
+_EXPECTED_CARD_TOTAL = display_points(5.79)  # 5.8
 
 
 class TestRosterSeasonPointsIncludesMvpBonus:
@@ -98,8 +100,8 @@ class TestSeasonLeaderboardIncludesMvpBonus:
         standings = compute_season_standings(db)
 
         assert len(standings) == 1
-        assert standings[0]["points"] == pytest.approx(5.79, abs=1e-2)
-        assert standings[0]["cards"][0]["points"] == pytest.approx(5.79, abs=1e-2)
+        assert standings[0]["points"] == _EXPECTED_CARD_TOTAL
+        assert standings[0]["cards"][0]["points"] == _EXPECTED_CARD_TOTAL
 
 
 class TestWeeklyLeaderboardIncludesMvpBonus:
@@ -109,7 +111,7 @@ class TestWeeklyLeaderboardIncludesMvpBonus:
         result = weekly_leaderboard(week_id=1, db=db)
 
         assert len(result) == 1
-        assert result[0]["week_points"] == pytest.approx(5.79, abs=1e-2)
+        assert result[0]["week_points"] == _EXPECTED_CARD_TOTAL
 
 
 class TestNoMvpMatchesLeavesCardUnaffected:

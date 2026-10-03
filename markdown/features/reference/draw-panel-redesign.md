@@ -45,13 +45,13 @@ Values are normalised from `draw_rate_common / draw_rate_rare / draw_rate_epic /
 
 ### `GET /config`
 
-Returns the full config object including `draw_rates`. No authentication required.
+Returns the app config, including `draw_rates`. No authentication required. The example below shows only the fields relevant to draw rates; see [`core/admin.md`](../core/admin.md) for the full list of fields.
 
 ```
 GET /config
 ```
 
-Response (example with default weights):
+Response (excerpt, default weights):
 ```json
 {
   "token_name": "token",

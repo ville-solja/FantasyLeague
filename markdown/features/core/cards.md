@@ -188,7 +188,7 @@ Returns the calling user's cards split into `active` and `bench` lists, with per
 - For a **locked** week: returns the `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window. `active` holds the counted entries (active not subbed out, plus subbed-in bench cards, each shown in the `slot_index` of the card it replaced). `bench` holds the rest: subbed-out cards first, then the saved bench in its lock-time `bench_order`. A week locked before the bench was saved (issue #129) has an empty `bench`.
 - For the **current editable** week: returns all owned cards of active players from the `cards` table, split by `is_active`, with running points accumulated so far.
 
-Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
+Every card also carries `team_id`, `team_name` and `team_logo_url` (the player's most recent team). Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
 
 ```json
 {

@@ -183,11 +183,13 @@ class WeeklySummaryReveal(Base):
 
 class WeeklySummarySeen(Base):
     """One row per user: the most recent week_id they've opened the report
-    popup for. Used only to gate the highlight badge on the report button."""
+    popup for (gates the highlight badge on the report button), and the most
+    recent week_id the "recap is ready" popup announced (issue #151)."""
     __tablename__ = "weekly_summary_seen"
 
-    user_id           = Column(Integer, ForeignKey("users.id"), primary_key=True)
-    last_seen_week_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)
+    user_id               = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    last_seen_week_id     = Column(Integer, ForeignKey("weeks.id"), nullable=True)
+    last_prompted_week_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)
 
 
 class SeasonArchive(Base):

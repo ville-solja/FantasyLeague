@@ -30,7 +30,7 @@ import pytest
 import card_points
 from models import Card, Match, Player, PlayerMatchStats, Team, User, Week, WeeklyRosterEntry, Weight
 from routers.cards import _build_roster_response
-from scoring import apply_mvp_bonus_to_row
+from scoring import apply_mvp_bonus_to_row, display_points
 
 _WEIGHTS = {
     "kills": 0.3,
@@ -70,8 +70,8 @@ class TestSingleMatchCardMatchesPlayerLevelExactly:
 
         result = _build_roster_response(db, user_id=1, week_id=1)
 
-        assert result["season_points"] == pytest.approx(stat.fantasy_points)
-        assert result["active"][0]["total_points"] == pytest.approx(stat.fantasy_points)
+        assert result["season_points"] == display_points(stat.fantasy_points)
+        assert result["active"][0]["total_points"] == display_points(stat.fantasy_points)
 
     def test_parity_with_mvp_bonus(self, db):
         stat = _seed_single_match_card(db, is_mvp=True)
@@ -79,5 +79,5 @@ class TestSingleMatchCardMatchesPlayerLevelExactly:
 
         result = _build_roster_response(db, user_id=1, week_id=1)
 
-        assert result["season_points"] == pytest.approx(stat.fantasy_points)
-        assert result["active"][0]["total_points"] == pytest.approx(stat.fantasy_points)
+        assert result["season_points"] == display_points(stat.fantasy_points)
+        assert result["active"][0]["total_points"] == display_points(stat.fantasy_points)

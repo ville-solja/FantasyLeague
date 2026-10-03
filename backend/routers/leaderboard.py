@@ -5,7 +5,7 @@ from sqlalchemy import text
 from database import get_db
 from match_scoring import counted_roster_entry_sql, scored_match_sql, scored_stat_sql
 from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
-from scoring import fantasy_score, SCORING_STATS
+from scoring import display_points, fantasy_score, SCORING_STATS
 
 router = APIRouter()
 
@@ -70,7 +70,7 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
             "card_id": r.card_id,
             "card_type": r.card_type,
             "player_name": r.player_name or "",
-            "points": round(card_pts, 2),
+            "points": display_points(card_pts),
         }
         if scope:
             chip["scope"] = scope
@@ -78,7 +78,7 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
 
     tags_by_user = _fetch_tags_for_users(db, list(totals.keys()))
     return sorted(
-        [{"id": uid, "username": usernames[uid], "points": round(totals[uid], 2),
+        [{"id": uid, "username": usernames[uid], "points": display_points(totals[uid]),
           "tags": tags_by_user.get(uid, []),
           "cards": sorted(cards_by_user.get(uid, []), key=lambda c: c["points"], reverse=True)}
          for uid in totals],
@@ -102,7 +102,7 @@ def top_performances(db=Depends(get_db)):
         ORDER BY s.fantasy_points DESC
         LIMIT 10
     """)).fetchall()
-    return [dict(r._mapping) for r in results]
+    return [{**r._mapping, "fantasy_points": display_points(r.fantasy_points)} for r in results]
 
 
 @router.get("/leaderboard")
@@ -115,7 +115,7 @@ def leaderboard(db=Depends(get_db)):
         GROUP BY p.id, p.name, p.avatar_url
         ORDER BY avg_points DESC
     """)).fetchall()
-    return [dict(r._mapping) for r in results]
+    return [{**r._mapping, "avg_points": display_points(r.avg_points)} for r in results]
 
 
 @router.get("/leaderboard/roster")
@@ -229,7 +229,7 @@ def archived_season_detail(season_id: int, db=Depends(get_db)):
         "season_label": anchor.season_label,
         "archived_at": anchor.archived_at,
         "standings": [{"user_id": r.user_id, "username": r.username,
-                       "points": r.points, "rank": r.rank} for r in rows],
+                       "points": display_points(r.points), "rank": r.rank} for r in rows],
     }
 
 
@@ -394,7 +394,7 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
             "player_id": r.player_id,
             "player_name": r.player_name,
             "team_name": r.team_name,
-            "fantasy_points": round(fantasy_score(stats, weights_used), 2),
+            "fantasy_points": display_points(fantasy_score(stats, weights_used), places=2),
             "stats": stats,
         })
 

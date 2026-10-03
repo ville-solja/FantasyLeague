@@ -19,6 +19,7 @@ from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import limiter, key_by_user_or_ip
+from scoring import display_points
 from weeks import get_next_editable_week, substitution_delay_hours
 
 router = APIRouter()
@@ -104,7 +105,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                    COALESCE(wre.subbed_in, 0) as subbed_in,
                    COALESCE(wre.subbed_out, 0) as subbed_out,
                    p.id as player_id, p.name as player_name, p.avatar_url,
-                   t.name as team_name, t.logo_url as team_logo_url,
+                   t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
             FROM weekly_roster_entries wre
             JOIN cards c ON c.id = wre.card_id
@@ -112,7 +113,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY wre.id, c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
+            GROUP BY wre.id, c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -141,14 +142,14 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
-                   t.name as team_name, t.logo_url as team_logo_url,
+                   t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
             FROM cards c
             JOIN players p ON p.id = c.player_id
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
-            GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.name, t.logo_url
+            GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -160,10 +161,12 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         active.sort(key=_slot_key)
         bench.sort(key=_slot_key)
 
+    # Week total from exact card sums, then every value rounded once (issue #149).
+    combined_value = sum(float(c["total_points"] or 0.0) for c in active)
     modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
     for c in cards:
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
-        c["total_points"] = float(c["total_points"] or 0.0)
+        c["total_points"] = display_points(c["total_points"])
 
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
@@ -181,9 +184,9 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
 
     return {
         "active": active, "bench": bench,
-        "combined_value": sum(c["total_points"] for c in active),
+        "combined_value": display_points(combined_value),
         "tokens": tokens,
-        "season_points": float(season_points),
+        "season_points": display_points(season_points),
         "week": {"id": week.id, "label": week.label, "is_locked": week.is_locked,
                  "start_time": week.start_time, "end_time": week.end_time,
                  "substitutions_done": week.substitutions_at is not None} if week else None,

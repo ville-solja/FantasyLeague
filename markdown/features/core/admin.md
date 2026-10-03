@@ -277,13 +277,16 @@ Returns public configuration values used by the frontend. No authentication requ
   "app_release": "...",
   "team_booster_cost": 3,
   "draw_rates": { "common": 60.0, "rare": 25.0, "epic": 10.0, "legendary": 5.0 },
-  "demo_mode": false
+  "demo_mode": false,
+  "tour_autostart": false
 }
 ```
 
 `draw_rates` values are normalised from the live `draw_rate_*` scoring weights (always sum to 100%). See `reference/draw-panel-redesign.md`.
 
 `demo_mode` is `true` only when the server has `DEMO_MODE=true` set. See `reference/demo-mode.md`.
+
+`tour_autostart` is `true` only when `GUIDED_TOUR_AUTOSTART` is `true` (any case), read on each request. See `reference/guided-tour.md`.
 
 ### `GET /health`
 No authentication required. Checks DB connectivity (`SELECT 1`), not just process liveness —
@@ -311,4 +314,4 @@ These features have dedicated reference documents:
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
-| Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/seen` | `core/weekly-summary.md` |
+| Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |

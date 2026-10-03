@@ -160,26 +160,6 @@ class TestDemoModeReflectedInApp:
         result = get_config(db=db)
         assert result.get("demo_mode", False) is False
 
-    def test_demo_mode_badge_visible_only_when_demo_mode_true(self):
-        # frontend-only: badge visibility toggling lives in frontend/app-globals.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify a persistent 'DEMO MODE' badge is shown on every tab when "
-            "window.demoMode (derived from GET /config demo_mode) is true, and "
-            "hidden otherwise"
-        )
-
-    def test_settings_demo_panel_absent_from_dom_when_demo_mode_false(self):
-        # frontend-only: conditional panel rendering lives in frontend/index.html /
-        # frontend/app-admin.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify the Settings tab's Demo Mode section (clock control + account "
-            "seeding) is entirely absent from the DOM, not just hidden via CSS, "
-            "when demo_mode is false"
-        )
-
-
 # ---------------------------------------------------------------------------
 # Story: Seed Demo Accounts
 # ---------------------------------------------------------------------------

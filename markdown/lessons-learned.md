@@ -9,6 +9,38 @@ Format:
 
 ---
 
+### 2026-10-03 — developer — testing
+**Problem:** Plan #153 said the new tour step shows "5 / 7", but inserting it after Points (step 5) makes it step 6; the test-planner's stub docstring copied the wrong index (4). Plans that state a step number or counter value can be off by one when written from the insertion point rather than the final list.
+**Solution:** Count the final list in the code before pinning an index in tests or docs, and fix the plan and stories to match. To reuse another test module's helpers, import them as `from tests.test_issue_144_guided_tour import _read, ...` (`backend/tests/` is a package); import only underscore names so pytest doesn't collect the other module's tests twice.
+
+### 2026-10-03 — developer — frontend
+**Problem:** Screenshotting the #152 reveal animation with `chromium --headless=new --virtual-time-budget=N --screenshot` froze it at the first frame: virtual time advanced `setTimeout` but no `requestAnimationFrame` tween or CSS transition ran, so every shot showed the card stuck off-screen. Separately, adding a field to a #151 roster card broke `test_build_week_summary_roster_cards_match_roster_response_order`, which asserts the exact key set (`_CARD_KEYS`).
+**Solution:** Drive Chromium in real time over CDP: launch it with `--remote-debugging-port`, read the page's `webSocketDebuggerUrl` from `http://127.0.0.1:<port>/json`, and send `Page.navigate` / `Page.captureScreenshot` / `Runtime.evaluate` with Node 22's built-in `WebSocket` (no Playwright or pip install needed). When a later plan adds a roster card field, extend the #151 key-set assertion (`_CARD_KEYS | {...}`) rather than dropping it.
+
+### 2026-10-03 — developer — frontend
+**Problem:** Issue #151 needed `.reveal-overlay` (the card viewer) above `.modal-overlay` so it opens on top of the Weekly Report. Raising its `z-index` alone would have hidden the player popup opened from the viewer's player link (on My Team too), since every `.modal-overlay` shares one `z-index` and stacks by DOM order. Separately, the bare `python3 -c "import main"` check fails outside pytest with the SECRET_KEY guard; conftest sets `DEBUG=true`, the shell does not.
+**Solution:** Keep the DOM-order stacking: `.reveal-overlay { z-index: 350 }` plus `.reveal-overlay ~ .modal-overlay { z-index: 360 }`, so popups placed after `#revealModal` (player, team) still open above the viewer and the report (before it) stays below. Run the import check as `DEBUG=true python3 -c "import main"`.
+
+### 2026-10-02 — developer — docs
+**Problem:** For the #108 Option A deep dive, the hub's `README.architecture.md` layering diagram says models use `db/ (Knex)`, but runtime models run raw SQL through `mysql2` (`apps/backend/src/db/mysqlRunQuery.ts`); Knex only runs migrations. Separately, a hand-summed effort total (44–68) did not match its rows (43.5–68).
+**Solution:** Confirm hub READMEs against the code they describe (grep the imports) before repeating them. For an effort table, add a test that sums the rows and compares the Total row (see `test_effort_table_has_sizes_person_weeks_and_total`).
+
+### 2026-10-02 — technical-writer — docs
+**Problem:** The first #108 draft said the hub's `LinkedAccounts.provider` allows only `steam`, read from the migration that created the table. Two later migrations widened the enum (`discord`, then `pubg` in `20260615120000_add_pubg_provider_to_linked_accounts.ts`), so the claim was stale at the pinned commit.
+**Solution:** For a Knex (or any migration-based) schema claim, grep every migration that alters the column (`grep -rn "<column>" apps/backend/migrations`) and quote the latest one, citing that file.
+
+### 2026-10-02 — developer — file-paths
+**Problem:** For issue #108 the production backups `data/fantasy.db.backup-*` are owned by root with mode 0600, so a read-only count as the normal user fails with "unable to open database file". The readable `data/fantasy.db` is a seeded development copy (every account created within one minute), so its counts are not production figures. Separately, the GitLab code search API (`/projects/:id/search`) returns 401 without a token, even for the public Kana Hub project.
+**Solution:** Report which file was read and say plainly when it is not production data; give the exact read-only `sqlite3 "file:...?mode=ro"` query for the operator to run on a production backup, recording aggregates only. To search the hub source, download the archive of a pinned commit (`/repository/archive.tar.gz?sha=<sha>`) into the scratchpad and grep it; never install or run it.
+
+### 2026-10-01 — developer — testing
+**Problem:** The conftest `db` fixture calls `Base.metadata.create_all` on whatever models are registered at that moment. A test file that only imports `main` inside the test body (the `get_config(db=db)` pattern from `test_issue_83_demo_mode.py`) passes in the full suite but fails alone with `no such table: weights`, because the fixture runs before `main` (and so `models`) is first imported.
+**Solution:** Add `import models  # noqa: F401` at module level in such test files so every table is registered before the fixture runs (see `test_issue_144_guided_tour.py`).
+
+### 2026-10-01 — developer — testing
+**Problem:** `scripts/bench_leaderboards.py` sets `DATABASE_URL` to its own temp file at import and then imports `database`, binding `engine`/`SessionLocal` to it. Inside pytest, `database` is already imported (bound to another URL), so importing the bench module in-process seeds and reads the wrong database. Separately, since issue #149 every reader returns points already rounded to one decimal by `scoring.display_points`, so tests comparing a reader's value to an exact stored sum with `pytest.approx(x)` or `round(x, 2)` fail.
+**Solution:** Run the bench season in a subprocess (`sys.executable -c ...`, cwd = repo root, `BACKGROUND_TASKS_ENABLED=false`, `DEBUG=true`, no `DATABASE_URL`) and print results as JSON (see `_bench_comparison` in `test_issue_149_points_rounding.py`). Compare reader output to `display_points(exact_sum)`; when checking that card values add up to a total, compare the exact stored sums or allow up to about 0.1.
+
 ### 2026-10-01 — developer — testing
 **Problem:** A migration test that seeds legacy rows into `weekly_roster_entries` and then calls `migrate.run_migrations` on a fresh engine finds the table empty: migration `010_weeks_epoch0_reset` runs first (nothing is recorded in `schema_migrations` yet) and deletes every roster entry. Separately, since issue #129 `weekly_roster_entries` also holds saved bench rows (`is_bench = 1`), so any new query over it that counts or sums roster cards must apply `match_scoring.counted_roster_entry_sql()` (or `is_bench = 0` for plain counts).
 **Solution:** In such a test, call `migrate._ensure_migrations_table(conn)` and `migrate._record(conn, id)` for every earlier migration before running, as a production DB would have them applied (see `_legacy_engine` in `test_issue_129_automatic_bench_substitution.py`).

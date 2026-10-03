@@ -190,8 +190,9 @@ breakdown, so that I control when I see the outcome instead of it being shown im
   highlighted),
   every player in each match grouped under their team, the match's MVP player with a
   highlighted portrait, and a points-earned number under each player's portrait
-- The points-earned number is shown in a neutral/grey color for players not on the viewing
-  user's roster that week, and in an accent color for players who were on it
+- Players who were one of the viewing user's counted cards that week show a YOUR CARD / YOUR SUB
+  tile with the user's card points (see "Your Cards in the Match Results"); other players show
+  match points in a neutral/grey color
 - Reveal state is per-user and per-week: one user revealing a week does not reveal it for any
   other user, and revealing one week does not reveal any other week
 - Reopening the popup later (same session or after logging back in) shows previously revealed
@@ -440,7 +441,7 @@ As a player, I want a card to show the same points on My Team, the weekly leader
 - A user's weekly and season totals equal the sum of their cards' points in that scope
 - The death bonus is floored at 0 per match, so it matches the Players tab's per-match `fantasy_points` before card modifiers and rarity
 - The season leaderboard view shows totals only (no card chips); the weekly leaderboard's card chips and My Team ("wk pts") show the same stored week value for a card
-- Values are stored and summed unrounded and rounded only in the response (2 decimals on the leaderboards) and on the page (1 decimal), and a list of card values adds up to the shown total within 0.1
+- Values are stored and summed unrounded and rounded once, in the response, to 1 decimal (`display_points`, issue #149); the page only formats them, and a list of card values can differ from the shown total by about 0.1
 
 ### Stored Per-Match Card Points
 **User story**
@@ -531,3 +532,223 @@ As an admin, I want to re-run a week's substitutions after correcting match data
 - It returns 409 for a week that isn't locked, or whose substitution time hasn't been reached
 - It writes an `admin_substitutions_rerun` audit entry
 - The admin Week Management table has a "Re-run substitutions" action on locked weeks once `end_time + SUBSTITUTION_DELAY_HOURS` has passed
+
+---
+
+## Consistent Points Rounding
+
+### Same Week Points Everywhere
+**User story**
+As a player, I want my week points to show the same number on My Team and on the leaderboard so that I can trust the scores.
+
+**Acceptance criteria**
+- One helper, `display_points(x)` in `backend/scoring.py`, rounds a points value to one decimal, half away from zero, using its decimal value (`Decimal(repr(x))`) so binary artefacts don't change the result. For example 240.45 → 240.5, 231.25 → 231.3, 0.05 → 0.1, −0.05 → −0.1, and 2.675 → 2.7
+- My Team's `combined_value`, `season_points` and each card's `total_points`, and the weekly and season leaderboards' totals and card `points`, all come from `display_points` applied to the exact sum
+- For every user and week in the benchmark season, My Team's week total equals the weekly leaderboard's total exactly (0 mismatches, against 29 of 600 before)
+- For every user, My Team's `season_points` equals the season leaderboard total
+
+### One Rounding Rule for All Points
+**User story**
+As a player, I want every points number in the app and the Twitch panel rounded the same way so that the same value never shows two different ways.
+
+**Acceptance criteria**
+- `display_points` is used for:
+  - the Twitch MVP panel player points (`GET /twitch/matches/current`),
+  - Weekly Report per-match points,
+  - `/top` points and `/leaderboard` average points,
+  - archived season standings,
+  - `/simulate` results, with two decimals there via a `places` argument, since the simulator compares weights
+- No other `round(` on a points value remains in `backend/routers/` or `backend/twitch.py`, checked by a test that searches the source
+- The frontend shows the server's value: `toFixed(1)` on an already-rounded number only formats it, and no frontend code rounds a points value any other way
+
+### Explain Card Totals
+**User story**
+As a player, I want to know why my cards' values don't always add up exactly to my total so that a 0.1 difference isn't confusing.
+
+**Acceptance criteria**
+- Where the leaderboard lists a user's cards under their total, a one-line note reads "Totals are rounded from exact points, so card values may differ by 0.1 in sum"
+- The How to Play scoring section has the same note once
+
+## Weekly Report Roster Panel and Aesthetics
+
+### Side-by-Side Weekly Report
+**User story**
+As a player, I want my roster and the match results side by side under the week tabs so that I can see what my cards scored and how the games went without switching views.
+
+**Acceptance criteria**
+- The week tabs are the only tabs in the popup. Below them, a "My roster" column (about 480 px) and a "Match results" column (the rest) sit side by side.
+- The popup is at most 1280 px wide and 85% of the window height.
+- Each column has a fixed header and its own scrolling area:
+  - the roster header shows "My roster", the count of cards counted and substitutions, and the week total,
+  - the results header shows "Match results" and the number of series and games.
+- Both scrolling areas use a shared `.k-scroll` class in `frontend/style.css`:
+  - thin, with the thumb in `var(--border)` and `var(--fg-dim)` on hover,
+  - a transparent track and `var(--r-xs)` corners,
+  - `scrollbar-gutter: stable` and at least 12 px between content and scrollbar.
+  
+  No hard-coded colours. `.card-grid` uses the same class instead of its own copy of the rules.
+- Below 1100 px window width, the columns stack, roster first, and the popup scrolls as one page. At 375 px there is no horizontal scrolling.
+- The docked "Reveal results" footer stays under both columns.
+
+### My Roster Panel
+**User story**
+As a player, I want to see each card that counted for my roster this week, with the games its player played and what the card scored in each, so that I understand my week's points.
+
+**Acceptance criteria**
+- The roster lists the cards in two parts:
+  1. **The counted cards**, in the same order as My Team for that week. A bench card that was subbed in takes the slot of the card it replaced. It is marked with a "SUBBED IN" tag and the line "From your bench, for {name}, who did not play this week". (#151 also gave it a tinted `var(--accent-ghost)` background; #152 removed it so that orange marks only the card being revealed, and the tag is now neutral.)
+  2. **A "Did not play" group**, after the counted cards. It holds the original roster cards that were replaced, so it comes after the fifth counted card. It appears only when a substitution happened. The cards are greyed out with a dashed border and the line "No matches this week. Replaced by {name}", and their points don't count.
+- Each card shows:
+  - a thumbnail: the player's avatar in a rarity-coloured border (initials when there is no avatar; the shrunken card image was replaced because it blurred),
+  - the player name as a player link and the team name as a team link,
+  - a rarity tag (since #152: the rarity name below the thumbnail instead, see Points Breakdown per Card),
+  - its status tag, if any,
+  - the card's points for the week.
+- Each card lists one row per game its player played that week:
+  - the date,
+  - "vs {opponent}", where the opponent is a team link,
+  - the game number in the series,
+  - WIN or LOSS,
+  - an MVP tag if the player was that game's MVP,
+  - the card's points for that game (`card_match_points`), including modifiers and the MVP bonus.
+- A game excluded from scoring shows "Not scored" instead of points.
+- Bench cards that weren't subbed in are not listed, because a bench can hold many cards. The "Did not play" group takes the subbed-out cards from `_build_roster_response`'s `bench` list, in its order, and drops the rest.
+- The week total equals the sum of the counted cards' week points, and it equals the user's `week_points` on the weekly leaderboard for that week.
+- Clicking or pressing Enter on a thumbnail opens the existing card viewer (`showCard`), with the full card image and its modifiers, on top of the report. The viewer's footer reads "{points} wk pts". Closing the viewer returns to the report with both scroll positions unchanged.
+
+### Your Cards in the Match Results
+**User story**
+As a player, I want my own players marked in the match results, with my card's points, so that I can spot them at a glance.
+
+**Acceptance criteria**
+- A player the user had as a counted card that week gets a filled tile (`var(--accent-ghost)` background) with a "YOUR CARD" label, or "YOUR SUB" for a card that was subbed in. The tile shows the user's card points for that game instead of the match points.
+- Other players show match points in the muted colour.
+- The MVP outline and the "YOUR CARD" tile can appear together on the same player.
+- The ownership mark uses a label and a filled shape, not colour alone.
+- On a match excluded from scoring there are no card points (`card_points` is null), so no tile is marked there.
+
+### Links Work as Everywhere Else
+**User story**
+As a player, I want player and team names in the Weekly Report to open the same popups as on the rest of the site so that I can look someone up without leaving the report.
+
+**Acceptance criteria**
+- Every player name (roster cards, result tiles) uses `playerLink(id, name)`, and every team name (roster card team, game opponent, series teams) uses `teamLink(id, name)`. Each is keyboard reachable, with the same hover style (`.entity-link`).
+- The player and team popups and the card viewer open on top of the Weekly Report. Closing them leaves the report open on the same week, with both scroll positions unchanged.
+- `.reveal-overlay` stacks above `.modal-overlay`, so the card viewer is never hidden behind an open popup.
+
+### Reveal and Substitution States
+**User story**
+As a player, I want the roster panel to follow the report's reveal and substitution rules so that it doesn't spoil results or show points that may still change without saying so.
+
+**Acceptance criteria**
+- Before the week is revealed, the roster panel lists the cards (up to five) as they were at lock time: a replaced card stays in its slot and the substitute is not shown, so the list gives nothing away. It shows thumbnails, names, teams and rarity only. Points, game rows, win/loss, MVP tags and status tags stay hidden, and the panel says "Reveal results to see your points". Clicking a thumbnail still opens the card viewer.
+- While substitutions are pending (`substitutions_pending`), the roster header shows the existing note that substitutions run {N} hours after the week ends and statuses may change.
+- The API returns no per-game points, results or statuses for an unrevealed week.
+
+### New Recap Popup
+**User story**
+As a player, I want a popup telling me when a new weekly recap is ready so that I don't miss it. I also want it to show up only once, so that it doesn't nag me.
+
+**Acceptance criteria**
+- **When it appears:** after login or page load, a popup "Week {label} recap is ready" (a label that already starts with "Week" is used as is) appears when the newest available report week has not been announced to the user yet. That means not opened and not shown as this popup before.
+- **Content:**
+  - one line, "See what your cards scored and how the matches went",
+  - a note that the recap is also under Weekly Report at the top right,
+  - an "Open recap" button (primary) and a "Close" button, plus an X.
+  
+  It gives no results, points or winners away.
+- **Open recap** opens the Weekly Report on that week and marks it both announced and seen, which clears the dot on the header button.
+- **Close**, the X, Esc or a click on the backdrop closes the popup and marks the week announced only. The dot on the Weekly Report button stays until the report is opened.
+- **Once per week:** once announced, the popup does not reappear for that week, on any device or after logging in again. It appears again only when a newer week's report becomes available.
+- **One popup at a time:** when several weeks are new, the popup announces the newest only, and opening it shows that week with the other week tabs available.
+- **No clashes:** the popup does not appear while another popup or the guided tour is open, or while the user must change their password. It is shown on a later page load instead, since nothing was marked; when the guided tour closes, the check runs again right away (#153).
+- **Keyboard:** focus moves to "Open recap" when the popup opens, and Tab stays inside the popup.
+
+## Weekly Recap Animations
+
+### Points Breakdown per Card
+**User story**
+As a player, I want each card in the Weekly Report to show how its points were made up so that I understand what my rarity, modifiers and MVPs contributed.
+
+**Acceptance criteria**
+- Every counted card in a revealed week's `roster.cards` (`GET /weekly-summary/{week_id}`) has a `breakdown` covering its counted, scored games that week:
+  - `raw`,
+  - `steps`, a list in this order:
+    - rarity (only when the rarity bonus is above 0),
+    - one entry per modifier (stat label and %),
+    - one MVP entry **per MVP game** (with that game's `match_id`). A player who was MVP in two games gets two MVP steps, so two separate scoring ticks.
+  
+  Each step has its points, rounded with `display_points`.
+- The exact (unrounded) parts add up to the card's stored points within 1e-6. The rounded `raw` plus the rounded steps equal the card's `week_points` exactly, because the rounding remainder goes to the last step (or to `raw` when there are no steps).
+- Cards in the "Did not play" group and unrevealed weeks have no `breakdown`.
+- When the reveal animation is finished, skipped or never played, each card shows its breakdown where each bonus comes from:
+  - **Tag row** under the player's name, in the order the bonuses are added, left to right: "RAW 48.2", then the modifier chips ("KILLS +10% +1.2", "GPM +10% +1.6"), then a status tag ("SUBBED IN") at the end. There is no rarity chip or tag in this row. The row wraps when needed.
+  - **Rarity bonus:** shown on the card thumbnail on the left. The thumbnail keeps its rarity-coloured border, with the rarity name below it. Under that, a small caption in the rarity colour reads "+3% +1.4". A card with no rarity bonus (common) has no caption.
+  - **MVP bonus:** shown on the MVP tag of the game row that earned it: "MVP +1.5". Each MVP game shows its own bonus.
+  - The game rows (#151) stay below the tag row, so the breakdown and the games don't compete for the same place.
+
+### Card-by-Card Reveal
+**User story**
+As a player opening a revealed week, I want my cards revealed one at a time with their points counting up so that the recap feels like a reveal, not a table.
+
+**Acceptance criteria**
+- **Order:** cards appear one at a time in reverse roster order, each at the top of the My roster list, so the finished list is in My Team order.
+- **Entry transition:** the cards already shown move down smoothly while the new card's slot opens from zero height at the top, in about 340 ms with an ease-out. Then the new card **slides in from the left edge of the column** into the open slot: about 420 ms, ease-out (cubic), with its opacity rising from 0 to 1 over the first 60% of the slide.
+- **Count-up:**
+  - each card's number counts up from 0 to its `raw` with an accelerating (ease-in) curve,
+  - the number grows slightly and gains an orange glow as it rises,
+  - the count lasts `clamp(1000 + raw × 35, 1000, 3000)` ms,
+  - **the RAW chip is highlighted (filled, glowing) for the whole count and shows the running value**, then settles to its lit state about 0.2 s after the count ends. It doesn't flash only at the end.
+- **Week total:** the header's week total starts at 0 and counts up by each card's final points as that card finishes. At the end it equals `roster.week_total`.
+- **After the counted cards:** the "Did not play" group appears without animation.
+- **Results column:** stays usable during the animation.
+
+### Bonus Highlights
+**User story**
+As a player, I want each bonus on a card highlighted as it is added so that I can see what my rarity, each modifier and an MVP were worth.
+
+**Acceptance criteria**
+- After the count-up, each step in `breakdown.steps` plays in order: rarity, then the modifiers left to right, then MVP. For each step:
+  - the element that earned it (the rarity caption, the modifier chip or the MVP tag) changes from a pending to a filled, glowing state with "+points",
+  - **at the same moment** the card total jumps to its new value. It doesn't count up as the raw points do. Instead, the number pops (about 28% larger, shrinking back over about 520 ms) and a small "+points" label floats up from it and fades out.
+- **Rarity step:** played only on the card thumbnail on the left:
+  - the thumbnail glows in the rarity colour and scales up slightly (rarity colours are allowed on card badges); the card's own border doesn't change,
+  - its "+pct% +points" caption appears,
+  - the floating "+points" uses the rarity colour.
+- **Modifier step:** the modifier's chip glows orange.
+- **MVP step:** played on the game row with that MVP:
+  - the row is tinted orange,
+  - its MVP tag fills and glows and gains "+points".
+  
+  A player who was MVP in several games gets one tick per game, in game order, each with its own pop.
+- **Steps without a bonus:** a card with no steps (a common card with no modifiers and no MVP) goes straight to the next card.
+- **Final value:** after the last step, the card total equals its `week_points`.
+
+### Control and Accessibility
+**User story**
+As a player, I want to skip or replay the reveal, and to have it respect reduced motion, so that it never gets in my way.
+
+**Acceptance criteria**
+- **Skip:** a "Skip" button in the My roster header is visible while the animation plays. It shows the finished state at once, with all chips lit and totals final.
+- **Replay:** a "Replay" button shows when the animation isn't playing and reduced motion is off, on a week with at least one counted card, and plays it again from the start.
+- **Plays once per week:** the animation plays once per week per browser. The played week ids are stored in `localStorage` under one key per user. Reads and writes are wrapped in try/catch, so if storage is unavailable the animation simply plays again.
+- **Reduced motion:** with `prefers-reduced-motion: reduce` (`_prefersReducedMotion()`), nothing animates and the finished state is shown.
+- **Leaving early:** switching week tab, closing the report or opening another week stops a running animation cleanly, with no timers left running.
+- **Screen readers:**
+  - while animating, the roster body has `aria-busy="true"`,
+  - each card's final points are in its accessible text from the start, so screen readers never hear the counting numbers,
+  - the counting number itself is `aria-hidden`.
+
+## Weekly Report Readability
+
+### Readable Weekly Report
+**User story**
+As a player reading my weekly recap, I want its text large and clear enough to read comfortably so that I can follow my points without squinting.
+
+**Acceptance criteria**
+- No text in the Weekly Report or the recap popup is below 11 px. Game rows, tags, bonus chips, notes, player names and points on result tiles, and dates are 13 px.
+- Big Shoulders is used only at 13 px and up; smaller labels use Inter.
+- Readable text has at least 4.5:1 contrast (`--fg-muted` or brighter); `--fg-dim` is not a text colour.
+- Points use tabular numerals.
+- Font sizes use `rem` tokens, so the browser's font-size setting scales the report.
+- A static test (`backend/tests/test_weekly_report_readability.py`) fails if any of these regress.

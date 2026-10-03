@@ -488,6 +488,21 @@ def _m029_weekly_roster_entries_substitution(conn):
     logger.info("Migration: weekly_roster_entries/weeks — added bench substitution columns")
 
 
+def _m030_weekly_summary_seen_last_prompted(conn):
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    )).fetchall()}
+    if "weekly_summary_seen" not in tables:
+        return  # created with the column by Base.metadata.create_all
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(weekly_summary_seen)")).fetchall()}
+    if "last_prompted_week_id" not in cols:
+        conn.execute(text(
+            "ALTER TABLE weekly_summary_seen ADD COLUMN last_prompted_week_id INTEGER REFERENCES weeks(id)"
+        ))
+        conn.commit()
+        logger.info("Migration: weekly_summary_seen — added last_prompted_week_id column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -541,6 +556,7 @@ MIGRATIONS = [
     ("027_match_parse_status",       _m027_match_parse_status),
     ("028_users_session_version",    _m028_users_session_version),
     ("029_weekly_roster_entries_substitution", _m029_weekly_roster_entries_substitution),
+    ("030_weekly_summary_seen_last_prompted", _m030_weekly_summary_seen_last_prompted),
 ]
 
 

@@ -42,6 +42,7 @@ These are non-negotiable — violating them produces off-brand output:
 - **No bluish-purple gradients** — only `--grad-orange` / `--grad-dusk` / `--grad-flame`.
 - **Tone:** Dry, terse, confident esports voice. "Draw a card" not "Draw a card! 🎴". Finnish strings on overlays are part of the brand.
 - **Iconography:** Lucide via CDN (`https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js`).
+- **Readability:** readable text is never below `--fs-xs` (11px) and data is `--fs-sm` (13px); Big Shoulders only at `--fs-sm` and up (Inter below that); text colour `--fg-muted` or brighter, never `--fg-dim` (3.2:1, borders and placeholders only); `tabular-nums` on points; size with the rem `--fs-*` tokens.
 
 ---
 

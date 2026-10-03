@@ -160,9 +160,10 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
 | `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup if the email isn't already registered. See `reference/env-based-admin-seeding.md` |
-| `TEMP_PASSWORD_TTL_HOURS` | `24` | Hours before a forgot-password temporary password expires. See `reference/temp-password-expiry.md` |
+| `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy, no longer read: password reset now uses one-time links. See `reference/temp-password-expiry.md` |
 | `ANTHROPIC_API_KEY` | *(empty)* | Enables AI-generated player bios during profile enrichment; facts are stored without a bio if unset. See `reference/player-profile-enrichment.md` |
 | `PROFILE_ENRICHMENT_COOLDOWN_HOURS` | `24` | Minimum hours between re-enrichment for a given player |
 | `ENRICHMENT_CHECK_INTERVAL` | `300` | Seconds between background profile-enrichment cycles |
 | `ENRICHMENT_BATCH_SIZE` | `3` | Players enriched per cycle |
+| `GUIDED_TOUR_AUTOSTART` | `false` | `true` starts the My Team guided tour automatically on a player's first visit (per browser); otherwise it only starts from How to Play. Served as `tour_autostart` in `GET /config`. See `reference/guided-tour.md` |
 | `APP_VERSION` / `APP_RELEASE` | *(unset)* | Build version / release tag shown as a faint badge on every page. See `reference/version-visibility.md` |

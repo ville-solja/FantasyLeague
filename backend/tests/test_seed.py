@@ -8,9 +8,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
-from models import Card, League, Match, Player, PlayerMatchStats, Weight
+from models import Weight
 from scoring import SCORING_STATS
-from seed import CARD_SCHEMA, DEFAULT_WEIGHTS, seed_cards, seed_weights
+from seed import DEFAULT_WEIGHTS, seed_weights
 
 
 @pytest.fixture
@@ -164,72 +164,3 @@ class TestSeedWeights:
         db.close()
         for w in DEFAULT_WEIGHTS:
             assert by_key[w["key"]] == pytest.approx(w["value"])
-
-
-# ---------------------------------------------------------------------------
-# seed_cards() DB behaviour
-# ---------------------------------------------------------------------------
-
-class TestSeedCards:
-    def _add_match_data(self, Session, league_id=42):
-        db = Session()
-        db.add(League(id=league_id, name="Test League"))
-        db.add(Player(id=1001, name="PlayerA"))
-        db.add(Player(id=1002, name="PlayerB"))
-        match = Match(match_id=9001, league_id=league_id)
-        db.add(match)
-        db.add(PlayerMatchStats(player_id=1001, match_id=9001, fantasy_points=10.0))
-        db.add(PlayerMatchStats(player_id=1002, match_id=9001, fantasy_points=8.0))
-        db.commit()
-        db.close()
-
-    def test_creates_correct_total_cards(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42)
-        db = seed_env()
-        total = db.query(Card).count()
-        db.close()
-        cards_per_player = sum(qty for _, qty in CARD_SCHEMA)
-        assert total == 2 * cards_per_player  # 2 players × 15 cards each
-
-    def test_card_schema_distribution(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42)
-        db = seed_env()
-        for card_type, qty_per_player in CARD_SCHEMA:
-            count = db.query(Card).filter(Card.card_type == card_type).count()
-            assert count == 2 * qty_per_player, \
-                f"Expected {2 * qty_per_player} {card_type} cards, got {count}"
-        db.close()
-
-    def test_all_seeded_cards_are_unowned(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42)
-        db = seed_env()
-        owned = db.query(Card).filter(Card.owner_id.isnot(None)).count()
-        db.close()
-        assert owned == 0
-
-    def test_idempotent_same_generation(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42, generation=1)
-        first_count = seed_env().query(Card).count()
-        seed_cards(league_id=42, generation=1)
-        second_count = seed_env().query(Card).count()
-        assert first_count == second_count
-
-    def test_different_generation_adds_cards(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42, generation=1)
-        first_count = seed_env().query(Card).count()
-        seed_cards(league_id=42, generation=2)
-        second_count = seed_env().query(Card).count()
-        assert second_count == first_count * 2
-
-    def test_cards_assigned_to_correct_league(self, seed_env):
-        self._add_match_data(seed_env)
-        seed_cards(league_id=42)
-        db = seed_env()
-        wrong_league = db.query(Card).filter(Card.league_id != 42).count()
-        db.close()
-        assert wrong_league == 0

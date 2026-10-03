@@ -3,7 +3,9 @@ import random
 from sqlalchemy import text
 
 from models import Card, CardModifier, Weight
-from scoring import card_fantasy_score, fantasy_score, stat_dict_from_row, SCORING_STATS
+from scoring import (
+    _death_contribution, card_fantasy_score, fantasy_score, stat_dict_from_row, SCORING_STATS,
+)
 
 
 _SCORED_STAT_COLS = list(SCORING_STATS) + ["deaths"]
@@ -56,6 +58,26 @@ def _compute_card_points(stat_sums: dict, card_type: str, weights: dict, rarity:
     base = card_fantasy_score(stat_sums, weights, mods, match_count) + mvp_bonus
     rarity_mod = 1 + rarity.get(f"mod_{card_type}", 0)
     return base * rarity_mod
+
+
+def card_points_breakdown(stats: dict, card_type: str, weights: dict, rarity: dict,
+                          mods: dict, mvp_bonus: float = 0.0) -> dict:
+    """Exact parts of one game's card points, in display order (issue #152); they sum to
+    _compute_card_points(stats, card_type, weights, rarity, mods, mvp_bonus).
+
+    Each part after raw carries the rarity multiplier on its own share, so the parts
+    can be shown in the order raw, rarity, modifiers, MVP and still add up."""
+    r = rarity.get(f"mod_{card_type}", 0)
+    raw = fantasy_score(stats, weights)
+    mod_parts = {}
+    for stat, pct in mods.items():
+        if stat == "deaths":
+            base = _death_contribution(stats.get("deaths", 0), weights)
+        else:
+            base = weights.get(stat, 0) * stats.get(stat, 0)
+        mod_parts[stat] = base * pct / 100 * (1 + r)
+    return {"raw": raw, "rarity": raw * r, "modifiers": mod_parts,
+            "mvp": mvp_bonus * (1 + r), "rarity_pct": r * 100}
 
 
 def _assign_modifiers(db, card: Card, weights: dict):

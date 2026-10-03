@@ -10,6 +10,7 @@ Short specifications for each tab and major UI element. Use these as the referen
 | [players.md](players.md) | Players — player table, player detail modal |
 | [teams.md](teams.md) | Teams — team table, team detail modal |
 | [profile.md](profile.md) | Profile — username, password, Dota 2 player link |
+| [weekly-report.md](weekly-report.md) | Weekly Report popup — week tabs, My roster and Match results columns, recap popup |
 | [admin.md](admin.md) | Admin — ingest, recalculate, schedule refresh, promo codes, token balances, scoring weights |
 
 ## Shared UI elements

@@ -433,3 +433,80 @@ so that I can view the bottom of the ranking without scrolling.
 - Clicking the active sort header reverses the current direction (ascending ↔ descending)
 - The arrow icon flips to reflect the new direction
 - Sort state is reset to default when the tab is first loaded or reloaded
+
+---
+
+## First-Time Guided Tour
+
+### Start the Tour from How to Play
+**User story**
+As a player, I want to start a short guided tour from the How to Play tab so that I can learn how to draw cards, set my roster, see my points and find the Weekly Report when I choose to.
+
+**Acceptance criteria**
+- The How to Play Users subtab has a "Show the tour" button near the top. For a logged-in user it switches to My Team and starts the tour from step 1. For a logged-out visitor it opens the login popup instead
+- The tour is **not** started automatically for anyone while `GUIDED_TOUR_AUTOSTART` is `false`, the default
+- The tour has these steps, in order, each highlighting one element with a title and one or two sentences:
+  1. **Draw a card** (`#drawBtn`): a draw costs 1 of your tokens (shown with the configured token name), or the team draw cost for a card from a team you pick; you get players you don't own yet first
+  2. **Chances** (`.rarity-grid`): your chance of each rarity per draw; rarer cards score a higher bonus
+  3. **Your roster** (`#rosterActiveGrid`): put up to {roster limit} cards on your active roster; only active cards score. The roster limit is the number of slots rendered on My Team (`ROSTER_SLOTS` in `app-roster.js`), not a server value; if the grid is empty it reads "up to the roster limit" instead
+  4. **Weekly lock** (`#rosterWeekSelect`): your roster locks automatically when the week starts, so make changes before then
+  5. **Points** (`#rosterTotals`, the This week / Season totals): your active cards score from every league match that week; totals update as matches come in
+  6. **Weekly Report** (`#weeklyReportBtn`): added by #153, see "Tour Includes the Weekly Report" below
+  7. **Leaderboards** (`#tab-btn-leaderboard`): see how you rank each week and over the season; full rules are in How to Play
+- The text comes from live values (configured token name, team draw cost, rendered roster slot count), so it never shows a stale number or name
+- A step whose element is missing or hidden is skipped, and the step count adjusts
+
+### Control the Tour
+**User story**
+As a player, I want to skip or step through the tour easily so that it never gets in my way.
+
+**Acceptance criteria**
+- Buttons: **Skip** and **Next**, with **Done** on the last step, plus a step counter ("2 / 7")
+- Clicking the dark backdrop or pressing Esc skips; Enter or → goes to the next step; ← goes back
+- Focus moves into the tour box when it opens and returns to the page when it closes; the box has `role="dialog"`, `aria-modal="true"` and a label
+- Skip, Done, Esc and a backdrop click all set `fantasy.tourSeen.v1`, so the tour doesn't start again after a reload. A blocked or failing `localStorage` doesn't break the page; the tour then simply shows again next time
+- With `prefers-reduced-motion`, the highlight moves without animation
+
+### Automatic Start for New Players (switched off at first)
+**User story**
+As an operator, I want to switch on an automatic first-visit tour later so that new players see it without looking for it, once the tour has proven itself.
+
+**Acceptance criteria**
+- `GUIDED_TOUR_AUTOSTART` (default `false`) is exposed to the frontend as `tour_autostart` in `GET /config`
+- When it is `true`, the tour starts automatically the first time a logged-in user opens My Team in a browser with no `fantasy.tourSeen.v1` key, once no other popup is open. If a popup stays open for 10 seconds, it gives up for that visit
+- When it is `false`, nothing starts automatically, and `fantasy.tourSeen.v1` is still written when the tour closes (Skip, Done, Esc or backdrop), so turning it on later doesn't re-show the tour to people who already took it
+- The How to Play button always starts the tour, seen or not
+- Pinned How to Play phrases in existing tests stay unchanged
+
+### Works on Every Screen
+**User story**
+As a player on a phone, I want the tour to fit my screen so that I can read every step.
+
+**Acceptance criteria**
+- At 400 px wide the text box stays fully on screen, placed below or above the highlighted element, whichever has room
+- The highlighted element is scrolled into view before its step shows
+- The highlight follows the element if the window is resized or rotated during the tour
+
+## Tour Includes the Weekly Report
+
+### Weekly Report Step in the Tour
+**User story**
+As a new player taking the guided tour, I want the tour to show me the Weekly Report so that I know where to see what my cards scored each week.
+
+**Acceptance criteria**
+- `myTeamTourSteps()` in `frontend/app-tour.js` includes a step on `#weeklyReportBtn`, after the "Points" step (`#rosterTotals`) and before the "Leaderboards" step (`#tab-btn-leaderboard`). The full tour therefore has 7 steps.
+- The step's title is "Weekly Report". Its body reads: "After each week ends, your recap is here: what each card scored, game by game, and every match result. A popup tells you when a new one is ready."
+- The step highlights the button; it doesn't open the report.
+- The step counter shows "6 / 7" on this step when every step is visible.
+- When `#weeklyReportBtn` is missing or hidden, the step is dropped and the counter counts only the remaining steps, using the existing `startTour` filtering. This is the failure path.
+- The box is positioned below the header button and kept inside the viewport (16 px margin) at desktop and phone widths, with the existing positioning logic.
+
+### Recap Popup After the Tour
+**User story**
+As a player who just finished or skipped the tour, I want the "recap is ready" popup to appear then, if a recap is waiting, so that the tour doesn't make me miss it until my next visit.
+
+**Acceptance criteria**
+- When the tour closes (Done, Skip, Esc or a backdrop click), `endTour()` calls `checkWeeklySummaryHighlight()` if it exists and a user is logged in. That function fetches `GET /weekly-summary` and calls `maybeShowWeeklyRecapPrompt(data)`.
+- The popup appears only under the existing rules: `show_prompt` is true, no other popup is open, and no password change is required. The tour no longer counts as open, because `_tour` is cleared before the check.
+- When no recap is waiting (`show_prompt` false) or the user is logged out, nothing appears and no request is made logged out. This is the failure path.
+- Ending the tour still marks it seen (`fantasy.tourSeen.v1`) and returns focus as before. If the popup appears, focus moves to its "Open recap" button.
