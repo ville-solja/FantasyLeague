@@ -51,19 +51,21 @@ ENV_EXAMPLE_PATH = os.path.join(_REPO_DIR, ".env.example")
 
 TOUR_STORAGE_KEY = "fantasy.tourSeen.v1"
 
-# The six step targets, in order (plan Story 1). The Points step highlights the
-# shared container of the This week / Season totals (#rosterTotals), which holds
-# #rosterCombined and #rosterSeasonPoints.
+# The seven step targets, in order (plan Story 1, plus the Weekly Report step
+# added by #153). The Points step highlights the shared container of the This
+# week / Season totals (#rosterTotals), which holds #rosterCombined and
+# #rosterSeasonPoints.
 STEP_TARGETS = [
     "#drawBtn",
     ".rarity-grid",
     "#rosterActiveGrid",
     "#rosterWeekSelect",
     "#rosterTotals",
+    "#weeklyReportBtn",
     "#tab-btn-leaderboard",
 ]
 
-STEP_TITLES = ["Draw a card", "Chances", "Your roster", "Weekly lock", "Points", "Leaderboards"]
+STEP_TITLES = ["Draw a card", "Chances", "Your roster", "Weekly lock", "Points", "Weekly Report", "Leaderboards"]
 
 
 def _read(path):
@@ -154,8 +156,8 @@ class TestStartTourFromHowToPlay:
         assert srcs.index("/app-tour.js") < srcs.index("/app-init.js")
         assert not any("app-tour" in s and s.startswith("http") for s in srcs)
 
-    def test_tour_steps_six_targets_in_order(self):
-        """app-tour.js defines the six My Team steps in order: #drawBtn, .rarity-grid, #rosterActiveGrid, #rosterWeekSelect, points totals, #tab-btn-leaderboard."""
+    def test_tour_steps_seven_targets_in_order(self):
+        """app-tour.js defines the seven My Team steps in order: #drawBtn, .rarity-grid, #rosterActiveGrid, #rosterWeekSelect, points totals, #weeklyReportBtn (#153), #tab-btn-leaderboard."""
         steps = _step_objects(_read(TOUR_JS_PATH))
         assert [t for t, _, _ in steps] == STEP_TARGETS
 
@@ -171,7 +173,7 @@ class TestStartTourFromHowToPlay:
         assert 'id="rosterSeasonPoints"' in html[start:end]
 
     def test_tour_step_titles_and_copy_present(self):
-        """Steps carry the titles Draw a card, Chances, Your roster, Weekly lock, Points, Leaderboards with one or two sentences each."""
+        """Steps carry the titles Draw a card, Chances, Your roster, Weekly lock, Points, Weekly Report, Leaderboards with one or two sentences each."""
         steps = _step_objects(_read(TOUR_JS_PATH))
         assert [title for _, title, _ in steps] == STEP_TITLES
         js = _read(TOUR_JS_PATH)

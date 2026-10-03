@@ -73,7 +73,9 @@ announces the newest report week once per user, across devices. "Open recap" ope
 on that week (marking it seen and announced); Close, the X, Esc or a backdrop click marks it
 announced only, so the badge stays until the report is opened. The popup is skipped, without
 marking anything, while another popup or the guided tour is open or a password change is
-required. Tracked by `WeeklySummarySeen.last_prompted_week_id`.
+required. Tracked by `WeeklySummarySeen.last_prompted_week_id`. When the guided tour closes,
+`endTour()` runs `checkWeeklySummaryHighlight()` again, so a recap held back by the tour
+appears right away (issue #153; see `reference/guided-tour.md`).
 
 ## Series Grouping
 

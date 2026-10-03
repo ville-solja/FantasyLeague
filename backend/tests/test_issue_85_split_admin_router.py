@@ -268,14 +268,15 @@ class TestPreserveExistingTestCoverageThroughSplit:
         frontend-only placeholders, so nothing is skipped any more; then
         plan-issue-151-weekly-report-aesthetics's 56 new tests did after that, and
         plan-issue-152-weekly-recap-animations's 59 new tests did after that, and
-        the Weekly Report readability pass's 12 new tests did after that)."""
+        the Weekly Report readability pass's 12 new tests did after that, and
+        plan-issue-153-tour-weekly-report's 13 new tests did after that)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "1604 passed" in output, output[-3000:]
+        assert "1617 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

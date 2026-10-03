@@ -661,7 +661,7 @@ As a player, I want a popup telling me when a new weekly recap is ready so that 
 - **Close**, the X, Esc or a click on the backdrop closes the popup and marks the week announced only. The dot on the Weekly Report button stays until the report is opened.
 - **Once per week:** once announced, the popup does not reappear for that week, on any device or after logging in again. It appears again only when a newer week's report becomes available.
 - **One popup at a time:** when several weeks are new, the popup announces the newest only, and opening it shows that week with the other week tabs available.
-- **No clashes:** the popup does not appear while another popup or the guided tour is open, or while the user must change their password. It is shown on a later page load instead, since nothing was marked.
+- **No clashes:** the popup does not appear while another popup or the guided tour is open, or while the user must change their password. It is shown on a later page load instead, since nothing was marked; when the guided tour closes, the check runs again right away (#153).
 - **Keyboard:** focus moves to "Open recap" when the popup opens, and Tab stays inside the popup.
 
 ## Weekly Recap Animations

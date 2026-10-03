@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-03 — developer — testing
+**Problem:** Plan #153 said the new tour step shows "5 / 7", but inserting it after Points (step 5) makes it step 6; the test-planner's stub docstring copied the wrong index (4). Plans that state a step number or counter value can be off by one when written from the insertion point rather than the final list.
+**Solution:** Count the final list in the code before pinning an index in tests or docs, and fix the plan and stories to match. To reuse another test module's helpers, import them as `from tests.test_issue_144_guided_tour import _read, ...` (`backend/tests/` is a package); import only underscore names so pytest doesn't collect the other module's tests twice.
+
 ### 2026-10-03 — developer — frontend
 **Problem:** Screenshotting the #152 reveal animation with `chromium --headless=new --virtual-time-budget=N --screenshot` froze it at the first frame: virtual time advanced `setTimeout` but no `requestAnimationFrame` tween or CSS transition ran, so every shot showed the card stuck off-screen. Separately, adding a field to a #151 roster card broke `test_build_week_summary_roster_cards_match_roster_response_order`, which asserts the exact key set (`_CARD_KEYS`).
 **Solution:** Drive Chromium in real time over CDP: launch it with `--remote-debugging-port`, read the page's `webSocketDebuggerUrl` from `http://127.0.0.1:<port>/json`, and send `Page.navigate` / `Page.captureScreenshot` / `Runtime.evaluate` with Node 22's built-in `WebSocket` (no Playwright or pip install needed). When a later plan adds a roster card field, extend the #151 key-set assertion (`_CARD_KEYS | {...}`) rather than dropping it.

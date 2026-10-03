@@ -84,6 +84,11 @@ function myTeamTourSteps() {
       body: "Your active cards score from every league match that week. Totals update as matches come in.",
     },
     {
+      target: "#weeklyReportBtn",
+      title: "Weekly Report",
+      body: "After each week ends, your recap is here: what each card scored, game by game, and every match result. A popup tells you when a new one is ready.",
+    },
+    {
       target: "#tab-btn-leaderboard",
       title: "Leaderboards",
       body: "See how you rank each week and over the season. Full rules are in How to Play.",
@@ -275,6 +280,9 @@ function endTour() {
   const prev = t.prevFocus;
   if (prev && prev !== document.body && document.contains(prev) && typeof prev.focus === "function") {
     prev.focus({ preventScroll: true });
+  }
+  if (activeUserId && typeof checkWeeklySummaryHighlight === "function") {
+    checkWeeklySummaryHighlight();
   }
 }
 

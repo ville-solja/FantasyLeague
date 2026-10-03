@@ -5,6 +5,7 @@ Opened from the **Weekly Report** button at the top right of the header (logged-
 ## Header button
 
 - **Weekly Report** button (`#weeklyReportBtn`) with a dot (`#weeklyReportBadge`) while a newer week's report has not been opened. Opening the popup clears the dot.
+- It is step 6 of 7 of the My Team guided tour ("Weekly Report"), which highlights the button without opening the report.
 
 ## Popup layout (`#weeklySummaryModal`)
 
@@ -103,6 +104,6 @@ A small dialog shown after login or page load when the newest report week has no
 - Eyebrow "WEEKLY REPORT", title "Week {label} recap is ready" (a label that already starts with "Week" is used as is), the line "See what your cards scored and how the matches went" and the note "You can also find every recap under Weekly Report at the top right."
 - **Open recap** (primary) — opens the report on that week and clears the header dot.
 - **Close**, the X, Esc or a backdrop click — closes it and marks the week announced; the header dot stays until the report is opened.
-- Shows only the newest new week. Not shown while another popup or the guided tour is open, or while a password change is required (shown on a later page load instead).
+- Shows only the newest new week. Not shown while another popup or the guided tour is open, or while a password change is required. When the guided tour closes (Done, Skip, Esc or backdrop), the check runs again, so a waiting recap appears right after the tour; otherwise it shows on a later page load.
 - Gives no results, points or winners away.
 - Focus moves to "Open recap" and Tab stays inside the popup.

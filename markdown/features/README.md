@@ -44,7 +44,7 @@ Implementation details, integrations, and operator tooling.
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
-| [Guided Tour](reference/guided-tour.md) | Spotlight tour of My Team (draw, chances, roster, weekly lock, points, leaderboards), started from How to Play; automatic first-visit start off by default (`GUIDED_TOUR_AUTOSTART`) |
+| [Guided Tour](reference/guided-tour.md) | Spotlight tour of My Team (draw, chances, roster, weekly lock, points, Weekly Report, leaderboards), started from How to Play; automatic first-visit start off by default (`GUIDED_TOUR_AUTOSTART`) |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Early MVP Selection](reference/early-mvp-selection.md) | Lists matches in the MVP panel from OpenDota's live feed before stats are ingested; bonus applied at ingest; faster polling right after a game |
 | [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
