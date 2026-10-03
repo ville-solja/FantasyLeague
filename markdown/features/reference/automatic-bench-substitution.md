@@ -54,7 +54,7 @@ Each row adds `substitutions_at` and `substitutions_due` (locked and past the su
 ## UI
 
 - My Team: "Subbed in for {player}" on the subbed-in card, "Did not play" on the subbed-out card (on the locked week's bench), and "Substitutions are made {N} hours after the week ends" under a locked week's roster until substitutions have run. See `markdown/ui_description/my-team.md`.
-- Weekly Report: "Bench substitutions are made {N} hours after the week ends; roster marks may change." above a revealed week's matches until substitutions have run. See `markdown/features/core/weekly-summary.md`.
+- Weekly Report: "Bench substitutions are made {N} hours after the week ends; roster marks may change." in the My roster column header of a revealed week until substitutions have run. See `markdown/features/core/weekly-summary.md`.
 - Admin, Week Management: **Re-run substitutions** button. See `markdown/ui_description/admin.md`.
 - How to Play, Users subtab, Roster & Weekly Lock: one bullet explaining the rule and that the leftmost bench card comes in first.
 

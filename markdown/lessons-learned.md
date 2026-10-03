@@ -9,6 +9,14 @@ Format:
 
 ---
 
+### 2026-10-03 — developer — frontend
+**Problem:** Screenshotting the #152 reveal animation with `chromium --headless=new --virtual-time-budget=N --screenshot` froze it at the first frame: virtual time advanced `setTimeout` but no `requestAnimationFrame` tween or CSS transition ran, so every shot showed the card stuck off-screen. Separately, adding a field to a #151 roster card broke `test_build_week_summary_roster_cards_match_roster_response_order`, which asserts the exact key set (`_CARD_KEYS`).
+**Solution:** Drive Chromium in real time over CDP: launch it with `--remote-debugging-port`, read the page's `webSocketDebuggerUrl` from `http://127.0.0.1:<port>/json`, and send `Page.navigate` / `Page.captureScreenshot` / `Runtime.evaluate` with Node 22's built-in `WebSocket` (no Playwright or pip install needed). When a later plan adds a roster card field, extend the #151 key-set assertion (`_CARD_KEYS | {...}`) rather than dropping it.
+
+### 2026-10-03 — developer — frontend
+**Problem:** Issue #151 needed `.reveal-overlay` (the card viewer) above `.modal-overlay` so it opens on top of the Weekly Report. Raising its `z-index` alone would have hidden the player popup opened from the viewer's player link (on My Team too), since every `.modal-overlay` shares one `z-index` and stacks by DOM order. Separately, the bare `python3 -c "import main"` check fails outside pytest with the SECRET_KEY guard; conftest sets `DEBUG=true`, the shell does not.
+**Solution:** Keep the DOM-order stacking: `.reveal-overlay { z-index: 350 }` plus `.reveal-overlay ~ .modal-overlay { z-index: 360 }`, so popups placed after `#revealModal` (player, team) still open above the viewer and the report (before it) stays below. Run the import check as `DEBUG=true python3 -c "import main"`.
+
 ### 2026-10-02 — developer — docs
 **Problem:** For the #108 Option A deep dive, the hub's `README.architecture.md` layering diagram says models use `db/ (Knex)`, but runtime models run raw SQL through `mysql2` (`apps/backend/src/db/mysqlRunQuery.ts`); Knex only runs migrations. Separately, a hand-summed effort total (44–68) did not match its rows (43.5–68).
 **Solution:** Confirm hub READMEs against the code they describe (grep the imports) before repeating them. For an effort table, add a test that sums the rows and compares the Total row (see `test_effort_table_has_sizes_person_weeks_and_total`).

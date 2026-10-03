@@ -14,7 +14,7 @@ These describe the primary user-visible surfaces of the app.
 | [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll |
 | [Weeks & Leaderboards](core/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
 | [Weekly Summary Report](core/weekly-summary.md) | Post-week recap popup: series-grouped matches, VOD links, and a per-user Reveal-results gate for MVP highlights and points earned |
-| [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, and match date display for the Weekly Summary Report |
+| [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, match date display, and (#151) a side-by-side roster panel with per-game card points, a themed scrollbar and a once-per-week new-recap popup for the Weekly Summary Report |
 | [Players & Teams](core/players.md) | Player and team browse endpoints with match history |
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
 | [Twitch Extension](core/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |
@@ -102,6 +102,7 @@ Implementation details, integrations, and operator tooling.
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
 | [Stored Card Points](reference/stored-card-points.md) | Card points stored per match and summed by every view, so My Team and the leaderboards agree and pages stop recalculating per request |
 | [Points Rounding](reference/points-rounding.md) | One server-side rounding rule (one decimal, half away from zero, on the decimal value) for every points number, so My Team, leaderboards, Weekly Report and the Twitch panel agree |
+| [Weekly Recap Animations](reference/weekly-recap-animations.md) | Card-by-card reveal in the Weekly Report's My roster column: raw points count up, then rarity, modifier and MVP bonuses are highlighted and added, from a per-card points breakdown |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |

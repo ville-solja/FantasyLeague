@@ -84,8 +84,9 @@ function _isModalVisible(el) {
 
 function _getVisibleModal() {
   // When modals stack (e.g. a player/team modal opened from within the Weekly Report
-  // popup), the later element in the DOM paints on top (same z-index for all
-  // .modal-overlay elements) — so the *last* visible one, not the first, is the one
+  // popup), the later element in the DOM paints on top (the card viewer's
+  // .reveal-overlay sits above the Weekly Report, and the player/team popups after it
+  // sit above the viewer; see style.css) — so the *last* visible one, not the first, is the one
   // Escape/focus-trapping should target, leaving the modal(s) underneath untouched.
   const visible = [...document.querySelectorAll(".modal-overlay, .reveal-overlay")].filter(_isModalVisible);
   return visible[visible.length - 1] || null;

@@ -76,11 +76,12 @@ The font fallback chain (tried in order):
 
 ## Stat modifier labels
 
-Modifier lines are rendered in the lower band of the card (below the portrait area). Each line shows the stat name and bonus percentage, e.g. `KILLS +10%`. Stat keys are mapped to human-readable labels:
+Modifier lines are rendered in the lower band of the card (below the portrait area). Each line shows the stat name and bonus percentage, e.g. `KILLS +10%`. Stat keys are mapped to human-readable labels from `scoring.STAT_LABELS` (shared with the Weekly Report points breakdown, issue #152), shown upper-case:
 
 | Stat key | Card label |
 |---|---|
 | `kills` | KILLS |
+| `assists` | ASSISTS |
 | `deaths` | DEATHS |
 | `gold_per_min` | GPM |
 | `obs_placed` | OBSERVER WARDS |
@@ -88,8 +89,8 @@ Modifier lines are rendered in the lower band of the card (below the portrait ar
 | `denies` | DENIES |
 | `towers_killed` | TOWERS |
 | `roshan_kills` | ROSHAN |
-| `teamfight_participation` | PARTICIPATION |
-| `camps_stacked` | STACKS |
+| `teamfight_participation` | TEAMFIGHT |
+| `camps_stacked` | CAMPS STACKED |
 | `rune_pickups` | RUNES |
 | `firstblood_claimed` | FIRST BLOOD |
 | `stuns` | STUNS |

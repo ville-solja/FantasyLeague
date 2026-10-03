@@ -32,15 +32,31 @@ Each week's tab in the popup has two states, gated per user:
    set. No player names, points, or MVP information.
 2. **After reveal** — clicking "Reveal results" permanently unlocks, for that user and that
    week only: every player per match grouped under their team, the match's MVP player with a
-   highlighted portrait, and a points-earned number per player (neutral color if the player
-   wasn't on the viewing user's roster that week, accent color if they were). "On roster" means
-   a counted roster entry after [bench substitution](../reference/automatic-bench-substitution.md):
-   an active card not subbed out, or a subbed-in bench card.
+   highlighted portrait, and a points-earned number per player. A player who was one of the
+   viewing user's counted cards that week gets a filled YOUR CARD tile (YOUR SUB for a
+   subbed-in card) showing the user's card points for that match, in the accent colour; other
+   players show match points in a neutral colour. "Counted" means a roster entry after
+   [bench substitution](../reference/automatic-bench-substitution.md): an active card not subbed
+   out, or a subbed-in bench card. The roster itself is in the My roster column (below).
 
 Bench substitutions run `SUBSTITUTION_DELAY_HOURS` (default 24) after the week ends, so the
-report normally opens before they have run. Until then a revealed week shows a muted note above
-its matches: "Bench substitutions are made {N} hours after the week ends; roster marks may
-change." The "on roster" marks update once substitutions have run.
+report normally opens before they have run. Until then a revealed week shows a muted note in
+the "My roster" column header: "Bench substitutions are made {N} hours after the week ends;
+roster marks may change." The "on roster" marks update once substitutions have run.
+
+## My Roster Column and Your Cards (issue #151)
+
+The popup shows two columns under the week tabs: **My roster** (the user's cards for that week,
+with per-game card points) and **Match results** (the series view above). Players the user had
+as a counted card get a filled "YOUR CARD" tile ("YOUR SUB" for a subbed-in card) showing the
+user's card points for that game. Before reveal the roster column lists only the lock-time
+cards' identities. Layout, states and copy: `markdown/ui_description/weekly-report.md`; the
+changes are summarised in `core/weekly-report-fixes.md`.
+
+Since issue #152 each counted card also shows a points breakdown (RAW and modifier chips, a
+rarity caption under the thumbnail, the MVP bonus on each MVP game's tag), revealed card by card
+with an animation the first time a revealed week is shown in a browser. See
+`reference/weekly-recap-animations.md`.
 
 Reveal state does not affect other users or other weeks.
 
@@ -49,6 +65,15 @@ Reveal state does not affect other users or other weeks.
 The "Weekly report" button carries a highlight/badge whenever a newer week's summary has
 become available than the last one the current user opened the popup for. Opening the popup
 (not revealing any particular week) clears it.
+
+## Recap Popup (issue #151)
+
+After login or page load, a small "Week {label} recap is ready" popup (`#weeklyRecapPrompt`)
+announces the newest report week once per user, across devices. "Open recap" opens the report
+on that week (marking it seen and announced); Close, the X, Esc or a backdrop click marks it
+announced only, so the badge stays until the report is opened. The popup is skipped, without
+marking anything, while another popup or the guided tour is open or a password change is
+required. Tracked by `WeeklySummarySeen.last_prompted_week_id`.
 
 ## Series Grouping
 
@@ -65,10 +90,15 @@ ordered most-recent-first:
 ```json
 {
   "weeks": [{"week_id": 3, "label": "Week 3", "revealed": false}],
-  "has_unseen": true
+  "has_unseen": true,
+  "show_prompt": true,
+  "latest_week": {"week_id": 3, "label": "Week 3"}
 }
 ```
 `has_unseen` compares the latest available week against the caller's `WeeklySummarySeen.last_seen_week_id`.
+`show_prompt` is true when the latest available week is neither `last_seen_week_id` nor
+`last_prompted_week_id` (issue #151). `latest_week` is the newest report week, or `null` when
+no week is available.
 
 ### `GET /weekly-summary/{week_id}`
 Auth required. 404 if no `WeeklySummary` row exists for the week yet. Returns matches (grouped
@@ -81,13 +111,66 @@ reflects bench substitution. The response also carries `substitutions_pending` (
 week's `substitutions_at` is null), `substitutions_at` (unix seconds or null) and
 `substitution_delay_hours`.
 
+Issue #151 adds:
+
+- **`card_points`** on every revealed result player: `display_points` of the summed
+  `card_match_points` of the caller's counted cards for that player and match, or `null` when
+  the player is not on the caller's counted roster that week (and on a match excluded from
+  scoring). `on_roster` stays for compatibility.
+- **`roster`**, the "My roster" column, built from the locked-week branch of
+  `routers.cards._build_roster_response` (which now also returns `team_id` per card). A card's
+  `team_id` / `team_name` are the player's most recent team (as in `GET /roster`), not
+  necessarily their team that week, and `week_points` is `_build_roster_response`'s
+  `total_points`. Revealed:
+
+  ```json
+  "roster": {
+    "week_total": 168.8,
+    "cards": [{"card_id": 1, "card_type": "legendary", "player_id": 7, "player_name": "Varjo",
+               "avatar_url": "...", "team_id": 3, "team_name": "Halla",
+               "counted": true, "subbed_in": false, "subbed_out": false, "subbed_in_for": null,
+               "modifiers": [], "week_points": 55.8,
+               "games": [{"match_id": 1, "start_time": 1711180800, "game_number": 1,
+                          "opponent_team_id": 12, "opponent_name": "Kuura",
+                          "won": true, "is_mvp": true, "points": 31.2, "scored": true}],
+               "breakdown": {"raw": 50.0, "steps": [
+                 {"kind": "rarity", "label": "Legendary", "pct": 3.0, "points": 1.5},
+                 {"kind": "mvp", "label": "MVP", "pct": 10.0, "points": 4.3, "match_id": 1}]}}]
+  }
+  ```
+
+  `cards` holds the roster's `active` cards in My Team order (a subbed-in card in the slot of
+  the card it replaced), then only the `bench` entries with `subbed_out: true`; unused bench
+  cards are left out. `week_total` is `combined_value`, so it equals the caller's `week_points`
+  on the weekly leaderboard. `games` has one row per match the card's player played in the
+  week window: `points` is the stored `card_match_points` row through `display_points`;
+  an excluded match has `points: null, scored: false`; `won` is `null` when `radiant_win` is
+  unknown; `game_number` is the match's position in its series (`_group_into_series`).
+  `breakdown` (issue #152, counted cards only) splits `week_points` into `raw` and ordered
+  `steps` (rarity when above 0, one per modifier, one MVP step per MVP game with its
+  `match_id`); the rounded values add up to `week_points` exactly. Details:
+  `reference/weekly-recap-animations.md`.
+
+  Unrevealed: `{"cards": [...]}` with the lock-time roster (each subbed-in card swapped back
+  for the card it replaced, in slot order) and only `card_id`, `card_type`, `player_id`,
+  `player_name`, `avatar_url`, `team_id`, `team_name` per card; no `week_total`, points, games
+  breakdown or substitution fields. A week that is not locked returns an empty `cards` list (plus
+  `week_total: 0.0` when revealed).
+
 ### `POST /weekly-summary/{week_id}/reveal`
 Auth required. Idempotently inserts a `WeeklySummaryReveal` row for `(week_id, current user)`,
 then returns the same content `GET /weekly-summary/{week_id}` would return afterward.
 
 ### `POST /weekly-summary/seen`
-Auth required. Upserts `WeeklySummarySeen.last_seen_week_id` to the current latest available
-week, clearing the highlight badge on the caller's next `GET /weekly-summary`.
+Auth required. Upserts `WeeklySummarySeen.last_seen_week_id` (and, since issue #151,
+`last_prompted_week_id`) to the current latest available week, clearing the highlight badge and
+the recap popup on the caller's next `GET /weekly-summary`.
+
+### `POST /weekly-summary/prompted`
+Auth required (`Depends(get_current_user)`; 401 without a session). Issue #151: sets
+`WeeklySummarySeen.last_prompted_week_id` to the current latest available week, creating the
+row if needed (`last_seen_week_id` stays as it was). Idempotent; returns `{"ok": true}`. Called
+when the recap popup is closed without opening the report.
 
 ### `PATCH /admin/matches/{match_id}/vod`
 Admin required (`Depends(require_admin)`). Body `{"vod_url": "https://..." | null}`; rejects
@@ -105,7 +188,9 @@ no row yet — idempotent, and with no dependency on calendar day/time.
 
 `Match.vod_url` (nullable string), `WeeklySummary` (`week_id` PK, `generated_at` — availability
 marker only, no denormalised content), `WeeklySummaryReveal` (`week_id`, `user_id`,
-`revealed_at`; unique per week/user), `WeeklySummarySeen` (`user_id` PK, `last_seen_week_id`).
+`revealed_at`; unique per week/user), `WeeklySummarySeen` (`user_id` PK, `last_seen_week_id`,
+`last_prompted_week_id` — nullable FK to `weeks.id`, added by migration
+`030_weekly_summary_seen_last_prompted`; existing rows get `NULL`).
 
 ---
 

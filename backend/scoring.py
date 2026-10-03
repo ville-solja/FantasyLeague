@@ -21,6 +21,25 @@ SCORING_STATS = [
     "stuns",
 ]
 
+# Human-readable stat names for card modifiers (SCORING_STATS + deaths), shared by the
+# card image (image.py) and the Weekly Report breakdown (issue #152).
+STAT_LABELS = {
+    "kills": "Kills",
+    "assists": "Assists",
+    "last_hits": "Last hits",
+    "denies": "Denies",
+    "deaths": "Deaths",
+    "gold_per_min": "GPM",
+    "obs_placed": "Observer wards",
+    "towers_killed": "Towers",
+    "roshan_kills": "Roshan",
+    "teamfight_participation": "Teamfight",
+    "camps_stacked": "Camps stacked",
+    "rune_pickups": "Runes",
+    "firstblood_claimed": "First blood",
+    "stuns": "Stuns",
+}
+
 
 def display_points(x, places: int = 1) -> float:
     """Round a points value for display: half away from zero, on its decimal value.
