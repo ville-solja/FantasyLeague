@@ -5,6 +5,7 @@ import sessions
 from database import get_db
 from deps import _audit, get_current_user
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
+from scoring import display_points
 from auth import check_password_bytes, check_username, hash_password, verify_password
 
 router = APIRouter()
@@ -66,7 +67,7 @@ def get_profile(user_id: int, db=Depends(get_db),
         .all()
     )
     result["past_seasons"] = [{"season_label": r.season_label,
-                               "points": r.points, "rank": r.rank}
+                               "points": display_points(r.points), "rank": r.rank}
                               for r in past_rows]
     return result
 

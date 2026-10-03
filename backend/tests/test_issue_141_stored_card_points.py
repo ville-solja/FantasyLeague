@@ -48,7 +48,7 @@ from routers import cards as cards_router
 from routers import leaderboard as leaderboard_router
 from routers.cards import _build_roster_response
 from routers.leaderboard import compute_season_standings, weekly_leaderboard
-from scoring import card_fantasy_score, fantasy_score, stat_dict_from_row
+from scoring import card_fantasy_score, display_points, fantasy_score, stat_dict_from_row
 
 REPO = Path(__file__).resolve().parents[2]
 _ADMIN = {"user_id": 1, "username": "admin", "is_admin": True}
@@ -205,11 +205,12 @@ def test_card_week_points_equal_sum_of_stored_match_points_on_every_page(db):
     wk1 = stored[(1, 1)] + stored[(1, 2)]
     wk2 = stored[(1, 3)]
 
-    assert _roster_points(db, 1, 1)[1] == pytest.approx(wk1)
-    assert _roster_points(db, 1, 2)[1] == pytest.approx(wk2)
-    assert _weekly_cards(db, 1)["alice"][1] == pytest.approx(wk1, abs=0.005)
-    assert _weekly_cards(db, 2)["alice"][1] == pytest.approx(wk2, abs=0.005)
-    assert _season_cards(db)["alice"][1] == pytest.approx(wk1 + wk2, abs=0.005)
+    # Every reader shows the exact stored sum rounded once (issue #149).
+    assert _roster_points(db, 1, 1)[1] == display_points(wk1)
+    assert _roster_points(db, 1, 2)[1] == display_points(wk2)
+    assert _weekly_cards(db, 1)["alice"][1] == display_points(wk1)
+    assert _weekly_cards(db, 2)["alice"][1] == display_points(wk2)
+    assert _season_cards(db)["alice"][1] == display_points(wk1 + wk2)
 
 
 def test_card_season_points_equal_sum_of_weekly_points_over_locked_weeks(db):
@@ -217,9 +218,13 @@ def test_card_season_points_equal_sum_of_weekly_points_over_locked_weeks(db):
     it was rostered in (two locked weeks, card rostered in both; season chip ==
     week1 + week2 from weekly_leaderboard)."""
     _seed(db)
+    stored = _stored(db)
     w1, w2, season = _weekly_cards(db, 1), _weekly_cards(db, 2), _season_cards(db)
     for user, card_id in (("alice", 1), ("bob", 3), ("bob", 4)):
-        assert season[user][card_id] == pytest.approx(w1[user][card_id] + w2[user][card_id], abs=0.011)
+        # Exact: the season chip is the card's stored points over matches 1-3 (weeks 1-2).
+        assert season[user][card_id] == display_points(sum(stored[(card_id, m)] for m in (1, 2, 3)))
+        # Shown values: each is rounded once, so they may differ by up to 0.05 per value.
+        assert season[user][card_id] == pytest.approx(w1[user][card_id] + w2[user][card_id], abs=0.15)
 
 
 def test_user_weekly_and_season_totals_equal_sum_of_card_points(db):
@@ -232,11 +237,11 @@ def test_user_weekly_and_season_totals_equal_sum_of_card_points(db):
     bob_season = sum(stored[k] for k in ((3, 1), (3, 2), (3, 3), (4, 1), (4, 2), (4, 3)))
     alice_w1 = sum(stored[k] for k in ((1, 1), (1, 2), (2, 1), (2, 2)))
 
-    assert _weekly_totals(db, 1)["alice"] == pytest.approx(alice_w1, abs=0.005)
-    assert _season_totals(db) == pytest.approx({"alice": alice_season, "bob": bob_season}, abs=0.005)
-    assert _build_roster_response(db, 1, 1)["season_points"] == pytest.approx(alice_season)
-    assert _build_roster_response(db, 2, 2)["season_points"] == pytest.approx(bob_season)
-    assert _build_roster_response(db, 1, 1)["combined_value"] == pytest.approx(alice_w1)
+    assert _weekly_totals(db, 1)["alice"] == display_points(alice_w1)
+    assert _season_totals(db) == {"alice": display_points(alice_season), "bob": display_points(bob_season)}
+    assert _build_roster_response(db, 1, 1)["season_points"] == display_points(alice_season)
+    assert _build_roster_response(db, 2, 2)["season_points"] == display_points(bob_season)
+    assert _build_roster_response(db, 1, 1)["combined_value"] == display_points(alice_w1)
 
 
 def test_death_bonus_floored_per_match_matches_players_tab_fantasy_points(db):
@@ -253,9 +258,9 @@ def test_death_bonus_floored_per_match_matches_players_tab_fantasy_points(db):
 
     week = _roster_points(db, 1, 1)[2]
 
-    assert week == pytest.approx(per_match, abs=1e-3)
-    assert week != pytest.approx(aggregate, abs=1e-3)
-    assert week > aggregate
+    assert week == display_points(per_match)
+    assert week != display_points(aggregate)
+    assert per_match > aggregate
 
 
 def test_compute_season_standings_card_chips_carry_season_scope(db):
@@ -294,7 +299,7 @@ def test_season_view_renders_no_chips_and_weekly_chips_match_my_team(db):
                        for c in _build_roster_response(db, row["id"], week_id)["active"]}
             assert row["cards"]
             for chip in row["cards"]:
-                assert chip["points"] == pytest.approx(round(my_team[chip["card_id"]], 2))
+                assert chip["points"] == my_team[chip["card_id"]]
 
 
 def test_card_values_add_up_to_shown_total_within_rounding(db):
@@ -308,7 +313,7 @@ def test_card_values_add_up_to_shown_total_within_rounding(db):
         for r in rows:
             assert abs(sum(c["points"] for c in r["cards"]) - r[key]) < 0.1
     roster = _build_roster_response(db, 1, 1)
-    assert sum(c["total_points"] for c in roster["active"]) == pytest.approx(roster["combined_value"])
+    assert abs(sum(c["total_points"] for c in roster["active"]) - roster["combined_value"]) < 0.1
 
 
 def test_card_week_points_ignore_matches_outside_window_and_unrostered_weeks(db):
@@ -320,13 +325,13 @@ def test_card_week_points_ignore_matches_outside_window_and_unrostered_weeks(db)
     assert (1, 4) in stored and (1, 5) in stored and (2, 3) in stored
 
     season = _season_cards(db)
-    assert season["alice"][1] == pytest.approx(stored[(1, 1)] + stored[(1, 2)] + stored[(1, 3)], abs=0.005)
+    assert season["alice"][1] == display_points(stored[(1, 1)] + stored[(1, 2)] + stored[(1, 3)])
     # c2 is not on alice's Week 2 roster, so match 3 does not count for it.
-    assert season["alice"][2] == pytest.approx(stored[(2, 1)] + stored[(2, 2)], abs=0.005)
+    assert season["alice"][2] == display_points(stored[(2, 1)] + stored[(2, 2)])
 
     _set_excluded(db, 2, True)
-    assert _weekly_cards(db, 1)["alice"][1] == pytest.approx(stored[(1, 1)], abs=0.005)
-    assert _roster_points(db, 1, 1)[1] == pytest.approx(stored[(1, 1)])
+    assert _weekly_cards(db, 1)["alice"][1] == display_points(stored[(1, 1)])
+    assert _roster_points(db, 1, 1)[1] == display_points(stored[(1, 1)])
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +417,7 @@ def test_ingest_match_writes_card_match_points_for_players_cards(db, monkeypatch
     for card_id, match_id in new_keys:
         assert stored[(card_id, match_id)] == pytest.approx(_expected(db, card_id, match_id))
     # Match 777 falls in Week 1: alice's c1 weekly value picks it up with no rebuild.
-    assert _roster_points(db, 1, 1)[1] == pytest.approx(stored[(1, 1)] + stored[(1, 2)] + stored[(1, 777)])
+    assert _roster_points(db, 1, 1)[1] == display_points(stored[(1, 1)] + stored[(1, 2)] + stored[(1, 777)])
 
 
 def test_refresh_match_stats_updates_card_match_points_after_parse(db, monkeypatch):
@@ -679,9 +684,11 @@ def test_changing_match_week_override_changes_totals_without_rebuild(db):
     db.commit()
 
     w1, w2 = _weekly_cards(db, 1), _weekly_cards(db, 2)
-    assert w1["alice"][1] == pytest.approx(w1_before["alice"][1] - stored[(1, 2)], abs=0.011)
-    assert w2["alice"][1] == pytest.approx(w2_before["alice"][1] + stored[(1, 2)], abs=0.011)
-    assert _roster_points(db, 1, 2)[1] == pytest.approx(stored[(1, 3)] + stored[(1, 2)])
+    assert w1_before["alice"][1] == display_points(stored[(1, 1)] + stored[(1, 2)])
+    assert w2_before["alice"][1] == display_points(stored[(1, 3)])
+    assert w1["alice"][1] == display_points(stored[(1, 1)])
+    assert w2["alice"][1] == display_points(stored[(1, 3)] + stored[(1, 2)])
+    assert _roster_points(db, 1, 2)[1] == display_points(stored[(1, 3)] + stored[(1, 2)])
 
 
 def test_roster_unlocked_week_uses_current_cards_with_stored_points(db):
@@ -695,8 +702,8 @@ def test_roster_unlocked_week_uses_current_cards_with_stored_points(db):
     assert [c["id"] for c in result["active"]] == [1, 2]
     assert [c["id"] for c in result["bench"]] == [5]
     points = {c["id"]: c["total_points"] for c in result["active"] + result["bench"]}
-    assert points == pytest.approx({1: stored[(1, 4)], 2: 0.0, 5: 0.0})
-    assert result["combined_value"] == pytest.approx(stored[(1, 4)])
+    assert points == {1: display_points(stored[(1, 4)]), 2: 0.0, 5: 0.0}
+    assert result["combined_value"] == display_points(stored[(1, 4)])
 
 
 # ---------------------------------------------------------------------------
@@ -970,20 +977,19 @@ def test_stored_totals_equal_old_totals_when_death_floor_not_triggered(db):
 
     for week_id, user_id, card_id in rostered:
         old = _old_card_week_total(db, card_id, weeks[week_id])
-        assert _roster_points(db, user_id, week_id)[card_id] == pytest.approx(old)
+        assert _roster_points(db, user_id, week_id)[card_id] == display_points(old)
     for week_id in weeks:
         old_users = {}
         for w, u, c in rostered:
             if w == week_id:
                 old_users[u] = old_users.get(u, 0.0) + _old_card_week_total(db, c, weeks[week_id])
         new = _weekly_totals(db, week_id)
-        assert new == pytest.approx({{1: "alice", 2: "bob"}[u]: v for u, v in old_users.items()},
-                                    abs=0.006)
+        assert new == {{1: "alice", 2: "bob"}[u]: display_points(v) for u, v in old_users.items()}
     old_season = {}
     for w, u, c in rostered:
         name = {1: "alice", 2: "bob"}[u]
         old_season[name] = old_season.get(name, 0.0) + _old_card_week_total(db, c, weeks[w])
-    assert _season_totals(db) == pytest.approx(old_season, abs=0.006)
+    assert _season_totals(db) == {u: display_points(v) for u, v in old_season.items()}
 
 
 def test_stored_totals_use_per_match_sums_when_death_floor_triggered(db):
@@ -996,9 +1002,10 @@ def test_stored_totals_use_per_match_sums_when_death_floor_triggered(db):
     new = _roster_points(db, 1, 1)[2]
     old = _old_card_week_total(db, 2, week1)
 
-    assert new == pytest.approx(stored[(2, 1)] + stored[(2, 2)])
-    assert new == pytest.approx(_expected(db, 2, 1) + _expected(db, 2, 2))
-    assert new > old
+    assert new == display_points(stored[(2, 1)] + stored[(2, 2)])
+    assert new == display_points(_expected(db, 2, 1) + _expected(db, 2, 2))
+    assert stored[(2, 1)] + stored[(2, 2)] > old
     for card_id in (1, 3, 4):
-        user_id = 1 if card_id == 1 else 2
-        assert _roster_points(db, user_id, 1)[card_id] >= _old_card_week_total(db, card_id, week1) - 1e-9
+        # Exact stored week sums (the shown values are rounded to one decimal).
+        exact = stored[(card_id, 1)] + stored[(card_id, 2)]
+        assert exact >= _old_card_week_total(db, card_id, week1) - 1e-9

@@ -393,24 +393,6 @@ class TestPastSeasonsVisibility:
         assert profile["past_seasons"][0]["season_label"] == "Season D"
         assert profile["past_seasons"][0]["rank"] == 1
 
-    def test_leaderboard_shows_past_seasons_selector(self):
-        # frontend-only: Past Seasons selector rendering lives in
-        # frontend/app-leaderboard.js / frontend/index.html
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify a Past Seasons selector appears in the Leaderboard tab "
-            "when GET /leaderboard/seasons returns at least one entry"
-        )
-
-    def test_profile_renders_past_placements(self):
-        # frontend-only: past placement lines (e.g. "Season 15 — 3rd, 1240 pts")
-        # are rendered by frontend/app-profile.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify the Profile view renders a line per past_seasons entry"
-        )
-
-
 # ---------------------------------------------------------------------------
 # Story: Manual Week Creation with Date-Only Inputs
 # ---------------------------------------------------------------------------
@@ -504,16 +486,6 @@ class TestManualWeekCreationDateOnly:
 
         import weeks
         assert not hasattr(weeks, "generate_weeks")
-
-    def test_week_forms_use_date_inputs(self):
-        # frontend-only: Week Management create/edit forms switch from
-        # datetime-local to date inputs in frontend/index.html /
-        # frontend/app-admin.js
-        pytest.skip(
-            "frontend-only: not testable via pytest — "
-            "verify Week Management create/edit forms use <input type=date>"
-        )
-
 
 # ---------------------------------------------------------------------------
 # Story: Retire Season Env Vars

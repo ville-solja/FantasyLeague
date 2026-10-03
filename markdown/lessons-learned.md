@@ -9,6 +9,26 @@ Format:
 
 ---
 
+### 2026-10-02 — developer — docs
+**Problem:** For the #108 Option A deep dive, the hub's `README.architecture.md` layering diagram says models use `db/ (Knex)`, but runtime models run raw SQL through `mysql2` (`apps/backend/src/db/mysqlRunQuery.ts`); Knex only runs migrations. Separately, a hand-summed effort total (44–68) did not match its rows (43.5–68).
+**Solution:** Confirm hub READMEs against the code they describe (grep the imports) before repeating them. For an effort table, add a test that sums the rows and compares the Total row (see `test_effort_table_has_sizes_person_weeks_and_total`).
+
+### 2026-10-02 — technical-writer — docs
+**Problem:** The first #108 draft said the hub's `LinkedAccounts.provider` allows only `steam`, read from the migration that created the table. Two later migrations widened the enum (`discord`, then `pubg` in `20260615120000_add_pubg_provider_to_linked_accounts.ts`), so the claim was stale at the pinned commit.
+**Solution:** For a Knex (or any migration-based) schema claim, grep every migration that alters the column (`grep -rn "<column>" apps/backend/migrations`) and quote the latest one, citing that file.
+
+### 2026-10-02 — developer — file-paths
+**Problem:** For issue #108 the production backups `data/fantasy.db.backup-*` are owned by root with mode 0600, so a read-only count as the normal user fails with "unable to open database file". The readable `data/fantasy.db` is a seeded development copy (every account created within one minute), so its counts are not production figures. Separately, the GitLab code search API (`/projects/:id/search`) returns 401 without a token, even for the public Kana Hub project.
+**Solution:** Report which file was read and say plainly when it is not production data; give the exact read-only `sqlite3 "file:...?mode=ro"` query for the operator to run on a production backup, recording aggregates only. To search the hub source, download the archive of a pinned commit (`/repository/archive.tar.gz?sha=<sha>`) into the scratchpad and grep it; never install or run it.
+
+### 2026-10-01 — developer — testing
+**Problem:** The conftest `db` fixture calls `Base.metadata.create_all` on whatever models are registered at that moment. A test file that only imports `main` inside the test body (the `get_config(db=db)` pattern from `test_issue_83_demo_mode.py`) passes in the full suite but fails alone with `no such table: weights`, because the fixture runs before `main` (and so `models`) is first imported.
+**Solution:** Add `import models  # noqa: F401` at module level in such test files so every table is registered before the fixture runs (see `test_issue_144_guided_tour.py`).
+
+### 2026-10-01 — developer — testing
+**Problem:** `scripts/bench_leaderboards.py` sets `DATABASE_URL` to its own temp file at import and then imports `database`, binding `engine`/`SessionLocal` to it. Inside pytest, `database` is already imported (bound to another URL), so importing the bench module in-process seeds and reads the wrong database. Separately, since issue #149 every reader returns points already rounded to one decimal by `scoring.display_points`, so tests comparing a reader's value to an exact stored sum with `pytest.approx(x)` or `round(x, 2)` fail.
+**Solution:** Run the bench season in a subprocess (`sys.executable -c ...`, cwd = repo root, `BACKGROUND_TASKS_ENABLED=false`, `DEBUG=true`, no `DATABASE_URL`) and print results as JSON (see `_bench_comparison` in `test_issue_149_points_rounding.py`). Compare reader output to `display_points(exact_sum)`; when checking that card values add up to a total, compare the exact stored sums or allow up to about 0.1.
+
 ### 2026-10-01 — developer — testing
 **Problem:** A migration test that seeds legacy rows into `weekly_roster_entries` and then calls `migrate.run_migrations` on a fresh engine finds the table empty: migration `010_weeks_epoch0_reset` runs first (nothing is recorded in `schema_migrations` yet) and deletes every roster entry. Separately, since issue #129 `weekly_roster_entries` also holds saved bench rows (`is_bench = 1`), so any new query over it that counts or sums roster cards must apply `match_scoring.counted_roster_entry_sql()` (or `is_bench = 0` for plain counts).
 **Solution:** In such a test, call `migrate._ensure_migrations_table(conn)` and `migrate._record(conn, id)` for every earlier migration before running, as a production DB would have them applied (see `_legacy_engine` in `test_issue_129_automatic_bench_substitution.py`).

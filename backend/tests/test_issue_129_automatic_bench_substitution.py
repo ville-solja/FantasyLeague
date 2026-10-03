@@ -89,7 +89,7 @@ from routers import admin_weeks
 from routers.cards import _build_roster_response, get_roster
 from routers.leaderboard import compute_season_standings, season_leaderboard, weekly_leaderboard
 from routers.weekly_summary import _build_week_summary
-from scoring import fantasy_score
+from scoring import display_points, fantasy_score
 
 REPO = Path(__file__).resolve().parents[2]
 _ADMIN = {"user_id": 99, "username": "admin", "is_admin": True}
@@ -283,11 +283,11 @@ def test_bench_entries_do_not_count_before_substitution(db):
     _seed(db)
     a = _card_week_pts(db, 1)
     assert _card_week_pts(db, 3) != 0
-    assert _build_roster_response(db, 1, 1)["combined_value"] == pytest.approx(a)
-    assert _build_roster_response(db, 1, 1)["season_points"] == pytest.approx(a)
-    assert _week_total(db) == pytest.approx(round(a, 2))
-    assert _season_total(db) == pytest.approx(round(a, 2))
-    assert {r["id"]: r["season_points"] for r in season_leaderboard(db=db)}[1] == pytest.approx(round(a, 2))
+    assert _build_roster_response(db, 1, 1)["combined_value"] == display_points(a)
+    assert _build_roster_response(db, 1, 1)["season_points"] == display_points(a)
+    assert _week_total(db) == display_points(a)
+    assert _season_total(db) == display_points(a)
+    assert {r["id"]: r["season_points"] for r in season_leaderboard(db=db)}[1] == display_points(a)
 
 
 def test_locked_week_roster_lists_bench_entries_on_bench_not_active(db):
@@ -642,7 +642,7 @@ def test_build_roster_response_locked_week_uses_substituted_roster(db):
     _seed(db)
     _sub(db)
     r = _build_roster_response(db, 1, 1)
-    assert r["combined_value"] == pytest.approx(_card_week_pts(db, 1) + _card_week_pts(db, 3))
+    assert r["combined_value"] == display_points(_card_week_pts(db, 1) + _card_week_pts(db, 3))
 
 
 def test_build_roster_response_season_points_use_substituted_roster(db):
@@ -650,14 +650,14 @@ def test_build_roster_response_season_points_use_substituted_roster(db):
     _seed(db)
     _sub(db)
     r = _build_roster_response(db, 1, 1)
-    assert r["season_points"] == pytest.approx(_card_week_pts(db, 1) + _card_week_pts(db, 3))
+    assert r["season_points"] == display_points(_card_week_pts(db, 1) + _card_week_pts(db, 3))
 
 
 def test_weekly_leaderboard_uses_substituted_roster(db):
     """weekly_leaderboard week_points for the user equal A + C after substitution."""
     _seed(db)
     _sub(db)
-    assert _week_total(db) == pytest.approx(round(_card_week_pts(db, 1) + _card_week_pts(db, 3), 2))
+    assert _week_total(db) == display_points(_card_week_pts(db, 1) + _card_week_pts(db, 3))
 
 
 def test_season_standings_use_substituted_roster(db):
@@ -665,7 +665,7 @@ def test_season_standings_use_substituted_roster(db):
     for the substituted week."""
     _seed(db)
     _sub(db)
-    expected = round(_card_week_pts(db, 1) + _card_week_pts(db, 3), 2)
+    expected = display_points(_card_week_pts(db, 1) + _card_week_pts(db, 3))
     assert _season_total(db) == pytest.approx(expected)
     assert {r["id"]: r["season_points"] for r in season_leaderboard(db=db)}[1] == pytest.approx(expected)
 
@@ -681,10 +681,10 @@ def test_all_readers_agree_after_substitution(db):
     season = {r["id"]: r["points"] for r in compute_season_standings(db)}
     for uid in (1, 2):
         r = _build_roster_response(db, uid, 1)
-        assert round(r["combined_value"], 2) == pytest.approx(weekly[uid])
-        assert round(r["season_points"], 2) == pytest.approx(season[uid])
+        assert r["combined_value"] == weekly[uid]
+        assert r["season_points"] == season[uid]
         assert weekly[uid] == pytest.approx(season[uid])
-    assert weekly[2] == pytest.approx(round(_card_week_pts(db, 8) + _card_week_pts(db, 12), 2))
+    assert weekly[2] == display_points(_card_week_pts(db, 8) + _card_week_pts(db, 12))
 
 
 def test_totals_unchanged_before_substitution_runs(db):
@@ -692,9 +692,9 @@ def test_totals_unchanged_before_substitution_runs(db):
     of the active entries only (as today), even with bench entries saved."""
     _seed(db)
     active_only = _card_week_pts(db, 1) + _card_week_pts(db, 2)
-    assert _build_roster_response(db, 1, 1)["combined_value"] == pytest.approx(active_only)
-    assert _week_total(db) == pytest.approx(round(active_only, 2))
-    assert _season_total(db) == pytest.approx(round(active_only, 2))
+    assert _build_roster_response(db, 1, 1)["combined_value"] == display_points(active_only)
+    assert _week_total(db) == display_points(active_only)
+    assert _season_total(db) == display_points(active_only)
 
 
 def test_substitution_does_not_change_stored_card_points(db):
@@ -881,7 +881,7 @@ def test_admin_rerun_substitutions_resets_and_recomputes(db):
     admin_weeks.rerun_substitutions(1, db=db, admin=_ADMIN)
     assert _flags(db) == {1: (False, False), 2: (False, False), 3: (False, False), 4: (False, False)}
     assert _entries(db)[3].subbed_for_entry_id is None
-    assert _week_total(db) == pytest.approx(round(_card_week_pts(db, 1) + _card_week_pts(db, 2), 2))
+    assert _week_total(db) == display_points(_card_week_pts(db, 1) + _card_week_pts(db, 2))
 
 
 def test_admin_rerun_substitutions_returns_count(db):

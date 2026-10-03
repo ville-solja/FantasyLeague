@@ -433,3 +433,55 @@ so that I can view the bottom of the ranking without scrolling.
 - Clicking the active sort header reverses the current direction (ascending ↔ descending)
 - The arrow icon flips to reflect the new direction
 - Sort state is reset to default when the tab is first loaded or reloaded
+
+---
+
+## First-Time Guided Tour
+
+### Start the Tour from How to Play
+**User story**
+As a player, I want to start a short guided tour from the How to Play tab so that I can learn how to draw cards, set my roster and see my points when I choose to.
+
+**Acceptance criteria**
+- The How to Play Users subtab has a "Show the tour" button near the top. For a logged-in user it switches to My Team and starts the tour from step 1. For a logged-out visitor it opens the login popup instead
+- The tour is **not** started automatically for anyone while `GUIDED_TOUR_AUTOSTART` is `false`, the default
+- The tour has these steps, in order, each highlighting one element with a title and one or two sentences:
+  1. **Draw a card** (`#drawBtn`): a draw costs 1 of your tokens (shown with the configured token name), or the team draw cost for a card from a team you pick; you get players you don't own yet first
+  2. **Chances** (`.rarity-grid`): your chance of each rarity per draw; rarer cards score a higher bonus
+  3. **Your roster** (`#rosterActiveGrid`): put up to {roster limit} cards on your active roster; only active cards score. The roster limit is the number of slots rendered on My Team (`ROSTER_SLOTS` in `app-roster.js`), not a server value; if the grid is empty it reads "up to the roster limit" instead
+  4. **Weekly lock** (`#rosterWeekSelect`): your roster locks automatically when the week starts, so make changes before then
+  5. **Points** (the This week / Season totals): your active cards score from every league match that week; totals update as matches come in
+  6. **Leaderboards** (`#tab-btn-leaderboard`): see how you rank each week and over the season; full rules are in How to Play
+- The text comes from live values (configured token name, team draw cost, rendered roster slot count), so it never shows a stale number or name
+- A step whose element is missing or hidden is skipped, and the step count adjusts
+
+### Control the Tour
+**User story**
+As a player, I want to skip or step through the tour easily so that it never gets in my way.
+
+**Acceptance criteria**
+- Buttons: **Skip** and **Next**, with **Done** on the last step, plus a step counter ("2 / 6")
+- Clicking the dark backdrop or pressing Esc skips; Enter or → goes to the next step; ← goes back
+- Focus moves into the tour box when it opens and returns to the page when it closes; the box has `role="dialog"`, `aria-modal="true"` and a label
+- Skip, Done, Esc and a backdrop click all set `fantasy.tourSeen.v1`, so the tour doesn't start again after a reload. A blocked or failing `localStorage` doesn't break the page; the tour then simply shows again next time
+- With `prefers-reduced-motion`, the highlight moves without animation
+
+### Automatic Start for New Players (switched off at first)
+**User story**
+As an operator, I want to switch on an automatic first-visit tour later so that new players see it without looking for it, once the tour has proven itself.
+
+**Acceptance criteria**
+- `GUIDED_TOUR_AUTOSTART` (default `false`) is exposed to the frontend as `tour_autostart` in `GET /config`
+- When it is `true`, the tour starts automatically the first time a logged-in user opens My Team in a browser with no `fantasy.tourSeen.v1` key, once no other popup is open. If a popup stays open for 10 seconds, it gives up for that visit
+- When it is `false`, nothing starts automatically, and `fantasy.tourSeen.v1` is still written when the tour closes (Skip, Done, Esc or backdrop), so turning it on later doesn't re-show the tour to people who already took it
+- The How to Play button always starts the tour, seen or not
+- Pinned How to Play phrases in existing tests stay unchanged
+
+### Works on Every Screen
+**User story**
+As a player on a phone, I want the tour to fit my screen so that I can read every step.
+
+**Acceptance criteria**
+- At 400 px wide the text box stays fully on screen, placed below or above the highlighted element, whichever has room
+- The highlighted element is scrolled into view before its step shows
+- The highlight follows the element if the window is resized or rotated during the tour

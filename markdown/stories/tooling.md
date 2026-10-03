@@ -302,3 +302,56 @@ As an operator, I want the test tools impossible to switch on in production so t
 - With `ENV=production`, startup fails when `DEMO_MODE=true`, with a clear `[SECURITY]` message
 - Every scenario and snapshot endpoint returns 404 when `DEMO_MODE` is off, before any admin check, as the existing demo endpoints do
 - The docs list the test setup for `test.kana-cards.com`: `DEMO_MODE=true`, `DEMO_ACCOUNT_PASSWORD` set, `ENV` unset
+
+---
+
+## Kana Hub Integration Feasibility
+
+### Feasibility Document
+**User story**
+As the product owner, I want a written assessment of folding Kana Cards into Kana Hub so that I can decide the direction before investing development time.
+
+**Acceptance criteria**
+- `markdown/features/reference/kana-hub-integration-feasibility.md` compares the two systems area by area: stack, data model, identity, game data, fantasy design, background jobs, Twitch, hosting and licence. Each area cites concrete files or docs from both repositories, with the hub's branch and date
+- It lists the **architectural blockers**, each with severity (blocker / major / minor) and what would remove it
+- It confirms or corrects the preliminary findings in this plan, including whether the hub ingests any Dota data and how its fantasy league scores
+- It explains how the hub is organised per game (game registry, per-game backend domains, per-game fantasy namespace, season routes), where Dota would fit, and which Kana Cards part maps to which hub layer
+- It is understandable without reading either codebase
+
+### Integration Options and Recommendation
+**User story**
+As the product owner, I want the realistic integration options compared side by side so that I can choose one with known cost and risk.
+
+**Acceptance criteria**
+- At least four options are compared:
+  - (A) full port into the eggosystem,
+  - (B) Kana Cards stays separate but uses hub (Steam) login and identity,
+  - (C) the hub links to or embeds Kana Cards views, and the two exchange data through APIs. This includes Kana Cards reading the Dota schedule, teams and results from the hub once they move there,
+  - (D) no integration; Kana Cards keeps its own branding
+- Each option lists what users see, the work involved in t-shirt sizes (S/M/L/XL) per area, the risks, what happens to existing data (accounts, cards, history), and the effect on the Twitch extension
+- What moving to Steam login removes from Kana Cards (files, endpoints, env vars), under Option A and under a Steam-only Option B, with the trade-off for players
+- A clear recommendation with reasons, and the first concrete step if chosen
+- An **Option A in depth** section evaluates the full port against both codebases: the target architecture in the hub (where each Kana Cards module lands in `games/dota/`, `games/fantasy/dota/` or hub core; how the hub's CS2 fantasy is structured and schedules scoring; `/api/v2/internal` vs public routes; frontend pages), the data model mapping (SQLite tables to hub tables or new Knex migrations, following hub conventions), background work, frontend, Twitch extension, testing and quality gates, an effort table per area with t-shirt size and person-week range plus a total and the critical path, a phased migration plan tied to season breaks, risks and gains, and decision criteria. It states whether the deeper analysis changes the recommendation and why, and every hub claim in it cites a hub file path at the checked commit
+- How Kana Cards would sit next to the hub's CS2 fantasy league as the Dota game, for example in navigation, account and leaderboard presentation. Both stay separate products
+- What "single site for the tournament" needs in order: Dota season, teams and schedule in the hub first, then fantasy linked or embedded
+
+### Questions for the Hub Team
+**User story**
+As the product owner, I want the open questions collected so that a single conversation with the hub maintainers can settle them.
+
+**Acceptance criteria**
+- A short list of questions only the hub team can answer, for example:
+  - When and how are Dota seasons, teams and the schedule planned to arrive in the hub?
+  - Will the hub expose them through a public API (`/api/v2`) that Kana Cards could read?
+  - Is Dota match data (OpenDota) wanted in the hub, or should Kana Cards keep ingesting it?
+  - What hosting and login (SSO) options exist for external services, and can the hub link or embed one?
+- Each question says which option or blocker it affects
+
+### Account Bridging Check
+**User story**
+As a developer, I want to know how Kana Cards accounts would map to hub identities so that a later integration doesn't lose anyone's cards.
+
+**Acceptance criteria**
+- The document explains the Steam32 ↔ Steam64 relation (OpenDota account id + 76561197960265728)
+- It states that the number of users with a linked player ID is not decisive: the architecture is the same whatever the count. No count is required, and no personal data appears in the document
+- It describes what happens to users without a linked ID (for example, a one-time Steam link step) and to Twitch links

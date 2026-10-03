@@ -165,4 +165,5 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `PROFILE_ENRICHMENT_COOLDOWN_HOURS` | `24` | Minimum hours between re-enrichment for a given player |
 | `ENRICHMENT_CHECK_INTERVAL` | `300` | Seconds between background profile-enrichment cycles |
 | `ENRICHMENT_BATCH_SIZE` | `3` | Players enriched per cycle |
+| `GUIDED_TOUR_AUTOSTART` | `false` | `true` starts the My Team guided tour automatically on a player's first visit (per browser); otherwise it only starts from How to Play. Served as `tour_autostart` in `GET /config`. See `reference/guided-tour.md` |
 | `APP_VERSION` / `APP_RELEASE` | *(unset)* | Build version / release tag shown as a faint badge on every page. See `reference/version-visibility.md` |

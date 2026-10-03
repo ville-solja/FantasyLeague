@@ -8,8 +8,17 @@ from deps import require_admin
 from enrich import run_profile_enrichment
 from match_scoring import scored_match_sql, scored_stat_sql
 from models import Player, PlayerProfile
+from scoring import display_points
 
 router = APIRouter()
+
+
+def _rounded_points(row) -> dict:
+    """Row dict with avg_points/total_points rounded once for display (issue #149)."""
+    d = dict(row)
+    d["avg_points"] = display_points(d["avg_points"])
+    d["total_points"] = display_points(d["total_points"])
+    return d
 
 
 @router.get("/players")
@@ -37,7 +46,7 @@ def list_players(db=Depends(get_db)):
         GROUP BY p.id, p.name, p.avatar_url, t.name, t.id
         ORDER BY total_points DESC
     """)).fetchall()
-    return [dict(r._mapping) for r in results]
+    return [_rounded_points(r._mapping) for r in results]
 
 
 @router.get("/players/{player_id}")
@@ -75,6 +84,10 @@ def get_player(player_id: int, db=Depends(get_db)):
     total_points = sum(r["fantasy_points"] or 0 for r in scored)
     avg_points = total_points / len(scored) if scored else 0
     best = max(scored, key=lambda r: r["fantasy_points"] or 0, default=None)
+    # Totals above use exact values; each displayed value is rounded once (issue #149).
+    for r in history:
+        if r["fantasy_points"] is not None:
+            r["fantasy_points"] = display_points(r["fantasy_points"])
 
     team_name = history[0]["team_name"] if history else None
     team_id = history[0]["team_id"] if history else None
@@ -86,8 +99,8 @@ def get_player(player_id: int, db=Depends(get_db)):
         "team_name": team_name,
         "team_id": team_id,
         "matches": matches,
-        "avg_points": avg_points,
-        "total_points": total_points,
+        "avg_points": display_points(avg_points),
+        "total_points": display_points(total_points),
         "best_match": {
             "match_id": best["match_id"],
             "fantasy_points": best["fantasy_points"],
@@ -153,5 +166,5 @@ def get_team(team_id: int, db=Depends(get_db)):
         "id": team.id,
         "name": team.name,
         "matches": match_count or 0,
-        "players": [dict(r._mapping) for r in players],
+        "players": [_rounded_points(r._mapping) for r in players],
     }

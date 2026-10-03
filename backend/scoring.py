@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 
 # Stats that flow through the standard weight × value loop.
 # Deaths is excluded — it uses a clamped pool formula handled separately.
@@ -18,6 +20,18 @@ SCORING_STATS = [
     "firstblood_claimed",
     "stuns",
 ]
+
+
+def display_points(x, places: int = 1) -> float:
+    """Round a points value for display: half away from zero, on its decimal value.
+
+    Every displayed points value goes through here exactly once, from its exact sum,
+    so two pages never show the same value two ways (issue #149).
+    """
+    if x is None:
+        return 0.0
+    q = Decimal(1).scaleb(-places)
+    return float(Decimal(repr(float(x))).quantize(q, rounding=ROUND_HALF_UP))
 
 
 def fantasy_score(p: dict, weights: dict) -> float:

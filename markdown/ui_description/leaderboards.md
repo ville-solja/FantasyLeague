@@ -11,7 +11,7 @@ Fantasy user standings with two modes toggled by buttons:
 
 Card rarity modifiers are applied to points in both views (e.g. a Legendary card gets +3% on top of raw stats).
 
-In the Weekly view, clicking a row expands that user's card chips: rarity, player name and the card's points for that week, the same stored week value My Team shows. The Season view shows totals only and does not expand into chips. The API rounds each card value and each user total to 2 decimals, each from its own unrounded sum, and the page shows 1 decimal, so the chips can differ from the shown total by less than 0.1.
+In the Weekly view, clicking a row expands that user's card chips: rarity, player name and the card's points for that week, the same stored week value My Team shows. The Season view shows totals only and does not expand into chips. The API rounds each card value and each user total once, to 1 decimal, each from its own exact sum (see `markdown/features/reference/points-rounding.md`), and the page shows that value as is. So the chips can add up to a slightly different number than the total (typically 0.1); a one-line note under the chips says "Totals are rounded from exact points, so card values may differ by 0.1 in sum."
 
 ## Player average performance panel
 

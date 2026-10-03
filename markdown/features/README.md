@@ -44,6 +44,7 @@ Implementation details, integrations, and operator tooling.
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
+| [Guided Tour](reference/guided-tour.md) | Spotlight tour of My Team (draw, chances, roster, weekly lock, points, leaderboards), started from How to Play; automatic first-visit start off by default (`GUIDED_TOUR_AUTOSTART`) |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
 | [Early MVP Selection](reference/early-mvp-selection.md) | Lists matches in the MVP panel from OpenDota's live feed before stats are ingested; bonus applied at ingest; faster polling right after a game |
 | [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
@@ -92,6 +93,7 @@ Implementation details, integrations, and operator tooling.
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
 | [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
+| [Kana Hub Integration Feasibility](reference/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
 | [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
 | [Rate Limiting](reference/rate-limiting.md) | Per-IP request-rate limits app-wide, with stricter limits on login/register/forgot-password and a per-username failed-login lockout |
@@ -99,6 +101,7 @@ Implementation details, integrations, and operator tooling.
 | [Roster Mutation Rate Limiting](reference/roster-mutation-rate-limiting.md) | Per-user rate limiting on roster activate/deactivate/swap/reorder, plus a frontend in-flight guard, closing a cheap DoS vector |
 | [Assists Scoring Fix](reference/assists-scoring-fix.md) | Fixes assists contributing zero points to fantasy scoring despite being captured, ingested, and displayed |
 | [Stored Card Points](reference/stored-card-points.md) | Card points stored per match and summed by every view, so My Team and the leaderboards agree and pages stop recalculating per request |
+| [Points Rounding](reference/points-rounding.md) | One server-side rounding rule (one decimal, half away from zero, on the decimal value) for every points number, so My Team, leaderboards, Weekly Report and the Twitch panel agree |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |

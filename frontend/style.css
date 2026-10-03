@@ -346,6 +346,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   font-size: var(--fs-xs);
 }
 .lb-chip-pts { font-weight: var(--w-bold); opacity: 0.9; }
+.lb-rounding-note { margin-top: 6px; font-size: var(--fs-xs); color: var(--fg-dim); }
 .lb-chip-rarity {
   font-weight: var(--w-bold);
   font-size: 0.68rem;
@@ -1224,3 +1225,79 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 .weekly-summary-points-neutral { color: var(--fg-dim); }
 .weekly-summary-points-rostered { color: var(--accent); font-weight: var(--w-bold); }
+
+/* ============================================================
+   GUIDED TOUR (issue #144) — spotlight overlay on My Team
+   ============================================================ */
+.tour-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.tour-cta-note {
+  font-size: var(--fs-sm);
+  color: var(--fg-dim);
+}
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+}
+.tour-backdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.tour-spotlight {
+  position: fixed;
+  pointer-events: none;
+  border-radius: var(--r-sm);
+  outline: var(--bw-thin) solid var(--accent);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--k-ink-950) 80%, transparent), var(--sh-glow-orange);
+  transition: left var(--t-base) var(--ease-out), top var(--t-base) var(--ease-out),
+              width var(--t-base) var(--ease-out), height var(--t-base) var(--ease-out);
+}
+.tour-box {
+  position: fixed;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--bg-card);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+  padding: 16px 18px;
+  color: var(--fg);
+}
+.tour-box:focus { outline: none; }
+.tour-box:focus-visible { outline: var(--bw-thin) solid var(--accent); }
+.tour-title {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.tour-body {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+  margin-bottom: 14px;
+}
+.tour-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tour-counter {
+  margin-right: auto;
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-wide);
+  color: var(--fg-dim);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spotlight { transition: none !important; }
+}

@@ -440,7 +440,7 @@ As a player, I want a card to show the same points on My Team, the weekly leader
 - A user's weekly and season totals equal the sum of their cards' points in that scope
 - The death bonus is floored at 0 per match, so it matches the Players tab's per-match `fantasy_points` before card modifiers and rarity
 - The season leaderboard view shows totals only (no card chips); the weekly leaderboard's card chips and My Team ("wk pts") show the same stored week value for a card
-- Values are stored and summed unrounded and rounded only in the response (2 decimals on the leaderboards) and on the page (1 decimal), and a list of card values adds up to the shown total within 0.1
+- Values are stored and summed unrounded and rounded once, in the response, to 1 decimal (`display_points`, issue #149); the page only formats them, and a list of card values can differ from the shown total by about 0.1
 
 ### Stored Per-Match Card Points
 **User story**
@@ -531,3 +531,39 @@ As an admin, I want to re-run a week's substitutions after correcting match data
 - It returns 409 for a week that isn't locked, or whose substitution time hasn't been reached
 - It writes an `admin_substitutions_rerun` audit entry
 - The admin Week Management table has a "Re-run substitutions" action on locked weeks once `end_time + SUBSTITUTION_DELAY_HOURS` has passed
+
+---
+
+## Consistent Points Rounding
+
+### Same Week Points Everywhere
+**User story**
+As a player, I want my week points to show the same number on My Team and on the leaderboard so that I can trust the scores.
+
+**Acceptance criteria**
+- One helper, `display_points(x)` in `backend/scoring.py`, rounds a points value to one decimal, half away from zero, using its decimal value (`Decimal(repr(x))`) so binary artefacts don't change the result. For example 240.45 → 240.5, 231.25 → 231.3, 0.05 → 0.1, −0.05 → −0.1, and 2.675 → 2.7
+- My Team's `combined_value`, `season_points` and each card's `total_points`, and the weekly and season leaderboards' totals and card `points`, all come from `display_points` applied to the exact sum
+- For every user and week in the benchmark season, My Team's week total equals the weekly leaderboard's total exactly (0 mismatches, against 29 of 600 before)
+- For every user, My Team's `season_points` equals the season leaderboard total
+
+### One Rounding Rule for All Points
+**User story**
+As a player, I want every points number in the app and the Twitch panel rounded the same way so that the same value never shows two different ways.
+
+**Acceptance criteria**
+- `display_points` is used for:
+  - the Twitch MVP panel player points (`GET /twitch/matches/current`),
+  - Weekly Report per-match points,
+  - `/top` points and `/leaderboard` average points,
+  - archived season standings,
+  - `/simulate` results, with two decimals there via a `places` argument, since the simulator compares weights
+- No other `round(` on a points value remains in `backend/routers/` or `backend/twitch.py`, checked by a test that searches the source
+- The frontend shows the server's value: `toFixed(1)` on an already-rounded number only formats it, and no frontend code rounds a points value any other way
+
+### Explain Card Totals
+**User story**
+As a player, I want to know why my cards' values don't always add up exactly to my total so that a 0.1 difference isn't confusing.
+
+**Acceptance criteria**
+- Where the leaderboard lists a user's cards under their total, a one-line note reads "Totals are rounded from exact points, so card values may differ by 0.1 in sum"
+- The How to Play scoring section has the same note once

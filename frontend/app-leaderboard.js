@@ -33,7 +33,8 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
     `<span class="lb-card-chip ${_escHtml(c.card_type)}"><span class="lb-chip-rarity" title="${_escHtml(c.card_type)}">${rarityAbbrev[c.card_type] || "?"}</span> ${_escHtml(c.player_name)} <span class="lb-chip-pts">${Number(c.points).toFixed(1)}</span></span>`
   ).join("");
   const detailRow = `<tr class="lb-card-detail hidden" id="lb-detail-${r.id}">
-    <td colspan="3"><div class="lb-card-breakdown">${breakdown}</div></td>
+    <td colspan="3"><div class="lb-card-breakdown">${breakdown}</div>
+      <div class="lb-rounding-note">Totals are rounded from exact points, so card values may differ by 0.1 in sum.</div></td>
   </tr>`;
   return mainRow + detailRow;
 }

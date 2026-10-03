@@ -9,6 +9,7 @@ from deps import get_current_user
 from dotabuff_league_logos import resolve_local_team_logo_path
 from image import _ASSETS_DIR
 from match_scoring import counted_roster_entry_sql
+from scoring import display_points
 from weeks import substitution_delay_hours
 from models import (
     Card, Player, PlayerMatchStats, Team, Week, WeeklyRosterEntry,
@@ -108,7 +109,7 @@ def _build_week_summary(db, week: Week, revealed: bool, user_id: int) -> dict:
                 "name": player.name,
                 "avatar_url": player.avatar_url,
                 "team_id": stats.team_id,
-                "points": None if stats.match_id in excluded_ids else round(stats.fantasy_points or 0.0, 1),
+                "points": None if stats.match_id in excluded_ids else display_points(stats.fantasy_points),
                 "is_mvp": bool(stats.is_mvp),
                 "on_roster": player.id in roster_player_ids,
             })

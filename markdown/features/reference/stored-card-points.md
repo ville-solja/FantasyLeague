@@ -63,7 +63,7 @@ Every view sums stored rows with the same joins as before; no view calls `card_f
 
 Match exclusion and week assignment are applied at read time, so toggling them changes totals immediately without a rebuild.
 
-Rounding: stored `points` and all sums are unrounded. The leaderboard API (weekly and season) rounds each card chip and each user total to 2 decimals, each from its own unrounded sum; My Team's `total_points`, `combined_value` and `season_points` are returned unrounded. The frontend then shows every value to 1 decimal (`toFixed(1)`). So the chips shown for a user can differ from the shown total by a rounding step (under 0.1).
+Rounding: stored `points` and all sums are unrounded. Every reader (weekly and season leaderboards, My Team's `total_points`, `combined_value` and `season_points`) rounds each card value and each user total once, with `scoring.display_points` (1 decimal, half away from zero), each from its own exact sum, so My Team and the leaderboards always show the same number. The frontend only formats the value (`toFixed(1)`). The chips shown for a user can therefore add up to a slightly different number than the shown total. See [points-rounding.md](points-rounding.md).
 
 Each reader runs a fixed number of queries regardless of users and cards: weekly 3, season 2, My Team 5.
 

@@ -42,7 +42,7 @@ Five fixed card positions (`#rosterActiveGrid`), each showing the card image wit
 
 ### Roster totals
 
-A line under the grid:
+A line under the grid (`#rosterTotals`):
 
 - **This week** — sum of fantasy points earned by the roster cards during the selected week's matches.
 - **Season** — cumulative fantasy points earned across all locked weeks (only counting cards that were in the active roster snapshot for each week, after any bench substitution).
@@ -58,3 +58,12 @@ A card grid (`#benchGrid`) under a **Bench** heading, in the same card style as 
 ### Week status label
 
 Shown next to the week selector. For the editable week: "Locks [weekday, date]" in amber. For locked weeks: "In progress" or "Locked" in grey.
+
+## Guided tour
+
+A spotlight tour of this tab (`frontend/app-tour.js`). It starts from **Show the tour** on How to Play → Users; with `GUIDED_TOUR_AUTOSTART=true` it also starts once, automatically, the first time a logged-in player opens My Team in a browser, after any open popup closes.
+
+- A dark overlay covers the page except a cut-out with an orange outline around one element. A text box below it (or above it when there is no room) shows a title, one or two sentences, a counter ("2 / 6"), **Skip** and **Next** (**Done** on the last step).
+- Steps, in order: **Draw a card** (`#drawBtn`, with the configured token name and the live team draw cost), **Chances** (`.rarity-grid`), **Your roster** (`#rosterActiveGrid`, with the number of roster slots rendered, `ROSTER_SLOTS` in `app-roster.js`; "up to the roster limit" if the grid is empty), **Weekly lock** (`#rosterWeekSelect`), **Points** (`#rosterTotals`), **Leaderboards** (`#tab-btn-leaderboard`). A step whose element is missing or hidden is skipped and the counter adjusts.
+- Esc or a click on the dark area skips; Enter or → goes to the next step; ← goes back. Focus moves into the box and returns to the page on close.
+- Skip, Done, Esc and a backdrop click all save `fantasy.tourSeen.v1` in `localStorage`, so the automatic start doesn't repeat. The automatic start gives up for that visit if a popup stays open for 10 seconds. The How to Play button always starts it.

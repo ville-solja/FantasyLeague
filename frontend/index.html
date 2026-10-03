@@ -422,7 +422,7 @@
 
       <!-- Active roster: card image grid -->
       <div id="rosterActiveGrid" class="card-grid"></div>
-      <div style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
+      <div id="rosterTotals" style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
         <span>This week: <strong id="rosterCombined" style="color:#aaa;">—</strong> pts</span>
         <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
         <span id="rosterStatus" style="color:#555;"></span>
@@ -623,6 +623,11 @@
 
       <p style="margin-bottom:16px;color:#bbb;font-size:0.9rem;">Kana Cards is a fan-made card game built on the Finnish Dota 2 league. Draw player cards, put up to 5 on your roster, and score points from how those players perform in real league matches each week.</p>
 
+      <div class="tour-cta">
+        <button id="htpTourBtn" type="button" class="secondary" onclick="startTourFromHowToPlay()">Show the tour</button>
+        <span class="tour-cta-note">A short walk through drawing, your roster and points on My Team.</span>
+      </div>
+
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Cards &amp; Drawing</h3>
       <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Each card is a real league player in one of four rarities: <strong>Common, Rare, Epic, Legendary</strong>.</li>
@@ -695,6 +700,8 @@
       </div>
 
       <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">The match MVP confirmed by the streamer (see the <strong>Streamers</strong> subtab) gets an extra bonus for that match. It is added after the fact and shows in every leaderboard and roster total. Current MVP bonus: <strong id="howtoplay-mvp-bonus">—</strong>.</p>
+
+      <p style="color:#999;font-size:0.8rem;margin-bottom:8px;">Points are shown to one decimal. Totals are rounded from exact points, so card values may differ by 0.1 in sum.</p>
 
       <p style="color:#999;font-size:0.8rem;">Admins set these values and may change them between seasons. The tables always show the current values.</p>
     </div>
@@ -1169,6 +1176,7 @@
 <script src="/app-admin.js"></script>
 <script src="/app-profile.js"></script>
 <script src="/app-weekly-summary.js"></script>
+<script src="/app-tour.js"></script>
 <script src="/app-init.js"></script>
 </body>
 </html>

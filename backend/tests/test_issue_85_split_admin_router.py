@@ -258,15 +258,22 @@ class TestPreserveExistingTestCoverageThroughSplit:
         the issue-141 documentation-steward fixes' 1 new test did after that, and
         plan-issue-117-longer-sessions' 85 new tests did after that, and
         plan-issue-129-automatic-bench-substitution's 61 new tests did after that, and
-        the #129 Weekly Report substitutions-pending follow-up's 2 new tests did after that)."""
+        the #129 Weekly Report substitutions-pending follow-up's 2 new tests did after that, and
+        plan-issue-149-points-rounding's 30 new tests did after that, and
+        plan-issue-144-guided-tour's 34 new tests did after that, and
+        plan-issue-108-kana-hub-integration-feasibility's 30 new tests did after that, and
+        its 2026-10-02 product-owner update's net 7 new tests did after that, and
+        its Option A deep dive's 15 new tests did after that; then 2026-10-03's
+        cleanup removed 6 tests of the dead seed_cards() and 10 always-skipped
+        frontend-only placeholders, so nothing is skipped any more)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "1367 passed" in output, output[-3000:]
-        assert "10 skipped" in output, output[-3000:]
+        assert "1477 passed" in output, output[-3000:]
+        assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):
         """pytest collection of backend/tests/ produces zero collection errors after the split (no stale import paths left behind)."""

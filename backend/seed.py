@@ -6,19 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
-from models import User, Card, Weight, PlayerMatchStats, Match, TagDefinition
+from models import User, Weight, TagDefinition
 from auth import hash_password
 from scoring import SCORING_STATS
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
-
-CARD_SCHEMA = [
-    ("legendary", 1),
-    ("epic",      2),
-    ("rare",      4),
-    ("common",    8),
-]
-
 
 def seed_users():
     db = SessionLocal()
@@ -93,48 +85,6 @@ def seed_admin_from_env():
                 logger.debug("Admin account %s already exists, skipping", username)
 
             i += 1
-    finally:
-        db.close()
-
-
-def seed_cards(league_id: int, generation: int = 1):
-    db = SessionLocal()
-    try:
-        player_ids = (
-            db.query(PlayerMatchStats.player_id)
-            .join(Match, Match.match_id == PlayerMatchStats.match_id)
-            .filter(Match.league_id == league_id)
-            .distinct()
-            .all()
-        )
-        player_ids = [r[0] for r in player_ids]
-
-        already_seeded = {
-            r[0] for r in
-            db.query(Card.player_id).filter(
-                Card.league_id == league_id,
-                Card.generation == generation,
-            ).distinct().all()
-        }
-
-        count = 0
-        for player_id in player_ids:
-            if player_id in already_seeded:
-                continue
-            for card_type, quantity in CARD_SCHEMA:
-                for _ in range(quantity):
-                    db.add(Card(
-                        player_id=player_id,
-                        owner_id=None,
-                        card_type=card_type,
-                        league_id=league_id,
-                        generation=generation,
-                    ))
-                    count += 1
-
-        db.commit()
-        logger.info("Seeded %d cards (gen %d) for league %d across %d players",
-                    count, generation, league_id, len(player_ids))
     finally:
         db.close()
 

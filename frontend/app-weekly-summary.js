@@ -108,7 +108,7 @@ function _weeklySummaryPlayerHtml(p) {
       ${mvpLabel}
       <img src="${p.avatar_url || ''}" alt="" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'">
       <div>${playerLink(p.player_id, p.name)}</div>
-      <div class="${pointsClass}">${p.points == null ? '—' : _escHtml(p.points)}</div>
+      <div class="${pointsClass}">${p.points == null ? '—' : _escHtml(Number(p.points).toFixed(1))}</div>
     </div>`;
 }
 
