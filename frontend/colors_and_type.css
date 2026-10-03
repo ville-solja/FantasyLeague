@@ -69,7 +69,7 @@
   --bg-card-hi:  var(--k-ink-700);
   --fg:          var(--k-ink-100);
   --fg-muted:    var(--k-ink-300);
-  --fg-dim:      var(--k-ink-400);
+  --fg-dim:      var(--k-ink-400);   /* 3.2:1 on cards: borders, disabled and placeholder states only, never readable text */
   --border:      var(--k-ink-600);
   --border-soft: var(--k-ink-700);
 
@@ -90,17 +90,19 @@
   --w-bold:    700;
   --w-black:   900;
 
-  /* sizes */
-  --fs-xs:   11px;
-  --fs-sm:   13px;
-  --fs-base: 15px;
-  --fs-md:   17px;
-  --fs-lg:   20px;
-  --fs-xl:   26px;
-  --fs-2xl:  36px;
-  --fs-3xl:  52px;
-  --fs-4xl:  72px;
-  --fs-hero: 112px;
+  /* sizes — in rem so the browser's font-size setting applies (values are the
+     px sizes at the default 16px root). Readable text is never below --fs-xs,
+     and Big Shoulders is used at --fs-sm and up only. */
+  --fs-xs:   0.6875rem;  /* 11px */
+  --fs-sm:   0.8125rem;  /* 13px */
+  --fs-base: 0.9375rem;  /* 15px */
+  --fs-md:   1.0625rem;  /* 17px */
+  --fs-lg:   1.25rem;    /* 20px */
+  --fs-xl:   1.625rem;   /* 26px */
+  --fs-2xl:  2.25rem;    /* 36px */
+  --fs-3xl:  3.25rem;    /* 52px */
+  --fs-4xl:  4.5rem;     /* 72px */
+  --fs-hero: 7rem;       /* 112px */
 
   /* line heights */
   --lh-tight:  1.05;

@@ -1181,7 +1181,7 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 .weekly-summary-winner-label {
   color: var(--accent);
-  font-size: 0.6rem;
+  font-size: var(--fs-xs);
   font-weight: var(--w-bold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1192,11 +1192,11 @@ body.roster-dragging * { cursor: grabbing !important; }
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  color: var(--fg-dim);
+  color: var(--fg-muted);
 }
 .weekly-summary-match-date {
-  font-size: 0.7rem;
-  color: var(--fg-dim);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
   letter-spacing: 0.03em;
 }
 /* Docked outside the scrollable #weeklySummaryContent, so it stays visible
@@ -1220,8 +1220,9 @@ body.roster-dragging * { cursor: grabbing !important; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 60px;
-  font-size: 0.68rem;
+  width: 68px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
   text-align: center;
   color: var(--fg);
   overflow-wrap: anywhere;
@@ -1233,14 +1234,14 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 .weekly-summary-mvp-label {
   color: var(--accent);
-  font-size: 0.55rem;
+  font-size: var(--fs-xs);
   font-weight: var(--w-bold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 2px;
 }
-.weekly-summary-points-neutral { color: var(--fg-dim); }
-.weekly-summary-points-rostered { color: var(--accent); font-weight: var(--w-bold); }
+.weekly-summary-points-neutral { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.weekly-summary-points-rostered { color: var(--accent); font-weight: var(--w-bold); font-variant-numeric: tabular-nums; }
 
 /* Issue #151: "YOUR CARD" / "YOUR SUB" tile — a filled shape plus a label, so
    ownership never relies on colour alone. Background only: the MVP outline
@@ -1251,9 +1252,9 @@ body.roster-dragging * { cursor: grabbing !important; }
   padding: 4px 2px;
 }
 .weekly-summary-owned-label {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: var(--w-bold);
-  font-size: 0.55rem;
+  font-size: var(--fs-xs);
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
   color: var(--accent);
@@ -1272,13 +1273,13 @@ body.roster-dragging * { cursor: grabbing !important; }
   vertical-align: middle;
 }
 .weekly-summary-match-players { margin-top: 8px; }
-.weekly-summary-vod { font-size: 0.75rem; }
-.weekly-summary-unknown { color: var(--fg-dim); }
-.weekly-summary-empty { color: var(--fg-dim); font-size: var(--fs-sm); }
+.weekly-summary-vod { font-size: var(--fs-sm); }
+.weekly-summary-unknown { color: var(--fg-muted); }
+.weekly-summary-empty { color: var(--fg-muted); font-size: var(--fs-sm); }
 .weekly-summary-empty.err { color: var(--k-err); }
 .weekly-summary-subs-pending {
-  color: var(--fg-dim);
-  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
   margin-top: 4px;
 }
 
@@ -1347,10 +1348,11 @@ body.roster-dragging * { cursor: grabbing !important; }
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
   color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 .weekly-summary-col-meta {
-  font-size: var(--fs-xs);
-  color: var(--fg-dim);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
   margin-top: 2px;
 }
 .weekly-summary-col-body {
@@ -1368,10 +1370,10 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-summary-roster-group {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   letter-spacing: var(--tr-widest);
   text-transform: uppercase;
-  color: var(--fg-dim);
+  color: var(--fg-muted);
   margin: var(--s-4) 0 var(--s-2);
 }
 .weekly-summary-roster-card {
@@ -1387,11 +1389,10 @@ body.roster-dragging * { cursor: grabbing !important; }
   border-style: dashed;
   border-color: var(--border);
   background: transparent;
-  opacity: 0.6;
 }
 .weekly-summary-roster-thumb-col {
   flex: none;
-  width: 56px;
+  width: 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1400,11 +1401,11 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-summary-roster-thumb {
   position: relative;
   flex: none;
-  width: 56px;
-  height: 79px;
+  width: 64px;
+  height: 64px;
   padding: 0;
   background: var(--bg-card);
-  border: var(--bw-thick) solid var(--border);
+  border: 3px solid var(--border);
   border-radius: var(--r-sm);
   overflow: hidden;
   cursor: pointer;
@@ -1415,36 +1416,46 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-summary-roster-thumb[data-rarity="rare"]      { border-color: var(--k-rarity-rare); }
 .weekly-summary-roster-thumb[data-rarity="epic"]      { border-color: var(--k-rarity-epic); }
 .weekly-summary-roster-thumb[data-rarity="legendary"] { border-color: var(--k-rarity-legendary); }
-.weekly-summary-roster-thumb img {
+.weekly-summary-roster-avatar {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.weekly-summary-roster-thumb-rarity {
+.weekly-summary-roster-initials {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 1px 0;
-  background: var(--bg);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: 9px;
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tr-wide);
+  color: var(--fg-muted);
+}
+.weekly-summary-roster-thumb-rarity {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
   text-align: center;
+  white-space: nowrap;
+  line-height: 1.1;
   color: var(--fg-muted);
 }
-.weekly-summary-roster-thumb[data-rarity="common"] .weekly-summary-roster-thumb-rarity    { color: var(--k-rarity-common); }
-.weekly-summary-roster-thumb[data-rarity="rare"] .weekly-summary-roster-thumb-rarity      { color: var(--k-rarity-rare); }
-.weekly-summary-roster-thumb[data-rarity="epic"] .weekly-summary-roster-thumb-rarity      { color: var(--k-rarity-epic); }
-.weekly-summary-roster-thumb[data-rarity="legendary"] .weekly-summary-roster-thumb-rarity { color: var(--k-rarity-legendary); }
+.weekly-summary-roster-thumb-col[data-rarity="common"] .weekly-summary-roster-thumb-rarity    { color: var(--k-rarity-common); }
+.weekly-summary-roster-thumb-col[data-rarity="rare"] .weekly-summary-roster-thumb-rarity      { color: var(--k-rarity-rare); }
+.weekly-summary-roster-thumb-col[data-rarity="epic"] .weekly-summary-roster-thumb-rarity      { color: var(--k-rarity-epic); }
+.weekly-summary-roster-thumb-col[data-rarity="legendary"] .weekly-summary-roster-thumb-rarity { color: var(--k-rarity-legendary); }
 .weekly-summary-roster-rarity-cap {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
-  letter-spacing: var(--tr-wide);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--fg-muted);
   transition: opacity var(--t-base) var(--ease-out);
@@ -1453,11 +1464,6 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-summary-roster-rarity-cap[data-rarity="rare"]      { color: var(--k-rarity-rare); }
 .weekly-summary-roster-rarity-cap[data-rarity="epic"]      { color: var(--k-rarity-epic); }
 .weekly-summary-roster-rarity-cap[data-rarity="legendary"] { color: var(--k-rarity-legendary); }
-.weekly-summary-roster-thumb .card-img-loading {
-  font-size: 0.55rem;
-  height: 100%;
-  overflow: hidden;
-}
 .weekly-summary-roster-main { flex: 1; min-width: 0; }
 .weekly-summary-roster-top {
   display: flex;
@@ -1474,7 +1480,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   text-transform: uppercase;
   color: var(--fg);
 }
-.weekly-summary-roster-team { font-size: var(--fs-xs); color: var(--fg-muted); }
+.weekly-summary-roster-team { font-size: var(--fs-sm); color: var(--fg-muted); }
 .weekly-summary-roster-pts {
   position: relative;
   font-family: var(--font-display);
@@ -1482,15 +1488,17 @@ body.roster-dragging * { cursor: grabbing !important; }
   font-size: var(--fs-lg);
   color: var(--accent);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .weekly-summary-roster-pts .recap-unit {
+  font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: var(--w-bold);
   text-transform: uppercase;
-  color: var(--fg-dim);
+  color: var(--fg-muted);
   margin-left: 3px;
 }
-.weekly-summary-roster-card.subbed-out .weekly-summary-roster-pts { color: var(--fg-dim); }
+.weekly-summary-roster-card.subbed-out .weekly-summary-roster-pts { color: var(--fg-muted); }
 .weekly-summary-roster-tags {
   display: flex;
   gap: 4px;
@@ -1500,7 +1508,7 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-summary-tag {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
   padding: 1px 6px;
@@ -1510,9 +1518,9 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 /* Neutral: orange marks only the card being revealed (issue #152). */
 .weekly-summary-tag.state { color: var(--fg-muted); border-color: var(--border); }
-.weekly-summary-roster-card.subbed-out .weekly-summary-tag.state { color: var(--fg-dim); border-color: var(--border); }
+.weekly-summary-roster-card.subbed-out .weekly-summary-tag.state { color: var(--fg-muted); border-color: var(--border); }
 .weekly-summary-roster-note {
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   color: var(--fg-muted);
   margin-top: 4px;
 }
@@ -1526,14 +1534,14 @@ body.roster-dragging * { cursor: grabbing !important; }
   flex-wrap: wrap;
   align-items: center;
   gap: 4px var(--s-2);
-  padding: 4px 0;
-  font-size: var(--fs-xs);
+  padding: 5px 0;
+  font-size: var(--fs-sm);
   color: var(--fg-muted);
   border-top: var(--bw-hair) solid var(--border-soft);
 }
-.weekly-summary-game-date { color: var(--fg-dim); min-width: 34px; }
+.weekly-summary-game-date { color: var(--fg-muted); min-width: 40px; font-variant-numeric: tabular-nums; }
 .weekly-summary-game-opp { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.weekly-summary-game-num { color: var(--fg-dim); }
+.weekly-summary-game-num { color: var(--fg-muted); }
 .weekly-summary-game-result,
 .weekly-summary-game-mvp {
   font-family: var(--font-display);
@@ -1542,7 +1550,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   text-transform: uppercase;
 }
 .weekly-summary-game-result.win { color: var(--k-ok); }
-.weekly-summary-game-result.loss { color: var(--fg-dim); }
+.weekly-summary-game-result.loss { color: var(--fg-muted); }
 .weekly-summary-game-mvp {
   color: var(--accent);
   border: var(--bw-hair) solid var(--accent);
@@ -1560,12 +1568,13 @@ body.roster-dragging * { cursor: grabbing !important; }
   font-weight: var(--w-bold);
   color: var(--fg);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.weekly-summary-game-pts.not-scored { font-weight: var(--w-regular); color: var(--fg-dim); }
+.weekly-summary-game-pts.not-scored { font-weight: var(--w-regular); color: var(--fg-muted); }
 
 /* ---- Breakdown chips and reveal animation (issue #152) ---- */
 .weekly-recap-controls { display: flex; gap: 4px; margin-left: auto; }
-.weekly-recap-btn { padding: 2px 8px; font-size: var(--fs-xs); border-radius: var(--r-sm); }
+.weekly-recap-btn { padding: 2px 8px; font-size: var(--fs-sm); border-radius: var(--r-sm); }
 .weekly-recap-btn.hidden { display: none; }
 .recap-sr {
   position: absolute;
@@ -1581,7 +1590,8 @@ body.roster-dragging * { cursor: grabbing !important; }
 .recap-chip {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
   padding: 1px 6px;
@@ -1679,10 +1689,10 @@ body.roster-dragging * { cursor: grabbing !important; }
 .weekly-recap-prompt-eyebrow {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   letter-spacing: var(--tr-widest);
   text-transform: uppercase;
-  color: var(--fg-dim);
+  color: var(--fg-muted);
   margin-bottom: var(--s-1);
 }
 .modal h2.weekly-recap-prompt-title {
@@ -1692,7 +1702,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   padding-right: var(--s-8);
 }
 .weekly-recap-prompt-text { color: var(--fg); margin-bottom: var(--s-2); }
-.weekly-recap-prompt-note { color: var(--fg-dim); font-size: var(--fs-sm); margin-bottom: var(--s-5); }
+.weekly-recap-prompt-note { color: var(--fg-muted); font-size: var(--fs-sm); margin-bottom: var(--s-5); }
 .weekly-recap-prompt-actions { display: flex; gap: var(--s-2); }
 .weekly-recap-prompt-actions button { flex: 1; }
 

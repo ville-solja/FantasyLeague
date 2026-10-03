@@ -599,9 +599,9 @@ As a player, I want to see each card that counted for my roster this week, with 
   1. **The counted cards**, in the same order as My Team for that week. A bench card that was subbed in takes the slot of the card it replaced. It is marked with a "SUBBED IN" tag and the line "From your bench, for {name}, who did not play this week". (#151 also gave it a tinted `var(--accent-ghost)` background; #152 removed it so that orange marks only the card being revealed, and the tag is now neutral.)
   2. **A "Did not play" group**, after the counted cards. It holds the original roster cards that were replaced, so it comes after the fifth counted card. It appears only when a substitution happened. The cards are greyed out with a dashed border and the line "No matches this week. Replaced by {name}", and their points don't count.
 - Each card shows:
-  - a card image thumbnail with the rarity border,
+  - a thumbnail: the player's avatar in a rarity-coloured border (initials when there is no avatar; the shrunken card image was replaced because it blurred),
   - the player name as a player link and the team name as a team link,
-  - a rarity tag (since #152: the rarity name at the thumbnail's foot instead, see Points Breakdown per Card),
+  - a rarity tag (since #152: the rarity name below the thumbnail instead, see Points Breakdown per Card),
   - its status tag, if any,
   - the card's points for the week.
 - Each card lists one row per game its player played that week:
@@ -683,7 +683,7 @@ As a player, I want each card in the Weekly Report to show how its points were m
 - Cards in the "Did not play" group and unrevealed weeks have no `breakdown`.
 - When the reveal animation is finished, skipped or never played, each card shows its breakdown where each bonus comes from:
   - **Tag row** under the player's name, in the order the bonuses are added, left to right: "RAW 48.2", then the modifier chips ("KILLS +10% +1.2", "GPM +10% +1.6"), then a status tag ("SUBBED IN") at the end. There is no rarity chip or tag in this row. The row wraps when needed.
-  - **Rarity bonus:** shown on the card thumbnail on the left. The thumbnail keeps its rarity-coloured border, with the rarity name at its foot. Below it, a small caption in the rarity colour reads "+3% +1.4". A card with no rarity bonus (common) has no caption.
+  - **Rarity bonus:** shown on the card thumbnail on the left. The thumbnail keeps its rarity-coloured border, with the rarity name below it. Under that, a small caption in the rarity colour reads "+3% +1.4". A card with no rarity bonus (common) has no caption.
   - **MVP bonus:** shown on the MVP tag of the game row that earned it: "MVP +1.5". Each MVP game shows its own bonus.
   - The game rows (#151) stay below the tag row, so the breakdown and the games don't compete for the same place.
 
@@ -738,3 +738,17 @@ As a player, I want to skip or replay the reveal, and to have it respect reduced
   - while animating, the roster body has `aria-busy="true"`,
   - each card's final points are in its accessible text from the start, so screen readers never hear the counting numbers,
   - the counting number itself is `aria-hidden`.
+
+## Weekly Report Readability
+
+### Readable Weekly Report
+**User story**
+As a player reading my weekly recap, I want its text large and clear enough to read comfortably so that I can follow my points without squinting.
+
+**Acceptance criteria**
+- No text in the Weekly Report or the recap popup is below 11 px. Game rows, tags, bonus chips, notes, player names and points on result tiles, and dates are 13 px.
+- Big Shoulders is used only at 13 px and up; smaller labels use Inter.
+- Readable text has at least 4.5:1 contrast (`--fg-muted` or brighter); `--fg-dim` is not a text colour.
+- Points use tabular numerals.
+- Font sizes use `rem` tokens, so the browser's font-size setting scales the report.
+- A static test (`backend/tests/test_weekly_report_readability.py`) fails if any of these regress.

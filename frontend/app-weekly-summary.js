@@ -157,15 +157,21 @@ function _weeklySummaryRosterCardHtml(c, revealed, pending = false) {
   const rarityCaption = rarityStep
     ? `<div class="weekly-summary-roster-rarity-cap${pending ? ' pending' : ''}" data-rarity="${_escHtml(rarity)}">+${_escHtml(_recapPct(rarityStep.pct))}% +${_escHtml(Number(rarityStep.points || 0).toFixed(1))}</div>`
     : '';
+  // The player's avatar (Steam "full", 184px) with a rarity-coloured border, not the
+  // card image: the full card shrunk to thumbnail size blurs and its modifier text is
+  // unreadable. Clicking opens the card viewer with the full card. Initials sit behind
+  // the avatar and show when there is none or it fails to load.
+  const avatar = _safeUrl(c.avatar_url);
+  const initials = String(c.player_name || '?').trim().slice(0, 2).toUpperCase();
   const thumb = `
     <div class="weekly-summary-roster-thumb-col" data-rarity="${_escHtml(rarity)}">
       <button type="button" class="weekly-summary-roster-thumb" data-rarity="${_escHtml(rarity)}"
               onclick="_weeklySummaryShowCard(${Number(c.card_id)})"
               aria-label="Open card ${_escHtml(c.player_name)}">
-        <img src="${cardImageUrl(c.card_id)}" alt="" loading="lazy"
-             data-player-name="${_escHtml(c.player_name)}" onerror="_cardImgFallback(this)" />
-        <span class="weekly-summary-roster-thumb-rarity" aria-hidden="true">${_escHtml(rarity.toUpperCase())}</span>
+        <span class="weekly-summary-roster-initials" aria-hidden="true">${_escHtml(initials)}</span>
+        ${avatar ? `<img class="weekly-summary-roster-avatar" src="${_escHtml(avatar)}" alt="" loading="lazy" onerror="this.remove()" />` : ''}
       </button>
+      <span class="weekly-summary-roster-thumb-rarity" aria-hidden="true">${_escHtml(rarity.toUpperCase())}</span>
       ${rarityCaption}
     </div>`;
   const names = `

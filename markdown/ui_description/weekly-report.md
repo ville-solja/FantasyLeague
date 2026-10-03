@@ -34,8 +34,8 @@ Unused bench cards are not shown.
 
 Each card shows:
 
-- a card image thumbnail with a rarity-coloured border and the rarity name at its foot; clicking it (or Enter) opens the card viewer with the full card image and modifiers, footer "{pts} wk pts". The viewer opens on top of the report,
-- below the thumbnail, for a card with a rarity bonus, a caption in the rarity colour: "+{pct}% +{points}" (none for common cards),
+- a thumbnail: the player's avatar (64 × 64 px, initials when there is none) in a rarity-coloured border, with the rarity name in the rarity colour below it; clicking it (or Enter) opens the card viewer with the full card image and modifiers, footer "{pts} wk pts". The viewer opens on top of the report,
+- below the rarity name, for a card with a rarity bonus, a caption in the rarity colour: "+{pct}% +{points}" (none for common cards),
 - the player name (player link) and team name (team link),
 - the card's week points,
 - a tag row under the name, left to right in the order the bonuses are added: **RAW {points}**, one chip per modifier ("GPM +10% +1.6"), then the status tag (SUBBED IN / NOT COUNTED), if any. There is no rarity tag in this row. The row wraps. "Did not play" cards have no RAW or modifier chips,
@@ -59,7 +59,7 @@ Plays the first time a revealed week is shown in this browser (usually right aft
 ### Before reveal
 
 - "Reveal results to see your points", then the cards as they were at lock time (a replaced card stays in its slot; the substitute is not shown).
-- Thumbnails (with the rarity name at their foot), names and teams only. No points, chips, rarity caption, game rows, results, MVP or status tags, and no animation.
+- Thumbnails (avatar, rarity border and rarity name below), names and teams only. No points, chips, rarity caption, game rows, results, MVP or status tags, and no animation.
 - Thumbnails still open the card viewer, with no points footer.
 
 ### Empty / loading / error
@@ -79,6 +79,17 @@ Plays the first time a revealed week is shown in this browser (usually right aft
 - After reveal: the winner is outlined with a "Winner" label, and each team's players appear as tiles (avatar, player link, points). The MVP has an outline and "MVP" label.
 - **Your cards:** a player the user had as a counted card that week gets a filled tile with a **YOUR CARD** label (**YOUR SUB** for a subbed-in card), showing the user's card points for that game in the accent colour. Other players show match points in the muted colour. On a match excluded from scoring no tile is marked, since there are no card points.
 - "No matches played during this week." when the week has none; "No weekly reports available yet." when no week is available.
+
+## Typography and contrast
+
+The report follows a readability floor, checked by `backend/tests/test_weekly_report_readability.py`:
+
+- **Sizes:** data the player reads is 13 px (`--fs-sm`): game rows, tags, bonus chips, notes, player names and points on result tiles, column meta, the dates. Small all-caps labels (MVP, YOUR CARD, WINNER, the points unit) are 11 px (`--fs-xs`), the minimum.
+- **Typeface:** Big Shoulders only at 13 px and up (titles, tags, chips, the rarity name under the thumbnail, the avatar initials, points). Labels smaller than that use Inter.
+- **Colour:** readable text uses `--fg-muted` (5.4:1 on cards) or brighter. `--fg-dim` (3.2:1) is only for borders and the pending-chip placeholder.
+- **Numbers:** all points use tabular numerals, so they line up.
+- **"Did not play" cards:** marked by a dashed border and transparent background, not by fading the whole card.
+- **Units:** the `--fs-*` tokens are `rem`, so the browser's font-size setting scales the report.
 
 ## Links and stacking
 

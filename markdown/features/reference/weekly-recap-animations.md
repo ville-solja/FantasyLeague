@@ -47,7 +47,7 @@ Only the card being revealed has the orange border and glow (`.recap-current`). 
 ## Static breakdown (finished, skipped or reduced-motion state)
 
 - **Tag row** under the player's name, left to right: "RAW 48.2", one chip per modifier ("GPM +10% +1.6"), then the status tag ("SUBBED IN", neutral colour) last. No rarity chip. The row wraps.
-- **Thumbnail:** rarity-coloured border with the rarity name at its foot, and a rarity-coloured caption "+3% +1.4" below it when there is a rarity step.
+- **Thumbnail:** the player's avatar in a rarity-coloured border, the rarity name below it in the rarity colour, and a rarity-coloured caption "+3% +1.4" under that when there is a rarity step.
 - **Game rows** (always shown in full): an MVP game's tag reads "MVP +1.5" with that game's MVP step.
 
 ## Endpoints

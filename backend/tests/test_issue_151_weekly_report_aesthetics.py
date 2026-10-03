@@ -535,27 +535,34 @@ class TestMyRosterPanel:
 
     def test_roster_styles_use_accent_ghost_not_left_border(self):
         """style.css: no `border-left` accent on roster cards; the "Did not play" card uses a
-        dashed border and greyed-out style. (Issue #152 removed the subbed-in card's
+        dashed border and a transparent background. (Issue #152 removed the subbed-in card's
         `var(--accent-ghost)` tint: the "SUBBED IN" tag alone marks it, see
-        test_issue_152_weekly_recap_animations.py.)"""
+        test_issue_152_weekly_recap_animations.py. The readability pass dropped the card's
+        opacity fade, which put muted text below AA contrast; see
+        test_weekly_report_readability.py.)"""
         css = _read(_STYLE_CSS_PATH)
         assert not any(sel == ".weekly-summary-roster-card.subbed-in"
                        for sel, _ in _css_blocks(css, r"subbed-in"))
         for sel, body in _css_blocks(css, r"\.weekly-summary-roster"):
             assert "border-left" not in body, sel
         out = _css_rule(css, ".weekly-summary-roster-card.subbed-out")
-        assert "dashed" in out and "opacity" in out
+        assert "dashed" in out and "transparent" in out and "opacity" not in out
 
     def test_thumbnail_button_opens_show_card_with_week_points_footer(self):
-        """app-weekly-summary.js: the roster thumbnail is a <button> wrapping
-        `<img src=cardImageUrl(card_id)>` with `_cardImgFallback` on error, and its handler calls
-        `showCard({...card, id: card_id}, `${week_points} wk pts`)` (footer reads "wk pts")."""
+        """app-weekly-summary.js: the roster thumbnail is a <button> showing the player's
+        avatar (a `_safeUrl`-checked `avatar_url`, removed on error) over the player's
+        initials, with a rarity-coloured border. The card image itself is not shown: shrunk to
+        thumbnail size it blurred. The handler calls `showCard({...card, id: card_id},
+        `${week_points} wk pts`)`, so the full card (with its modifiers) opens on click."""
         js = _read(_APP_WEEKLY_SUMMARY_JS_PATH)
         card = _fn_body(js, "_weeklySummaryRosterCardHtml")
+        assert "const avatar = _safeUrl(c.avatar_url)" in card
         thumb = card[card.index('<button type="button" class="weekly-summary-roster-thumb"'):]
         thumb = thumb[:thumb.index("</button>")]
-        assert '<img src="${cardImageUrl(c.card_id)}"' in thumb
-        assert 'onerror="_cardImgFallback(this)"' in thumb
+        assert 'class="weekly-summary-roster-initials"' in thumb
+        assert 'class="weekly-summary-roster-avatar" src="${_escHtml(avatar)}"' in thumb
+        assert 'onerror="this.remove()"' in thumb
+        assert "cardImageUrl" not in thumb
         assert "_weeklySummaryShowCard(" in thumb
         show = _fn_body(js, "_weeklySummaryShowCard")
         assert "showCard({...card, id: card.card_id}, footer)" in show

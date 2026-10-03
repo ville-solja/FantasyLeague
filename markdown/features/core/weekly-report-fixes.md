@@ -78,8 +78,10 @@ UI details (elements, columns, states, copy): `markdown/ui_description/weekly-re
   `_weeklySummaryGameHtml`, `_renderWeeklySummaryRosterHeader` in
   `frontend/app-weekly-summary.js`): rendered from the response's `roster` block
   (`core/weekly-summary.md`). Counted cards first, then a "Did not play" group of subbed-out
-  cards. The thumbnail is a `<button>` wrapping `<img src=cardImageUrl(card_id)>`
-  (`_cardImgFallback` on error); `_weeklySummaryShowCard` opens `showCard({...card, id: card_id},
+  cards. The thumbnail is a `<button>` showing the player's avatar (`avatar_url` through
+  `_safeUrl`, removed on error so the initials behind it show) in a 3 px rarity-coloured
+  border. It was the card image until the readability pass: shrunk to thumbnail size the card
+  blurred and its modifier text was unreadable. `_weeklySummaryShowCard` opens `showCard({...card, id: card_id},
   "{week_points} wk pts")`. Names use `playerLink` / `teamLink`; every other string goes through
   `_escHtml`.
 - **Your cards in the results:** `_weeklySummaryPlayerHtml` adds `.weekly-summary-owned`
@@ -100,7 +102,7 @@ UI details (elements, columns, states, copy): `markdown/ui_description/weekly-re
   to "Open recap"; a keydown handler keeps Tab inside the popup.
 - **Points breakdown and reveal (issue #152):** each counted card's tag row now reads RAW,
   the modifier chips (`.recap-chip`), then the status tag; the #151 rarity tag is gone (the
-  rarity name sits at the thumbnail's foot, with a "+pct% +points" caption below it), and an
+  rarity name sits below the thumbnail, with a "+pct% +points" caption under it), and an
   MVP game's tag reads "MVP +points". The subbed-in card lost its `var(--accent-ghost)` tint
   and the "SUBBED IN" tag is now neutral (`var(--fg-muted)` on `var(--border)`), because orange
   now marks only the card being revealed. The reveal animation, Skip / Replay and the
@@ -110,6 +112,18 @@ UI details (elements, columns, states, copy): `markdown/ui_description/weekly-re
   `POST /weekly-summary/prompted`; `POST /weekly-summary/seen` also sets
   `last_prompted_week_id`. New column `weekly_summary_seen.last_prompted_week_id` (migration
   `030_weekly_summary_seen_last_prompted`). Details in `core/weekly-summary.md`.
+
+### Readability (2026-10-03)
+A readability pass over the popup and the recap prompt:
+- **Size:** data text is 13 px and nothing is below 11 px.
+- **Typeface:** Big Shoulders is used only at 13 px and up.
+- **Colour:** `--fg-dim` is no longer used as a text colour.
+- **Numbers:** points use tabular numerals.
+- **"Did not play" cards:** no longer faded with opacity.
+- **Thumbnails:** the roster thumbnail is the player's 64 × 64 px avatar in a 3 px rarity-coloured border, with initials when there is no avatar. Below it are the rarity name (Big Shoulders 13 px, rarity colour) and the bonus caption. It replaced the shrunken card image, which blurred and had the rarity band over its modifier lines. The full card still opens on click.
+- **Tokens:** the `--fs-*` tokens became `rem` (exact px equivalents).
+
+Rules and the static test: `markdown/ui_description/weekly-report.md` (Typography and contrast) and `backend/tests/test_weekly_report_readability.py`.
 
 ## Endpoints
 
