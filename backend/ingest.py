@@ -5,10 +5,12 @@ import threading
 import time
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as _pg_insert
+from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
 import card_points
 from database import SessionLocal
-from models import AuditLog, LiveMatch, Match, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
+from models import AuditLog, LiveMatch, Match, MatchTiming, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json, post_json as opendota_post_json
 from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -67,22 +69,13 @@ def get_league_info(league_id: int):
     return opendota_get_json(url, label=f"league {league_id} info")
 
 
-def get_live_matches() -> list[dict]:
-    """Games currently in progress, per OpenDota's live endpoint (raw entries).
-    One request regardless of how many leagues are monitored; [] if the call fails."""
-    data = opendota_get_json(f"{OPEN_DOTA_URL}/live", label="live matches")
-    if not isinstance(data, list):
-        return []
-    return [m for m in data if isinstance(m, dict)]
-
-
 # A stored live match that is still not ingested this long after it was last seen
 # (e.g. ingest skipped it as shorter than 15 minutes) is dropped.
 _LIVE_MATCH_STALE_SECONDS = 24 * 3600
 
 
 def _live_int(val) -> int | None:
-    """OpenDota /live sends ids as numbers or strings, with 0 / "" for a missing team."""
+    """Ids as numbers or strings, with 0 / "" for a missing team, become int or None."""
     try:
         n = int(val)
     except (TypeError, ValueError):
@@ -103,8 +96,24 @@ def _live_players(raw_players) -> list[dict]:
     return players
 
 
+def record_timing(db, match_id: int, **fields) -> None:
+    """Set the given match_timings fields for a match, each only while it is still NULL,
+    creating the row if needed. The caller commits."""
+    insert = _pg_insert if db.get_bind().dialect.name == "postgresql" else _sqlite_insert
+    db.execute(insert(MatchTiming).values(match_id=match_id)
+               .on_conflict_do_nothing(index_elements=[MatchTiming.match_id]))
+    for key, value in fields.items():
+        if value is None:
+            continue
+        db.query(MatchTiming).filter(
+            MatchTiming.match_id == match_id, getattr(MatchTiming, key).is_(None)
+        ).update({key: value}, synchronize_session=False)
+
+
 def store_live_matches(entries: list[dict], monitored_league_ids, db=None, now: int | None = None) -> None:
-    """Record the monitored-league games in `entries` (a /live response) in live_matches.
+    """Record the monitored-league games in `entries` (normalised by
+    steam_live.get_live_league_games) in live_matches, and each game's first sighting in
+    match_timings.live_first_seen_at.
 
     Upserts every game seen, sets ended_at on rows no longer present, and deletes
     rows whose match now has ingested stats or that were last seen over 24 hours ago."""
@@ -132,6 +141,7 @@ def store_live_matches(entries: list[dict], monitored_league_ids, db=None, now: 
                 last_seen_at=now,
                 ended_at=None,
             )
+            record_timing(db, match_id, live_first_seen_at=now)
             row = db.get(LiveMatch, match_id)
             if row is None:
                 db.add(LiveMatch(match_id=match_id, first_seen_at=now, **fields))
@@ -287,8 +297,9 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     _reapply_mvp_bonus(db, match_id)
 
     # The match now has stats, so the Twitch panel lists it from those instead.
-    if db.query(LiveMatch).filter(LiveMatch.match_id == match_id).delete():
-        db.commit()
+    db.query(LiveMatch).filter(LiveMatch.match_id == match_id).delete()
+    record_timing(db, match_id, ingested_at=int(time.time()))
+    db.commit()
 
     if _is_unparsed(data):
         request_parse(match_id)

@@ -17,6 +17,7 @@ function mvpGoTo(step) {
 // ── Init ────────────────────────────────────────────────────────────────────
 
 el("btn-start-mvp").addEventListener("click", loadSeries);
+el("btn-refresh-series").addEventListener("click", loadSeries);
 el("btn-confirm-mvp").addEventListener("click", confirmMVP);
 
 el("btn-back-0").addEventListener("click", function() { mvpGoTo(0); });
@@ -27,10 +28,38 @@ function onReady() {}
 
 // ── Step 1: load series ─────────────────────────────────────────────────────
 
+// A live check older than this (or none, or no live source) shows the warning line.
+var _LIVE_STALE_SECONDS = 5 * 60;
+
+function liveFreshness(data, nowSec) {
+    var checked = data && data.live_checked_at;
+    if (!data || !data.live_source_configured || !checked || nowSec - checked > _LIVE_STALE_SECONDS) {
+        return { text: "Live games not checked recently — your match will appear once its stats are in", warn: true };
+    }
+    var age = Math.max(0, nowSec - checked);
+    var ago = age < 60 ? age + " s ago" : Math.floor(age / 60) + " min ago";
+    return { text: "Live games checked " + ago, warn: false };
+}
+
+function renderFreshness(data) {
+    var line = el("live-freshness");
+    if (!data) {
+        line.textContent = "";
+        line.classList.remove("warn");
+        return;
+    }
+    var f = liveFreshness(data, Math.floor(Date.now() / 1000));
+    line.textContent = f.text;
+    line.classList.toggle("warn", f.warn);
+}
+
 function loadSeries() {
     el("series-list").innerHTML = '<p class="muted">Loading…</p>';
     mvpGoTo(1);
+    var refreshBtn = el("btn-refresh-series");
+    refreshBtn.disabled = true;
     ebsGet("/twitch/matches/current").then(function(data) {
+        renderFreshness(data || {});
         _seriesData = (data && data.series) || [];
         var container = el("series-list");
         if (_seriesData.length === 0) {
@@ -51,7 +80,10 @@ function loadSeries() {
             container.appendChild(div);
         });
     }).catch(function() {
+        renderFreshness(null);
         el("series-list").innerHTML = '<p class="muted">Failed to load matches.</p>';
+    }).finally(function() {
+        refreshBtn.disabled = false;
     });
 }
 
@@ -158,12 +190,13 @@ function confirmMVP() {
         var dropMsg = "";
         if (drop.already_dropped) {
             dropMsg = " (tokens already dropped for this match)";
-        } else if (drop.winners && drop.winners.length > 0) {
-            var shown = drop.winners.slice(0, 5).join(", ");
-            var extra = drop.winners.length > 5 ? " +" + (drop.winners.length - 5) + " more" : "";
-            dropMsg = " · Tokens → " + shown + extra;
+        } else if (drop.enabled === false) {
+            dropMsg = " · Token drops are off";
+        } else if (drop.winner_count > 0) {
+            // Winner count only (issue #157): no viewer names in the dashboard either.
+            dropMsg = " · " + drop.winner_count + (drop.winner_count === 1 ? " viewer" : " viewers") + " received a token";
         } else if (drop.pool_size === 0) {
-            dropMsg = " · No viewers in pool";
+            dropMsg = " · No joined viewers in the pool";
         }
 
         var bonusMsg = _selectedMatch.provisional ? " · Fantasy bonus is applied when the stats arrive" : "";

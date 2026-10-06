@@ -36,8 +36,8 @@ before any token work). Since issue #135, a configured SMTP send that fails or r
 back the new token (the previous one is kept) and returns 503; with `SMTP_HOST` unset the
 request still returns `{"status": "ok"}`. Internally:
 
-1. Deletes any existing `PasswordResetToken` row for the account (mirrors `TwitchLinkCode`'s
-   invalidate-on-regenerate pattern in `twitch.py`'s `generate_link_code()`).
+1. Deletes any existing `PasswordResetToken` row for the account (the same
+   invalidate-on-regenerate pattern the retired Twitch link code used).
 2. Creates a new token via `secrets.token_urlsafe(32)` (256 bits of entropy) with
    `expires_at = now + PASSWORD_RESET_TOKEN_TTL_HOURS * 3600`.
 3. Writes a `password_reset_requested` audit log entry.
@@ -92,7 +92,9 @@ No authentication required for either endpoint — the token itself is the crede
   describe a reset link/code, not a temporary password; `submitForgotPassword()`
   (`frontend/app-auth.js`) success message follows suit.
 - A new "Set new password" modal (`#resetPasswordModal`) accepts a token (pre-fillable) and a
-  new password, submitted via `submitResetPassword()` against `POST /reset-password`.
+  new password, submitted via `submitResetPassword()` against `POST /reset-password`. The fields
+  are `#resetPasswordForm`; Enter or the button submits it, and a hidden `#resetUsername` lets
+  password managers save the new password (see `password-manager-autofill.md`).
 - `frontend/app-init.js`'s `init()` calls `_handleResetTokenParam()`, which detects
   `?reset_token=...` via `URLSearchParams`, strips it from the visible URL with
   `history.replaceState`, and opens the reset-password modal pre-filled with the token — so a

@@ -14,7 +14,7 @@ IMMEDIATELY overwrites the account's real password_hash before emailing it -- kn
 username alone is enough to mutate real credentials. This plan replaces that with a
 single-use, expiring PasswordResetToken (new table: token PK, user_id, expires_at --
 same shape/precedent as TwitchLinkCode in backend/models.py, whose "invalidate prior
-unexpired code for this user" pattern in twitch.py's generate_link_code() --
+unexpired code for this user" pattern in the former Twitch link code (retired in #160) --
 `db.query(TwitchLinkCode).filter_by(user_id=user_id).delete()` -- this plan's token
 creation is meant to mirror). /forgot-password only ever creates/replaces that token and
 emails it; a new POST /reset-password endpoint is the only thing that actually changes
@@ -279,7 +279,7 @@ def test_forgot_password_repeat_request_invalidates_prior_token(client, db_sessi
     """AC: a second /forgot-password request for the same user invalidates (removes)
     any prior unused token for that user -- only one live PasswordResetToken per user
     at a time, mirroring TwitchLinkCode's invalidate-on-regenerate precedent in
-    twitch.py's generate_link_code(). FORGOT_PASSWORD_COOLDOWN_SECONDS is set to "0"
+    the former Twitch link code (retired in #160). FORGOT_PASSWORD_COOLDOWN_SECONDS is set to "0"
     here so the second call isn't itself suppressed by issue #122's unrelated
     per-username cooldown."""
     user = _create_user(db_session)

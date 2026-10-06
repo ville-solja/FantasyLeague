@@ -24,7 +24,7 @@ function renderAdminMatches() {
     ? _adminMatchesRows.filter(m => m.parse_status === 'unparseable')
     : _adminMatchesRows;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan='10' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='13' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
@@ -37,6 +37,9 @@ function renderAdminMatches() {
       <td style="font-size:0.85rem;">${teamLink(m.radiant_team_id, m.team1)}</td>
       <td style="font-size:0.85rem;">${teamLink(m.dire_team_id, m.team2)}</td>
       <td style="font-size:0.8rem;">${start}</td>
+      ${_timingCell(m.live_first_seen_at, m.start_time)}
+      ${_timingCell(m.ingested_at, m.start_time)}
+      ${_timingCell(m.mvp_confirmed_at, m.start_time)}
       <td></td>
       <td></td>
       <td class="mvp-cell">${_escHtml(m.mvp_player_name) || '—'}</td>
@@ -47,12 +50,23 @@ function renderAdminMatches() {
     setMvpBtn.style.cssText = 'padding:2px 7px;';
     setMvpBtn.textContent = 'Set MVP';
     setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
-    tr.cells[5].appendChild(_buildParseCell(m));
-    tr.cells[6].appendChild(_buildScoringCell(m));
-    tr.cells[8].appendChild(_buildVodCell(m.match_id, m.vod_url));
-    tr.cells[9].appendChild(setMvpBtn);
+    tr.cells[8].appendChild(_buildParseCell(m));
+    tr.cells[9].appendChild(_buildScoringCell(m));
+    tr.cells[11].appendChild(_buildVodCell(m.match_id, m.vod_url));
+    tr.cells[12].appendChild(setMvpBtn);
     tbody.appendChild(tr);
   });
+}
+
+// Minutes from the match start to a timing (issue #161), e.g. "+2 min"; "—" when unknown.
+// The exact time is in the cell's title.
+function _timingCell(at, startTime) {
+  if (!at) return '<td style="font-size:0.8rem;">—</td>';
+  const exact = _escHtml(new Date(at * 1000).toLocaleString());
+  if (!startTime) return `<td style="font-size:0.8rem;" title="${exact}">—</td>`;
+  const mins = Math.round((at - startTime) / 60);
+  const text = `${mins >= 0 ? '+' : '−'}${Math.abs(mins)} min`;
+  return `<td style="font-size:0.8rem;white-space:nowrap;" title="${exact}">${_escHtml(text)}</td>`;
 }
 
 // ---------------------------------------------------------------------------

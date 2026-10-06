@@ -15,8 +15,8 @@ with ingested `player_match_stats` rows or, since issue #139, a provisional live
 `early-mvp-selection.md`), with no lower time bound — a stale first week with no
 subsequent ingest activity would still surface here indefinitely.
 
-Since issue #139 a series can also contain **provisional** matches: games seen in OpenDota's
-`/live` feed (table `live_matches`) whose stats are not ingested yet. A provisional match's
+Since issue #139 a series can also contain **provisional** matches: games seen live (table
+`live_matches`; since issue #161 from Steam's live league list, previously OpenDota's `/live`) whose stats are not ingested yet. A provisional match's
 `start_time` is when it was first seen live, its players come from the live feed with
 `fantasy_points: 0`, and a live game with no team ids is grouped by its team names. See
 [Early MVP Selection](early-mvp-selection.md).
@@ -47,7 +47,12 @@ Response shape (simplified — `week` key removed):
 ```
 
 `provisional` is `true` for a match listed from the live feed, and `live` is `true` while
-that game is still in `/live` (always `false` for an ingested match).
+that game is still in the live list (always `false` for an ingested match).
+
+Since issue #161 the response also has two top-level fields next to `series`:
+`live_checked_at` (Unix time of the last successful live check, or `null`) and
+`live_source_configured` (whether `STEAM_API_KEY` is set). See
+[MVP Selection Delays](mvp-selection-delays.md).
 
 Series are sorted most-recently-played first. At most 5 series are returned.
 
@@ -83,4 +88,4 @@ and uses `INGEST_LIVE_MATCH_POLL_INTERVAL` (30 s) — see
 
 ---
 
-Implemented in `backend/twitch.py` (`current_matches`), `backend/main.py` (`_ingest_poll_loop`), and `twitch-extension/live_config.js`.
+Implemented in `backend/twitch.py` (`current_matches`), `backend/main.py` (`_ingest_poll_loop`, `_live_poll_loop`), and `twitch-extension/live_config.js`.

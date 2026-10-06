@@ -1,8 +1,18 @@
 """Twitch Extension Backend Service (EBS) routes.
 
-All endpoints are under /twitch/. Authentication is via Twitch-signed JWT
-(validated by verify_twitch_jwt), except /twitch/link-code which requires
-an active Fantasy session.
+All endpoints here are under /twitch/ and authenticate with the Twitch-signed
+extension JWT (validated by verify_twitch_jwt). The website-side Twitch connection
+routes (session cookie) live in twitch_oauth.py (issue #160).
+
+Issue #157: the panel is a self-contained game. GET /twitch/panel serves live
+fantasy data to every viewer; POST /twitch/join creates a soft account
+(soft_accounts.py) keyed by the viewer's opaque Twitch id; the draw, team and
+roster routes run the website's own card functions (routers/cards.py) for that
+account; POST /twitch/leave deletes a soft account or unlinks a website account.
+
+Issue #160: the 6-character link code (POST /twitch/link-code, POST /twitch/link)
+and the legacy GET /twitch/status are retired. A website account connected with
+Twitch sign-in is recognised in the panel by the JWT's `user_id` (_panel_account).
 
 Set TWITCH_LOCAL_DEV=true in .env to bypass JWT validation and PubSub HTTP
 calls for local development.
@@ -12,8 +22,6 @@ import json
 import logging
 import os
 import random
-import secrets
-import string
 import time
 from types import SimpleNamespace
 
@@ -29,27 +37,30 @@ from sqlalchemy.orm import Session
 
 import card_points
 import clock
+import steam_live
 from database import get_db
-from deps import get_current_user
+from ingest import record_timing
+from deps import _audit
 from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
-                    Team, TwitchLinkCode, TwitchMVP, TwitchPresence,
+                    Team, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
-from rate_limit import limiter
+from rate_limit import key_by_twitch_viewer_or_ip, limiter
 from schedule import bust_cache
 from scoring import apply_mvp_bonus_to_row, display_points
+import soft_accounts
+from routers.cards import SwapRequest
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
 
-_LINK_CODE_TTL    = 600   # seconds — 10 minutes
 _PRESENCE_TTL     = 600   # seconds — viewers expire from pool after 10 min inactive
 _TWITCH_DROP_MAX  = int(os.getenv("TWITCH_DROP_MAX", "20"))
 
-# Per-IP limit on link-code guessing (issue #135). link_account stays a plain
-# function so direct calls keep working; link_account_route carries the
-# `request` parameter slowapi needs (same split as routers/cards.py).
-RATE_LIMIT_TWITCH_LINK = os.getenv("RATE_LIMIT_TWITCH_LINK", "10/minute")
-
-_LINK_CODE_ALPHABET = string.ascii_uppercase + string.digits
+# Issue #157 panel game routes: Join and draws are limited per viewer (opaque id)
+# and per IP; roster changes and Leave per viewer only. Plain functions stay
+# directly callable; the `*_route` wrappers carry slowapi's `request`.
+RATE_LIMIT_TWITCH_JOIN    = os.getenv("RATE_LIMIT_TWITCH_JOIN", "10/minute")
+RATE_LIMIT_TWITCH_JOIN_IP = os.getenv("RATE_LIMIT_TWITCH_JOIN_IP", "60/minute")
+RATE_LIMIT_TWITCH_ACTION  = os.getenv("RATE_LIMIT_TWITCH_ACTION", "30/minute")
 
 _CHAT_TEXT_MAX         = 280  # Twitch Send Extension Chat Message limit
 _TWITCH_ERROR_BODY_MAX = 300  # chars of a failed Twitch response kept in the log
@@ -60,13 +71,24 @@ _chat_version_warned   = False  # TWITCH_EXTENSION_VERSION warning logged once p
 # JWT validation
 # ---------------------------------------------------------------------------
 
-def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
+def _remember_viewer(request: Request | None, payload: dict) -> dict:
+    """Expose the opaque id to the per-viewer rate-limit key (rate_limit.key_by_twitch_viewer_or_ip)."""
+    if request is not None:
+        try:
+            request.state.twitch_opaque_id = payload.get("opaque_user_id") or None
+        except AttributeError:
+            pass
+    return payload
+
+
+def verify_twitch_jwt(request: Request = None, authorization: str = Header(...)) -> dict:
     """Validate Twitch extension JWT. Returns the decoded payload.
 
     Payload fields of interest:
       channel_id      — Twitch channel the extension is open on
-      opaque_user_id  — Twitch's anonymised user identifier (starts with U for linked, A for anon)
-      role            — "viewer", "broadcaster", or "external"
+      opaque_user_id  — Twitch's anonymised user identifier (starts with U for a viewer logged in to Twitch, A for logged out)
+      user_id         — the real Twitch user id, only after the viewer accepted the identity share
+      role            — "viewer", "broadcaster", "moderator" or "external"
     """
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         if os.getenv("ENV", "").lower() == "production":
@@ -74,11 +96,11 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
                 status_code=500,
                 detail="TWITCH_LOCAL_DEV must not be set in production",
             )
-        return {
+        return _remember_viewer(request, {
             "channel_id": "dev_channel",
             "opaque_user_id": "Udev123",
             "role": "broadcaster",
-        }
+        })
     token = authorization.removeprefix("Bearer ")
     secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "").strip().strip('"').strip("'")
     if not secret_b64:
@@ -102,7 +124,7 @@ def verify_twitch_jwt(authorization: str = Header(...)) -> dict:
     except Exception as exc:
         logger.error("Twitch JWT decode unexpected error: %s", exc)
         raise HTTPException(status_code=500, detail="JWT decode error")
-    return payload
+    return _remember_viewer(request, payload)
 
 
 def _require_broadcaster(payload: dict):
@@ -154,31 +176,25 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         logger.exception("Twitch PubSub broadcast failed")
 
 
-def _mvp_chat_text(player_name: str, winner_names: list[str], token_name: str,
-                   pool_empty: bool) -> str:
+def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
+                   drops_enabled: bool = True) -> str:
     """Build the MVP chat announcement within Twitch's 280-character limit.
 
-    The MVP name is always kept in full; winners are listed until the next one
-    (plus ", and N more") would pass the limit.
+    Names the MVP and, for a token drop, only how many viewers received a token:
+    soft accounts have no username, and a linked player's website username is
+    never revealed in chat (issue #157).
     """
     base = f"Match MVP: {player_name}!"
-    if not winner_names:
-        return base + (" (No linked viewers in the drop pool.)" if pool_empty else "")
-    prefix = f"{base} Token drop winners (+1 {token_name}): "
-    full = prefix + ", ".join(winner_names)
-    if len(full) <= _CHAT_TEXT_MAX:
-        return full
-    listed: list[str] = []
-    for name in winner_names:
-        remaining = len(winner_names) - len(listed) - 1
-        candidate = prefix + ", ".join(listed + [name]) + f", and {remaining} more"
-        if len(candidate) > _CHAT_TEXT_MAX:
-            break
-        listed.append(name)
-    remaining = len(winner_names) - len(listed)
-    if not listed:
-        return f"{base} {remaining} viewers won +1 {token_name}."
-    return prefix + ", ".join(listed) + f", and {remaining} more"
+    if not drops_enabled:
+        text = base
+    elif winner_count > 0:
+        noun = "viewer" if winner_count == 1 else "viewers"
+        text = f"{base} {winner_count} {noun} received a token."
+    elif pool_empty:
+        text = f"{base} No tokens were dropped: no joined viewers were watching."
+    else:
+        text = base
+    return text[:_CHAT_TEXT_MAX]
 
 
 def _post_chat_message(channel_id: str, message: str):
@@ -239,81 +255,6 @@ def _post_chat_message(channel_id: str, message: str):
 
 
 # ---------------------------------------------------------------------------
-# Account linking
-# ---------------------------------------------------------------------------
-
-class LinkCodeResponse(BaseModel):
-    code: str
-    expires_in: int
-
-
-class LinkBody(BaseModel):
-    code: str = Field(min_length=1, max_length=6)
-
-
-def get_session_user(current_user: dict = Depends(get_current_user)) -> dict:
-    """Session-cookie auth for the /twitch/* routes that do not use a Twitch JWT."""
-    return current_user
-
-
-@router.post("/link-code", response_model=LinkCodeResponse)
-def generate_link_code(
-    current_user: dict = Depends(get_session_user),
-    db: Session = Depends(get_db),
-):
-    """Generate a 6-character alphanumeric code the user enters in the extension to link accounts."""
-    user_id = current_user["user_id"]
-    # Invalidate any existing unexpired code for this user
-    db.query(TwitchLinkCode).filter_by(user_id=user_id).delete()
-    code = "".join(secrets.choice(_LINK_CODE_ALPHABET) for _ in range(6))
-    expires_at = int(time.time()) + _LINK_CODE_TTL
-    db.add(TwitchLinkCode(code=code, user_id=user_id, expires_at=expires_at))
-    db.commit()
-    return {"code": code, "expires_in": _LINK_CODE_TTL}
-
-
-def link_account(
-    body: LinkBody,
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Consume a linking code and store the Twitch user ID on the matching Fantasy account."""
-    twitch_user_id = payload.get("opaque_user_id", "")
-    if not twitch_user_id or twitch_user_id.startswith("A"):
-        raise HTTPException(status_code=400, detail="Twitch account must be logged in to link")
-
-    now = int(time.time())
-    link = db.query(TwitchLinkCode).filter_by(code=body.code.upper()).first()
-    if not link or link.expires_at < now:
-        raise HTTPException(status_code=400, detail="Invalid or expired linking code")
-
-    # Detach this Twitch ID from any previous Fantasy account
-    existing = db.query(User).filter_by(twitch_user_id=twitch_user_id).first()
-    if existing:
-        existing.twitch_user_id = None
-
-    user = db.query(User).filter_by(id=link.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user.twitch_user_id = twitch_user_id
-    db.delete(link)
-    db.commit()
-    return {"linked": True, "username": user.username}
-
-
-@router.post("/link")
-@limiter.limit(RATE_LIMIT_TWITCH_LINK)
-def link_account_route(
-    request: Request,
-    body: LinkBody,
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    return link_account(body, payload, db)
-
-
-# ---------------------------------------------------------------------------
 # Viewer presence (heartbeat)
 # ---------------------------------------------------------------------------
 
@@ -338,20 +279,351 @@ def heartbeat(
 
 
 # ---------------------------------------------------------------------------
-# Viewer status
+# Panel game (issue #157): live data, Join, draws, collection, roster, Leave
 # ---------------------------------------------------------------------------
 
-@router.get("/status")
-def viewer_status(
+_PANEL_LATEST_MATCHES = 5   # "latest games" for the Live tab's top performers
+_PANEL_TOP_PERFORMERS = 3
+_JOIN_ROLES = {"viewer", "broadcaster", "moderator"}
+
+
+def _opaque_id(payload: dict) -> str:
+    return str(payload.get("opaque_user_id") or "")
+
+
+def _logged_in_opaque_id(payload: dict) -> str:
+    """The opaque id of a viewer logged in to Twitch (U...); 403 for logged-out (A...) viewers."""
+    opaque_id = _opaque_id(payload)
+    if not opaque_id.startswith("U"):
+        raise HTTPException(status_code=403, detail="twitch_login_required")
+    return opaque_id
+
+
+def _record_identity_share(db: Session, user: User, payload: dict) -> None:
+    """Store the real Twitch id when the JWT carries one (identity share). A conflict
+    is logged, not raised, so the panel keeps working.
+
+    Issue #160: when the id is held by a website account connected with Twitch sign-in
+    and this is a soft account, the soft account becomes that website account's
+    pending merge (Profile then offers it), unless one is already pending or the
+    website account has used its one merge."""
+    real_id = payload.get("user_id")
+    if not real_id or user.twitch_account_id:
+        return
+    try:
+        soft_accounts.record_twitch_account_id(db, user, real_id)
+    except HTTPException:
+        holder = soft_accounts.find_by_twitch_account_id(db, real_id)
+        if (user.account_type == soft_accounts.SOFT and holder is not None
+                and holder.account_type != soft_accounts.SOFT
+                and not holder.pending_merge_user_id and holder.merged_soft_account_at is None):
+            holder.pending_merge_user_id = user.id
+            logger.info("Twitch identity share: soft account %s is now pending merge into user %s",
+                        user.id, holder.id)
+        else:
+            logger.warning("Twitch identity share for user %s refused: id already held by another account", user.id)
+
+
+def _panel_account(db: Session, payload: dict) -> User | None:
+    """The account the panel acts as (issue #160 lookup order):
+
+    (a) the account holding the viewer's opaque id (a soft account, or a website
+        account already recognised);
+    (b) else the account whose twitch_account_id equals the JWT's `user_id` (a
+        website account connected with Twitch sign-in, after the identity share):
+        the opaque id is attached to it and committed, so drops reach it too;
+    (c) else None (Join creates a soft account).
+
+    A JWT without `user_id` never switches accounts. Logged-out viewers get None."""
+    opaque_id = _opaque_id(payload)
+    if not opaque_id.startswith("U"):
+        return None
+    user = soft_accounts.find_by_opaque_id(db, opaque_id)
+    if user is not None:
+        return user
+    holder = soft_accounts.find_by_twitch_account_id(db, payload.get("user_id"))
+    if holder is None:
+        return None
+    holder.twitch_user_id = opaque_id
+    _audit(db, "twitch_panel_recognised", actor_id=holder.id, actor_username=holder.display_name,
+           detail=f"user_id={holder.id}")
+    db.commit()
+    return holder
+
+
+def _joined_user(db: Session, payload: dict) -> User:
+    """The caller's account (see _panel_account); 404 not_joined otherwise."""
+    user = _panel_account(db, payload)
+    if user is None:
+        raise HTTPException(status_code=404, detail="not_joined")
+    _record_identity_share(db, user, payload)
+    soft_accounts.touch_last_seen(db, user)
+    return user
+
+
+def _acting_user(user: User) -> dict:
+    """The current_user dict the website's card functions take (deps.get_current_user shape)."""
+    return {"user_id": user.id, "username": user.username, "is_admin": False}
+
+
+def _roster_week_state(db: Session) -> tuple[int | None, bool]:
+    """(week_id, locked) for the panel roster: the next editable week when there is one;
+    otherwise a locked week in progress is shown read-only."""
+    from weeks import get_current_week, get_next_editable_week
+    if get_next_editable_week(db) is not None:
+        return None, False
+    current = get_current_week(db)
+    if current is not None and current.is_locked:
+        return current.id, True
+    return None, False
+
+
+def _require_editable_roster(db: Session) -> None:
+    if _roster_week_state(db)[1]:
+        raise HTTPException(status_code=409, detail="Roster locked for this week")
+
+
+def _week_points(db: Session, user_id: int) -> dict | None:
+    """Points so far in the week in progress (locked snapshot), or None between weeks."""
+    from routers.cards import _build_roster_response
+    from weeks import get_current_week
+    current = get_current_week(db)
+    if current is None or not current.is_locked:
+        return None
+    data = _build_roster_response(db, user_id, current.id)
+    return {"week_id": current.id, "label": current.label, "points": data["combined_value"]}
+
+
+def _me_state(db: Session, user: User) -> dict:
+    """Game state of the caller's own account. Never includes Twitch ids, email,
+    username or another user's data."""
+    from routers.cards import ROSTER_LIMIT, _build_roster_response, collection_for_user
+    week_id, locked = _roster_week_state(db)
+    roster = _build_roster_response(db, user.id, week_id)
+    weights = {w.key: w.value for w in db.query(Weight).filter(Weight.key == "team_booster_cost").all()}
+    return {
+        "joined": True,
+        "tokens": user.tokens if user.tokens is not None else 0,
+        "collection": collection_for_user(db, user.id),
+        "roster": roster,
+        "roster_locked": locked,
+        "roster_limit": ROSTER_LIMIT,
+        "week_points": _week_points(db, user.id),
+        "team_draw_cost": int(weights.get("team_booster_cost", 3)),
+        "identity_shared": bool(user.twitch_account_id),
+        "website_account": user.account_type != soft_accounts.SOFT,
+    }
+
+
+@router.get("/panel")
+def panel_live(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return whether the viewer has linked their Fantasy account, and their token balance."""
-    twitch_user_id = payload.get("opaque_user_id", "")
-    user = db.query(User).filter_by(twitch_user_id=twitch_user_id).first()
-    if not user:
-        return {"linked": False, "tokens": None, "username": None}
-    return {"linked": True, "tokens": user.tokens, "username": user.username}
+    """Live tab data for every viewer, logged in to Twitch or not: the top fantasy
+    performers of the latest games (GET /top's query) and the next scheduled match
+    (GET /schedule's data). Public data only."""
+    from routers.leaderboard import top_performance_rows
+    from match_scoring import scored_match_sql
+    from sqlalchemy import text as _text
+    latest = [r[0] for r in db.execute(_text(f"""
+        SELECT m.match_id FROM matches m
+        WHERE {scored_match_sql()}
+          AND EXISTS (SELECT 1 FROM player_match_stats s WHERE s.match_id = m.match_id)
+        ORDER BY m.start_time DESC, m.match_id DESC
+        LIMIT :n
+    """), {"n": _PANEL_LATEST_MATCHES}).fetchall()]
+    top = [{"player_id": r["id"], "player_name": r["name"], "fantasy_points": r["fantasy_points"]}
+           for r in top_performance_rows(db, limit=_PANEL_TOP_PERFORMERS, match_ids=latest)]
+    try:
+        from schedule import next_scheduled_match
+        next_match = next_scheduled_match(db)
+    except Exception:
+        logger.exception("Twitch panel: next match lookup failed")
+        next_match = None
+    return {"top_performers": top, "next_match": next_match}
+
+
+def join(payload: dict, db: Session) -> dict:
+    """Create (or return) the viewer's account. Idempotent: an existing soft account,
+    or a website account recognised by opaque id or by the JWT's user_id (connected
+    with Twitch sign-in, issue #160), is returned and nothing is created."""
+    opaque_id = _logged_in_opaque_id(payload)
+    if payload.get("role") not in _JOIN_ROLES:
+        raise HTTPException(status_code=403, detail="Viewer role required")
+    user = _panel_account(db, payload)
+    if user is not None:
+        _record_identity_share(db, user, payload)
+        soft_accounts.touch_last_seen(db, user)
+        db.commit()
+        return {**_me_state(db, user), "created": False}
+    user, created = soft_accounts.get_or_create_soft_account(db, opaque_id, payload.get("user_id"))
+    if soft_accounts.touch_last_seen(db, user):
+        db.commit()
+    return {**_me_state(db, user), "created": created}
+
+
+@router.post("/join")
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN, key_func=key_by_twitch_viewer_or_ip)
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def join_route(
+    request: Request,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    return join(payload, db)
+
+
+@router.get("/me")
+def me(
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """The caller's own game state, or {joined: false} without an account."""
+    opaque_id = _opaque_id(payload)
+    user = _panel_account(db, payload)
+    if user is None:
+        return {"joined": False, "can_join": opaque_id.startswith("U")}
+    _record_identity_share(db, user, payload)
+    soft_accounts.touch_last_seen(db, user)
+    db.commit()
+    return _me_state(db, user)
+
+
+def draw(payload: dict, db: Session) -> dict:
+    from routers.cards import draw_card
+    user = _joined_user(db, payload)
+    return draw_card(db=db, current_user=_acting_user(user))
+
+
+@router.post("/draw")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def draw_route(request: Request, payload: dict = Depends(verify_twitch_jwt),
+               db: Session = Depends(get_db)):
+    return draw(payload, db)
+
+
+def draw_team(team_id: int, payload: dict, db: Session) -> dict:
+    """Team draw for the caller. A team whose players the caller already owns is
+    refused (its tile is disabled in the panel; this catches a stale request)."""
+    from routers.cards import booster_deck_for_user, draw_booster
+    user = _joined_user(db, payload)
+    team = next((t for t in booster_deck_for_user(db, user.id) if t["team_id"] == team_id), None)
+    if team is not None and team["remaining"] == 0:
+        raise HTTPException(status_code=409, detail="No players available for this team")
+    return draw_booster(team_id, db=db, current_user=_acting_user(user))
+
+
+@router.post("/draw/booster/{team_id}")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def draw_team_route(request: Request, team_id: int, payload: dict = Depends(verify_twitch_jwt),
+                    db: Session = Depends(get_db)):
+    return draw_team(team_id, payload, db)
+
+
+@router.get("/teams")
+def teams(
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """Team draw picker: the website's GET /deck/booster data for the caller."""
+    from routers.cards import booster_deck_for_user
+    user = _joined_user(db, payload)
+    db.commit()
+    cost = db.query(Weight.value).filter(Weight.key == "team_booster_cost").scalar()
+    return {"teams": booster_deck_for_user(db, user.id),
+            "cost": int(cost if cost is not None else 3),
+            "tokens": user.tokens if user.tokens is not None else 0}
+
+
+def roster_activate(card_id: int, payload: dict, db: Session, slot: int | None = None) -> dict:
+    """Bench card into an empty roster slot (activate_card); `slot` places it in the
+    slot the viewer picked."""
+    from models import Card
+    from routers.cards import ROSTER_LIMIT, activate_card
+    user = _joined_user(db, payload)
+    _require_editable_roster(db)
+    result = activate_card(card_id, db=db, current_user=_acting_user(user))
+    if slot is not None and 0 <= slot < ROSTER_LIMIT:
+        card = db.get(Card, card_id)
+        if card is not None and card.owner_id == user.id:
+            card.slot_index = slot
+            db.commit()
+    return result
+
+
+@router.post("/roster/activate/{card_id}")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+def roster_activate_route(request: Request, card_id: int, slot: int | None = None,
+                          payload: dict = Depends(verify_twitch_jwt),
+                          db: Session = Depends(get_db)):
+    return roster_activate(card_id, payload, db, slot)
+
+
+def roster_deactivate(card_id: int, payload: dict, db: Session) -> dict:
+    from routers.cards import deactivate_card
+    user = _joined_user(db, payload)
+    _require_editable_roster(db)
+    return deactivate_card(card_id, db=db, current_user=_acting_user(user))
+
+
+@router.post("/roster/deactivate/{card_id}")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+def roster_deactivate_route(request: Request, card_id: int, payload: dict = Depends(verify_twitch_jwt),
+                            db: Session = Depends(get_db)):
+    return roster_deactivate(card_id, payload, db)
+
+
+def roster_swap(body, payload: dict, db: Session) -> dict:
+    """Bench card into a roster slot, the slot's card to the bench: the website's
+    drag-and-drop swap (swap_roster)."""
+    from routers.cards import swap_roster
+    user = _joined_user(db, payload)
+    _require_editable_roster(db)
+    return swap_roster(body, user=_acting_user(user), db=db)
+
+
+@router.post("/roster/swap")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+def roster_swap_route(request: Request, body: SwapRequest,
+                      payload: dict = Depends(verify_twitch_jwt),
+                      db: Session = Depends(get_db)):
+    return roster_swap(body, payload, db)
+
+
+def leave(payload: dict, db: Session) -> dict:
+    """Leave Kana Cards. A soft account is deleted with all its rows; a website
+    account is only unlinked (twitch_user_id cleared) and keeps everything, including
+    its Twitch connection (twitch_account_id): Disconnect is on the website. While
+    connected and sharing identity, the panel recognises it again on the next call.
+    Without an account it is a no-op, so leaving twice is safe."""
+    opaque_id = _opaque_id(payload)
+    user = soft_accounts.find_by_opaque_id(db, opaque_id) if opaque_id.startswith("U") else None
+    if user is None:
+        return {"left": False, "deleted": False}
+    uid = user.id
+    if user.account_type == soft_accounts.SOFT:
+        soft_accounts.delete_soft_account(db, user)
+        _audit(db, "twitch_soft_account_deleted", actor_id=None, actor_username="twitch",
+               detail=f"user_id={uid} reason=leave")
+        db.commit()
+        return {"left": True, "deleted": True}
+    user.twitch_user_id = None
+    db.query(TwitchPresence).filter(TwitchPresence.twitch_user_id == opaque_id).delete(
+        synchronize_session=False)
+    _audit(db, "twitch_account_unlinked", actor_id=uid, actor_username=user.display_name,
+           detail=f"user_id={uid} reason=leave")
+    db.commit()
+    return {"left": True, "deleted": False}
+
+
+@router.post("/leave")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+def leave_route(request: Request, payload: dict = Depends(verify_twitch_jwt),
+                db: Session = Depends(get_db)):
+    return leave(payload, db)
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +642,7 @@ def _live_players(live_row: LiveMatch) -> list[dict]:
 
 
 def _live_display_name(account_id: int, live_name: str | None, known_names: dict[int, str]) -> str:
-    """Known players name, else the /live name, else "Player {account_id}"."""
+    """Known players name, else the live name, else "Player {account_id}"."""
     return known_names.get(account_id) or live_name or f"Player {account_id}"
 
 
@@ -459,10 +731,15 @@ def current_matches(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Return the 5 most recent series with ingested or live match data, across any week."""
+    """Return the 5 most recent series with ingested or live match data, across any week,
+    and how fresh the live-game list is (live_checked_at, live_source_configured)."""
+    freshness = {
+        "live_checked_at": steam_live.live_checked_at,
+        "live_source_configured": bool(steam_live.STEAM_API_KEY),
+    }
     series = _current_series(db)
     if not series:
-        return {"series": []}
+        return {"series": [], **freshness}
     series_map = dict(series)
     matches = [m for _, series_matches in series for m in series_matches]
     provisional = [m for m in matches if getattr(m, "provisional", False)]
@@ -569,7 +846,7 @@ def current_matches(
             "matches": match_list,
         })
 
-    return {"series": result_series}
+    return {"series": result_series, **freshness}
 
 
 # ---------------------------------------------------------------------------
@@ -635,7 +912,8 @@ def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, we
 # ---------------------------------------------------------------------------
 
 def _active_pool(db: Session, channel_id: str) -> list[str]:
-    """Linked viewers who sent a heartbeat within the presence TTL."""
+    """Viewers with an account (soft account or recognised website account, both via
+    users.twitch_user_id) who sent a heartbeat within the presence TTL."""
     cutoff = int(time.time()) - _PRESENCE_TTL
     from sqlalchemy import text as _text
     rows = db.execute(_text("""
@@ -655,7 +933,10 @@ def _active_pool(db: Session, channel_id: str) -> list[str]:
 def _execute_token_drop(
     db: Session, channel_id: str, match_id: int, weights: dict
 ) -> tuple[list[str], int, bool]:
-    """Grant tokens to a random sample of present linked viewers. Returns (winner_names, pool_size, already_dropped)."""
+    """Grant tokens to a random sample of present joined viewers. Returns (winner_names, pool_size, already_dropped).
+
+    winner_names are for the broadcaster's response and the audit log only (a soft
+    account's is "Twitch viewer #id"); chat and PubSub carry the count alone."""
     drop_key = str(match_id)
     already_dropped = bool(
         db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).first()
@@ -680,7 +961,7 @@ def _execute_token_drop(
                 user = users_by_twitch_id.get(twitch_id)
                 if user:
                     user.tokens = (user.tokens or 0) + 1
-                    winner_names.append(user.username)
+                    winner_names.append(user.display_name)
             db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).update(
                 {TwitchTokenDrop.count: len(winner_names)}, synchronize_session=False)
             db.add(AuditLog(
@@ -692,6 +973,12 @@ def _execute_token_drop(
             ))
 
     return winner_names, pool_size, already_dropped
+
+
+def drops_enabled() -> bool:
+    """TWITCH_DROPS_ENABLED (default true): kill switch for MVP token drops (issue #157).
+    Off, confirming an MVP sets the MVP and the fantasy bonus only."""
+    return os.getenv("TWITCH_DROPS_ENABLED", "true").strip().lower() not in ("false", "0", "no", "off")
 
 
 def _mvp_allowed_channels() -> set[str]:
@@ -732,7 +1019,7 @@ def set_mvp(
         raise HTTPException(status_code=403, detail="Match is not in the current series window")
 
     # A stored live match with no ingested stats yet: the player must be one of
-    # its /live players, and the bonus is applied later by ingest._reapply_mvp_bonus.
+    # its live players, and the bonus is applied later by ingest._reapply_mvp_bonus.
     has_stats = db.query(PlayerMatchStats.id).filter_by(match_id=body.match_id).first() is not None
     provisional = live_row is not None and not has_stats
     if provisional:
@@ -757,6 +1044,7 @@ def set_mvp(
 
     old_player_id = upsert_mvp(db, body.match_id, body.player_id, channel_id)
     existing = old_player_id is not None
+    record_timing(db, body.match_id, mvp_confirmed_at=int(time.time()), mvp_provisional=provisional)
 
     if not provisional:
         # Clear bonus from previous MVP if different player
@@ -766,10 +1054,14 @@ def set_mvp(
         _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
         card_points.refresh_card_points(db, match_ids=[body.match_id])
 
-    # Token drop — once per match
-    winner_names, pool_size, already_dropped = _execute_token_drop(
-        db, channel_id, body.match_id, weights
-    )
+    # Token drop — once per match, unless the kill switch is off
+    enabled = drops_enabled()
+    if enabled:
+        winner_names, pool_size, already_dropped = _execute_token_drop(
+            db, channel_id, body.match_id, weights
+        )
+    else:
+        winner_names, pool_size, already_dropped = [], 0, False
 
     db.add(AuditLog(
         timestamp=int(time.time()),
@@ -781,16 +1073,18 @@ def set_mvp(
     ))
     db.commit()
     bust_cache()
+    # No winner names or ids go to the channel: every joined panel re-reads its own
+    # balance from GET /twitch/me and shows the drop when it went up.
     _pubsub_broadcast(channel_id, {
         "type": "mvp",
         "player_name": player_name,
         "match_id": body.match_id,
-        "token_drop_winners": winner_names,
+        "token_drop": {"count": len(winner_names), "refresh": bool(winner_names)},
     })
 
-    token_name = os.getenv("TOKEN_NAME", "tokens")
-    chat_msg = _mvp_chat_text(player_name, winner_names, token_name,
-                              pool_empty=not already_dropped and pool_size == 0)
+    chat_msg = _mvp_chat_text(player_name, len(winner_names),
+                              pool_empty=not already_dropped and pool_size == 0,
+                              drops_enabled=enabled)
     _post_chat_message(channel_id, chat_msg)
 
     return {
@@ -798,7 +1092,10 @@ def set_mvp(
         "player_id": body.player_id,
         "player_name": player_name,
         "token_drop": {
-            "winners": winner_names,
+            "enabled": enabled,
+            # Count only: a winner's display name is a website username for a
+            # connected viewer, and is not shown to the channel (issue #157).
+            "winner_count": len(winner_names),
             "pool_size": pool_size,
             "already_dropped": already_dropped,
         },

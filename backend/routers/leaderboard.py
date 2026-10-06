@@ -92,17 +92,31 @@ _STORED_POINT_SUMS = (
 )
 
 
-@router.get("/top")
-def top_performances(db=Depends(get_db)):
+def top_performance_rows(db, limit: int = 10, match_ids: list[int] | None = None) -> list[dict]:
+    """Best single-match fantasy performances, best first. Shared by GET /top and the
+    Twitch panel's GET /twitch/panel, which passes the latest matches' ids (issue #157)."""
+    if match_ids is not None and not match_ids:
+        return []
+    params: dict = {"limit": limit}
+    match_filter = ""
+    if match_ids is not None:
+        keys = [f"m{i}" for i in range(len(match_ids))]
+        params.update({k: int(v) for k, v in zip(keys, match_ids)})
+        match_filter = f"AND s.match_id IN ({', '.join(':' + k for k in keys)})"
     results = db.execute(text(f"""
         SELECT p.id, p.name, p.avatar_url, s.fantasy_points
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
-        WHERE {scored_stat_sql()}
+        WHERE {scored_stat_sql()} {match_filter}
         ORDER BY s.fantasy_points DESC
-        LIMIT 10
-    """)).fetchall()
+        LIMIT :limit
+    """), params).fetchall()
     return [{**r._mapping, "fantasy_points": display_points(r.fantasy_points)} for r in results]
+
+
+@router.get("/top")
+def top_performances(db=Depends(get_db)):
+    return top_performance_rows(db)
 
 
 @router.get("/leaderboard")
@@ -137,7 +151,7 @@ def roster_leaderboard(db=Depends(get_db)):
             WHERE {scored_stat_sql("match_id")}
             GROUP BY player_id
         ) pts ON pts.player_id = c.player_id
-        WHERE u.is_tester = 0
+        WHERE u.is_tester = 0 AND u.account_type = 'full'
         GROUP BY u.id, u.username, owned.total
         ORDER BY roster_value DESC
     """)).fetchall()
@@ -178,7 +192,7 @@ def compute_season_standings(db) -> list[dict]:
             WHERE {counted_roster_entry_sql()}
             GROUP BY wre.user_id, wre.card_id
         ) agg ON agg.user_id = u.id AND agg.card_id = c.id
-        WHERE u.is_tester = 0
+        WHERE u.is_tester = 0 AND u.account_type = 'full'
     """)).fetchall()
     return _leaderboard_rows(db, rows, scope="season")
 
@@ -254,7 +268,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
             AND {scored_match_sql()}
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
-        WHERE u.is_tester = 0
+        WHERE u.is_tester = 0 AND u.account_type = 'full'
         GROUP BY u.id, u.username, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)

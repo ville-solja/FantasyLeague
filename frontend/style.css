@@ -293,6 +293,24 @@ th.sort-desc::after { content: " \2193"; color: var(--k-orange-500); }
 .status.ok  { color: var(--k-ok); }
 .status.err { color: var(--k-err); }
 input.invalid { border-color: var(--k-err); }
+
+/* Credential forms (issue #158) wrap existing fields; they add no spacing. */
+.modal form, #changePasswordForm { margin: 0; }
+
+/* Hidden username helper for password managers: present in the form, invisible,
+   not focusable. Clip-based, since some managers ignore display:none fields. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .field-error {
   font-size: var(--fs-xs);
   color: var(--k-err);
@@ -519,8 +537,299 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .modal .status { margin-top: 8px; }
 
 /* ============================================================
-   SCHEDULE
+   SCHEDULE (issue #156: Right now strip, week strip, hide mode)
    ============================================================ */
+/* One column grid for series rows and their game rows, so everything lines up:
+   time+division | team 1 (faces the score) | score | team 2 | link + button */
+#tab-schedule { --sched-cols: 128px minmax(0, 1fr) 76px minmax(0, 1fr) 300px; }
+.schedule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.schedule-head h2 { margin-bottom: 0; }
+.schedule-head-actions { display: flex; align-items: center; gap: 8px; }
+.schedule-hide-toggle,
+.schedule-refresh { min-height: 44px; }
+.schedule-hide-toggle {
+  background: var(--bg-card-hi);
+  color: var(--fg-muted);
+  border: var(--bw-hair) solid var(--border-soft);
+}
+.schedule-hide-toggle:hover { background: var(--k-ink-600); color: var(--fg); }
+.schedule-hide-toggle[aria-pressed="true"] {
+  background: var(--accent-ghost);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.stale-notice { font-size: var(--fs-xs); color: var(--fg-muted); margin-bottom: 12px; }
+.schedule-empty { display: block; color: var(--fg-muted); font-size: var(--fs-sm); padding: 12px 0; }
+
+/* Right now strip */
+.schedule-now {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.now-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 16px;
+  background: var(--bg-card-hi);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-md);
+}
+.now-card.live { border-color: var(--k-err); }
+.now-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wider);
+  color: var(--fg-muted);
+}
+.now-card.live .now-card-eyebrow { color: var(--k-err); }
+.now-card.next .now-card-eyebrow { color: var(--accent); }
+.live-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--k-err);
+  animation: schedule-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes schedule-live-pulse { 50% { opacity: 0.35; } }
+.now-card-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--fs-base);
+  color: var(--fg);
+}
+.now-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.now-team.right { text-align: left; }
+.now-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 36px;
+  margin-top: auto;
+}
+.now-card-foot .now-card-meta { min-width: 0; }
+.now-vs { font-size: var(--fs-xs); color: var(--fg-muted); text-transform: uppercase; }
+.now-card .series-score { font-size: var(--fs-lg); }
+.now-card-meta { font-size: var(--fs-xs); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.now-countdown { color: var(--accent); }
+.now-card-eyebrow .now-countdown {
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-weight: var(--w-regular);
+  font-size: var(--fs-xs);
+  text-transform: none;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.now-card-watch { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+/* Next up: up to three compact rows; teams line up on "vs" across rows. */
+.next-list { display: flex; flex-direction: column; }
+.next-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 156px;
+  grid-template-areas: "when teams watch";
+  align-items: center;
+  column-gap: 10px;
+  min-height: 40px;
+  padding: 4px 0;
+  border-top: var(--bw-hair) solid var(--border-soft);
+  font-size: var(--fs-sm);
+}
+.next-row:first-child { border-top: 0; }
+.next-when { grid-area: when; display: flex; flex-direction: column; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.next-time { color: var(--fg); white-space: nowrap; }
+.next-div { font-size: var(--fs-xs); color: var(--fg-muted); }
+.next-teams { grid-area: teams; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: baseline; gap: 6px; min-width: 0; }
+.next-watch { grid-area: watch; display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.next-watch .now-card-link { min-width: 0; min-height: 28px; padding: 2px 10px; font-size: var(--fs-xs); }
+.next-summary strong { color: var(--fg); font-weight: var(--w-medium); }
+.next-summary { grid-area: teams; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-muted); text-align: center; }
+.next-watch button.now-card-btn.next-view { min-width: 0; min-height: 28px; padding: 2px 10px; font-size: var(--fs-xs); }
+/* No stream link yet: a greyed-out, non-interactive Watch button. */
+.series-link-slot .stream-link.is-disabled,
+.now-card-link.is-disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  border: var(--bw-hair) dashed var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-dim);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: not-allowed;
+}
+.series-link-slot .stream-link.is-disabled { min-width: 88px; min-height: 32px; padding: 4px 12px; font-size: var(--fs-sm); }
+.series-link-slot .stream-link.is-disabled:hover { text-decoration: none; color: var(--fg-dim); }
+.stream-name.tbd { font-style: italic; }
+/* Streamer name before a watch button. */
+.stream-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+.next-watch .stream-name { max-width: 84px; }
+.series-link-slot .stream-name { max-width: 96px; }
+button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; background: var(--bg-card); border: var(--bw-hair) solid var(--k-ink-500); }
+
+/* Week strip */
+.schedule-weeks { display: flex; align-items: stretch; gap: 6px; margin-bottom: 16px; }
+.schedule-weeks:empty { display: none; }
+.schedule-week-chips {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--k-ink-600) transparent;
+}
+.schedule-week-chip {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 72px;
+  min-height: 56px;
+  padding: 6px 10px;
+  background: var(--bg-card-hi);
+  color: var(--fg-muted);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+  font-family: var(--font-body);
+  font-weight: var(--w-regular);
+}
+.schedule-week-chip:hover { background: var(--k-ink-600); color: var(--fg); }
+.schedule-week-chip.played { background: var(--bg-card); }
+.schedule-week-chip.upcoming { border-style: dashed; }
+.schedule-week-chip.selected { background: var(--k-ink-600); color: var(--fg); border-color: var(--fg-muted); }
+.schedule-week-chip.current { border-color: var(--accent); border-style: solid; }
+.schedule-week-chip-name {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
+}
+.schedule-week-chip-date { font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.schedule-week-chip-tag {
+  font-size: var(--fs-xs);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
+}
+.schedule-week-chip-marker {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: var(--r-xs);
+}
+.schedule-week-arrow {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  background: var(--bg-card-hi);
+  color: var(--fg-muted);
+  border: var(--bw-hair) solid var(--border-soft);
+  font-size: var(--fs-lg);
+}
+.schedule-week-arrow:hover { background: var(--k-ink-600); color: var(--fg); }
+.schedule-this-week { flex-shrink: 0; min-height: 44px; margin-left: auto; }
+
+/* Week panel */
+.schedule-week-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.schedule-week-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.schedule-week-title h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-lg);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
+  color: var(--fg);
+}
+.schedule-week-range { font-size: var(--fs-sm); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.schedule-week-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.schedule-week-note { font-size: var(--fs-xs); color: var(--fg-muted); }
+.schedule-div-filter { display: flex; gap: 4px; }
+.schedule-div-chip {
+  min-height: 36px;
+  padding: 6px 12px;
+  background: none;
+  color: var(--fg-muted);
+  border: var(--bw-hair) solid var(--border-soft);
+}
+.schedule-div-chip:hover { background: var(--bg-card-hi); color: var(--fg); }
+.schedule-div-chip.active { background: var(--bg-card-hi); color: var(--fg); border-color: var(--fg-muted); }
+.schedule-date-hd {
+  padding: 14px 0 2px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
+}
+.schedule-now-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--w-bold);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
+  font-variant-numeric: tabular-nums;
+}
+.schedule-now-line::before,
+.schedule-now-line::after { content: ""; height: 2px; background: var(--accent); }
+.schedule-now-line::before { flex: 0 0 12px; }
+.schedule-now-line::after { flex: 1; }
+
+/* Series rows */
 .badge-division {
   font-size: var(--fs-xs);
   text-transform: uppercase;
@@ -529,21 +838,27 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   border-radius: var(--r-xs);
   flex-shrink: 0;
 }
-.badge-division.div1 { background: #1a1a2a; color: #6a6aaa; }
-.badge-division.div2 { background: #1a2a1a; color: #6aaa6a; }
+.badge-division.div1 { background: #1a1a2a; color: #8a8acc; }
+.badge-division.div2 { background: #1a2a1a; color: #7cc07c; }
 
 .series-row {
   display: grid;
-  grid-template-columns: 40px 1fr 64px 1fr minmax(0, 170px);
+  grid-template-columns: var(--sched-cols);
   align-items: center;
-  column-gap: 10px;
+  column-gap: 12px;
   padding: 10px 0;
   border-bottom: var(--bw-hair) solid var(--k-ink-900);
   font-size: var(--fs-sm);
+  color: var(--fg);
 }
-.series-row.past { color: var(--fg-dim, #888); }
-.series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.series-team.right { text-align: right; }
+.series-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Both teams face the score: team 1 right-aligned, team 2 ("right" team) left-aligned. */
+.series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.series-team.right { text-align: left; }
+.series-team.win,
+.now-team .win { color: var(--fg); font-weight: var(--w-bold); }
+.series-team.loss,
+.now-team .loss { color: var(--fg-muted); }
 .series-score {
   font-family: var(--font-display);
   font-weight: var(--w-black);
@@ -551,48 +866,109 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   text-align: center;
   font-size: var(--fs-md);
   letter-spacing: var(--tr-normal);
+  font-variant-numeric: tabular-nums;
 }
-.series-score.no-result { color: var(--border); font-weight: var(--w-regular); font-size: var(--fs-sm); }
-.series-links {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.series-score.no-result { color: var(--fg-muted); font-weight: var(--w-regular); font-size: var(--fs-sm); }
+.series-played {
+  text-align: center;
   font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wide);
 }
-.stream-link { color: var(--k-rarity-rare); text-decoration: none; }
-.stream-link:hover { text-decoration: underline; }
-.series-time { color: var(--fg-dim); white-space: nowrap; }
-.series-time.tbd { font-style: italic; opacity: 0.7; }
-.schedule-section {
+.series-live { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.live-tag {
   font-family: var(--font-display);
   font-weight: var(--w-bold);
-  font-size: var(--fs-xs);
-  color: var(--fg-dim);
+  font-size: var(--fs-sm);
+  color: var(--k-err);
   text-transform: uppercase;
-  letter-spacing: var(--tr-widest);
-  padding: 18px 0 6px;
+  letter-spacing: var(--tr-wider);
 }
-.schedule-date-hd { font-size: var(--fs-xs); color: var(--border); padding: 10px 0 2px; }
-.stale-notice { font-size: var(--fs-xs); color: var(--fg-dim); margin-bottom: 12px; }
+/* Fixed slots: links in one column, buttons in another, on every row. */
+.series-links {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  align-items: center;
+  column-gap: 8px;
+  font-size: var(--fs-xs);
+}
+.series-link-slot { justify-self: end; display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; white-space: nowrap; }
+.series-btn-slot { display: flex; }
+.series-btn-slot .series-btn { width: 100%; }
+.series-btn { min-height: 32px; padding: 4px 10px; }
+.schedule-week-tools .series-btn { min-height: 36px; }
+.series-stream-label { color: var(--fg-muted); }
+.stream-link { color: var(--k-rarity-rare); text-decoration: none; }
+.stream-link:hover { text-decoration: underline; }
+/* Stream / watch links in rows and Right now cards look like outlined buttons:
+   same display face as the games button, but ghost, so the two read as a pair.
+   A live match's link is the one filled (primary) action. */
+.series-link-slot .stream-link,
+a.now-card-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 88px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: var(--bw-hair) solid var(--k-ink-500);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+a.now-card-link { flex-shrink: 0; min-width: 96px; min-height: 36px; }
+.ext-icon { width: 12px; height: 12px; flex-shrink: 0; }
+.series-link-slot .stream-link:hover,
+a.now-card-link:hover {
+  border-color: var(--accent);
+  background: var(--accent-ghost);
+  color: var(--accent);
+  text-decoration: none;
+}
+.series-link-slot .stream-link:focus-visible,
+a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.series-row.live .series-link-slot .stream-link,
+.now-card.live a.now-card-link {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.series-row.live .series-link-slot .stream-link:hover,
+.now-card.live a.now-card-link:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-fg); }
+.series-time { color: var(--fg-muted); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 40px; }
+.series-time.tbd { font-style: italic; }
 
+/* Game rows, folded behind the "N games" button */
+.series-games { background: var(--bg-card-hi); }
 .game-row {
   display: grid;
-  grid-template-columns: 40px 1fr 64px 1fr minmax(0, 170px);
+  grid-template-columns: var(--sched-cols);
   align-items: center;
-  column-gap: 10px;
-  padding: 5px 0 5px 14px;
+  column-gap: 12px;
+  padding: 5px 0;
   border-bottom: var(--bw-hair) solid var(--k-ink-900);
   background: var(--bg-card-hi);
   font-size: var(--fs-xs);
 }
-.game-row-num { color: var(--border); }
-.game-row-heroes { display: flex; align-items: center; gap: 3px; min-width: 0; }
-.game-row-heroes.right { justify-content: flex-end; }
-.game-row-score { text-align: center; color: var(--fg-dim); }
-.game-row-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.game-row-duration { color: var(--fg-dim); white-space: nowrap; }
+.game-row-num { display: flex; align-items: center; gap: 8px; color: var(--fg-muted); padding-left: 12px; white-space: nowrap; }
+/* Heroes sit under their team name, next to the kills score. */
+.game-row-heroes { display: flex; align-items: center; justify-content: flex-end; gap: 3px; min-width: 0; }
+.game-row-heroes.right { justify-content: flex-start; }
+.game-row-score { text-align: center; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.game-row-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; white-space: nowrap; }
+.game-row-mvp-star { color: var(--k-amber-300); }
+.game-row-duration { min-width: 40px; text-align: right; color: var(--fg-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .hero-icon {
   width: 20px;
   height: 20px;
@@ -610,6 +986,56 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   box-sizing: border-box;
   flex-shrink: 0;
   display: inline-block;
+}
+
+@media (max-width: 700px) {
+  .schedule-now { grid-template-columns: 1fr; }
+  .schedule-week-arrow { display: none; }
+  .schedule-week-chips { flex: 1 1 auto; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .schedule-week-chips::-webkit-scrollbar { display: none; }
+  /* Rows without a button: the link moves to the right edge. */
+  .series-links { grid-template-columns: auto auto; justify-content: end; }
+  .series-btn-slot:empty { display: none; }
+  .next-watch .stream-name,
+  .now-card-watch .stream-name { display: none; }
+  /* Next up rows: time and watch button on top, the teams get the full width below. */
+  .next-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "when watch" "teams teams";
+    row-gap: 4px;
+    padding: 8px 0;
+  }
+  .next-when { flex-direction: row; align-items: baseline; gap: 8px; }
+  .next-summary { white-space: normal; text-align: left; }
+  .series-btn-slot .series-btn { min-width: 96px; }
+  .series-link-slot .stream-link,
+  a.now-card-link { min-height: 44px; }
+  .series-row {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas:
+      "meta meta links"
+      "t1 mid t2";
+    row-gap: 6px;
+  }
+  .series-row > .series-meta { grid-area: meta; }
+  .series-row > .series-links { grid-area: links; }
+  .series-row > .series-team { grid-area: t1; }
+  .series-row > .series-team.right { grid-area: t2; }
+  .series-row > .series-score,
+  .series-row > .series-played,
+  .series-row > .series-live { grid-area: mid; }
+  .game-row { grid-template-columns: 96px 56px minmax(0, 1fr); }
+  .game-row-num { padding-left: 4px; }
+  .schedule-this-week { margin-left: 0; }
+  .game-row-heroes { display: none; }
+  .series-btn,
+  .schedule-div-chip,
+  button.now-card-btn { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+  .series-link-slot .stream-link, a.now-card-link { transition: none; }
 }
 
 /* ============================================================
@@ -1284,8 +1710,11 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 
 /* ---- Popup layout: week tabs, then two columns side by side ---- */
+/* Fixed height (issue #159): the frame, tabs and column headers stay put while
+   the columns' content changes. */
 .weekly-summary-modal {
   width: min(1280px, calc(100vw - 48px));
+  height: 85vh;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -1359,6 +1788,11 @@ body.roster-dragging * { cursor: grabbing !important; }
   overflow-y: auto;
   min-height: 0;
   flex: 1;
+}
+/* While another week loads, the shown week stays, dimmed (issue #159). */
+.weekly-summary-col-body.is-loading {
+  opacity: .6;
+  transition: opacity 150ms;
 }
 
 /* ---- My roster column ---- */
@@ -1678,6 +2112,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   .recap-total.recap-pop,
   .recap-float { animation: none; }
   .recap-float { display: none; }
+  .weekly-summary-col-body.is-loading { transition: none; }
 }
 
 /* ---- "Recap is ready" popup ---- */
@@ -1723,7 +2158,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   }
 }
 @media (max-width: 600px) {
-  .weekly-summary-modal { width: calc(100vw - 16px); padding: var(--s-4); max-height: 92vh; }
+  .weekly-summary-modal { width: calc(100vw - 16px); padding: var(--s-4); height: 92vh; max-height: 92vh; }
   .weekly-summary-reveal-footer { bottom: calc(-1 * var(--s-4)); }
 }
 
@@ -1801,4 +2236,53 @@ body.roster-dragging * { cursor: grabbing !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tour-spotlight { transition: none !important; }
+}
+
+/* Profile › Twitch (issue #160) */
+.profile-twitch-copy {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+  margin-bottom: 12px;
+}
+.profile-twitch-status {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.profile-twitch-merge {
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.profile-twitch-merge-text {
+  font-size: var(--fs-sm);
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+.profile-twitch-note {
+  font-size: var(--fs-xs);
+  color: var(--fg-dim);
+  margin: 12px 0 0;
+}
+
+/* Admin › Users › Twitch merges (issue #160) */
+.twitch-merges-title {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 20px 0 6px;
+}
+.twitch-merges-note {
+  font-size: var(--fs-xs);
+  color: var(--fg-dim);
+  margin-bottom: 8px;
 }

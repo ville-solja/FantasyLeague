@@ -29,3 +29,11 @@ def key_by_user_or_ip(request: Request) -> str:
     session cookie itself carries only a session ID (issue #117)."""
     user_id = getattr(getattr(request, "state", None), "session_user_id", None)
     return f"user:{user_id}" if user_id else get_remote_address(request)
+
+
+def key_by_twitch_viewer_or_ip(request: Request) -> str:
+    """Rate-limit key for the Twitch panel's game routes (issue #157): the viewer's
+    opaque Twitch id, set on request.state by twitch.verify_twitch_jwt (resolved before
+    the limit is checked), else the source IP."""
+    opaque_id = getattr(getattr(request, "state", None), "twitch_opaque_id", None)
+    return f"twitch:{opaque_id}" if opaque_id else get_remote_address(request)

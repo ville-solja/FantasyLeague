@@ -19,7 +19,8 @@ Testing approach per story (copy the fixtures from the named precedent files):
     - "Writes nothing" assertions check `twitch_mvp`, `twitch_token_drops`
       and `PlayerMatchStats.is_mvp` are unchanged.
     - `TWITCH_MVP_CHANNEL_IDS` is set/unset with monkeypatch.setenv/delenv.
-    - `/twitch/link` rate limit: TestClient against a reloaded app, following
+    - `/twitch/link` rate limit (retired in #160; now GET /auth/twitch/start):
+      TestClient against a reloaded app, following
       test_issue_121_rate_limiting.py / test_issue_124_...py — reload
       `rate_limit` (fresh Limiter, empty counters), then `twitch`, then
       `main`, in that order; disable routers.auth's unrelated limiter.
@@ -294,7 +295,8 @@ def test_set_mvp_eligible_match_sets_mvp_and_drops_tokens(db, twitch_env):
     result = _call_set_mvp(db, w["eligible"], w["eligible_player"])
 
     assert result["player_id"] == w["eligible_player"]
-    assert result["token_drop"]["winners"] == ["viewer"]
+    assert result["token_drop"]["winner_count"] == 1
+    assert "winners" not in result["token_drop"]
     db.expire_all()
     mvp = db.query(TwitchMVP).filter_by(match_id=w["eligible"]).one()
     assert mvp.player_id == w["eligible_player"]
@@ -391,61 +393,47 @@ def test_set_mvp_allowlist_unset_allows_any_channel(db, twitch_env, monkeypatch)
     assert db.query(TwitchMVP).filter_by(match_id=w["eligible"]).count() == 1
 
 
-def test_link_code_generated_with_secrets(db, monkeypatch):
-    """POST /twitch/link-code generates the code with the secrets module (6 chars, A-Z0-9)."""
-    _add_user(db, user_id=7, username="linker", email="linker@example.com")
-    calls = []
-    real_choice = twitch.secrets.choice
-
-    def _spy(seq):
-        calls.append(seq)
-        return real_choice(seq)
-
-    monkeypatch.setattr(twitch.secrets, "choice", _spy)
-    result = twitch.generate_link_code(current_user={"user_id": 7}, db=db)
-    assert re.fullmatch(r"[A-Z0-9]{6}", result["code"])
-    assert len(calls) == 6
-
-
-def test_link_code_does_not_use_random_module():
-    """twitch.py's link-code generation no longer calls random.choices."""
+def test_twitch_sign_in_secrets_generated_with_secrets_module():
+    """Issue #160 retired the link code (generated with secrets.choice). Twitch sign-in's
+    state, nonce and PKCE verifier come from secrets.token_urlsafe, never random."""
     import inspect
-    src = inspect.getsource(twitch.generate_link_code)
-    assert "random." not in src
-    assert "secrets.choice" in src
+    import twitch_oauth
+    src = inspect.getsource(twitch_oauth.start)
+    assert src.count("secrets.token_urlsafe(32)") == 3
+    assert "random." not in _read(os.path.join(_BACKEND_DIR, "twitch_oauth.py"))
     assert "random.choices" not in _read(os.path.join(_BACKEND_DIR, "twitch.py"))
+    assert not hasattr(twitch, "generate_link_code")
 
 
-def _twitch_link_client(monkeypatch):
-    monkeypatch.setenv("TWITCH_LOCAL_DEV", "true")
-    monkeypatch.delenv("ENV", raising=False)
-    app, _ = _build_app(["twitch"], rate_limited=True)
+def _twitch_start_client(monkeypatch):
+    for name in ("TWITCH_OAUTH_CLIENT_ID", "TWITCH_OAUTH_CLIENT_SECRET", "TWITCH_OAUTH_REDIRECT_URI"):
+        monkeypatch.delenv(name, raising=False)
+    app, _ = _build_app(["twitch_oauth"], rate_limited=True)
     return TestClient(app)
 
 
-def _post_link(client):
-    return client.post("/twitch/link", json={"code": "ZZZZZZ"},
-                       headers={"Authorization": "Bearer dev"})
+def _get_start(client):
+    return client.get("/auth/twitch/start", follow_redirects=False)
 
 
-def test_twitch_link_first_ten_requests_not_rate_limited(db, monkeypatch):
-    """POST /twitch/link allows 10 requests a minute from one client IP."""
-    client = _twitch_link_client(monkeypatch)
+def test_twitch_start_first_ten_requests_not_rate_limited(db, monkeypatch):
+    """GET /auth/twitch/start (issue #160; replaced the retired POST /twitch/link here) allows 10 requests a minute from one client IP."""
+    client = _twitch_start_client(monkeypatch)
     for _ in range(10):
-        resp = _post_link(client)
-        assert resp.status_code == 400  # invalid code, but not rate limited
+        resp = _get_start(client)
+        assert resp.status_code == 503  # Connect Twitch unconfigured, but not rate limited
 
 
-def test_twitch_link_eleventh_request_returns_429(db, monkeypatch):
-    """The 11th POST /twitch/link from the same IP within a minute returns 429."""
-    client = _twitch_link_client(monkeypatch)
+def test_twitch_start_eleventh_request_returns_429(db, monkeypatch):
+    """The 11th GET /auth/twitch/start from the same IP within a minute returns 429."""
+    client = _twitch_start_client(monkeypatch)
     for _ in range(10):
-        assert _post_link(client).status_code == 400
-    blocked = _post_link(client)
+        assert _get_start(client).status_code == 503
+    blocked = _get_start(client)
     assert blocked.status_code == 429
     # A different client IP has its own budget.
     other = TestClient(client.app, client=("10.9.9.9", 1234))
-    assert _post_link(other).status_code == 400
+    assert _get_start(other).status_code == 503
 
 
 # ---------------------------------------------------------------------------

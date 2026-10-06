@@ -66,18 +66,19 @@ deploying the parse-retry step backfills any recent unparsed matches without fur
 
 ### Live-match enrichment gate
 
-See `reference/opendota-query-prioritization.md` for the full mechanism. Each poll cycle, if any
-monitored league has a currently-live match, `_ingest_poll_loop` makes one `GET /live` call
-(`ingest.py::get_live_matches()`) to find out. The same response is stored in `live_matches`
-(`ingest.py::store_live_matches()`) so the Twitch MVP panel can list a game before its stats
-are ingested — see `reference/early-mvp-selection.md`. Match ingestion always runs regardless,
-but low-priority player name/avatar enrichment (`run_enrichment()`) is skipped for that cycle so
-it doesn't compete with match ingestion for OpenDota's shared rate limit exactly when a
-broadcaster is waiting on a finished match. The check itself is skipped entirely when no league
-is currently monitored, so it costs nothing outside of an active broadcast. Enrichment resumes,
-and the interval falls back to the active-week/default tiers, on the first cycle where no
-monitored league is live. A failed or unreachable `GET /live` call degrades to "nothing live"
-rather than crashing the poll loop.
+See `reference/opendota-query-prioritization.md` for the full mechanism. Each poll cycle,
+`_ingest_poll_loop` reads which monitored leagues have a live match from `live_matches`
+(`main._live_league_ids()`: a row not ended and seen in the last 15 minutes). It makes no live
+calls itself: since issue #161 a separate thread, `_live_poll_loop`, checks Steam's live league
+list every `LIVE_POLL_INTERVAL` seconds and stores the games (`ingest.py::store_live_matches()`)
+so the Twitch MVP panel can list a game before its stats are ingested — see
+`reference/early-mvp-selection.md` and `reference/mvp-selection-delays.md`. Match ingestion
+always runs regardless, but low-priority player name/avatar enrichment (`run_enrichment()`) is
+skipped for that cycle so it doesn't compete with match ingestion for OpenDota's shared rate
+limit exactly when a broadcaster is waiting on a finished match. Enrichment resumes, and the
+interval falls back to the active-week/default tiers, on the first cycle where no monitored
+league is live. A failure reading `live_matches` degrades to "nothing live" rather than crashing
+the poll loop.
 
 ## Manual Ingest
 

@@ -6,18 +6,19 @@ Resolves GitHub issue #109. Covers the three user stories in that plan:
   - Poll Faster While a Monitored Match Is Live
   - Operator Visibility into Prioritization State
 
-`backend/ingest.py` gains a single `GET /live` call per poll cycle (mirroring the existing
-`get_league_matches`/`get_league_info` pattern). Since issue #139 it is
-`get_live_matches() -> list[dict]` (the raw live games); the poll loop derives the set of
-`league_id`s with a match in progress from those entries.
+Since issue #161 live games come from Steam (`steam_live.get_live_league_games`), checked
+by the separate `main._live_poll_loop` thread and stored in `live_matches`; OpenDota's
+`GET /live` is no longer called. `_ingest_poll_loop` makes no live calls: it reads the
+monitored leagues with a live match from `live_matches` (`main._live_league_ids`: not
+ended, seen in the last 15 minutes).
 
-`backend/main.py`'s `_auto_ingest`/`_ingest_poll_loop` are extended to check live-match
-state once per poll cycle against the monitored league IDs: while any monitored league is
-live, `run_enrichment()` is skipped for that cycle (ingestion itself is never paused) and
-the loop selects the new, tighter `INGEST_LIVE_MATCH_POLL_INTERVAL` instead of the existing
-`INGEST_LIVE_POLL_INTERVAL`/`INGEST_POLL_INTERVAL` tiers. A failure in
-`get_live_matches()` (network error, OpenDota down) must degrade to an empty live
-set rather than crash the loop, falling back to today's interval-selection behavior.
+`backend/main.py`'s `_auto_ingest`/`_ingest_poll_loop` check live-match state once per poll
+cycle against the monitored league IDs: while any monitored league is live,
+`run_enrichment()` is skipped for that cycle (ingestion itself is never paused) and the
+loop selects the tighter `INGEST_LIVE_MATCH_POLL_INTERVAL` instead of the existing
+`INGEST_LIVE_POLL_INTERVAL`/`INGEST_POLL_INTERVAL` tiers. A failure reading the live state
+degrades to an empty live set rather than crash the loop, falling back to the normal
+interval selection; a failed Steam request returns None and changes nothing.
 """
 
 import sys
@@ -25,8 +26,12 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import logging
+import time
 
 import pytest
+
+# Registers every table (including live_matches) before the conftest db fixture runs.
+import models  # noqa: F401
 
 
 class _OneShotEvent:
@@ -52,7 +57,7 @@ class _OneShotEvent:
 class TestDeferLowPriorityEnrichmentWhileMonitoredMatchLive:
 
     def test_auto_ingest_skips_enrichment_when_league_has_live_match(self, monkeypatch):
-        """AC: while a monitored league has a live match (per get_live_matches()),
+        """AC: while a monitored league has a live match (per live_matches),
         _auto_ingest() skips run_enrichment() for that cycle but still ingests new match
         data for the league — only enrichment is paused, never ingestion."""
         import main
@@ -65,15 +70,20 @@ class TestDeferLowPriorityEnrichmentWhileMonitoredMatchLive:
 
         assert ingested == [123]
 
-    def test_get_live_matches_falls_back_to_empty_list_when_opendota_call_fails(self, monkeypatch):
-        """AC failure path: when OpenDota's GET /live call fails or returns None (network
-        error, rate-limited past retries), get_live_matches() must not raise —
-        it degrades to an empty list so the enrichment gate falls back to running normally."""
-        import ingest as ingest_module
+    def test_get_live_league_games_returns_none_when_steam_call_fails(self, monkeypatch):
+        """AC failure path (since #161 the live source is Steam): when the live request
+        fails, steam_live.get_live_league_games() must not raise — it returns None, the
+        stored live matches stay as they are and the enrichment gate is unaffected."""
+        import requests
+        import steam_live
 
-        monkeypatch.setattr(ingest_module, "opendota_get_json", lambda url, label=None: None)
+        monkeypatch.setattr(steam_live, "STEAM_API_KEY", "TESTKEY")
 
-        assert ingest_module.get_live_matches() == []
+        def _fail(*args, **kwargs):
+            raise requests.ConnectionError("simulated Steam failure")
+        monkeypatch.setattr(steam_live.requests, "get", _fail)
+
+        assert steam_live.get_live_league_games([123]) is None
 
 
 # ===========================================================================
@@ -82,16 +92,22 @@ class TestDeferLowPriorityEnrichmentWhileMonitoredMatchLive:
 
 class TestPollFasterWhileMonitoredMatchLive:
 
-    def test_ingest_poll_loop_selects_live_match_interval_when_league_live(self, monkeypatch):
-        """AC: while the live-match check finds a monitored league's match in progress,
-        _ingest_poll_loop() waits INGEST_LIVE_MATCH_POLL_INTERVAL instead of the existing
-        active-week (INGEST_LIVE_POLL_INTERVAL) or default (INGEST_POLL_INTERVAL) interval."""
+    def test_ingest_poll_loop_selects_live_match_interval_when_league_live(self, db, monkeypatch):
+        """AC: while a monitored league has a live match in progress (a fresh, unended
+        live_matches row), _ingest_poll_loop() waits INGEST_LIVE_MATCH_POLL_INTERVAL instead
+        of the existing active-week (INGEST_LIVE_POLL_INTERVAL) or default
+        (INGEST_POLL_INTERVAL) interval."""
         import main
+        from models import LiveMatch
 
+        now = int(time.time())
+        db.add(LiveMatch(match_id=1, league_id=123, players_json="[]",
+                         first_seen_at=now - 120, last_seen_at=now - 30, ended_at=None))
+        db.commit()
+        monkeypatch.setattr(main, "SessionLocal", lambda: db)
         monkeypatch.setattr(main, "_get_monitored_league_ids", lambda: [123])
-        monkeypatch.setattr(main, "get_live_matches", lambda: [{"match_id": "1", "league_id": 123}])
-        monkeypatch.setattr(main, "store_live_matches", lambda entries, monitored: None)
-        monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: None)
+        auto_ingest_calls = []
+        monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: auto_ingest_calls.append(live))
         monkeypatch.setattr(main, "_run_toornament_sync", lambda: None)
         monkeypatch.setattr(main, "_has_active_week", lambda: pytest.fail("active-week check should not be reached when a match is live"))
 
@@ -100,19 +116,22 @@ class TestPollFasterWhileMonitoredMatchLive:
 
         main._ingest_poll_loop()
 
+        assert auto_ingest_calls == [{123}]
         assert fake_event.wait_calls == [main._INGEST_LIVE_MATCH_POLL_INTERVAL]
 
     def test_ingest_poll_loop_falls_back_to_normal_interval_selection_when_live_check_fails(self, monkeypatch):
-        """AC failure path: when the live-match check raises or otherwise fails inside a
-        poll cycle, _ingest_poll_loop() does not crash — it falls back to today's
-        active-week/default interval-selection behavior for that cycle."""
+        """AC failure path: when reading the live-match state raises inside a poll cycle,
+        _ingest_poll_loop() does not crash — it treats no league as live (ingest and
+        enrichment still run) and falls back to the active-week/default interval selection."""
         import main
 
         monkeypatch.setattr(main, "_get_monitored_league_ids", lambda: [123])
 
-        def _raise_live_check():
-            raise RuntimeError("simulated OpenDota /live failure")
-        monkeypatch.setattr(main, "get_live_matches", _raise_live_check)
+        def _raise_live_check(league_ids):
+            raise RuntimeError("simulated live_matches read failure")
+        monkeypatch.setattr(main, "_live_league_ids", _raise_live_check)
+        monkeypatch.setattr(main, "_has_recently_ended_live_match", lambda league_ids: False)
+        monkeypatch.setattr(main, "_has_active_week", lambda: False)
 
         auto_ingest_calls = []
         monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: auto_ingest_calls.append((league_ids, live)))
@@ -123,7 +142,7 @@ class TestPollFasterWhileMonitoredMatchLive:
 
         main._ingest_poll_loop()  # must not raise
 
-        assert auto_ingest_calls == []
+        assert auto_ingest_calls == [([123], set())]
         assert fake_event.wait_calls == [main._INGEST_POLL_INTERVAL]
 
 

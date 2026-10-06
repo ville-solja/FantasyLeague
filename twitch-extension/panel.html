@@ -8,47 +8,140 @@
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
 <script src="extension.js"></script>
 </head>
-<body>
+<body class="panel">
 
-<div id="banner" class="banner"></div>
+<header class="p-head">
+  <div class="p-brand">Kana <span>Cards</span></div>
+  <div class="p-tokens" id="token-chip" hidden><strong id="token-count">0</strong> tokens</div>
+  <button type="button" id="btn-settings" class="icon-btn" aria-label="Settings" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+  </button>
+</header>
 
-<!-- Unlinked state — visible by default until status confirms linked -->
-<div id="view-unlinked">
-  <h2>Link your account</h2>
-  <p>Connect your Kanaliiga Fantasy account to receive token drops from the broadcaster.</p>
-  <ol style="padding-left:16px;line-height:1.7;margin-bottom:10px">
-    <li>Log into <strong>kana-cards.com</strong>.</li>
-    <li>Profile → <strong>Generate Twitch Code</strong>.</li>
-    <li>Enter the 6-character code below and press Link.</li>
-  </ol>
-  <input id="link-code-input" type="text" maxlength="6" placeholder="ABC123"
-    style="font-size:1.3rem;letter-spacing:0.2em;text-transform:uppercase;
-           padding:8px;text-align:center" />
-  <button id="btn-link">Link</button>
-  <p id="link-status" style="margin-top:6px;color:#f66;font-size:11px"></p>
-  <p class="muted" id="chat-note" style="margin-top:8px;font-size:11px">If you win a token drop, your Kanaliiga Fantasy username is posted in this channel's chat.</p>
-</div>
+<nav class="p-tabs" role="tablist" aria-label="Kana Cards">
+  <button type="button" role="tab" class="p-tab" id="tab-live" data-view="live" aria-selected="true" aria-controls="view-live">Live</button>
+  <button type="button" role="tab" class="p-tab" id="tab-cards" data-view="cards" aria-selected="false" aria-controls="view-cards">Cards</button>
+  <button type="button" role="tab" class="p-tab" id="tab-roster" data-view="roster" aria-selected="false" aria-controls="view-roster">Roster</button>
+</nav>
 
-<!-- Linked state -->
-<div id="view-linked" style="display:none">
-  <h2>Kana Cards</h2>
-  <div class="stat-block">
-    <div class="stat-label">Your tokens</div>
-    <div class="stat-value" id="token-count">—</div>
+<main class="p-main">
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Live: every viewer, logged in to Twitch or not -->
+  <section id="view-live" class="view" role="tabpanel" aria-labelledby="tab-live">
+    <div class="join-slot"></div>
+    <h3 class="eyebrow">Latest MVPs</h3>
+    <div id="live-mvps"><p class="note">Loading…</p></div>
+    <h3 class="eyebrow">Top performers</h3>
+    <div id="live-top"><p class="note">Loading…</p></div>
+    <h3 class="eyebrow">Next match</h3>
+    <div id="live-next"><p class="note">Loading…</p></div>
+  </section>
+
+  <!-- Cards: draw, reveal, collection -->
+  <section id="view-cards" class="view" role="tabpanel" aria-labelledby="tab-cards" hidden>
+    <div class="join-slot"></div>
+    <div id="cards-main" hidden>
+      <div class="draw-row">
+        <button type="button" id="btn-draw">Draw · 1</button>
+        <button type="button" id="btn-team-draw" class="secondary">Team draw · 3</button>
+      </div>
+      <p id="draw-note" class="note" role="status"></p>
+      <div id="reveal" class="reveal" aria-live="polite" hidden></div>
+      <div class="coll-head">
+        <h3 class="eyebrow">Collection</h3>
+        <span id="coll-count" class="note">0 cards</span>
+      </div>
+      <div id="coll-filters" class="chips" role="group" aria-label="Filter by rarity"></div>
+      <div id="coll-grid" class="coll-grid"></div>
+      <p id="coll-empty" class="note" hidden>No cards yet. Draw one to start your collection.</p>
+    </div>
+  </section>
+
+  <!-- Team draw picker -->
+  <section id="view-teams" class="view with-pinned" aria-labelledby="teams-title" hidden>
+    <div class="sub-head">
+      <button type="button" id="btn-teams-back" class="back">Back</button>
+      <h2 id="teams-title">Team draw</h2>
+    </div>
+    <p class="note">Pick a team. You get one of its players you don't own yet. Costs 3 tokens.</p>
+    <div id="team-list" class="team-list" role="group" aria-label="Teams"></div>
+    <div class="pinned">
+      <p id="team-note" class="note" role="status"></p>
+      <button type="button" id="btn-team-confirm" disabled>Pick a team · 3</button>
+    </div>
+  </section>
+
+  <!-- Roster: slot first -->
+  <section id="view-roster" class="view" role="tabpanel" aria-labelledby="tab-roster" hidden>
+    <div class="join-slot"></div>
+    <div id="roster-main" hidden>
+      <div class="roster-meta">
+        <h3 class="eyebrow" id="roster-week">Roster</h3>
+        <span id="roster-lock" class="note"></span>
+      </div>
+      <p id="roster-points" class="note"></p>
+      <p id="roster-locked" class="note" hidden>Roster locked for this week</p>
+      <p id="roster-confirm" class="confirm" role="status"></p>
+      <ol id="roster-slots" class="slots"></ol>
+      <p id="bench-count" class="note"></p>
+    </div>
+  </section>
+
+  <!-- Bench picker for one slot -->
+  <section id="view-picker" class="view" aria-labelledby="picker-title" hidden>
+    <div class="sub-head">
+      <button type="button" id="btn-picker-back" class="back">Back</button>
+      <h2 id="picker-title">Pick a card for slot 1</h2>
+    </div>
+    <div id="picker-current" class="current-box box" hidden>
+      <div class="grow"><span class="note">In this slot:</span> <strong id="picker-current-name"></strong></div>
+      <button type="button" id="btn-bench-it" class="secondary" style="width:auto;margin:0">Bench it</button>
+    </div>
+    <div id="picker-filters" class="chips" role="group" aria-label="Filter by rarity"></div>
+    <div class="sort-row" role="group" aria-label="Sort">
+      <span class="label">Sort</span>
+      <button type="button" class="chip" data-sort="points" aria-pressed="true">Points</button>
+      <button type="button" class="chip" data-sort="rarity" aria-pressed="false">Rarity</button>
+    </div>
+    <div id="picker-list"></div>
+  </section>
+
+  <!-- Settings: identity share and Leave -->
+  <section id="view-settings" class="view" aria-labelledby="settings-title" hidden>
+    <div class="sub-head">
+      <button type="button" id="btn-settings-back" class="back">Back</button>
+      <h2 id="settings-title">Settings</h2>
+    </div>
+    <div class="settings-block box" id="share-box">
+      <p id="share-text">Share your Twitch identity so your progress can follow your Twitch account later. Twitch asks you to confirm.</p>
+      <button type="button" id="btn-share" class="secondary">Share your Twitch identity</button>
+    </div>
+    <div class="settings-block box">
+      <p id="leave-text">Leaving deletes your cards, tokens and roster.</p>
+      <button type="button" id="btn-leave" class="danger">Leave Kana Cards</button>
+      <p id="leave-note" class="note" role="status"></p>
+    </div>
+    <p class="privacy">We store your Twitch id, your game progress and when you last played, to run the game. Kana Cards never asks for a password.</p>
+  </section>
+</main>
+
+<template id="tpl-join">
+  <div class="join-box box">
+    <h2>Join Kana Cards</h2>
+    <p class="note">Collect player cards, set a weekly roster and win tokens when the broadcaster picks a match MVP.</p>
+    <button type="button" class="btn-join">Join Kana Cards</button>
+    <p class="note consent">Uses your Twitch login. We store your Twitch id and game progress; leave any time in Settings.</p>
+    <p class="note err join-error" role="status"></p>
   </div>
-  <div class="stat-block">
-    <div class="stat-label">Linked as</div>
-    <div id="linked-username" style="font-weight:600">—</div>
-  </div>
-  <p class="muted">Stay in this panel to remain eligible for token drops!</p>
-</div>
+</template>
 
-<!-- Winner announcement overlay (hidden by default) -->
-<div id="winner-banner" style="display:none;text-align:center;padding:16px;background:#2c2c3a;border-radius:8px;margin-top:10px">
-  <div style="font-size:20px">🎉</div>
-  <div style="font-weight:700;color:#9147ff;margin:4px 0" id="winner-name"></div>
-  <div class="muted" id="winner-msg"></div>
-</div>
+<template id="tpl-login">
+  <div class="join-box box">
+    <h2>Join Kana Cards</h2>
+    <p class="note">Log in to Twitch to join. The Live tab is open to everyone.</p>
+  </div>
+</template>
 
 <script src="panel.js"></script>
 </body>

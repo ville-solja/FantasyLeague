@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -12,7 +13,7 @@ from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league, retry_unparsed_matches, INGEST_LOCK
 from models import Match, PlayerMatchStats, Week, Weight
-from schedule import get_schedule, bust_cache, SCHEDULE_SHEET_URL
+from schedule import get_schedule, get_schedule_for_request, bust_cache, SCHEDULE_SHEET_URL
 from scoring import fantasy_score, stat_dict_from_row
 from toornament import sync_toornament_results
 
@@ -144,7 +145,7 @@ def recalculate(db=Depends(get_db), admin: dict = Depends(require_admin)):
 
 @router.get("/schedule")
 def schedule_endpoint(db=Depends(get_db)):
-    return get_schedule(db)
+    return get_schedule_for_request(db, int(time.time()))
 
 
 @router.post("/schedule/refresh")
@@ -152,7 +153,7 @@ def schedule_refresh(db=Depends(get_db), admin: dict = Depends(require_admin)):
     bust_cache()
     _audit(db, "admin_schedule_refresh", actor_id=admin["user_id"], actor_username=admin["username"])
     db.commit()
-    return get_schedule(db)
+    return get_schedule_for_request(db, int(time.time()))
 
 
 @router.get("/schedule/debug")

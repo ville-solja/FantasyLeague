@@ -61,8 +61,9 @@ UI details (elements, columns, states, copy): `markdown/ui_description/weekly-re
 
 - **Layout** (`frontend/index.html`, `frontend/style.css`): `#weeklySummaryModal` holds
   `.modal.weekly-summary-modal.k-scroll` (`width: min(1280px, calc(100vw - 48px))`,
-  `max-height: 85vh`, flex column; below 600 px `width: calc(100vw - 16px)` and
-  `max-height: 92vh`). The modal carries `k-scroll` because it scrolls as a whole when stacked. The week tabs (`#weeklySummaryTabs`) are the only tabs. Below them,
+  `height` and `max-height` both `85vh`, a fixed frame since #159, flex column; below 600 px
+  `width: calc(100vw - 16px)` and `height`/`max-height` `92vh`; see
+  `reference/flicker-free-tab-switching.md`). The modal carries `k-scroll` because it scrolls as a whole when stacked. The week tabs (`#weeklySummaryTabs`) are the only tabs. Below them,
   `.weekly-summary-columns` is a grid of `480px minmax(0, 1fr)` with two `<section>`s, each
   with a fixed `.weekly-summary-col-head` and a `div.k-scroll.weekly-summary-col-body`:
   `#weeklySummaryRoster` (My roster) and `#weeklySummaryContent` (Match results). Inline height

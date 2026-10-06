@@ -43,7 +43,8 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
 def get_profile(user_id: int, db=Depends(get_db),
                  current_user: dict = Depends(get_current_user)):
     user = db.get(User, user_id)
-    if not user:
+    # Twitch viewer soft accounts (issue #157) have no public profile.
+    if not user or user.account_type == "twitch":
         raise HTTPException(status_code=404, detail="User not found")
     result = {"id": user.id, "username": user.username, "player_id": user.player_id,
               "player_name": None, "player_avatar_url": None,

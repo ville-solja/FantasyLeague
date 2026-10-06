@@ -351,7 +351,7 @@ As a developer, I want every session-based check to validate the session version
 
 **Acceptance criteria**
 - `get_current_user` loads the user from the database and returns `user_id`, `username` and `is_admin` from the database row, not from the cookie
-- `get_session_user` in `backend/twitch.py` (used by `POST /twitch/link-code`) uses the same check
+- `get_session_user` in `backend/twitch.py` (used by `POST /twitch/link-code`) uses the same check *(both retired in #160; the session-cookie Twitch routes in `twitch_oauth.py` use `get_current_user`)*
 - The optional-login paths of `GET /deck` and `GET /deck/booster` treat a revoked session as logged out
 - The frontend treats a 401 from `GET /me` as logged out and clears the stored username and admin flag, instead of showing a stale logged-in header
 
@@ -437,3 +437,43 @@ As an operator, I want every limit configurable and documented so that I can mat
   - their defaults, and the accepted-risk note for the 14-day player idle limit
 - Startup fails with a clear error when a value is not a positive integer, when an idle limit is larger than its absolute limit, or when `SESSION_TOUCH_SECONDS` is not smaller than the admin idle limit
 - `SESSION_MAX_AGE_SECONDS` from #119 is still accepted as an alias for `SESSION_ABSOLUTE_SECONDS`, with a startup warning
+
+## Password Manager Autofill
+
+### Password Manager Fills the Login
+**User story**
+As a player who uses a password manager, I want it to fill my username and password in the login popup so that I can log in without typing them.
+
+**Acceptance criteria**
+- `#loginUsername` and `#loginPassword` sit inside one `<form id="loginForm" autocomplete="on">` in `#loginModal`.
+- `#loginUsername` has `name="username"`, `autocomplete="username"`, `autocapitalize="none"` and `spellcheck="false"`.
+- `#loginPassword` has `name="password"` and `autocomplete="current-password"`.
+- The Login button is `type="submit"`. Pressing Enter in either field submits the form once, so the old `onkeydown` Enter handlers are removed.
+- The form's submit handler calls `preventDefault()` and then `login()`. The page doesn't reload, and the request is the same `POST /login` as before.
+- "Forgot password" and "Create new account" are `type="button"`, so they never submit the login form.
+- **Failure path:** a failed login still shows the error in `#loginStatus`, keeps the typed username and password (as today; neither field is cleared on failure), and doesn't reload the page.
+
+### Only the Login Looks Like a Login
+**User story**
+As a player, I want my password manager to treat each password field correctly so that it fills the login and offers to save new passwords in the right places.
+
+**Acceptance criteria**
+- **Registration** (`#registerModal`): one `<form id="registerForm">`. Fields: `#regUsername` with `autocomplete="username"`, `#regEmail` with `type="email"` and `autocomplete="email"`, `#regPassword` with `autocomplete="new-password"`. Create account is `type="submit"`; Back to login is `type="button"`.
+- **Password reset** (`#resetPasswordModal`): one `<form>`. Fields:
+  - `#resetToken` with `autocomplete="one-time-code"`,
+  - `#resetNewPassword` with `autocomplete="new-password"`,
+  - a visually hidden, read-only username field with `autocomplete="username"`, so managers store the new password under the right login. It's prefilled from the username entered on the forgot-password step when known, and empty otherwise (for example when the reset link is opened from the email).
+- **Profile change password**: one `<form>`. Fields: `#pwCurrent` with `autocomplete="current-password"`, `#pwNew` with `autocomplete="new-password"`, and a visually hidden, read-only username field with `autocomplete="username"` holding the logged-in username.
+- **Admin re-login** (`#reauthModal`): one `<form>`. `#reauthPassword` keeps `autocomplete="current-password"` and gains a visually hidden, read-only username field (`autocomplete="username"`, the logged-in username), so it pairs with the same saved login and isn't mistaken for a separate login.
+- **Every password input** in `index.html` is inside a `<form>` and has an `autocomplete` value of `current-password` or `new-password`. No password input lacks one. A static test checks this, which is the failure path.
+- **Hidden helper fields** are visually hidden with a class (not `display:none`, which some managers ignore). They aren't focusable (`tabindex="-1"`) and are `aria-hidden="true"`, so keyboard and screen-reader users don't meet them.
+
+### No Change for Everyone Else
+**User story**
+As a player who types my password, I want the login and the other forms to behave exactly as before so that the fix doesn't break anything.
+
+**Acceptance criteria**
+- Every form submits through its existing function (`login()`, `register()`, `submitResetPassword()`, `changePassword()`, `submitReauth()`). Each fires once per submit, with no page reload or URL change, and none of them sends a password in the URL.
+- The visible layout of the popups and the profile page is unchanged.
+- After a successful login, the password field is cleared as today (the username stays, as before). Password managers that watch the submit event get the chance to offer saving or updating.
+- **Failure path:** a form submit that fails validation, such as an empty username, shows the same error as today.

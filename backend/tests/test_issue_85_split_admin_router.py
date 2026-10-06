@@ -269,14 +269,25 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-151-weekly-report-aesthetics's 56 new tests did after that, and
         plan-issue-152-weekly-recap-animations's 59 new tests did after that, and
         the Weekly Report readability pass's 12 new tests did after that, and
-        plan-issue-153-tour-weekly-report's 13 new tests did after that)."""
+        plan-issue-153-tour-weekly-report's 13 new tests did after that, and
+        plan-issue-158-password-manager-autofill's 34 new tests did after that, and
+        plan-issue-159-flicker-free-tab-switching's 44 new tests did after that, and
+        plan-issue-156-schedule-visuals's 52 new tests did after that, and
+        plan-issue-161-mvp-selection-delays's 42 new tests did after that, and
+        plan-issue-157-twitch-extension-policy-compliance's 88 new tests did after
+        that; its rewrite of test_twitch_review_resubmission.py replaced two
+        link-code panel tests with two Join-panel tests, net 0), and
+        plan-issue-160-twitch-account-connection-oidc's 81 new tests did after that
+        (its retired-route updates: test_issue_136's two link-code Origin tests became
+        four parametrized cases, +2; test_issue_135's two link-code secrets tests became
+        one, -1; test_issue_117/119 replaced like for like, net 82)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "1617 passed" in output, output[-3000:]
+        assert "1972 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

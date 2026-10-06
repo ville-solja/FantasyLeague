@@ -68,8 +68,12 @@ host, so the port is not reachable from outside at all. Covered by
   which `get_current_user` sets; the cookie carries only a session ID since #117)
 - `GET /cards/{card_id}/image` — per-IP limit (`RATE_LIMIT_CARD_IMAGE`, issue #135); the endpoint
   is public and renders a PNG with Pillow on every call
-- `POST /twitch/link` — per-IP limit (`RATE_LIMIT_TWITCH_LINK`, issue #135) against link-code
-  guessing
+- `GET /auth/twitch/start` and `GET /auth/twitch/callback` — per-IP limit each
+  (`RATE_LIMIT_TWITCH_OAUTH`, issue #160). They replaced the retired `POST /twitch/link`
+  (`RATE_LIMIT_TWITCH_LINK`, #135, against link-code guessing)
+- Twitch panel game routes (issue #157) — Join per viewer (`RATE_LIMIT_TWITCH_JOIN`, keyed by the
+  opaque Twitch id through `key_by_twitch_viewer_or_ip`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`,
+  also on both draws); draws, roster changes and Leave per viewer (`RATE_LIMIT_TWITCH_ACTION`)
 - Roster activate/deactivate/swap/reorder — per-user limit (`RATE_LIMIT_ROSTER_MUTATION`,
   issue #124)
 - Every other route — the global baseline (`RATE_LIMIT_GLOBAL`) applies automatically via
@@ -93,7 +97,10 @@ limiting.
 | `RATE_LIMIT_RESET_PASSWORD` | `10/minute` | Per-IP limit on `POST /reset-password` |
 | `RATE_LIMIT_REDEEM` | `5/minute` | Per-user limit on `POST /redeem` |
 | `RATE_LIMIT_CARD_IMAGE` | `60/minute` | Per-IP limit on `GET /cards/{card_id}/image` |
-| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
+| `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` (#160; `RATE_LIMIT_TWITCH_LINK` retired with `POST /twitch/link`) |
+| `RATE_LIMIT_TWITCH_JOIN` | `10/minute` | Per-viewer limit on `POST /twitch/join` |
+| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Per-IP limit on `POST /twitch/join`, `/twitch/draw` and `/twitch/draw/booster/{team_id}` |
+| `RATE_LIMIT_TWITCH_ACTION` | `30/minute` | Per-viewer limit on Twitch panel draws, roster changes and Leave |
 | `RATE_LIMIT_ROSTER_MUTATION` | `30/minute` | Per-user limit on roster mutations |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed login attempts against one username before lockout |
 | `LOGIN_LOCKOUT_WINDOW_SECONDS` | `300` | Rolling window the lockout threshold is counted over |

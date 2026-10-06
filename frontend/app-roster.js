@@ -2,6 +2,10 @@ let _rosterCards = [];
 let _rosterWeekId = null; // null = current week (default)
 let _rosterLocked = false; // true when week is locked — drag disabled
 let _dragState = null;    // { cardId, zone } while a drag is in flight
+// The active and bench cards on screen; drag-and-drop handlers read these, so
+// handlers bound to nodes kept from an earlier render act on the latest data.
+let _rosterActive = [];
+let _rosterBench = [];
 
 // Issue #124 — in-flight guard: while one activate/deactivate/swap/reorder
 // mutation is still resolving, ignore a second click/keypress/drop of the
@@ -40,6 +44,7 @@ async function showRosterCard(cardId) {
 async function loadWeeks() {
   try {
     const res = await fetch(`${API}/weeks`);
+    if (!res.ok) return;
     _weeks = await res.json();
     _renderWeekSelector();
   } catch (e) { /* weeks endpoint may not exist on older deploys */ }
@@ -50,7 +55,10 @@ function _renderWeekSelector() {
   if (!sel || !_weeks.length) return;
   const now = Date.now() / 1000;
   const nextWeek = _weeks.find(w => w.start_time > now);
-  sel.innerHTML = _weeks.map(w => {
+  // Keep the player's own pick; with none (_rosterWeekId null) the markup's
+  // default (the upcoming week) wins.
+  const prev = _rosterWeekId !== null ? sel.value : "";
+  const html = _weeks.map(w => {
     const isLive   = w.is_locked && w.start_time <= now && w.end_time >= now;
     const isNext   = nextWeek && w.id === nextWeek.id;
     const label = w.is_locked
@@ -59,6 +67,7 @@ function _renderWeekSelector() {
     const isSelected = _rosterWeekId === w.id || (_rosterWeekId === null && isNext);
     return `<option value="${w.id}"${isSelected ? " selected" : ""}>${_escHtml(label)}</option>`;
   }).join("");
+  if (renderIfChanged(sel, html) && prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
 }
 
 function onRosterWeekChange() {
@@ -75,12 +84,15 @@ async function loadRoster(weekId = null) {
       : `${API}/roster/${activeUserId}`;
     const res = await fetch(url);
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Failed to load roster");
     const { active, bench, combined_value, tokens, season_points, week,
             substitutions_done, substitution_delay_hours } = data;
     const isLocked = week?.is_locked ?? false;
     _rosterLocked = isLocked;
 
     _rosterCards = [...active, ...bench];
+    _rosterActive = active;
+    _rosterBench = bench;
 
     if (tokens !== undefined) updateTokenDisplay(tokens);
 
@@ -136,12 +148,12 @@ async function loadRoster(weekId = null) {
     });
     let activeHTML = slots.map((card, i) =>
       card
-        ? _cardSlotHTML(card, isLocked ? null : "bench")
+        ? _cardSlotHTML(card, isLocked ? null : "bench", !isLocked)
         : `<div class="card-slot-empty" data-zone="active" data-slot-index="${i}">empty slot</div>`
     ).join("");
-    activeGrid.innerHTML = activeHTML || `<span style="color:#444;font-size:0.85rem;">No active cards</span>`;
+    const activeWrote = renderIfChanged(activeGrid, activeHTML || `<span style="color:#444;font-size:0.85rem;">No active cards</span>`);
 
-    document.getElementById("rosterCombined").textContent = Number(combined_value).toFixed(1);
+    renderIfChanged(document.getElementById("rosterCombined"), _escHtml(Number(combined_value).toFixed(1)));
 
     // Issue #129 — bench substitutions run a set delay after a locked week ends.
     const subsNote = document.getElementById("rosterSubsNote");
@@ -157,35 +169,39 @@ async function loadRoster(weekId = null) {
 
     const benchSection = document.getElementById("benchSection");
     const benchGrid = document.getElementById("benchGrid");
+    let benchWrote = false;
     if (isLocked && bench.length) {
       // Locked week: the saved bench (and any subbed-out cards), read-only.
       benchSection.style.display = "";
-      benchGrid.innerHTML = bench.map(c => _cardSlotHTML(c, null)).join("");
+      benchWrote = renderIfChanged(benchGrid, bench.map(c => _cardSlotHTML(c, null, false)).join(""));
     } else if (!isLocked) {
       benchSection.style.display = "";
       const rosterFull = active.length >= 5;
       if (bench.length) {
-        benchGrid.innerHTML = bench.map(c => _cardSlotHTML(c, rosterFull ? null : "activate")).join("");
+        benchWrote = renderIfChanged(benchGrid, bench.map(c => _cardSlotHTML(c, rosterFull ? null : "activate", true)).join(""));
       } else {
-        benchGrid.innerHTML = `<span style="color:#444;font-size:0.85rem;">No cards on bench — draw some!</span>`;
+        benchWrote = renderIfChanged(benchGrid, `<span style="color:#444;font-size:0.85rem;">No cards on bench — draw some!</span>`);
       }
     } else {
       benchSection.style.display = "none";
     }
 
     const statusEl = document.getElementById("rosterStatus");
-    if (statusEl) statusEl.textContent = isLocked ? "" : `${active.length}/5 active`;
+    if (statusEl) { statusEl.textContent = isLocked ? "" : `${active.length}/5 active`; statusEl.className = ""; }
 
-    // Item 5 — settle animation on every render
-    requestAnimationFrame(() => {
-      document.querySelectorAll(".card-slot, .card-slot-empty").forEach(el => {
-        el.classList.remove("reorder-animate");
-        void el.offsetWidth; // force reflow so re-adding the class restarts the animation
-        el.classList.add("reorder-animate");
+    // Item 5 — settle animation whenever a grid was redrawn (not on a no-op refresh)
+    const redrawn = [activeWrote && activeGrid, benchWrote && benchGrid].filter(Boolean);
+    if (redrawn.length) {
+      requestAnimationFrame(() => {
+        redrawn.forEach(grid => grid.querySelectorAll(".card-slot, .card-slot-empty").forEach(el => {
+          el.classList.remove("reorder-animate");
+          void el.offsetWidth; // force reflow so re-adding the class restarts the animation
+          el.classList.add("reorder-animate");
+        }));
       });
-    });
+    }
 
-    if (!isLocked) _initDragAndDrop(active, bench);
+    if (!isLocked) _initDragAndDrop();
 
   } catch (e) {
     const statusEl = document.getElementById("rosterStatus");
@@ -196,14 +212,16 @@ async function loadRoster(weekId = null) {
 /**
  * Build the HTML for a single card slot (image + action button).
  * action: "bench" | "activate" | null (locked/no action)
+ * draggable: true on an editable (unlocked) week, so a locked view never reuses
+ * draggable nodes from an unlocked one.
  */
-function _cardSlotHTML(c, action) {
+function _cardSlotHTML(c, action, draggable = false) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
   const zone = action === "bench" ? "active" : "bench";
   const isActiveCard = action === "bench";
   return `
-    <div class="card-slot" data-rarity="${_escHtml(c.card_type)}" data-card-id="${c.id}" data-zone="${zone}">
+    <div class="card-slot" data-rarity="${_escHtml(c.card_type)}" data-card-id="${c.id}" data-zone="${zone}"${draggable ? ' draggable="true"' : ""}>
       <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
            data-player-name="${_escHtml(c.player_name)}"
            draggable="false" tabindex="0" role="button"
@@ -259,6 +277,9 @@ async function toggleCardZone(cardId, isActiveCard) {
 /**
  * Wire up HTML5 drag-and-drop on all rendered card slots.
  * Must be called after loadRoster() has populated the DOM.
+ * Safe to call on every render (issue #159): a slot node kept by renderIfChanged
+ * already has its handlers and is skipped, the grid-level handlers are bound once,
+ * and every handler reads the current cards from _rosterActive / _rosterBench.
  *
  * Four drop scenarios handled:
  *   active → active   : in-zone reorder  → POST /roster/reorder
@@ -266,7 +287,7 @@ async function toggleCardZone(cardId, isActiveCard) {
  *   bench  → active   : swap             → POST /roster/swap
  *   active → bench    : deactivate + reorder
  */
-function _initDragAndDrop(activeCards, benchCards) {
+function _initDragAndDrop() {
   const activeGrid = document.getElementById("rosterActiveGrid");
   const benchGrid  = document.getElementById("benchGrid");
   if (!activeGrid || !benchGrid) return;
@@ -274,7 +295,8 @@ function _initDragAndDrop(activeCards, benchCards) {
   const cardSlots = document.querySelectorAll(".card-slot[data-card-id]");
 
   cardSlots.forEach(slot => {
-    slot.setAttribute("draggable", "true");
+    if (slot._dndBound) return;
+    slot._dndBound = true;
 
     slot.addEventListener("dragstart", e => {
       const cardId = parseInt(slot.dataset.cardId);
@@ -334,6 +356,8 @@ function _initDragAndDrop(activeCards, benchCards) {
       const targetZone = slot.dataset.zone;
 
       if (safeId === targetId) return;
+      const activeCards = _rosterActive;
+      const benchCards = _rosterBench;
 
       await _withRosterMutationGuard(async () => {
         // Case 1 — active → active : in-zone reorder
@@ -423,6 +447,8 @@ function _initDragAndDrop(activeCards, benchCards) {
 
   // Per-slot handlers (normal case: mouse directly over an empty slot element)
   document.querySelectorAll(".card-slot-empty[data-zone='active']").forEach(slot => {
+    if (slot._dndBound) return;
+    slot._dndBound = true;
     slot.addEventListener("dragover", e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
@@ -440,16 +466,21 @@ function _initDragAndDrop(activeCards, benchCards) {
     });
   });
 
+  // The grids themselves are never replaced, so their handlers are bound once.
+  if (activeGrid._dndBound) return;
+  activeGrid._dndBound = true;
+
   // Container-level fallback: catches drops that land on the activeGrid background
   // (flex gaps between slots, padding, wrapped rows) — routes to the spatially closest empty slot.
   activeGrid.addEventListener("dragover", e => {
+    if (_rosterLocked) return;
     if (activeGrid.querySelectorAll(".card-slot-empty").length) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
     }
   });
   activeGrid.addEventListener("drop", async e => {
-    if (e.target !== activeGrid) return; // per-slot handlers cover direct hits
+    if (e.target !== activeGrid || _rosterLocked) return; // per-slot handlers cover direct hits
     e.preventDefault();
     const emptySlots = Array.from(activeGrid.querySelectorAll(".card-slot-empty"));
     if (!emptySlots.length) return;
@@ -470,6 +501,7 @@ function _initDragAndDrop(activeCards, benchCards) {
 
   // Also allow dropping active cards onto the bench container (not just a specific bench card)
   benchGrid.addEventListener("dragover", e => {
+    if (_rosterLocked) return;
     e.preventDefault();
     benchGrid.classList.add("drag-over");
   });
@@ -479,7 +511,7 @@ function _initDragAndDrop(activeCards, benchCards) {
     benchGrid.classList.remove("drag-over");
 
     // Only handle if the drop landed on the container, not on a card-slot child
-    if (e.target !== benchGrid) return;
+    if (e.target !== benchGrid || _rosterLocked) return;
 
     let payload;
     try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
@@ -493,7 +525,7 @@ function _initDragAndDrop(activeCards, benchCards) {
     await _withRosterMutationGuard(async () => {
       const res = await fetch(`${API}/roster/${safeId}/deactivate`, { method: "POST" });
       if (!res.ok) return;
-      const benchIds = [draggedId, ...benchCards.map(c => c.id)];
+      const benchIds = [draggedId, ..._rosterBench.map(c => c.id)];
       await _apiReorder(benchIds);
       loadRoster(_rosterWeekId);
     });

@@ -42,4 +42,6 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    if not password_hash:
+        return False  # Twitch soft accounts (issue #157) have no password
     return bcrypt.checkpw(password.encode(), password_hash.encode())

@@ -14,6 +14,10 @@ in-memory player array fetched on tab load.
 Sort state is tracked in a module-level object (`{ col, dir }`). On each click the
 comparator is applied to the in-memory rows array and the table is re-rendered.
 
+The sort state persists across tab refreshes during a page visit (#159): `loadPlayers` keeps
+`_playerSort` and calls `_initPlayerSortHeaders()`, which re-applies the header arrow on each
+load. See `flicker-free-tab-switching.md`.
+
 ## Visual indicator
 
 The active sort column gets a CSS pseudo-element arrow:

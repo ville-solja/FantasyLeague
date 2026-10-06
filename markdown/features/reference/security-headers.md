@@ -46,7 +46,7 @@ Any other origin gets no `Access-Control-Allow-Origin` header. The main site is 
 
 ## Origin Check (CSRF)
 
-`OriginCheckMiddleware` refuses `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus `POST /twitch/link-code`, which uses the session cookie) with `403 {"detail": "Cross-origin request refused"}` when the `Origin` header, or the `Referer` if there is no `Origin`, names a host other than the request's `Host` header or the host of `APP_BASE_URL`. Requests with neither header pass. `CSRF_ORIGIN_CHECK=false` turns it off. The main case it covers is a page on a sibling subdomain, which `SameSite=Lax` does not stop. See [Security Audit 3](security-audit-3.md) for details.
+`OriginCheckMiddleware` refuses `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus `POST /twitch/merge/confirm` and `POST /twitch/disconnect`, which use the session cookie; `POST /twitch/link-code` until #160 retired it) with `403 {"detail": "Cross-origin request refused"}` when the `Origin` header, or the `Referer` if there is no `Origin`, names a host other than the request's `Host` header or the host of `APP_BASE_URL`. Requests with neither header pass. `CSRF_ORIGIN_CHECK=false` turns it off. The main case it covers is a page on a sibling subdomain, which `SameSite=Lax` does not stop. See [Security Audit 3](security-audit-3.md) for details.
 
 ---
 

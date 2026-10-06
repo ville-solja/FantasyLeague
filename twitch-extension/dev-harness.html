@@ -133,11 +133,9 @@
     <div class="pubsub-log" id="pubsub-log">&gt; Ready</div>
     <div class="pubsub-controls">
       <select id="msg-type">
-        <option value="winner">winner</option>
-        <option value="token_drop">token_drop</option>
         <option value="mvp">mvp</option>
       </select>
-      <input type="text" id="msg-payload" placeholder='{"winner_username":"Alice"}'>
+      <input type="text" id="msg-payload" placeholder='{"player_name":"Savu","token_drop":{"count":1}}'>
       <button onclick="sendPubSub()">Broadcast</button>
     </div>
   </div>
@@ -158,7 +156,9 @@ function buildStubScript(ebsUrl, role, userId) {
       "  },",
       "  onAuthorized: function(cb) { cb({ token: 'dev-token', userId: " + JSON.stringify(userId) + ", channelId: 'dev_channel' }); },",
       "  listen: function(t, cb) { window.__pubSubListener = cb; },",
-      "  send:   function() {}",
+      "  send:   function() {},",
+      "  viewer: { isLinked: false },",
+      "  actions: { requestIdShare: function() { console.log('[harness] requestIdShare'); } }",
       "} };",
     ].join("\n");
 }

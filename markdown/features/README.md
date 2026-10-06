@@ -17,7 +17,7 @@ These describe the primary user-visible surfaces of the app.
 | [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, match date display, and (#151) a side-by-side roster panel with per-game card points, a themed scrollbar and a once-per-week new-recap popup for the Weekly Summary Report |
 | [Players & Teams](core/players.md) | Player and team browse endpoints with match history |
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
-| [Twitch Extension](core/twitch-extension.md) | Broadcaster token drops, MVP selection, viewer account linking |
+| [Twitch Extension](core/twitch-extension.md) | Viewer panel game (Live, Join with the Twitch login, cards, roster), broadcaster MVP selection and token drops |
 
 ---
 
@@ -46,7 +46,8 @@ Implementation details, integrations, and operator tooling.
 | [How to Play Tab](reference/how-to-play-tab.md) | In-app rules tab organised into role-based subtabs (Users/Players/Streamers/Developers): getting started, Twitch MVP flow, live scoring formula display |
 | [Guided Tour](reference/guided-tour.md) | Spotlight tour of My Team (draw, chances, roster, weekly lock, points, Weekly Report, leaderboards), started from How to Play; automatic first-visit start off by default (`GUIDED_TOUR_AUTOSTART`) |
 | [Twitch MVP Series Window](reference/twitch-mvp-series-window.md) | Cross-week series list for MVP panel; live ingest polling interval |
-| [Early MVP Selection](reference/early-mvp-selection.md) | Lists matches in the MVP panel from OpenDota's live feed before stats are ingested; bonus applied at ingest; faster polling right after a game |
+| [Early MVP Selection](reference/early-mvp-selection.md) | Lists matches in the MVP panel from Steam's live league list (since #161) before stats are ingested; bonus applied at ingest; faster polling right after a game |
+| [MVP Selection Delays](reference/mvp-selection-delays.md) | Live games come from Steam's live league list (OpenDota `/live` dropped), checked in their own thread every minute; per-match timings for admins and a freshness line in the MVP picker |
 | [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
@@ -84,6 +85,7 @@ Implementation details, integrations, and operator tooling.
 | [Schedule Series Game Breakdown](reference/schedule-series-game-breakdown.md) | Expands each resolved series into per-game rows showing duration, team kills, and hero icons; results also derive directly from ingested matches when the schedule sheet has no row for them |
 | [MVP Schedule Cache Bust](reference/mvp-schedule-cache-bust.md) | Admin and Twitch MVP-setting endpoints bust the schedule cache so a new MVP shows on the Schedule tab immediately instead of after up to an hour |
 | [Schedule Fixtures API Source](reference/schedule-fixtures-api.md) | Structured JSON fixtures feed (`SCHEDULE_FIXTURES_URL`) as a preferred alternative to the Google Sheet CSV; same parsed shape downstream, "Time TBD" for unscheduled fixtures |
+| [Schedule Visuals](reference/schedule-visuals.md) | Schedule tab redesign: Right now strip (live, next up, latest result), fantasy-week strip with a Now line, and spoiler-free hide/reveal of results linked to Weekly Report reveals |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
 | [Shoutrrr Support](reference/shoutrrr-support.md) | **PLANNED** — not built yet. Outbound push notifications via a separately-hosted Shoutrrr instance; first notification type is a match-starting-soon reminder |
@@ -103,6 +105,11 @@ Implementation details, integrations, and operator tooling.
 | [Stored Card Points](reference/stored-card-points.md) | Card points stored per match and summed by every view, so My Team and the leaderboards agree and pages stop recalculating per request |
 | [Points Rounding](reference/points-rounding.md) | One server-side rounding rule (one decimal, half away from zero, on the decimal value) for every points number, so My Team, leaderboards, Weekly Report and the Twitch panel agree |
 | [Weekly Recap Animations](reference/weekly-recap-animations.md) | Card-by-card reveal in the Weekly Report's My roster column: raw points count up, then rarity, modifier and MVP bonuses are highlighted and added, from a per-card points breakdown |
+| [Password Manager Autofill](reference/password-manager-autofill.md) | Login, registration, password reset, change-password and admin re-login as real forms with `autocomplete` hints, so password managers fill and save the right fields |
+| [Flicker-Free Tab Switching](reference/flicker-free-tab-switching.md) | Tabs and the Weekly Report update only what changed: `renderIfChanged`, no loading placeholders over existing content, quiet same-tab refresh, and a fixed Weekly Report frame with an in-memory week cache |
+| [Twitch Extension Policy Compliance](reference/twitch-extension-policy-compliance.md) | For Twitch policy 4.5: live info for every viewer, one-button Join creating a Twitch soft account, card draws, collection and roster in the panel, MVP drops to soft accounts; link codes leave the extension (Part 1, #157) |
+| [Twitch Account Connection](reference/twitch-account-connection.md) | Website "Connect Twitch" through Twitch's sign-in (OpenID Connect), merging a Twitch soft account into the website account after confirmation, and retiring the old link codes (Part 2, #160) |
+| [Twitch Incident Runbook](reference/twitch-incident-runbook.md) | (#160) What to do if the Twitch sign-in, the developer account or a merge goes wrong: kill switches, secret rotation, audit review, merge reversal, player communication |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |

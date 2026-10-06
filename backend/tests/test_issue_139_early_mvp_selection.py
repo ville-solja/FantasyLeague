@@ -1,23 +1,28 @@
 """
 Tests for plan-issue-139-early-mvp-selection.md (resolves GitHub issue #139).
 
-A match seen in OpenDota's /live for a monitored league is stored in a new
-`live_matches` table (model `LiveMatch`) and offered in the Twitch MVP panel
-before its stats are ingested. One stub per acceptance criterion, plus the
-primary failure path for each story.
+A match seen live for a monitored league is stored in a new `live_matches`
+table (model `LiveMatch`) and offered in the Twitch MVP panel before its stats
+are ingested. One stub per acceptance criterion, plus the primary failure path
+for each story.
+
+Since issue #161 the live source is Steam (`steam_live.get_live_league_games`,
+checked by `main._live_poll_loop`); OpenDota's /live and
+`ingest.get_live_matches()` are gone, and `_ingest_poll_loop` only reads
+`live_matches`. Steam's games are normalised to the same entry keys
+`store_live_matches()` has always read, so `_LIVE_PAYLOAD` (originally an
+OpenDota /live capture) still exercises it. Steam-specific tests live in
+test_issue_161_mvp_selection_delays.py.
 
 Testing approach (copy the fixtures from the named precedent files):
 
-  OpenDota /live fixture (shape verified 2026-09-30, see plan Context)
+  Live entry fixture (OpenDota /live shape verified 2026-09-30)
     - Use `_LIVE_PAYLOAD` below: `match_id` is a STRING, players carry
       `account_id`, `hero_id`, `team` (0 radiant, 1 dire) and `team_slot`, and
       usually NO `name`. A missing team is `0` / `""` (see the second entry).
       One player has no `account_id` and must be skipped.
-    - Never hit the network: monkeypatch `ingest.opendota_get_json` with a
-      lambda returning the canned payload (precedent:
-      test_opendota_parse_retry.py, test_issue_109_...py).
 
-  Storage / cleanup (`ingest.get_live_matches`, `ingest.store_live_matches`)
+  Storage / cleanup (`ingest.store_live_matches`)
     - Call them directly. If `store_live_matches` opens its own session, patch
       `monkeypatch.setattr(ingest, "SessionLocal", lambda: db)` so it uses the
       conftest `db` fixture; otherwise pass `db` explicitly.
@@ -47,8 +52,7 @@ Testing approach (copy the fixtures from the named precedent files):
       `import main` inside the test (do NOT reload main; conftest sets
       BACKGROUND_TASKS_ENABLED=false and DEBUG=true), `_OneShotEvent` as
       `main._stop_event`, and monkeypatch `_get_monitored_league_ids`,
-      `get_live_matches`, `store_live_matches`, `_auto_ingest`,
-      `_run_toornament_sync`, `_has_active_week`. For the post-match check,
+      `_auto_ingest`, `_run_toornament_sync`, `_has_active_week`. For the post-match check,
       patch `main.SessionLocal` to return `db`, or patch whatever helper the
       implementation exposes for "recently ended LiveMatch without stats".
       Patch the module-level interval constants rather than env vars (they are
@@ -85,7 +89,8 @@ _PACKAGE_SH = os.path.join(_REPO_ROOT, "twitch-extension", "package.sh")
 _MONITORED_LEAGUE = 777
 _OTHER_LEAGUE = 888
 
-# Canned OpenDota /live response, matching the shape verified on 2026-09-30.
+# Live entries in the shape store_live_matches() reads (an OpenDota /live capture
+# verified on 2026-09-30; since #161 steam_live produces the same keys).
 _LIVE_PAYLOAD = [
     {   # Monitored league, both teams known, one player without account_id.
         "match_id": "8100000001",
@@ -246,11 +251,9 @@ class _OneShotEvent:
         self._flag = True
 
 
-def _run_poll_loop_once(monkeypatch, db, live_entries, active_week=True):
+def _run_poll_loop_once(monkeypatch, db, active_week=True):
     import main
     monkeypatch.setattr(main, "_get_monitored_league_ids", lambda: [_MONITORED_LEAGUE])
-    monkeypatch.setattr(main, "get_live_matches", lambda: live_entries)
-    monkeypatch.setattr(main, "store_live_matches", lambda entries, monitored: None)
     monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: None)
     monkeypatch.setattr(main, "_run_toornament_sync", lambda: None)
     monkeypatch.setattr(main, "_has_active_week", lambda: active_week)
@@ -315,7 +318,7 @@ def test_store_live_matches_upserts_monitored_league_entries(db):
     assert again.ended_at is None
 
 
-def test_store_live_matches_skips_unmonitored_leagues_and_players_without_account_id(db, monkeypatch):
+def test_store_live_matches_skips_unmonitored_leagues_and_players_without_account_id(db):
     """Failure path: unmonitored-league games are not stored and players without account_id are skipped."""
     import ingest
     from models import LiveMatch
@@ -324,11 +327,6 @@ def test_store_live_matches_skips_unmonitored_leagues_and_players_without_accoun
 
     assert db.get(LiveMatch, 8100000003) is None
     assert len(json.loads(db.get(LiveMatch, 8100000001).players_json)) == 9
-
-    monkeypatch.setattr(ingest, "opendota_get_json", lambda url, label=None: None)
-    assert ingest.get_live_matches() == []
-    monkeypatch.setattr(ingest, "opendota_get_json", lambda url, label=None: _LIVE_PAYLOAD)
-    assert ingest.get_live_matches() == _LIVE_PAYLOAD
 
 
 def test_store_live_matches_sets_ended_at_when_match_leaves_live(db):
@@ -349,25 +347,24 @@ def test_store_live_matches_sets_ended_at_when_match_leaves_live(db):
     assert still.last_seen_at == 1500
 
 
-def test_ingest_poll_loop_stores_live_matches_each_cycle(monkeypatch):
-    """AC: the ingest poll stores /live games and derives the live-league set from them as before."""
+def test_live_poll_once_stores_live_matches_each_check(monkeypatch):
+    """AC: each live check stores the live games of the monitored leagues (since #161 the
+    separate live thread does this, not the ingest poll)."""
     import main
+    import steam_live
 
-    stored, ingested = [], []
+    stored, requested = [], []
+    monkeypatch.setattr(steam_live, "STEAM_API_KEY", "TESTKEY")
+    monkeypatch.setattr(steam_live, "live_checked_at", None)
     monkeypatch.setattr(main, "_get_monitored_league_ids", lambda: [_MONITORED_LEAGUE])
-    monkeypatch.setattr(main, "get_live_matches", lambda: _LIVE_PAYLOAD)
+    monkeypatch.setattr(main.steam_live, "get_live_league_games",
+                        lambda league_ids: requested.append(league_ids) or _LIVE_PAYLOAD)
     monkeypatch.setattr(main, "store_live_matches", lambda entries, monitored: stored.append((entries, monitored)))
-    monkeypatch.setattr(main, "_auto_ingest", lambda league_ids, live: ingested.append((league_ids, live)))
-    monkeypatch.setattr(main, "_run_toornament_sync", lambda: None)
-    monkeypatch.setattr(main, "_has_active_week", lambda: pytest.fail("a live league uses the live-match interval"))
-    event = _OneShotEvent()
-    monkeypatch.setattr(main, "_stop_event", event)
 
-    main._ingest_poll_loop()
+    main._live_poll_once()
 
+    assert requested == [[_MONITORED_LEAGUE]]
     assert stored == [(_LIVE_PAYLOAD, [_MONITORED_LEAGUE])]
-    assert ingested == [([_MONITORED_LEAGUE], {_MONITORED_LEAGUE})]
-    assert event.wait_calls == [main._INGEST_LIVE_MATCH_POLL_INTERVAL]
 
 
 def test_current_matches_includes_provisional_live_match_in_team_pair_series(db, twitch_env):
@@ -474,7 +471,8 @@ def test_set_mvp_provisional_match_accepts_stored_live_player(db, twitch_env):
 
     assert result["match_id"] == 8100000001
     assert result["player_id"] == 500
-    assert result["token_drop"]["winners"] == ["viewer"]
+    assert result["token_drop"]["winner_count"] == 1
+    assert "winners" not in result["token_drop"]
     db.expire_all()
     assert db.query(TwitchMVP).filter_by(match_id=8100000001, player_id=500).count() == 1
     assert db.query(TwitchTokenDrop).filter_by(channel_id="test_channel", series_id="8100000001").count() == 1
@@ -736,7 +734,7 @@ def test_ingest_poll_loop_uses_live_match_interval_after_game_ends_without_stats
     now = int(time.time())
     _seed_live(db, _LIVE_PAYLOAD[0], first_seen=now - 2400, ended_at=now - 5 * 60)
 
-    waits = _run_poll_loop_once(monkeypatch, db, [])
+    waits = _run_poll_loop_once(monkeypatch, db)
 
     assert waits == [main._INGEST_LIVE_MATCH_POLL_INTERVAL]
 
@@ -749,7 +747,7 @@ def test_ingest_poll_loop_falls_back_after_post_match_fast_poll_window(db, monke
     now = int(time.time())
     _seed_live(db, _LIVE_PAYLOAD[0], first_seen=now - 3600, ended_at=now - 21 * 60)
 
-    waits = _run_poll_loop_once(monkeypatch, db, [])
+    waits = _run_poll_loop_once(monkeypatch, db)
 
     assert waits == [main._INGEST_LIVE_POLL_INTERVAL]
 
@@ -758,14 +756,14 @@ def test_ingest_poll_loop_intervals_unchanged_without_live_or_recent_matches(db,
     """AC: with no live or recently ended matches, intervals are unchanged."""
     import main
 
-    assert _run_poll_loop_once(monkeypatch, db, [], active_week=True) == [main._INGEST_LIVE_POLL_INTERVAL]
-    assert _run_poll_loop_once(monkeypatch, db, [], active_week=False) == [main._INGEST_POLL_INTERVAL]
+    assert _run_poll_loop_once(monkeypatch, db, active_week=True) == [main._INGEST_LIVE_POLL_INTERVAL]
+    assert _run_poll_loop_once(monkeypatch, db, active_week=False) == [main._INGEST_POLL_INTERVAL]
 
     # A recently ended match that already has stats does not keep the fast interval.
     now = int(time.time())
     _seed_live(db, _LIVE_PAYLOAD[0], first_seen=now - 2400, ended_at=now - 5 * 60)
     _seed_match(db, 8100000001, 11, 12, now - 2400, player_ids=(500, 510))
-    assert _run_poll_loop_once(monkeypatch, db, [], active_week=True) == [main._INGEST_LIVE_POLL_INTERVAL]
+    assert _run_poll_loop_once(monkeypatch, db, active_week=True) == [main._INGEST_LIVE_POLL_INTERVAL]
 
 
 # ===========================================================================

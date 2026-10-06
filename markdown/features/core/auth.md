@@ -57,6 +57,12 @@ Authenticates with username and password.
 - Always starts a new session: a new `user_sessions` row and a new session ID in the cookie, even
   when the request already carried a valid session (that older session of the browser is deleted).
   `POST /register` does the same. The cookie payload is only `{"sid": "<token>"}`.
+- **Twitch soft accounts can't log in** (issue #157). Accounts created by the Twitch panel's Join
+  (`account_type="twitch"`) have no username, email or password, so login and forgot-password never
+  find them by username; `auth.verify_password` returns False for an empty hash; and
+  `deps._session_user` treats a soft account as no user even if a session row existed. Only
+  `POST /twitch/join` creates them; registration always creates `account_type="full"`. See
+  `reference/twitch-extension-policy-compliance.md`.
 
 ### `POST /logout`
 
@@ -71,14 +77,15 @@ entry and returns `{ "status": "ok" }`.
 
 ### `POST /reauth`
 
-Login required; open to any logged-in user, not only admins (the audit action is still
-`admin_reauth`). Body `{ "password" }`. Confirms the current user's password for this session and
-stores `reauth_at` on the session row; destructive admin endpoints then accept the session for
-`ADMIN_REAUTH_SECONDS` (default 600). Wrong password: 401 `"Incorrect password"`, counted toward
+Login required; open to any logged-in user, not only admins. Body `{ "password" }`. Confirms the
+current user's password for this session and stores `reauth_at` on the session row; destructive
+admin endpoints (`deps.require_recent_reauth`) and a player's Twitch connection actions
+(`deps.require_recent_player_reauth`: Connect, merge and Disconnect, issue #160) then accept the
+session for `ADMIN_REAUTH_SECONDS` (default 600). Wrong password: 401 `"Incorrect password"`, counted toward
 the per-username login lockout (`LOGIN_LOCKOUT_THRESHOLD`); a locked-out username gets 429 with the
 same message as `/login`. If the current session row is missing (a defensive check), 401
-`"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an `admin_reauth` audit entry on
-success (`ok`) and on failure (`failed: …`).
+`"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an audit entry on success (`ok`) and
+on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for everyone else.
 
 ### `GET /sessions`
 
@@ -136,7 +143,7 @@ The response shape and content for an authenticated request are otherwise unchan
 }
 ```
 
-`twitch_linked` is `true` if the user has completed the Twitch account linking flow. See `core/twitch-extension.md`.
+`twitch_linked` is `true` when the panel recognises the account (`users.twitch_user_id` is set). Profile's Twitch section reads `GET /twitch/connection` instead (see **Twitch Connection** below).
 
 `player_name` and `player_avatar_url` are `null` if the user has not linked a Dota 2 account, or if the linked `player_id` does not exist in the local database.
 
@@ -225,7 +232,7 @@ Requests a password reset for the given username. Does **not** change the accoun
    per-username cooldown (see `reference/forgot-password-cooldown.md`), the endpoint fast-exits
    with the bcrypt timing-equalization call and returns `{"status": "ok"}` — no state changes.
 2. Any existing `PasswordResetToken` row for the account is deleted (only one live token per
-   user at a time — same invalidate-on-regenerate precedent as `TwitchLinkCode`).
+   user at a time — same invalidate-on-regenerate precedent as the retired `TwitchLinkCode`).
 3. A new single-use token is generated (`secrets.token_urlsafe(32)`) and stored with an
    `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS` hours (default `1`).
 4. A `password_reset_requested` audit log entry is written.
@@ -286,7 +293,8 @@ An expired row is deleted on the spot, and the week maintenance loop deletes the
 the app starts and then once a day.
 `last_seen_at` is written at most once per `SESSION_TOUCH_SECONDS` (5 minutes). The returned
 `user_id`, `username` and `is_admin` come from the database row, not the cookie.
-`POST /twitch/link-code` uses the same check, and the optional-login routes `GET /deck` and
+The session-cookie Twitch routes (`GET /twitch/connection`, `POST /twitch/merge/confirm`,
+`POST /twitch/disconnect`, the `/auth/twitch/*` sign-in, issue #160) use the same check, and the optional-login routes `GET /deck` and
 `GET /deck/booster` treat an invalid session as logged out (`session_user_or_none`).
 
 Revocation deletes rows: `POST /logout` (this session), `PUT /profile/password` (all others; the
@@ -313,7 +321,9 @@ The cookie holds only the session ID. Its `Max-Age` is the larger absolute limit
 the server enforces the actual limits above. Under `HTTPS_ONLY=true` the cookie is named
 `__Host-session` (`Secure`, `Path=/`, no `Domain`), which pins it to the exact host; without it
 (local dev) it is named `session`, since browsers reject the `__Host-` prefix without `Secure`.
-`HttpOnly` and `SameSite=Lax` are always set.
+`HttpOnly` and `SameSite=Lax` are always set. `SameSite` must stay `Lax`, not `Strict`: the
+Twitch sign-in callback (`GET /auth/twitch/callback`, #160) is a cross-site top-level GET from
+Twitch and needs the session cookie (a comment at the setting in `main.py` says so).
 
 The six session settings are validated at startup: a non-integer or non-positive value, an idle
 limit larger than its absolute limit, or `SESSION_TOUCH_SECONDS` not smaller than
@@ -326,6 +336,24 @@ can be revoked on the server, and the 30-day absolute limit meets NIST SP 800-63
 much shorter limits plus re-authentication. See `reference/longer-sessions.md`.
 
 Set `HTTPS_ONLY=true` when running behind an HTTPS reverse proxy (e.g. nginx, Caddy) to enable the `Secure` flag on the session cookie. It is required outside local dev: the app refuses to start without it unless `DEBUG=true` or `TWITCH_LOCAL_DEV=true` (the latter only with `SECRET_KEY` unset; issue #118, see `reference/https-enforcement.md`).
+
+---
+
+## Twitch Connection
+
+Players connect a Twitch account on Profile with Twitch's own sign-in (OpenID Connect; issue #160).
+It never logs anyone in: it stores the verified Twitch user id on the logged-in account
+(`users.twitch_account_id`), so the Kana Cards Twitch panel plays with the website account, and
+offers once to merge a Twitch panel collection into the account. Connect, merge and Disconnect need
+a recent `POST /reauth`. Twitch's tokens are never stored. Endpoints, checks and configuration
+(`TWITCH_OAUTH_CLIENT_ID`, `TWITCH_OAUTH_CLIENT_SECRET`, `TWITCH_OAUTH_REDIRECT_URI`):
+`reference/twitch-account-connection.md`.
+
+---
+
+## Password Manager Autofill
+
+The login, registration, password reset, profile change-password and admin re-login fields are each a `<form>` (`#loginForm`, `#registerForm`, `#resetPasswordForm`, `#changePasswordForm`, `#reauthForm`) with `name` and `autocomplete` tokens (`username`, `current-password`, `new-password`, `email`, `one-time-code`), so password managers fill the login and offer to save or update passwords (issue #158). Each form's `submit` event calls `preventDefault()` and the existing function, so the requests above are unchanged and the page never reloads. Forms with a lone password field carry a visually hidden, read-only username helper. See `reference/password-manager-autofill.md`.
 
 ---
 

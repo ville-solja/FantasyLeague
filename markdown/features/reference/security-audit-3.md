@@ -11,7 +11,7 @@ The session cookie is already `SameSite=Lax`, and FastAPI rejects non-JSON bodie
 `OriginCheckMiddleware` in `backend/main.py` handles this:
 
 - Applies to `POST`, `PUT`, `PATCH` and `DELETE` only. `GET`, `HEAD` and `OPTIONS` are never blocked, and CORS preflights are answered by `CORSMiddleware` first.
-- Paths starting with `/twitch/` are exempt. They authenticate with a Twitch JWT in the `Authorization` header and are called from the extension origin. The exception is `POST /twitch/link-code`, which uses the session cookie and is checked like any other cookie route.
+- Paths starting with `/twitch/` are exempt. They authenticate with a Twitch JWT in the `Authorization` header and are called from the extension origin. The exceptions are the session-cookie routes in `_COOKIE_AUTH_TWITCH_PATHS`, checked like any other cookie route: `POST /twitch/merge/confirm` and `POST /twitch/disconnect` since #160 (originally `POST /twitch/link-code`, now retired).
 - Reads `Origin`, falling back to `Referer`. When both are absent the request passes (API clients, scripts, tests).
 - Allows the request when the source host (lower-cased, with port when non-default) equals the request's `Host` header or the host of `APP_BASE_URL`. Otherwise it returns `403 {"detail": "Cross-origin request refused"}`. An unparseable or opaque `Origin` such as `null` counts as foreign.
 - `CSRF_ORIGIN_CHECK` and `APP_BASE_URL` are read on every request.

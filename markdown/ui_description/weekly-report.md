@@ -10,10 +10,11 @@ Opened from the **Weekly Report** button at the top right of the header (logged-
 ## Popup layout (`#weeklySummaryModal`)
 
 - **Title bar** — "Weekly Report" and an X close button.
-- **Week tabs** (`#weeklySummaryTabs`) — one tab per available week, newest first. These are the only tabs. Opening the popup selects the newest week, or the week the recap popup announced.
+- **Week tabs** (`#weeklySummaryTabs`) — one tab per available week, newest first. These are the only tabs. Opening the popup selects the newest week, or the week the recap popup announced. The buttons are rebuilt only when the list of weeks changes; otherwise only the active mark moves.
+- **Switching weeks** — the week on screen stays, dimmed (60% opacity, 150 ms fade, no fade with reduced motion, `aria-busy="true"` on both column bodies), until the new week arrives; then both columns and their headers change together and both scroll to the top. If the player clicks several weeks quickly, the last one clicked is shown. A week already viewed during this opening shows at once from memory and then refreshes quietly; the memory is cleared when the popup closes and when results are revealed.
 - **Two columns** below the tabs, side by side: **My roster** (480 px) and **Match results** (the rest). Each has a fixed header and its own scrolling body with the shared thin `.k-scroll` scrollbar.
 - **Reveal footer** (`#weeklySummaryRevealFooter`) — a "Reveal results" button under both columns, shown while any listed week is unrevealed. It reveals every listed week at once.
-- **Size** — at most 1280 px wide and 85% of the window height; below 600 px, the full width less 16 px and 92% of the window height.
+- **Size** — a fixed frame: at most 1280 px wide and exactly 85% of the window height, whatever the week's content; below 600 px, the full width less 16 px and 92% of the window height. The title bar, week tabs and column headers never move when the content changes.
 - **Below 1100 px** — the columns stack (roster first) and the whole popup scrolls as one page; the reveal footer stays at the bottom. No horizontal scrolling at 375 px.
 - Closing: X, Esc or a click on the backdrop.
 
@@ -46,7 +47,7 @@ The RAW value plus the rarity caption, the modifier chips and the MVP bonuses ad
 
 ### Reveal animation (revealed week)
 
-Plays the first time a revealed week is shown in this browser (usually right after "Reveal results"); afterwards the week opens in the finished state above.
+Plays the first time a revealed week is shown in this browser (usually right after "Reveal results"); afterwards the week opens in the finished state above. Switching back to a week already shown during this opening of the popup shows the finished state; it does not replay.
 
 - The column starts empty and the header reads "Week total 0.0 pts". Cards appear one at a time in reverse order, each at the top: its slot opens and pushes the earlier cards down, then the card slides in from the left.
 - The card being revealed has an orange border and glow; it goes when the card finishes.
@@ -65,7 +66,8 @@ Plays the first time a revealed week is shown in this browser (usually right aft
 
 ### Empty / loading / error
 
-- "Loading…" while a week loads; the API error text if it fails.
+- "Loading…" only when the columns are still empty (the first load); otherwise the previous week stays, dimmed, while the next one loads.
+- The API error text if a week fails to load, in place of both columns (the frame keeps its size). A week already shown during this opening keeps its content if a background refresh fails.
 - "No cards on your roster this week." when the user had no cards for that week.
 
 ## Match results column

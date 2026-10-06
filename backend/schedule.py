@@ -3,13 +3,26 @@ import io
 import os
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from sqlalchemy import bindparam, text
 
+from models import LiveMatch, Week
+
 SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 SCHEDULE_FIXTURES_URL = os.getenv("SCHEDULE_FIXTURES_URL", "")
 CACHE_TTL = 3600
+LIVE_FRESH_SECONDS = 15 * 60
+# Fixture times are league (Finnish) wall-clock times. The container runs on UTC, so
+# feed timestamps are converted to this zone, and "now" for upcoming/past is taken
+# in it, rather than relying on the server's local time.
+LEAGUE_TZ = ZoneInfo("Europe/Helsinki")
+
+
+def _league_now():
+    """Current league wall-clock time, naive, comparable with datetime_iso values."""
+    return datetime.now(LEAGUE_TZ).replace(tzinfo=None)
 
 _DIVISION_MAP = {"upper": "div1", "lower": "div2"}
 
@@ -120,7 +133,7 @@ def parse_match_row(row, offset):
     status = "unknown"
     if dt_iso:
         try:
-            status = "past" if datetime.fromisoformat(dt_iso) < datetime.now() else "upcoming"
+            status = "past" if datetime.fromisoformat(dt_iso) < _league_now() else "upcoming"
         except ValueError:
             pass
 
@@ -212,7 +225,7 @@ def _fixture_to_series(f):
     if starts_at:
         try:
             dt_iso = (datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
-                      .astimezone().replace(tzinfo=None).isoformat())
+                      .astimezone(LEAGUE_TZ).replace(tzinfo=None).isoformat())
             scheduled = True
         except ValueError:
             dt_iso = None
@@ -233,7 +246,7 @@ def _fixture_to_series(f):
     status = "unknown"
     if dt_iso:
         try:
-            status = "past" if datetime.fromisoformat(dt_iso) < datetime.now() else "upcoming"
+            status = "past" if datetime.fromisoformat(dt_iso) < _league_now() else "upcoming"
         except ValueError:
             pass
 
@@ -274,6 +287,55 @@ def parse_fixtures_json(payload):
 def bust_cache():
     _cache["data"] = None
     _cache["fetched_at"] = None
+
+
+def get_live_pairs(db, now: int) -> list[dict]:
+    """Team pairs with a game in progress: live_matches rows not ended and seen
+    recently. Computed per request, never cached (issue #156)."""
+    rows = db.query(LiveMatch).filter(
+        LiveMatch.ended_at.is_(None),
+        LiveMatch.last_seen_at >= now - LIVE_FRESH_SECONDS,
+        LiveMatch.radiant_team_id.isnot(None),
+        LiveMatch.dire_team_id.isnot(None),
+    ).all()
+    return [{"team_ids": sorted([r.radiant_team_id, r.dire_team_id]),
+             "started_at": r.first_seen_at} for r in rows]
+
+
+def get_fantasy_weeks(db) -> list[dict]:
+    """Admin-defined fantasy weeks for the Schedule week strip, ordered by start_time."""
+    return [{"week_id": w.id, "label": w.label, "start_time": w.start_time, "end_time": w.end_time}
+            for w in db.query(Week).order_by(Week.start_time).all()]
+
+
+def get_schedule_for_request(db, now: int) -> dict:
+    """The cached schedule plus per-request `live` and `fantasy_weeks`, on a shallow
+    copy so the cache entry itself is never changed."""
+    data = dict(get_schedule(db))
+    data["live"] = get_live_pairs(db, now)
+    data["fantasy_weeks"] = get_fantasy_weeks(db)
+    return data
+
+
+def next_scheduled_match(db) -> dict | None:
+    """The earliest scheduled series still to be played, from the same cached data as
+    GET /schedule (issue #157, Twitch panel Live tab). Only team names and the start
+    time are returned; stream links are left out so the panel never links out."""
+    now_iso = _league_now().isoformat()
+    upcoming = []
+    for week in get_schedule(db).get("weeks") or []:
+        for series in (week.get("div1") or []) + (week.get("div2") or []):
+            dt = series.get("datetime_iso")
+            if not dt or not series.get("scheduled", True) or dt < now_iso:
+                continue
+            if not (series.get("team1") and series.get("team2")):
+                continue
+            upcoming.append((dt, series, week.get("label")))
+    if not upcoming:
+        return None
+    dt, series, label = min(upcoming, key=lambda item: item[0])
+    return {"team1": series["team1"], "team2": series["team2"], "datetime_iso": dt,
+            "week_label": label}
 
 
 def norm_team_name(name):

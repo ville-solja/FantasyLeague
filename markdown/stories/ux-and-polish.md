@@ -14,7 +14,7 @@
 As a user, I want to see the full season fixture list including past results and upcoming matches.
 
 **Acceptance criteria**
-- All series shown in a single chronological list spanning all divisions
+- All series shown in a single chronological list spanning all divisions *(superseded by issue #156: the tab now shows one fantasy week at a time; see "Schedule Visuals" below)*
 - Upcoming series show planned date, team names, and stream link where available
 - Past series show actual match start time, series result (e.g. 2–0)
 - Team names link to the team detail modal
@@ -294,7 +294,7 @@ As a new user, I want a "Users" subtab that explains how the fantasy app works a
 **Acceptance criteria**
 - Contains the existing Getting Started content: drawing cards, roster/weekly lock, earning tokens
 - Contains the existing Scoring & Modifiers content: live stat weight table, rarity bonus table, modifier table, and MVP bonus value, all loaded from `GET /weights`
-- Contains the viewer half of the existing Twitch & MVP content: linking a Fantasy account via Profile → Generate Twitch Code, and that watching linked streams makes a viewer eligible for token drops
+- Contains the viewer half of the existing Twitch & MVP content: joining in the Kana Cards panel with **Join Kana Cards** (Twitch login, no sign-up), and that watching with the panel open makes a joined viewer eligible for token drops *(updated for #157: the earlier "Profile → Generate Twitch Code" linking step is gone)*
 - Renders correctly with no active session, since `GET /weights` is a public endpoint
 
 ---
@@ -319,7 +319,7 @@ As a Kanaliiga broadcaster, I want a "Streamers" subtab that explains both how t
 - Explains how to apply: while the extension is in Twitch's "Local Test" status, a broadcaster needs a developer-provided test install link to whitelist their channel; once publicly released this step is not needed
 - Explains how to install: add the extension from the Twitch Extension Manager (or via the test install link), no URL configuration required on the broadcaster's side
 - Explains how to use it: Quick Actions (Live Config view in Twitch Stream Manager) → Select match MVP → series → match → player → confirm
-- Explains the effects of confirming an MVP: automatic one-time token drop to eligible linked viewers, and a configurable fantasy score bonus applied to that player for that match
+- Explains the effects of confirming an MVP: automatic one-time token drop to eligible joined viewers (soft accounts and website accounts (code-linked before #160, or connected with Twitch sign-in), #157), and a configurable fantasy score bonus applied to that player for that match
 - Content matches the current implementation described in `markdown/features/core/twitch-extension.md` (no stale steps, e.g. no mention of manually setting an EBS URL, which is a one-time operator task, not a broadcaster task)
 
 ---
@@ -510,3 +510,141 @@ As a player who just finished or skipped the tour, I want the "recap is ready" p
 - The popup appears only under the existing rules: `show_prompt` is true, no other popup is open, and no password change is required. The tour no longer counts as open, because `_tour` is cleared before the check.
 - When no recap is waiting (`show_prompt` false) or the user is logged out, nothing appears and no request is made logged out. This is the failure path.
 - Ending the tour still marks it seen (`fantasy.tourSeen.v1`) and returns focus as before. If the popup appears, focus moves to its "Open recap" button.
+
+## Flicker-Free Tab Switching
+
+### No Flicker When Switching Tabs
+**User story**
+As a player, I want switching between tabs to be smooth so that the page doesn't flash or reload content that hasn't changed.
+
+**Acceptance criteria**
+- **New helper `renderIfChanged(el, html)`** in `frontend/app-globals.js`:
+  - sets `el.innerHTML` only when `html` differs from the markup it last set on that element (kept in a `WeakMap`),
+  - returns whether it wrote,
+  - always writes the first time it sees an element.
+- **Loaders that use it** for their main blocks:
+  - `loadRoster` (`#rosterActiveGrid`, `#benchGrid`, `#rosterCombined`; `#rosterSeasonPoints` is set with `textContent`),
+  - `loadDeck`, `loadBoosterTeams`,
+  - `loadSeasonLeaderboard`, `loadWeeklyLeaderboard`, `loadPastSeasons`,
+  - `loadPlayers`, `loadLeaderboard`, `loadTop`, `loadTeams`, `loadSchedule`,
+  - the week selects in `loadWeeks` and `_populateLbWeekSelect`.
+  
+  A refresh with unchanged data leaves those elements' DOM nodes untouched: same node identity, no image reload, the selected dropdown option and the scroll position kept.
+- **Placeholders:** `loadSchedule` and `loadBoosterTeams` show their "Loading…" text only while their container is still empty. Otherwise the old content stays until the new data replaces it.
+- **Select boxes** rebuilt with changed options keep the previously selected value when it still exists. The My Team week select keeps the player's own pick; with none, the upcoming week stays the default.
+- **View state:** the Players table sort and the "Show all" toggle of Top players by avg stay across a refresh, and a kept team-draw tile loses its selection like a rebuilt one.
+- **Failure path:** when a refresh fails (network error, non-OK response), the content already on screen stays (except Past seasons, which hides its panel on error). The error appears in the tab's existing status line, as today, instead of replacing the content. A block that had never loaded shows the error as before.
+
+### Same Tab or a Different Tab
+**User story**
+As a player, I want clicking the tab I'm on to just refresh quietly, and opening another tab to show it immediately, so that navigation feels instant.
+
+**Acceptance criteria**
+- **Same tab:** clicking it (or a code call to `switchTab(name)` for the active tab) leaves the tab classes and scroll position as they are. It runs the tab's loaders as a quiet refresh: unchanged data changes nothing on screen.
+- **Different tab:** switching shows that tab's last content immediately, because hidden tab panels keep their DOM. It then runs the loaders as a quiet refresh. It restores the window scroll position the player last had on that tab during this page visit, or scrolls to the top on a first visit.
+- **Existing callers keep working:** login, logout, a forced password change and the tour still land on their tab with fresh data.
+- **Failure path:** a forced password change still overrides any requested tab with Profile, as `switchTab` does today.
+
+### Weekly Report Keeps Its Frame
+**User story**
+As a player reading the Weekly Report, I want the popup window to stay the same size and in place when I switch weeks so that only its contents change.
+
+**Acceptance criteria**
+- **Fixed size:**
+  - above 600 px wide, `.weekly-summary-modal` has a fixed `height: 85vh` (not just `max-height`), so the frame, title bar, week tabs and column headers don't move when content changes,
+  - this includes the stacked layout (1100 px and below), where the popup scrolls as one page inside the fixed frame,
+  - at 600 px and below the height is `92vh`.
+- **Switching weeks:**
+  - `selectWeeklySummaryTab()` no longer writes "Loading…" over existing content. The previous week's columns stay visible, dimmed by a `.is-loading` class (opacity about 0.6, a 150 ms fade, no animation with reduced motion), with `aria-busy="true"` on both column bodies.
+  - When the new week's data arrives, both columns and their headers are replaced in one update, and both bodies scroll to the top.
+  - A slow or out-of-order response for a week the player has already left is ignored, using a request counter, so it can't overwrite the week now shown.
+- **Week cache:** weeks fetched while the popup is open are kept in memory (`_weeklySummaryCache`, keyed by week id). Switching back to one renders it at once, then refreshes quietly in the background with `renderIfChanged`. The cache is cleared when the popup closes, and for the revealed weeks on "Reveal results" (`revealAllWeeklySummaries`, the only reveal path), so revealed data is never stale.
+- **Tab bar:** `renderWeeklySummaryTabs()` updates the week tab bar in place. It rebuilds the buttons only when the list of weeks (ids, labels, reveal state) changed, and otherwise only moves the `active` class.
+- **First open:** the popup shows its full frame immediately, with "Loading…" in the empty columns only on that first load.
+- **Failure path:** when loading a week fails, the error replaces that week's columns (there is nothing correct to keep). The frame stays the same size, and the dimming is removed. A cached week whose quiet refresh fails keeps its content.
+- **Recap animation (#152):** it still plays only on a week's first revealed view and is stopped on a week switch, as today. Re-rendering a week during the same opening (from the cache or its quiet refresh) doesn't replay it; a recap interrupted by a week switch plays again on a later opening.
+
+---
+
+## Schedule Visuals (issue #156)
+
+### See What's Happening Now at the Top of the Schedule
+**User story**
+As a player, I want the Schedule tab to open on what is live, what is next and what just finished, so that I don't scroll through the whole season to find tonight's matches.
+
+**Acceptance criteria**
+- A "Right now" strip at the top of the Schedule tab shows up to three cards:
+  - **Live now:** a series with a matching live game. It shows both teams, its division, when it started and a "Watch live" link when a stream URL is known.
+  - **Next up:** up to three next series with a planned time in the future, as compact rows with time, division, teams, streamer and a Watch button. The header shows a relative countdown to the first ("in 1 h 20 min", "in 2 days").
+- Each watch button has the streamer name before it: the feed's stream label, or the channel from the stream URL. An upcoming fixture without a stream link shows "Caster TBD" and a greyed-out Watch button.
+- With fewer than three timed series, Next up adds a row per coming week whose matches have no time yet, saying how far away it is ("Next week", "In 2 weeks") and how many matches it has ("7 matches, times to be announced"), with a View week button.
+  - **Latest result:** the most recently played series.
+- A card is left out when it has nothing to show. When all three are empty, the strip is not shown.
+- The Latest result card follows hide mode: while the series is hidden it shows "Result hidden" with a Reveal button, and it never shows a score or MVP.
+- Live state comes from `live_matches` rows with `ended_at` empty, seen in the last 15 minutes, with the same two team ids as the series in either order. The live game must have started within 12 hours of the series' time, so an earlier or later meeting of the same two teams is not marked live.
+- Live state is never served from the one-hour schedule cache; it reflects the database at request time.
+
+### Browse the Season Week by Week in Time Order
+**User story**
+As a player, I want to move through the season one week at a time, with matches in the order they are played, so that the schedule reads like a timeline and I can see where we are in it.
+
+**Acceptance criteria**
+- A week strip shows one chip per fantasy week (W1 … Wn), with its start date. The current week's chip is marked "This week" in orange and has `aria-current="date"`. Played weeks and upcoming weeks look different from each other.
+- The tab opens on the current week. Between weeks it opens on the next upcoming week, and after the season on the last week.
+- Clicking a chip, or the previous and next arrows, shows that week; a "This week" button returns to the current week.
+- Within a week, series are grouped by day and sorted by time, earliest first, across both divisions. "Time TBD" fixtures have no real time, so they close the week in their own "Time TBD" group.
+- In the current week, a "Now" line appears between the last started series and the next one, labelled with the current day and time.
+- Division filter chips (All, Div 1, Div 2) narrow the week's list. A division with no series that week shows "No matches for this division this week."
+- Every series appears in exactly one week, including feed fixtures, DB-derived results without a feed row, and "Time TBD" fixtures. A series outside every fantasy week goes to the nearest earlier week, or to the first week if none is earlier.
+- With no fantasy weeks defined, the strip uses calendar weeks starting on Monday.
+- At phone width the week strip scrolls sideways, the arrows are hidden, the Right now cards stack, and each series row becomes two lines: the time, division and action on top, the teams and score below.
+- The stale notice, the "Loading..." shown only on the first load, and partial re-rendering (`renderIfChanged`) keep working as today.
+
+### Hide Results Until I Choose to See Them
+**User story**
+As a player who watches matches later, I want to hide results on the Schedule tab and reveal them one series at a time, so that the schedule doesn't spoil a match I haven't watched yet.
+
+**Acceptance criteria**
+- A "Hide results" toggle in the Schedule header turns hide mode on and off. It has `aria-pressed`; its label stays "Hide results" and the pressed styling shows the state.
+- Hide mode is on by default: on a first visit, or with nothing stored, results start hidden.
+- The player's choice is remembered in the browser across visits and logins. Once they turn hide mode off, it stays off until they turn it back on.
+- While hide mode is on, a played series that hasn't been revealed shows:
+  - both team names at equal weight, with no winner styling,
+  - the word "Played" in place of the score,
+  - a "Reveal" button.
+  
+  It does not show the score, the number of games, per-game rows, kills, hero picks, the MVP or the "Not scored" badge.
+- Clicking Reveal shows that series' score and winner styling. The game rows stay folded behind a "N games" button.
+- A revealed series stays revealed across visits in the same browser.
+- A week with hidden results shows a "Reveal week" button in its header, which reveals every played series in that week. Its chip in the week strip carries a small marker.
+- After revealing on the Schedule tab, the week header offers "Hide week again", which hides that week's series revealed on the tab again.
+- In a hidden row, team names are plain text rather than links to the team popup, which lists results.
+- Turning hide mode off shows every result. Turning it back on hides again only the series that were never revealed.
+- Upcoming and live series look the same in both modes.
+
+### Results Already Seen in the Weekly Report Stay Revealed
+**User story**
+As a logged-in player, I want weeks I already revealed in my Weekly Report to show their results on the Schedule tab, so that hide mode doesn't hide what I've already seen.
+
+**Acceptance criteria**
+- For a logged-in user, the Schedule tab reads the `revealed` flags from `GET /weekly-summary`. In hide mode, every series placed in a revealed fantasy week shows its result without a click.
+- That week's header shows "Revealed in your Weekly Report" and no "Reveal week" button.
+- Revealing a series or a week on the Schedule tab does not change anything in the Weekly Report.
+- For a logged-out viewer, or if `GET /weekly-summary` fails, the Schedule tab still works and falls back to the reveals stored in the browser.
+
+### Played Results Read at a Glance
+**User story**
+As a player, I want each played series to show who won at a glance and keep game details one click away, so that a week's results fit on one screen.
+
+**Acceptance criteria**
+- A revealed series shows its series score in display type, the winner's name bright and bold, and the loser's name in muted text.
+- Per-game rows are folded by default behind a "N games" button with `aria-expanded`. When unfolded, each game row shows:
+  - game number,
+  - each side's hero icons,
+  - the kills score,
+  - the MVP with a star,
+  - the duration,
+  - the OpenDota link,
+  - the "Not scored" badge where it applies.
+- The Latest result card's "Games" button jumps to that series' week (normally the current week) and unfolds its games.
+- An upcoming series shows "vs" and no games button, as today. A fixture past its date with no resolved games shows "No result". A played series with a result but no resolved games shows its score and no games button.

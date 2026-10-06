@@ -778,7 +778,9 @@ class TestNewRecapPopup:
         `last_prompted_week_id` (migration id `030_weekly_summary_seen_last_prompted`), existing
         rows get NULL, and running again is a no-op."""
         ids = [m[0] for m in migrate.MIGRATIONS]
-        assert ids[-1] == "030_weekly_summary_seen_last_prompted"
+        # 031 (issue #157) follows it; 030 stays registered right before.
+        assert "030_weekly_summary_seen_last_prompted" in ids
+        assert ids.index("030_weekly_summary_seen_last_prompted") == ids.index("029_weekly_roster_entries_substitution") + 1
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(engine)
         with engine.connect() as conn:

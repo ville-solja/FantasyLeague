@@ -7,7 +7,7 @@ import card_points
 from database import get_db
 from deps import require_admin, _audit
 import ingest
-from models import Match, Player, PlayerMatchStats, Team, TwitchMVP, Weight
+from models import Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Weight
 from schedule import bust_cache
 from twitch import _apply_mvp_bonus, upsert_mvp
 
@@ -46,6 +46,11 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         p.id: p for p in db.query(Player).filter(Player.id.in_(mvp_player_ids)).all()
     } if mvp_player_ids else {}
 
+    timings_by_match = {
+        t.match_id: t
+        for t in db.query(MatchTiming).filter(MatchTiming.match_id.in_(match_ids)).all()
+    } if match_ids else {}
+
     team_ids = {tid for m in matches for tid in (m.radiant_team_id, m.dire_team_id) if tid}
     teams_by_id = {
         t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()
@@ -57,6 +62,7 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         mvp_player = players_by_id.get(mvp.player_id) if mvp else None
         radiant = teams_by_id.get(m.radiant_team_id) if m.radiant_team_id else None
         dire = teams_by_id.get(m.dire_team_id) if m.dire_team_id else None
+        timing = timings_by_match.get(m.match_id)
         result.append({
             "match_id": m.match_id,
             "league_id": m.league_id,
@@ -70,6 +76,9 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
             "vod_url": m.vod_url,
             "parse_status": m.parse_status,
             "excluded_from_scoring": bool(m.excluded_from_scoring),
+            "live_first_seen_at": timing.live_first_seen_at if timing else None,
+            "ingested_at": timing.ingested_at if timing else None,
+            "mvp_confirmed_at": timing.mvp_confirmed_at if timing else None,
         })
     return result
 

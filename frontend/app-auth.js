@@ -25,6 +25,10 @@ function showLogin() {
   document.getElementById("loginStatus").textContent = "";
 }
 
+// Username from the forgot-password step, so the reset form's hidden username
+// field lets password managers save the new password under the right login.
+let _forgotPasswordUsername = "";
+
 function showForgotPassword() {
   document.getElementById("loginModal").classList.add("hidden");
   document.getElementById("resetPasswordModal").classList.add("hidden");
@@ -42,6 +46,7 @@ async function submitForgotPassword() {
       body: JSON.stringify({username})
     });
     if (res.ok) {
+      _forgotPasswordUsername = username;
       setStatus("forgotStatus", "If an account with that username exists, a password reset link/code has been sent to its registered email. Your current password stays valid until you complete the reset.");
       document.getElementById("forgotUsername").value = "";
     } else {
@@ -58,6 +63,8 @@ function showResetPassword(prefillToken) {
   document.getElementById("forgotModal").classList.add("hidden");
   document.getElementById("resetPasswordModal").classList.remove("hidden");
   document.getElementById("resetPasswordStatus").textContent = "";
+  document.getElementById("resetUsername").value =
+    document.getElementById("forgotUsername").value.trim() || _forgotPasswordUsername;
   document.getElementById("resetToken").value = prefillToken || "";
   document.getElementById("resetNewPassword").value = "";
 }
@@ -300,3 +307,10 @@ function _applyTempPasswordBanner() {
   const banner = document.getElementById("tempPasswordBanner");
   if (banner) banner.style.display = activeMustChangePassword ? "" : "none";
 }
+
+// Each credential flow is a <form> so password managers can fill and save it
+// (issue #158). Submitting (Enter or the submit button) runs the existing
+// function once; preventDefault() keeps the page from reloading.
+document.getElementById("loginForm").addEventListener("submit", e => { e.preventDefault(); login(); });
+document.getElementById("registerForm").addEventListener("submit", e => { e.preventDefault(); register(); });
+document.getElementById("resetPasswordForm").addEventListener("submit", e => { e.preventDefault(); submitResetPassword(); });

@@ -1,9 +1,13 @@
 let _allTags = [];
 let _cachedUsers = [];
 
+function _userAccountType() {
+  return document.getElementById("userAccountType")?.value === "twitch" ? "twitch" : "full";
+}
+
 async function loadUsers() {
   try {
-    const res = await fetch(`${API}/users`);
+    const res = await fetch(`${API}/users?account_type=${_userAccountType()}`);
     const rows = await res.json();
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
     _cachedUsers = rows;
@@ -14,10 +18,44 @@ async function loadUsers() {
   }
 }
 
+function _fmtUserDate(ts) {
+  return ts ? new Date(ts * 1000).toLocaleDateString() : "—";
+}
+
+// Issue #157: Twitch viewer soft accounts — tokens, card count, created and last
+// seen; no password, tag or admin actions; delete is available.
+function _renderTwitchViewerRow(u) {
+  return `<tr data-user-id="${u.id}">
+      <td>${_escHtml(u.username)}${u.twitch_identity_shared ? ' <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#aaa;font-size:0.7rem;">ID SHARED</span>' : ""}</td>
+      <td style="font-size:0.8rem;color:#aaa;">${u.card_count} cards · created ${_fmtUserDate(u.created_at)} · last seen ${_fmtUserDate(u.last_seen_at)}</td>
+      <td>${u.tokens}</td>
+      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
+        <button class="secondary" onclick="grantTokens(${u.id})">Grant</button>
+        <button class="danger" style="font-size:0.8rem;" onclick="deleteTwitchViewer(${u.id})">Delete</button>
+      </td>
+    </tr>`;
+}
+
+async function deleteTwitchViewer(userId) {
+  const user = _cachedUsers.find(u => u.id === userId);
+  if (!confirm(`Delete ${user ? user.username : "this Twitch viewer"} and all their cards? This cannot be undone.`)) return;
+  try {
+    const res = await adminFetch(`${API}/admin/users/${userId}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("usersStatus", data.detail, false);
+    setStatus("usersStatus", "Twitch viewer deleted");
+    loadUsers();
+  } catch (e) {
+    setStatus("usersStatus", e.message, false);
+  }
+}
+
 function _renderUsers(rows) {
   const search = (document.getElementById("userSearch")?.value || "").toLowerCase();
   const visible = search ? rows.filter(u => u.username.toLowerCase().includes(search)) : rows;
   document.getElementById("usersBody").innerHTML = visible.map(u => {
+    if (u.account_type === "twitch") return _renderTwitchViewerRow(u);
     const testerBadge = u.is_tester
       ? ` <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>`
       : "";
@@ -291,5 +329,67 @@ async function _confirmDeleteCode(codeId) {
     loadCodes();
   } catch (e) {
     setStatus("codesStatus", e.message, false);
+  }
+}
+
+// Issue #160: recent Twitch collection merges with Reverse. Both calls need the
+// admin password re-check (adminFetch shows the prompt). No Twitch ids are returned.
+let _twitchMerges = [];
+
+async function loadTwitchMerges() {
+  try {
+    const res = await adminFetch(`${API}/admin/twitch/merges`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("twitchMergesStatus", rows.detail, false);
+    _twitchMerges = rows;
+    _renderTwitchMerges(rows);
+    setStatus("twitchMergesStatus", rows.length ? "" : "No merges in the last 30 days");
+  } catch (e) {
+    setStatus("twitchMergesStatus", e.message, false);
+  }
+}
+
+function _renderTwitchMerges(rows) {
+  const table = document.getElementById("twitchMergesTable");
+  const tbody = document.getElementById("twitchMergesBody");
+  table.style.display = rows.length ? "" : "none";
+  tbody.replaceChildren();
+  rows.forEach(m => {
+    const tr = document.createElement("tr");
+    const who = document.createElement("td");
+    who.textContent = m.username || `User #${m.full_user_id}`;
+    const when = document.createElement("td");
+    when.textContent = new Date(Number(m.merged_at) * 1000).toLocaleString();
+    const moved = document.createElement("td");
+    moved.textContent = `${m.cards} cards · ${m.tokens_moved} tokens`;
+    const action = document.createElement("td");
+    if (m.reversible) {
+      const btn = document.createElement("button");
+      btn.className = "danger";
+      btn.textContent = "Reverse";
+      btn.addEventListener("click", () => reverseTwitchMerge(m.id));
+      action.appendChild(btn);
+    } else {
+      action.textContent = m.reversed_at ? "Reversed" : (m.blocked_reason || "Not reversible");
+    }
+    tr.append(who, when, moved, action);
+    tbody.appendChild(tr);
+  });
+}
+
+async function reverseTwitchMerge(logId) {
+  const merge = _twitchMerges.find(m => m.id === logId);
+  const who = merge ? (merge.username || `user #${merge.full_user_id}`) : "this account";
+  if (!confirm(`Reverse the Twitch merge into ${who}? The Twitch viewer account is recreated with its cards and tokens, and ${who} is disconnected from Twitch.`)) return;
+  try {
+    const res = await adminFetch(`${API}/admin/twitch/merges/${encodeURIComponent(logId)}/reverse`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchMergesStatus", data.detail, false);
+    const shortfall = data.token_shortfall ? ` ${data.token_shortfall} tokens had already been spent.` : "";
+    setStatus("twitchMergesStatus", `Merge reversed: ${data.cards_returned} cards and ${data.tokens_returned} tokens returned.${shortfall}`);
+    loadTwitchMerges();
+    loadUsers();
+  } catch (e) {
+    setStatus("twitchMergesStatus", e.message, false);
   }
 }

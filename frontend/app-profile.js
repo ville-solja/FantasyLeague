@@ -1,5 +1,7 @@
 async function loadProfile() {
+  _twitchMergeDismissed = false;
   document.getElementById("profileUsername").value = activeUsername || "";
+  document.getElementById("pwUsername").value = activeUsername || "";
   document.getElementById("profilePlayerPreview").style.display = "none";
   document.getElementById("playerIdStatus").textContent = "";
   document.getElementById("usernameStatus").textContent = "";
@@ -12,7 +14,7 @@ async function loadProfile() {
     } else {
       document.getElementById("profilePlayerId").value = "";
     }
-    _renderTwitchLinkStatus(data.twitch_linked);
+    loadTwitchConnection();
     const tags = data.tags || [];
     const container = document.getElementById("profileTagsContainer");
     if (container) {
@@ -110,43 +112,135 @@ function _renderPastSeasons(seasons) {
   ).join("");
 }
 
-function _renderTwitchLinkStatus(linked) {
-  document.getElementById("twitchLinked").style.display = linked ? "block" : "none";
-  document.getElementById("twitchUnlinked").style.display = linked ? "none" : "block";
-  document.getElementById("twitchCodeSection").style.display = "none";
-  document.getElementById("twitchStatus").textContent = "";
+// ---------------------------------------------------------------------------
+// Twitch connection (issue #160). Twitch sign-in replaces the old link code:
+// Connect navigates to GET /auth/twitch/start, which redirects to Twitch (or back
+// here with ?twitch=reauth_required when the password check is missing). Twitch
+// returns to /auth/twitch/callback, which redirects to /#profile?twitch=<key>.
+// No Twitch id ever reaches the page.
+// ---------------------------------------------------------------------------
+
+const _TWITCH_RETURN_MESSAGES = {
+  connected:        ["Twitch connected.", true],
+  merge_ready:      ["Twitch connected. Your Twitch collection is waiting below.", true],
+  cancelled:        ["Twitch sign-in was cancelled. Nothing was changed.", false],
+  failed:           ["Twitch sign-in did not complete. Nothing was changed. Try again.", false],
+  no_session:       ["Log in to Kana Cards first, then connect Twitch.", false],
+  login_required:   ["Log in to Kana Cards first, then connect Twitch.", false],
+  in_use:           ["This Twitch account is connected to another Kana Cards account", false],
+  disconnect_first: ["Disconnect your current Twitch account first", false],
+  unavailable:      ["Connecting Twitch is not available right now.", false],
+};
+
+let _twitchMergeDismissed = false;
+
+function _showTwitchState(id) {
+  ["twitchConnectState", "twitchUnavailableState", "twitchConnectedState"].forEach(el => {
+    document.getElementById(el).style.display = el === id ? "block" : "none";
+  });
 }
 
-var _twitchCodeTimer = null;
-
-async function generateTwitchCode() {
-  document.getElementById("twitchStatus").textContent = "";
+async function loadTwitchConnection() {
   try {
-    const res = await fetch(`${API}/twitch/link-code`, { method: "POST" });
+    const res = await fetch(`${API}/twitch/connection`);
     const data = await res.json();
     if (!res.ok) return setStatus("twitchStatus", data.detail, false);
-    document.getElementById("twitchCode").textContent = data.code;
-    document.getElementById("twitchCodeSection").style.display = "block";
-    if (_twitchCodeTimer) clearInterval(_twitchCodeTimer);
-    let remaining = data.expires_in;
-    const expiry = document.getElementById("twitchCodeExpiry");
-    expiry.style.color = "";
-    expiry.textContent = `Expires in ${remaining}s`;
-    _twitchCodeTimer = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) {
-        clearInterval(_twitchCodeTimer);
-        _twitchCodeTimer = null;
-        expiry.textContent = "Code expired. Generate a new one.";
-        expiry.style.color = "#c0392b";
-        document.getElementById("twitchCode").textContent = "------";
-      } else {
-        expiry.textContent = `Expires in ${remaining}s`;
-      }
-    }, 1000);
+    _renderTwitchConnection(data);
   } catch (e) {
     setStatus("twitchStatus", e.message, false);
   }
+}
+
+function _renderTwitchConnection(data) {
+  if (data.connected) _showTwitchState("twitchConnectedState");
+  else _showTwitchState(data.available ? "twitchConnectState" : "twitchUnavailableState");
+  const activity = document.getElementById("twitchLastActivity");
+  activity.textContent = data.last_twitch_activity_at
+    ? `Last Twitch activity: ${new Date(Number(data.last_twitch_activity_at) * 1000).toLocaleString()}`
+    : "Last Twitch activity: none yet";
+
+  const prompt = document.getElementById("twitchMergePrompt");
+  const pending = data.pending_merge;
+  if (pending && !_twitchMergeDismissed) {
+    const text = document.getElementById("twitchMergeText");
+    if (data.merge_used) {
+      text.textContent = `Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. This account has already added a Twitch collection once, so this one stays in the Twitch panel.`;
+      document.getElementById("twitchMergeActions").style.display = "none";
+    } else {
+      text.textContent = `Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. Add it to this account?`;
+      document.getElementById("twitchMergeActions").style.display = "";
+    }
+    prompt.style.display = "block";
+  } else {
+    prompt.style.display = "none";
+  }
+  document.getElementById("twitchGuidance").style.display =
+    data.connected && !pending && !data.merge_used ? "block" : "none";
+}
+
+function connectTwitch() {
+  // A top-level navigation: the server checks the recent password confirmation and
+  // sends the browser to Twitch, or back here asking for the password.
+  window.location.href = `${API}/auth/twitch/start`;
+}
+
+async function disconnectTwitch() {
+  if (!confirm("Disconnect Twitch from this account? Your cards and tokens stay here. In the Twitch panel you are then not joined until you join again.")) return;
+  try {
+    const res = await adminFetch(`${API}/twitch/disconnect`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchStatus", data.detail, false);
+    setStatus("twitchStatus", "Twitch disconnected.");
+    loadTwitchConnection();
+  } catch (e) {
+    setStatus("twitchStatus", e.message, false);
+  }
+}
+
+async function confirmTwitchMerge() {
+  try {
+    const res = await adminFetch(`${API}/twitch/merge/confirm`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus("twitchStatus", data.detail, false);
+      return loadTwitchConnection();
+    }
+    setStatus("twitchStatus", `${data.cards} cards and ${data.tokens} tokens added`);
+    loadTwitchConnection();
+    if (typeof loadMe === "function") loadMe();
+  } catch (e) {
+    setStatus("twitchStatus", e.message, false);
+  }
+}
+
+function dismissTwitchMerge() {
+  // "Not now": nothing changes on the server; the prompt returns on the next Profile visit.
+  _twitchMergeDismissed = true;
+  document.getElementById("twitchMergePrompt").style.display = "none";
+}
+
+/** Reads /#profile?twitch=<key> left by the Twitch sign-in redirects, strips it from
+ *  the address bar, opens Profile and shows the message. Returns true when handled. */
+function handleTwitchReturn() {
+  const hash = window.location.hash || "";
+  if (!hash.startsWith("#profile")) return false;
+  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  const key = new URLSearchParams(query).get("twitch");
+  history.replaceState(null, "", window.location.pathname);
+  if (!activeUserId) return false;
+  switchTab("profile");
+  if (!key) return true;
+  _twitchMergeDismissed = false;
+  if (key === "reauth_required") {
+    _promptReauth().then(ok => {
+      if (ok) connectTwitch();
+      else setStatus("twitchStatus", "Confirm your password to connect Twitch.", false);
+    });
+    return true;
+  }
+  const msg = _TWITCH_RETURN_MESSAGES[key];
+  if (msg) setStatus("twitchStatus", msg[0], msg[1]);
+  return true;
 }
 
 async function saveUsername() {
@@ -160,6 +254,7 @@ async function saveUsername() {
     const data = await res.json();
     if (!res.ok) return setStatus("usernameStatus", data.detail, false);
     activeUsername = data.username;
+    document.getElementById("pwUsername").value = activeUsername;
     localStorage.setItem("username", activeUsername);
     document.getElementById("headerUserLabel").textContent = activeUsername;
     setStatus("usernameStatus", "Username updated");
@@ -167,6 +262,8 @@ async function saveUsername() {
     setStatus("usernameStatus", e.message, false);
   }
 }
+
+document.getElementById("changePasswordForm").addEventListener("submit", e => { e.preventDefault(); changePassword(); });
 
 async function changePassword() {
   const current = document.getElementById("pwCurrent").value;

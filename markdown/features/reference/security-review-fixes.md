@@ -40,7 +40,7 @@ Fixes for the 2026-09-26 external security review attached to GitHub issue #135.
 
 Monitored-league status is not checked separately: eligibility is exactly the 5-series window. Only monitored leagues are ingested, and adding a league filter would have changed what `GET /twitch/matches/current` shows.
 
-The link code from `POST /twitch/link-code` is now drawn with `secrets.choice`, and `POST /twitch/link` is limited to 10 requests a minute per IP.
+The link code from `POST /twitch/link-code` is now drawn with `secrets.choice`, and `POST /twitch/link` is limited to 10 requests a minute per IP. *(Both routes were retired in #160 in favour of Twitch sign-in; see `twitch-account-connection.md`.)*
 
 ## Escaping
 
@@ -67,9 +67,9 @@ Static checks in the test file parse every `${...}` in these files and fail if a
 | `POST /redeem` | 5 a minute per user | `RATE_LIMIT_REDEEM` |
 | `POST /reset-password` | 10 a minute per IP | `RATE_LIMIT_RESET_PASSWORD` |
 | `GET /cards/{card_id}/image` | 60 a minute per IP | `RATE_LIMIT_CARD_IMAGE` |
-| `POST /twitch/link` | 10 a minute per IP | `RATE_LIMIT_TWITCH_LINK` |
+| `POST /twitch/link` *(retired in #160)* | 10 a minute per IP | `RATE_LIMIT_TWITCH_LINK` *(retired; replaced by `RATE_LIMIT_TWITCH_OAUTH` on `GET /auth/twitch/start` and `GET /auth/twitch/callback`)* |
 
-`redeem_code`, `get_card_image` and `link_account` stay plain functions; the registered routes are `*_route` wrappers, as for the roster mutations. See `reference/rate-limiting.md`.
+`redeem_code` and `get_card_image` stay plain functions (as did `link_account` until #160 removed it with `POST /twitch/link`); the registered routes are `*_route` wrappers, as for the roster mutations. See `reference/rate-limiting.md`.
 
 - `ReorderRequest.card_ids`: at most 500 items. The frontend sends the whole bench on every move and bench size is unlimited, so the cap is set well above any real collection. `RemovePlayersBody.player_ids`: at most 500. Larger lists get 422.
 - `POST /grant-tokens`: `amount` at most 10,000 (`GRANT_TOKENS_MAX`).
@@ -97,4 +97,4 @@ Static checks in the test file parse every `${...}` in these files and fail if a
 | `RATE_LIMIT_REDEEM` | `5/minute` | Per-user limit on `POST /redeem` |
 | `RATE_LIMIT_RESET_PASSWORD` | `10/minute` | Per-IP limit on `POST /reset-password` |
 | `RATE_LIMIT_CARD_IMAGE` | `60/minute` | Per-IP limit on `GET /cards/{card_id}/image` |
-| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
+| `RATE_LIMIT_TWITCH_LINK` | — | *Retired in #160 with `POST /twitch/link`; replaced by `RATE_LIMIT_TWITCH_OAUTH` (`10/minute`, per IP on each of `GET /auth/twitch/start` and `GET /auth/twitch/callback`)* |

@@ -195,6 +195,35 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     }
 
 
+def collection_for_user(db, user_id: int) -> list[dict]:
+    """Every card the user owns with player, team, rarity, modifiers, roster state and
+    season points (the card's stored points over all scored matches), rarest first,
+    then by player name. Used by the Twitch panel's GET /twitch/me (issue #157)."""
+    rows = db.execute(text(f"""
+        SELECT c.id, c.card_type, c.is_active, c.slot_index,
+               p.id as player_id, p.name as player_name, p.avatar_url,
+               t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
+               COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN cmp.points END), 0) as season_points
+        FROM cards c
+        JOIN players p ON p.id = c.player_id
+        LEFT JOIN card_match_points cmp ON cmp.card_id = c.id
+        LEFT JOIN matches m ON m.match_id = cmp.match_id AND {scored_match_sql()}
+        {_LATEST_TEAM_SUBQUERY}
+        WHERE c.owner_id = :user_id
+        GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url,
+                 t.id, t.name, t.logo_url
+    """), {"user_id": user_id}).fetchall()
+    cards = [dict(r._mapping) for r in rows]
+    modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
+    rank = {"legendary": 0, "epic": 1, "rare": 2, "common": 3}
+    for c in cards:
+        c["is_active"] = bool(c["is_active"])
+        c["season_points"] = display_points(c["season_points"])
+        c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
+    cards.sort(key=lambda c: (rank.get(c["card_type"], 4), (c["player_name"] or "").lower(), c["id"]))
+    return cards
+
+
 @router.get("/deck")
 def get_deck(request: Request, db=Depends(get_db)):
     rarities = ["common", "rare", "epic", "legendary"]
@@ -262,7 +291,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         db.rollback()
         raise HTTPException(status_code=409, detail="Not enough tokens")
     db.refresh(user)
-    _audit(db, "token_draw", actor_id=user_id, actor_username=user.username,
+    _audit(db, "token_draw", actor_id=user_id, actor_username=user.display_name,
            detail=f"card_id={card.id} player={player.name} rarity={rarity}")
     db.commit()
     tokens_remaining = user.tokens
@@ -286,8 +315,13 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
 def get_booster_deck(request: Request, db=Depends(get_db)):
     """Return per-team drawable card counts for the requesting user."""
     session_user = session_user_or_none(request, db)
-    user_id = session_user.id if session_user else None
+    return booster_deck_for_user(db, session_user.id if session_user else None)
 
+
+def booster_deck_for_user(db, user_id: int | None) -> list[dict]:
+    """Teams with players who have match data and how many of those players `user_id`
+    does not own yet (all of them when user_id is None). Shared by GET /deck/booster
+    and the Twitch panel's GET /twitch/teams (issue #157)."""
     teams = db.query(Team).all()
 
     # Pre-fetch all (team_id, player_id) pairs in a single query
@@ -381,7 +415,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
         db.rollback()
         raise HTTPException(status_code=409, detail="Not enough tokens")
     db.refresh(user)
-    _audit(db, "token_booster_draw", actor_id=user_id, actor_username=user.username,
+    _audit(db, "token_booster_draw", actor_id=user_id, actor_username=user.display_name,
            detail=f"card_id={card.id} player={player.name} rarity={rarity} "
                   f"team_id={team_id} cost={cost}")
     db.commit()
@@ -518,7 +552,7 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
         db.rollback()
         raise HTTPException(status_code=409, detail="Not enough tokens")
     db.refresh(user)
-    _audit(db, "reroll_modifiers", actor_id=user_id, actor_username=user.username,
+    _audit(db, "reroll_modifiers", actor_id=user_id, actor_username=user.display_name,
            detail=f"card_id={card_id} rarity={card.card_type}")
     db.commit()
     tokens_remaining = user.tokens
