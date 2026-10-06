@@ -1,0 +1,265 @@
+{
+  "_stand_in": "STAND-IN built from Steam's documented GetLiveLeagueGames shape (issue #161 plan Step 1). Replace with a trimmed real capture (ids kept, no key) taken during a live Kanaliiga game.",
+  "result": {
+    "status": 200,
+    "games": [
+      {
+        "match_id": 8200000001,
+        "league_id": 20162,
+        "lobby_id": 27100000000000001,
+        "spectators": 3,
+        "series_id": 0,
+        "game_number": 1,
+        "radiant_team": {
+          "team_name": "Radiant Wolves",
+          "team_id": 9100001,
+          "team_logo": 0,
+          "complete": true
+        },
+        "dire_team": {
+          "team_name": "Dire Bears",
+          "team_id": 9100002,
+          "team_logo": 0,
+          "complete": true
+        },
+        "players": [
+          {
+            "account_id": 1000,
+            "name": "P1000",
+            "hero_id": 1,
+            "team": 0
+          },
+          {
+            "account_id": 1001,
+            "name": "P1001",
+            "hero_id": 2,
+            "team": 0
+          },
+          {
+            "account_id": 1002,
+            "name": "P1002",
+            "hero_id": 3,
+            "team": 0
+          },
+          {
+            "account_id": 1003,
+            "name": "P1003",
+            "hero_id": 4,
+            "team": 0
+          },
+          {
+            "account_id": 1004,
+            "name": "P1004",
+            "hero_id": 5,
+            "team": 0
+          },
+          {
+            "account_id": 1010,
+            "name": "P1010",
+            "hero_id": 20,
+            "team": 1
+          },
+          {
+            "account_id": 1011,
+            "name": "P1011",
+            "hero_id": 21,
+            "team": 1
+          },
+          {
+            "account_id": 1012,
+            "name": "P1012",
+            "hero_id": 22,
+            "team": 1
+          },
+          {
+            "account_id": 1013,
+            "name": "P1013",
+            "hero_id": 23,
+            "team": 1
+          },
+          {
+            "name": "NoAccount",
+            "hero_id": 40,
+            "team": 1
+          },
+          {
+            "account_id": 1900,
+            "name": "CasterOne",
+            "hero_id": 0,
+            "team": 2
+          },
+          {
+            "account_id": 1901,
+            "name": "SpectatorOne",
+            "hero_id": 0,
+            "team": 4
+          }
+        ]
+      },
+      {
+        "match_id": 8200000002,
+        "league_id": 20163,
+        "lobby_id": 27100000000000002,
+        "spectators": 0,
+        "series_id": 0,
+        "game_number": 1,
+        "radiant_team": {
+          "team_name": "",
+          "team_id": 0,
+          "team_logo": 0,
+          "complete": false
+        },
+        "dire_team": {
+          "team_name": "Pickup Beta",
+          "team_id": 9100004,
+          "team_logo": 0,
+          "complete": true
+        },
+        "players": [
+          {
+            "account_id": 2000,
+            "name": "P2000",
+            "hero_id": 1,
+            "team": 0
+          },
+          {
+            "account_id": 2001,
+            "name": "P2001",
+            "hero_id": 2,
+            "team": 0
+          },
+          {
+            "account_id": 2002,
+            "name": "P2002",
+            "hero_id": 3,
+            "team": 0
+          },
+          {
+            "account_id": 2003,
+            "name": "P2003",
+            "hero_id": 4,
+            "team": 0
+          },
+          {
+            "account_id": 2004,
+            "name": "P2004",
+            "hero_id": 5,
+            "team": 0
+          },
+          {
+            "account_id": 2010,
+            "name": "P2010",
+            "hero_id": 30,
+            "team": 1
+          },
+          {
+            "account_id": 2011,
+            "name": "P2011",
+            "hero_id": 31,
+            "team": 1
+          },
+          {
+            "account_id": 2012,
+            "name": "P2012",
+            "hero_id": 32,
+            "team": 1
+          },
+          {
+            "account_id": 2013,
+            "name": "P2013",
+            "hero_id": 33,
+            "team": 1
+          },
+          {
+            "account_id": 2014,
+            "name": "P2014",
+            "hero_id": 34,
+            "team": 1
+          }
+        ]
+      },
+      {
+        "match_id": 8200000003,
+        "league_id": 99999,
+        "lobby_id": 27100000000000003,
+        "spectators": 120,
+        "series_id": 0,
+        "game_number": 1,
+        "radiant_team": {
+          "team_name": "Other A",
+          "team_id": 9200001,
+          "team_logo": 0,
+          "complete": true
+        },
+        "dire_team": {
+          "team_name": "Other B",
+          "team_id": 9200002,
+          "team_logo": 0,
+          "complete": true
+        },
+        "players": [
+          {
+            "account_id": 3000,
+            "name": "P3000",
+            "hero_id": 1,
+            "team": 0
+          },
+          {
+            "account_id": 3001,
+            "name": "P3001",
+            "hero_id": 2,
+            "team": 0
+          },
+          {
+            "account_id": 3002,
+            "name": "P3002",
+            "hero_id": 3,
+            "team": 0
+          },
+          {
+            "account_id": 3003,
+            "name": "P3003",
+            "hero_id": 4,
+            "team": 0
+          },
+          {
+            "account_id": 3004,
+            "name": "P3004",
+            "hero_id": 5,
+            "team": 0
+          },
+          {
+            "account_id": 3010,
+            "name": "P3010",
+            "hero_id": 50,
+            "team": 1
+          },
+          {
+            "account_id": 3011,
+            "name": "P3011",
+            "hero_id": 51,
+            "team": 1
+          },
+          {
+            "account_id": 3012,
+            "name": "P3012",
+            "hero_id": 52,
+            "team": 1
+          },
+          {
+            "account_id": 3013,
+            "name": "P3013",
+            "hero_id": 53,
+            "team": 1
+          },
+          {
+            "account_id": 3014,
+            "name": "P3014",
+            "hero_id": 54,
+            "team": 1
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -130,15 +130,9 @@ def _chat_paragraph():
     return " ".join(lines)
 
 
-def _unlinked_view(panel_text):
-    m = re.search(r'<div id="view-unlinked">(.*?)<div id="view-linked"', panel_text, re.S)
-    assert m, "view-unlinked element not found in panel.html"
-    return m.group(1)
-
-
-def _linked_view(panel_text):
-    m = re.search(r'<div id="view-linked"[^>]*>(.*?)<!-- Winner', panel_text, re.S)
-    assert m, "view-linked element not found in panel.html"
+def _join_template(panel_text):
+    m = re.search(r'<template id="tpl-join">(.*?)</template>', panel_text, re.S)
+    assert m, "tpl-join template not found in panel.html"
     return m.group(1)
 
 
@@ -147,12 +141,12 @@ def _linked_view(panel_text):
 # ---------------------------------------------------------------------------
 
 def test_submission_doc_references_current_version():
-    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference the current version (1.1.7 since issue #139)."""
+    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference the current version (1.2.0 since issue #157)."""
     doc = _submission_doc()
     header = doc.split("## Submission checklist")[0]
     checklist = doc.split("## Submission checklist")[1].split("## Listing copy")[0]
-    assert "twitch-extension-1.1.7.zip" in header
-    assert "1.1.7" in checklist
+    assert "twitch-extension-1.2.0.zip" in header
+    assert "1.2.0" in checklist
 
 
 def test_submission_doc_does_not_submit_version_1_1_5():
@@ -306,11 +300,12 @@ def test_listing_description_has_twitch_chat_paragraph():
 
 
 def test_listing_description_states_message_contents():
-    """The chat paragraph states the message contents: MVP player name, Kanaliiga Fantasy usernames of drop winners, or a note when no linked viewers were in the pool."""
+    """The chat paragraph states the message contents: MVP player name and how many viewers received a token (no viewer names since issue #157), or that no tokens were dropped when no joined viewers were watching."""
     para = _chat_paragraph()
     assert "Match MVP: PlayerName!" in para
-    assert "Kanaliiga Fantasy usernames" in para
-    assert "no linked viewers" in para.lower()
+    assert "viewers received a token" in para
+    assert "no viewer names" in para.lower()
+    assert "no joined viewers" in para.lower()
 
 
 def test_listing_description_states_no_chat_read_store_or_repeat_drop():
@@ -329,22 +324,25 @@ def test_listing_chat_paragraph_is_inside_description_block():
 
 
 def test_config_html_mentions_chat_announcement():
-    """config.html's broadcaster copy mentions the MVP chat announcement, consistent with the listing description."""
+    """config.html's broadcaster copy mentions the MVP chat announcement, consistent with the listing description (winner count only, no viewer names, since issue #157)."""
     text = (EXT_DIR / "config.html").read_text()
     broadcaster = text.split("For broadcasters", 1)[1].split("<h3", 1)[0]
     assert "chat announcement" in broadcaster
-    assert "Kanaliiga Fantasy usernames" in broadcaster
+    assert "how many viewers received a token" in broadcaster
+    assert "No viewer names are posted" in broadcaster
 
 
-def test_panel_html_unlinked_view_mentions_username_in_chat():
-    """panel.html's unlinked view tells viewers that linking can show their Kanaliiga username in chat if they win a drop."""
-    unlinked = _unlinked_view((EXT_DIR / "panel.html").read_text())
-    assert "Kanaliiga Fantasy username" in unlinked
-    assert "chat" in unlinked
-
-
-def test_panel_html_chat_note_not_only_in_linked_view():
-    """The panel chat note is in the unlinked view element, not solely in the linked view (where unlinked viewers would never see it)."""
+def test_panel_html_join_view_has_consent_line_and_no_chat_username_note():
+    """Issue #157 replaced the unlinked view: the Join box carries the consent line, and since chat posts only a winner count the old "username is posted in chat" note is gone."""
     text = (EXT_DIR / "panel.html").read_text()
-    assert 'id="chat-note"' in _unlinked_view(text)
-    assert "chat-note" not in _linked_view(text)
+    join = _join_template(text)
+    assert "Uses your Twitch login. We store your Twitch id and game progress; leave any time in Settings." in join
+    assert "chat-note" not in text
+    assert "username is posted" not in text
+
+
+def test_panel_html_has_no_unlinked_or_linked_views():
+    """The link-code views (#view-unlinked, #view-linked) are removed from the panel (issue #157)."""
+    text = (EXT_DIR / "panel.html").read_text()
+    assert 'id="view-unlinked"' not in text
+    assert 'id="view-linked"' not in text

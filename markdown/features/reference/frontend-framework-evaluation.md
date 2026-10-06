@@ -24,7 +24,9 @@ Read directly from the repository, not estimated:
 | Loading mechanism | 19 plain `<script src="/app-*.js">` tags in `frontend/index.html`, loaded in dependency order (e.g. `app-globals.js` first, since later files reference its globals) |
 | Serving | `backend/main.py` mounts `frontend/` directly: `app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")` — the files FastAPI serves are exactly the files in the repo, no compile/transpile step in between |
 | State management | Global `let` variables in `app-globals.js` (`activeUserId`, `activeIsAdmin`, `activeMustChangePassword`, `_tokenBalance`, `_weeks`, …), read and written directly by every other file with no encapsulation |
-| Rendering pattern | Hand-written `fetch()` → build an HTML string via template literals → `element.innerHTML = ...`, repeated independently in every file that renders a table or panel |
+| Rendering pattern | Hand-written `fetch()` → build an HTML string via template literals → `element.innerHTML = ...`, repeated independently in every file that renders a table or panel¹ |
+
+¹ This evaluation is a point-in-time snapshot. Since #159, the player-facing loaders write their main blocks through `renderIfChanged` in `app-globals.js` instead of assigning `innerHTML` directly; see `flicker-free-tab-switching.md`.
 
 ## Recurring Pain Point: Duplicated Tab-Switching Logic
 

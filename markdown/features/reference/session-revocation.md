@@ -31,7 +31,7 @@ Unlike the old counter, rows can be listed and ended one device at a time (`GET 
 
 ### Other session readers
 
-- `POST /twitch/link-code`: `twitch.get_session_user` delegates to `get_current_user`.
+- `POST /twitch/link-code`: `twitch.get_session_user` delegated to `get_current_user` (both retired in #160; the session-cookie Twitch routes in `twitch_oauth.py` use `get_current_user` directly).
 - `GET /deck` and `GET /deck/booster` (login optional): use `session_user_or_none`, so a revoked session counts as logged out.
 - `rate_limit.key_by_user_or_ip` reads the user id that `get_current_user` puts on `request.state` (the cookie no longer carries it), so per-user limits stay per user.
 

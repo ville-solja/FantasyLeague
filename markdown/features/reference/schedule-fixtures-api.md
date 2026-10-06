@@ -16,7 +16,7 @@ An alternative, preferred source for the Schedule tab's fixture list: a structur
    `parse_fixtures_json(payload) -> (weeks, dropped)` converts it (`source: "fixtures_json"`)
 2. Else if `SCHEDULE_SHEET_URL` is set → the existing CSV path (`fetch_csv_text` →
    `parse_schedule`), `source: "sheet_csv"`
-3. Else → empty Upcoming; Results still derived from ingested matches
+3. Else → no feed fixtures; played series are still derived from ingested matches
 
 ### `backend/schedule.py` signatures
 
@@ -72,7 +72,7 @@ Flagged per the issue — none block adoption:
 
 - **No provisional times.** Every fixture in the current feed is `scheduled: false` with
   `starts_at: null` and empty `date`/`time`. The parser falls back to `week_start` at 00:00 so
-  the fixture still appears under its week in Upcoming; the UI shows "Time TBD". Precise slots
+  the fixture still appears in its week, in a "Time TBD" group at the end; the UI shows "Time TBD". Precise slots
   appear once the feed populates `starts_at`.
 - **Round-robin only.** No playoff/bracket rows in the feed. As with the sheet, `extra_results`
   still surfaces those from ingested match data.

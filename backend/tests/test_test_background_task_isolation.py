@@ -99,6 +99,10 @@ def _build_main(monkeypatch, tmp_path):
     import enrich
     import ingest
     import seed
+    import steam_live
+    # Without a Steam key the live poll thread (#161) is not started, so the
+    # four-thread expectations below hold whatever key the shell has.
+    monkeypatch.setattr(steam_live, "STEAM_API_KEY", "")
     monkeypatch.setattr(enrich, "SessionLocal", test_session_factory)
     monkeypatch.setattr(ingest, "SessionLocal", test_session_factory)
     monkeypatch.setattr(seed, "SessionLocal", test_session_factory)
@@ -278,7 +282,8 @@ _CHILD_SCRIPT = textwrap.dedent("""
 
 def _run_child(tmp_path, extra_env=None):
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST_")}
-    for name in ("BACKGROUND_TASKS_ENABLED", "TWITCH_LOCAL_DEV", "SECRET_KEY", "ENV", "DEMO_MODE"):
+    for name in ("BACKGROUND_TASKS_ENABLED", "TWITCH_LOCAL_DEV", "SECRET_KEY", "ENV", "DEMO_MODE",
+                 "STEAM_API_KEY"):
         env.pop(name, None)
     env.update({
         "DEBUG": "true",

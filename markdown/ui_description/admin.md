@@ -4,7 +4,7 @@ Visible only to admin users. All actions require an active admin session cookie 
 
 ## Password re-entry prompt
 
-Destructive actions (End Season, Reset Season, league data purge, every Database Backups action, Promote/Demote admin) need the admin's password again if it was not confirmed on this device in the last 10 minutes. The server answers 403 `reauth_required`; `adminFetch()` then opens an in-page **Confirm your password** modal (password field, **Confirm** and **Cancel**, never a browser `confirm()`/`prompt()`). Confirm calls `POST /reauth`; on success the modal closes and the action is retried once. A wrong password shows the error in the modal's status line and keeps it open. Cancel (or Escape, or a backdrop click) closes it and the action reports the 403 in its usual status line. The modal stacks above the Season Reset confirmation.
+Destructive actions (End Season, Reset Season, league data purge, every Database Backups action, Promote/Demote admin) need the admin's password again if it was not confirmed on this device in the last 10 minutes. The server answers 403 `reauth_required`; `adminFetch()` then opens an in-page **Confirm your password** modal (password field, **Confirm** and **Cancel**, never a browser `confirm()`/`prompt()`). Confirm calls `POST /reauth` (Enter in the field does the same; the field is the `#reauthForm` form, with a hidden username, so password managers fill it, see `features/reference/password-manager-autofill.md`); on success the modal closes and the action is retried once. A wrong password shows the error in the modal's status line and keeps it open. Cancel (or Escape, or a backdrop click) closes it and the action reports the 403 in its usual status line. The modal stacks above the Season Reset confirmation.
 
 ## Ingest League panel
 
@@ -35,9 +35,12 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 - **Create** — enter a code name (auto-uppercased) and a token amount, then click Create. The code can be redeemed by users in the My Team tab.
 - **Table** — lists all existing codes with their token amount and redemption count. Each row has a Delete button.
 
-## Token Balances panel
+## Token Balances panel (User Management)
 
-- Lists all registered users with their current token balance.
+- An **account type** select: **Website accounts** (default) or **Twitch viewers** (`GET /users?account_type=full|twitch`). The search box filters the loaded list.
+- **Website accounts** lists registered users with their current token balance.
+- **Twitch viewers** lists soft accounts created by the Twitch panel's Join (issue #157) as "Twitch viewer #{id}", with an "ID SHARED" badge when the viewer shared their Twitch identity, card count, created and last-seen dates, and tokens. Each row has **Grant** and **Delete** (confirmation, then `DELETE /admin/users/{id}` after admin re-authentication; deletes the account and all its cards). No password, tag, tester, admin or logout actions. Twitch ids are never shown.
+- **Twitch collection merges** (issue #160), under the user table: a short note and a **Show recent merges** button. It loads `GET /admin/twitch/merges` (admin password re-check) into a table: Website account, Merged (date and time), Moved ("{cards} cards · {tokens} tokens"), and Actions. A reversible merge has a **Reverse** button (confirmation, then `POST /admin/twitch/merges/{log_id}/reverse` with re-check); the status line then reports the cards and tokens returned and any tokens already spent. Merges that can't be reversed show "Reversed" or the reason (older than 30 days, cards gone after a season reset). "No merges in the last 30 days" when empty. Twitch ids are never shown.
 - Each row has a number input and a **Grant** button to add tokens to that user's balance.
 - Each row has a **Force logout** button. After a confirmation prompt it calls `POST /users/{id}/force-logout`, which ends every session of that user; the status line then reads "{username} logged out of every session". Forcing your own logout (the prompt says it includes your own session) returns the page to the logged-out state.
 
@@ -49,7 +52,8 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 
 ## Matches panel
 
-- Table columns: Match (OpenDota link), League, Team 1, Team 2, Start Time, **Parse**, **Scoring**, MVP, VOD, Action (**Set MVP**).
+- Table columns: Match (OpenDota link), League, Team 1, Team 2, Start Time, **Live seen**, **Stats in**, **MVP picked**, **Parse**, **Scoring**, MVP, VOD, Action (**Set MVP**).
+- **Live seen**, **Stats in** and **MVP picked** show when the match was first seen live, when its stats were ingested and when its MVP was first confirmed in the Twitch extension, each as minutes after Start Time ("+2 min", "+58 min"; a negative value when it came before the start). Hovering a value shows the exact time. Unknown values show "—": a dash under Live seen means live detection missed the match. See `markdown/features/reference/mvp-selection-delays.md`.
 - **Parse** shows Parsed, Unparsed or Unparseable (a dash for matches with no status). Unparsed rows have a **Retry parse** button (`POST /admin/matches/{id}/retry-parse`). After it finishes, the table reloads and the status line says whether the match was refreshed with parsed stats, a parse was requested, the request was on cooldown, or OpenDota rejected it. A 409 appears in the status line while an ingest is running.
 - **Scoring** has two checkboxes, **Unparseable** and **Not scored**. Each change sends `PATCH /admin/matches/{id}/scoring` with that single field, then the table reloads. On error, the checkbox reverts and the status line shows the error.
 - An **Unparseable only** checkbox in the panel header filters the table client-side to matches whose status is Unparseable. The empty state reads "No unparseable matches".

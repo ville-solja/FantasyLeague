@@ -12,6 +12,8 @@ def _session_user(request: Request, db):
     See sessions.validate_request: the cookie's session ID must have a
     user_sessions row within the role's idle and absolute limits."""
     user = sessions.validate_request(request, db)
+    if user is not None and getattr(user, "account_type", None) == "twitch":
+        return None  # soft accounts (issue #157) never sign in on the website
     if user is not None:
         try:
             # Per-user rate-limit key (rate_limit.key_by_user_or_ip); the cookie
@@ -61,6 +63,15 @@ def require_recent_reauth(request: Request, admin: dict = Depends(require_admin)
     if not sessions.reauth_is_recent(sessions.current_row(request, db)):
         raise HTTPException(status_code=403, detail="reauth_required")
     return admin
+
+
+def require_recent_player_reauth(request: Request, current_user: dict = Depends(get_current_user),
+                                 db=Depends(get_db)):
+    """Like require_recent_reauth, for any logged-in user (issue #160: connecting,
+    merging and disconnecting Twitch). POST /reauth works for players too."""
+    if not sessions.reauth_is_recent(sessions.current_row(request, db)):
+        raise HTTPException(status_code=403, detail="reauth_required")
+    return current_user
 
 
 def _audit(db, action: str, actor_id=None, actor_username=None, detail=None):

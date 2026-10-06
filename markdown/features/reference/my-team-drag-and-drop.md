@@ -30,6 +30,8 @@ The My Team tab has two drop zones:
 
 When the current week is locked, all drag handles are disabled.
 
+Since #159 the roster DOM can outlive a render, so `_initDragAndDrop()` binds handlers once per node (`_dndBound`), and the handlers read the current cards from `_rosterActive` / `_rosterBench`; see `flicker-free-tab-switching.md`.
+
 ---
 
 ## Drag Scenarios

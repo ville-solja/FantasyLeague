@@ -19,37 +19,35 @@ rounds of 50 players) running sequentially before/alongside match ingestion, and
 429/5xx along the way triggering `opendota_client.get_json`'s exponential backoff (up to ~160s per
 failed call), which blocks the *entire* next poll cycle in a single-threaded loop. A per-call
 priority queue would add real complexity without addressing that specific mechanism. A cheap,
-targeted signal does: OpenDota's `GET /live` endpoint returns every currently-live tracked match
-with its `league_id`, in one request — enough to know, once per poll cycle, whether *any*
-monitored league needs urgent attention right now.
+targeted signal does: knowing, once per poll cycle, whether *any* monitored league has a live
+match right now. This was first a single OpenDota `GET /live` request per cycle; since issue #161
+the live games come from Steam's league list, checked by a separate thread (see
+`reference/mvp-selection-delays.md`), and the poll loop only reads the stored result.
 
 ## Behaviour
 
-- `backend/ingest.py::get_live_matches()` — one `GET /live` call per poll cycle, returns the raw
-  live games; the poll loop derives the set of `league_id`s with a match in progress from them.
-  Called only when at least one league is currently monitored, so an idle app makes no extra
-  requests. Since issue #139 the monitored-league games are also stored in `live_matches`
-  (`reference/early-mvp-selection.md`).
-- `backend/main.py::_ingest_poll_loop` intersects that set with the currently-monitored league
-  IDs; if any monitored league is live:
+- `backend/main.py::_live_league_ids(monitored)` — the monitored leagues with a `live_matches` row
+  that has not ended and was seen in the last 15 minutes. The rows are written by the live thread
+  (`_live_poll_loop`, Steam `GetLiveLeagueGames`), so this check makes no OpenDota or Steam
+  request. Before #161 it was `ingest.get_live_matches()`, one OpenDota `GET /live` call per cycle.
+- `backend/main.py::_ingest_poll_loop` uses that set; if any monitored league is live:
   - `run_enrichment()` is skipped for that cycle (match ingestion itself is never skipped) —
     `_auto_ingest(league_ids, live_league_ids)` logs which outcome applied to each league
   - the next poll uses `INGEST_LIVE_MATCH_POLL_INTERVAL` (tighter than the existing
     `INGEST_LIVE_POLL_INTERVAL` "active week" cadence) instead of the normal interval
 - Once no monitored league is live, both enrichment and the normal interval selection resume,
   and a log line confirms enrichment is running again for that league
-- A failed/unreachable `GET /live` call raises inside `_ingest_poll_loop`'s per-cycle try/except,
-  which falls back to the plain default interval (`INGEST_POLL_INTERVAL`) for that cycle only —
-  not the active-week interval, since the `except` block doesn't re-check `_has_active_week()` —
-  without crashing the loop; `get_live_matches()` itself also degrades to an empty list
-  rather than raising when the underlying `opendota_get_json` call is exhausted, matching that helper's
-  existing None-on-exhausted-retries contract
+- A failure reading `live_matches` is logged and treated as "nothing live" for that cycle: match
+  ingest and enrichment run and the active-week/default interval applies, without crashing the
+  loop. A failed Steam request in the live thread changes no rows (see
+  `reference/mvp-selection-delays.md`); after 15 minutes without a sighting a stored game no
+  longer counts as live
 
 ## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
-| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Poll interval (seconds) while a monitored league has a live match, per `GET /live`, and for `INGEST_POST_MATCH_FAST_POLL_MINUTES` after one ends |
+| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Poll interval (seconds) while a monitored league has a live match (per `live_matches`), and for `INGEST_POST_MATCH_FAST_POLL_MINUTES` after one ends |
 
 ---
 

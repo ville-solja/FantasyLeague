@@ -7,9 +7,10 @@ from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 
 import sessions
+import soft_accounts
 from database import get_db
 from deps import get_current_user, require_admin, require_recent_reauth, _audit
-from models import PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
+from models import Card, PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
 from rate_limit import limiter, key_by_user_or_ip
 
 router = APIRouter()
@@ -36,9 +37,20 @@ class RedeemCodeBody(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
+_ACCOUNT_TYPE_FILTERS = {"full", "twitch", "all"}
+
+
 @router.get("/users")
-def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
-    users = db.query(User).order_by(User.username).all()
+def list_users(account_type: str = "full", db=Depends(get_db), _: dict = Depends(require_admin)):
+    """Admin user list. account_type filters it: "full" (website accounts, the
+    default), "twitch" (Twitch viewer soft accounts, issue #157) or "all". The
+    Twitch ids themselves are never returned, only whether they are set."""
+    if account_type not in _ACCOUNT_TYPE_FILTERS:
+        raise HTTPException(status_code=422, detail="account_type must be full, twitch or all")
+    query = db.query(User)
+    if account_type != "all":
+        query = query.filter(User.account_type == account_type)
+    users = sorted(query.all(), key=lambda u: (u.username is None, u.username or "", u.id))
     user_ids = [u.id for u in users]
     # Fetch all UserTag rows for these users in one query (avoid N+1)
     user_tags_rows = (
@@ -52,17 +64,43 @@ def list_users(db=Depends(get_db), _: dict = Depends(require_admin)):
         tags_by_user.setdefault(ut.user_id, []).append(
             {"id": td.id, "key": td.key, "label": td.label}
         )
+    card_counts = dict(
+        db.query(Card.owner_id, func.count(Card.id))
+        .filter(Card.owner_id.in_(user_ids)).group_by(Card.owner_id).all()
+    ) if user_ids else {}
     return [
         {
             "id": u.id,
-            "username": u.username,
+            "username": u.display_name,
+            "account_type": u.account_type or "full",
             "tokens": u.tokens if u.tokens is not None else 0,
+            "card_count": card_counts.get(u.id, 0),
+            "created_at": u.created_at,
+            "last_seen_at": u.last_seen_at,
+            "twitch_linked": bool(u.twitch_user_id),
+            "twitch_identity_shared": bool(u.twitch_account_id),
             "is_tester": bool(u.is_tester),
             "is_admin": bool(u.is_admin),
             "tags": tags_by_user.get(u.id, []),
         }
         for u in users
     ]
+
+
+@router.delete("/admin/users/{user_id}", dependencies=[Depends(require_recent_reauth)])
+def delete_twitch_viewer(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    """Delete a Twitch viewer soft account and all its rows (issue #157). Website
+    accounts cannot be deleted here."""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.account_type != soft_accounts.SOFT:
+        raise HTTPException(status_code=409, detail="Only Twitch viewer accounts can be deleted")
+    soft_accounts.delete_soft_account(db, user)
+    _audit(db, "twitch_soft_account_deleted", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"user_id={user_id} reason=admin")
+    db.commit()
+    return {"deleted": True, "user_id": user_id}
 
 
 @router.post("/users/{user_id}/toggle-tester")
@@ -117,7 +155,7 @@ def grant_tokens(body: GrantTokensBody, db=Depends(get_db), admin: dict = Depend
         raise HTTPException(status_code=422, detail="Amount must be at least 1")
     target.tokens = (target.tokens or 0) + body.amount
     _audit(db, "admin_grant_tokens", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"target={target.username} amount={body.amount}")
+           detail=f"target={target.display_name} amount={body.amount}")
     db.commit()
     return {"username": target.username, "tokens": target.tokens}
 

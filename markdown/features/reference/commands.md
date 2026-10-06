@@ -113,7 +113,9 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `GITHUB_REPOSITORY` | *(required for prod compose)* | `owner/repo` used by `docker-compose.yml` to resolve the GHCR image (`ghcr.io/${GITHUB_REPOSITORY}:...`) |
 | `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles (off-season) |
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
-| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Seconds between ingest cycles when a monitored league has a match currently in progress (per `GET /live`) — takes priority over `INGEST_LIVE_POLL_INTERVAL` |
+| `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Seconds between ingest cycles when a monitored league has a match currently in progress (per `live_matches`, written by the live thread) — takes priority over `INGEST_LIVE_POLL_INTERVAL` |
+| `STEAM_API_KEY` | *(empty)* | Steam Web API key for live-game detection (`GetLiveLeagueGames`). Unset: no live checks run and a warning is logged at start-up. See `reference/mvp-selection-delays.md` |
+| `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks (Steam), in their own thread apart from ingest |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week auto-lock maintenance checks (weeks themselves are admin-created, see `reference/season-lifecycle.md`). The same loop deletes expired login sessions on its first pass after startup and then once a day |
 | `SUBSTITUTION_DELAY_HOURS` | `24` | Hours after a locked week's `end_time` before its automatic bench substitutions run (see `reference/automatic-bench-substitution.md`) |
 | `SCHEDULE_FIXTURES_URL` | *(empty)* | Structured JSON fixtures feed URL for the match schedule. Preferred over `SCHEDULE_SHEET_URL` when both are set; unset falls back to the CSV sheet. See `reference/schedule-fixtures-api.md` |
@@ -148,14 +150,17 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
-| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel (e.g. `1.1.6`); required for MVP chat announcements, which are skipped with one warning when empty |
+| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel (e.g. `1.2.0`); required for MVP chat announcements, which are skipped with one warning when empty |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
+| `TWITCH_DROPS_ENABLED` | `true` | `false` turns MVP token drops off (MVP and bonus still set); see `twitch-extension-policy-compliance.md` |
+| `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Idle days before a Twitch viewer soft account is purged by the daily job |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join and draws per IP; draws, roster changes and Leave per viewer |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs allowed to set MVPs; empty allows any channel |
-| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` (link-code guessing) |
+| `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `GET /auth/twitch/callback` (#160; replaced `RATE_LIMIT_TWITCH_LINK` with the retired `POST /twitch/link`) |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |
 | `BACKGROUND_TASKS_ENABLED` | `true` | `false` skips starting the four background threads (ingest poll, week maintenance, profile enrichment, DB backup). The backend test conftest sets it `false` — **do not set `false` in production** |
 | `ENV` | *(unset)* | Set `production` in production. Startup then fails if `DEBUG=true` or `TWITCH_LOCAL_DEV=true`, or if `SECRET_KEY` is shorter than 32 characters; the Twitch JWT bypass also refuses to run (500) |
-| `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except `/twitch/link-code`. Set `false` if the proxy rewrites `Host` |
+| `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except the session-cookie `/twitch/merge/confirm` and `/twitch/disconnect`. Set `false` if the proxy rewrites `Host` |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<client-id>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
 | `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |

@@ -73,15 +73,58 @@ function updateTokenDisplay(balance) {
   }
 }
 
+// Last markup renderIfChanged wrote into each element (issue #159).
+const _lastHtml = new WeakMap();
+
+/**
+ * Set el.innerHTML only when html differs from what this function last set there,
+ * so a refresh with unchanged data leaves the DOM (images, focus, scroll) alone.
+ * Writes on first sight of an element and when it was emptied elsewhere. Returns
+ * whether it wrote. Rule: code that changes a managed element's children directly
+ * (other than cosmetic classes that may persist) calls forgetRendered(el) so the
+ * next render writes again.
+ */
+function renderIfChanged(el, html) {
+  if (!el) return false;
+  if (_lastHtml.get(el) === html && el.innerHTML !== "") return false;
+  el.innerHTML = html;
+  _lastHtml.set(el, html);
+  return true;
+}
+
+/** The next renderIfChanged(el, ...) writes, whatever it was given before. */
+function forgetRendered(el) {
+  if (el) _lastHtml.delete(el);
+}
+
+/** renderIfChanged for a <select>: keeps the selected value when that option still exists. */
+function renderSelectIfChanged(sel, html) {
+  if (!sel) return false;
+  const prev = sel.value;
+  const wrote = renderIfChanged(sel, html);
+  if (wrote && prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  return wrote;
+}
+
+// Window scroll position per main tab during this page visit (issue #159).
+const _tabScroll = {};
+
 function switchTab(name) {
   if (activeMustChangePassword && name !== "profile") {
     name = "profile";
   }
-  document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
-  document.getElementById(`tab-${name}`).classList.add("active");
-  const btn = document.getElementById(`tab-btn-${name}`);
-  if (btn) btn.classList.add("active");
+  const current = document.querySelector(".tab-content.active");
+  const sameTab = !!current && current.id === `tab-${name}`;
+  if (!sameTab) {
+    if (current) _tabScroll[current.id.replace(/^tab-/, "")] = window.scrollY;
+    document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
+    document.getElementById(`tab-${name}`).classList.add("active");
+    const btn = document.getElementById(`tab-btn-${name}`);
+    if (btn) btn.classList.add("active");
+    const y = _tabScroll[name] || 0;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+  }
 
   if (name === "profile")  { if (!activeUserId) return; loadProfile(); }
   if (name === "team")     {

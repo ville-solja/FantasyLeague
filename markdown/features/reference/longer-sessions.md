@@ -23,7 +23,7 @@ Server-side session management: players stay logged in while active (14 days idl
 - **Per-user rate limits.** The cookie no longer carries a user id, so `get_current_user` puts it on `request.state.session_user_id`, and `rate_limit.key_by_user_or_ip` reads it from there.
 - **Cleanup.** The week maintenance loop (`_week_maintenance_loop` in `backend/main.py`) calls `sessions.cleanup_expired(db)` on its first pass after the app starts and then once a day (the first pass at least 24 hours after the previous cleanup), deleting rows past their role's limits or whose user is gone.
 - **Existing cookies.** Cookies from before this release carry no `sid` and are treated as logged out.
-- **Twitch.** Extension requests use Twitch JWTs and are unaffected. `POST /twitch/link-code` uses the session cookie and gets the same checks.
+- **Twitch.** Extension requests use Twitch JWTs and are unaffected. The website's Twitch connection routes (#160, `twitch_oauth.py`; `POST /twitch/link-code` before them) use the session cookie and get the same checks; Connect, merge and Disconnect also need a recent `POST /reauth` (`require_recent_player_reauth`).
 - **`users.session_version`** (#119) stays in the schema but is no longer read or written.
 
 ### Frontend

@@ -6,7 +6,7 @@ import warnings
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,14 +17,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
+import twitch_oauth
 import card_points
 import database
 import sessions
+import soft_accounts
 from database import SessionLocal, engine, Base, DATABASE_URL, get_db, backup_sqlite_db, cleanup_old_backups, backup_retention_days
 from rate_limit import limiter
 from models import League, LiveMatch, PlayerMatchStats, Week, Weight
 from migrate import run_migrations
-from ingest import ingest_league, get_live_matches, store_live_matches, retry_unparsed_matches, INGEST_LOCK
+from ingest import ingest_league, store_live_matches, retry_unparsed_matches, INGEST_LOCK
+import steam_live
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
@@ -36,6 +39,7 @@ from routers import profile as profile_router
 from routers import leaderboard as leaderboard_router
 from routers import cards as cards_router
 from routers import admin_users as admin_users_router
+from routers import admin_twitch as admin_twitch_router
 from routers import admin_ingest as admin_ingest_router
 from routers import admin_weeks as admin_weeks_router
 from routers import admin_notifications as admin_notifications_router
@@ -49,6 +53,13 @@ from routers import admin_demo as admin_demo_router
 from routers import weekly_summary as weekly_summary_router
 
 logger = logging.getLogger(__name__)
+# API keys travel in query strings (STEAM_API_KEY, OPENDOTA_API_KEY), and urllib3's
+# DEBUG line logs the full request URL. Keep it at INFO even when DEBUG=true sets the
+# root logger to DEBUG; a logger's own level wins over the root's.
+logging.getLogger("urllib3").setLevel(logging.INFO)
+# Issue #160: the Twitch sign-in callback URL carries a one-time code and state; keep
+# them out of uvicorn's access log.
+logging.getLogger("uvicorn.access").addFilter(twitch_oauth.RedactSignInQuery())
 
 _stop_event = threading.Event()
 
@@ -62,6 +73,9 @@ _WEEK_CHECK_INTERVAL       = int(os.getenv("WEEK_CHECK_INTERVAL",        "300"))
 _INGEST_POLL_INTERVAL      = int(os.getenv("INGEST_POLL_INTERVAL",       "900"))
 _INGEST_LIVE_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_POLL_INTERVAL",  "120"))
 _INGEST_LIVE_MATCH_POLL_INTERVAL = int(os.getenv("INGEST_LIVE_MATCH_POLL_INTERVAL", "30"))
+_LIVE_POLL_INTERVAL        = int(os.getenv("LIVE_POLL_INTERVAL",         "60"))
+# A stored live match not ended and seen within this long counts as live for the ingest loop.
+_LIVE_MATCH_FRESH_SECONDS  = 15 * 60
 _INGEST_POST_MATCH_FAST_POLL_MINUTES = int(os.getenv("INGEST_POST_MATCH_FAST_POLL_MINUTES", "20"))
 _INGEST_PARSE_RETRY_HOURS  = int(os.getenv("INGEST_PARSE_RETRY_HOURS",   "48"))
 _ENRICHMENT_INTERVAL       = int(os.getenv("ENRICHMENT_CHECK_INTERVAL",  "300"))
@@ -70,6 +84,14 @@ _DB_BACKUP_INTERVAL_HOURS  = int(os.getenv("DB_BACKUP_INTERVAL_HOURS",   "24"))
 _DB_BACKUP_RETENTION_DAYS  = backup_retention_days()
 _SESSION_CLEANUP_INTERVAL  = 86400
 _last_session_cleanup      = 0.0
+# Issue #157: idle Twitch soft accounts are purged once a day by the week maintenance loop.
+_SOFT_ACCOUNT_PURGE_INTERVAL = 86400
+_SOFT_ACCOUNT_RETENTION_DAYS = soft_accounts.retention_days()
+_last_soft_account_purge     = 0.0
+# Issue #160: expired Twitch sign-in attempts and merge undo-log rows older than 30
+# days are deleted once a day by the same loop.
+_TWITCH_OAUTH_CLEANUP_INTERVAL = 86400
+_last_twitch_oauth_cleanup     = 0.0
 
 
 def _week_maintenance_loop():
@@ -80,9 +102,11 @@ def _week_maintenance_loop():
 
     Weeks themselves are created manually by admins (Week Management tab) —
     this loop no longer auto-generates them. Once a day it also deletes expired
-    login sessions (issue #117).
+    login sessions (issue #117), Twitch soft accounts idle for
+    TWITCH_SOFT_ACCOUNT_RETENTION_DAYS (issue #157), and expired Twitch sign-in
+    attempts and merge undo-log rows older than 30 days (issue #160).
     """
-    global _last_session_cleanup
+    global _last_session_cleanup, _last_soft_account_purge, _last_twitch_oauth_cleanup
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
@@ -95,6 +119,13 @@ def _week_maintenance_loop():
                     _last_session_cleanup = time.time()
                     if deleted:
                         logger.info("Deleted %d expired login session(s)", deleted)
+                if time.time() - _last_soft_account_purge >= _SOFT_ACCOUNT_PURGE_INTERVAL:
+                    soft_accounts.purge_inactive_soft_accounts(
+                        db, int(time.time()), _SOFT_ACCOUNT_RETENTION_DAYS)
+                    _last_soft_account_purge = time.time()
+                if time.time() - _last_twitch_oauth_cleanup >= _TWITCH_OAUTH_CLEANUP_INTERVAL:
+                    twitch_oauth.cleanup(db, int(time.time()))
+                    _last_twitch_oauth_cleanup = time.time()
             finally:
                 db.close()
         except Exception:
@@ -197,19 +228,35 @@ def _has_recently_ended_live_match(league_ids: list[int]) -> bool:
         db.close()
 
 
+def _live_league_ids(league_ids: list[int]) -> set[int]:
+    """Leagues with a stored live match that has not ended and was seen in the last
+    15 minutes (written by the live thread)."""
+    if not league_ids:
+        return set()
+    cutoff = int(time.time()) - _LIVE_MATCH_FRESH_SECONDS
+    db = SessionLocal()
+    try:
+        rows = db.query(LiveMatch.league_id).filter(
+            LiveMatch.league_id.in_(league_ids),
+            LiveMatch.ended_at.is_(None),
+            LiveMatch.last_seen_at >= cutoff,
+        ).distinct().all()
+        return {r[0] for r in rows}
+    finally:
+        db.close()
+
+
 def _ingest_poll_loop():
-    """Background thread: periodically ingest new matches then sync to toornament."""
+    """Background thread: periodically ingest new matches then sync to toornament.
+    Makes no live calls: which leagues are live comes from live_matches (_live_poll_loop)."""
     while not _stop_event.is_set():
         try:
             monitored = _get_monitored_league_ids()
-            # Skipped when nothing is monitored so a fresh/test DB never calls OpenDota.
-            live_entries = get_live_matches() if monitored else []
-            live = {e.get("league_id") for e in live_entries if e.get("league_id")} & set(monitored)
-            if monitored:
-                try:
-                    store_live_matches(live_entries, monitored)
-                except Exception:
-                    logger.exception("Ingest poll: storing live matches failed")
+            try:
+                live = _live_league_ids(monitored)
+            except Exception:
+                logger.exception("Ingest poll: reading live matches failed")
+                live = set()
             if live:
                 logger.info("Ingest poll: monitored league(s) with a live match: %s", sorted(live))
             else:
@@ -229,6 +276,30 @@ def _ingest_poll_loop():
             logger.exception("Unexpected error in ingest poll loop")
             interval = _INGEST_POLL_INTERVAL
         _stop_event.wait(timeout=interval)
+
+
+def _live_poll_once():
+    """One live check: Steam's live games of the monitored leagues into live_matches.
+    A failed request keeps the stored rows as they are (none is marked ended)."""
+    monitored = _get_monitored_league_ids()
+    if not monitored or not steam_live.STEAM_API_KEY:
+        return
+    games = steam_live.get_live_league_games(monitored)
+    if games is None:
+        return
+    store_live_matches(games, monitored)
+    steam_live.live_checked_at = int(time.time())
+
+
+def _live_poll_loop():
+    """Background thread: check for live games every LIVE_POLL_INTERVAL seconds, apart
+    from the ingest loop so ingest, enrichment and their backoffs never delay it."""
+    while not _stop_event.is_set():
+        try:
+            _live_poll_once()
+        except Exception:
+            logger.exception("Live poll failed")
+        _stop_event.wait(timeout=_LIVE_POLL_INTERVAL)
 
 
 def _backup_loop():
@@ -254,9 +325,16 @@ def _backup_loop():
 def _start_background_threads():
     if _DEMO_MODE:
         logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
+        logger.info("Live poll thread skipped (DEMO_MODE=true)")
     else:
         threading.Thread(target=_ingest_poll_loop, daemon=True).start()
         logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
+        if steam_live.STEAM_API_KEY:
+            threading.Thread(target=_live_poll_loop, daemon=True).start()
+            logger.info("Live poll thread started (interval=%ds)", _LIVE_POLL_INTERVAL)
+        else:
+            logger.warning("STEAM_API_KEY is not set: live-game detection is off, so matches "
+                           "reach the Twitch MVP picker only after ingest")
     threading.Thread(target=_week_maintenance_loop, daemon=True).start()
     logger.info("Week maintenance thread started (interval=%ds)", _WEEK_CHECK_INTERVAL)
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
@@ -382,6 +460,10 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=_secret_key,
     session_cookie=SESSION_COOKIE_NAME,
+    # Must stay "lax": the Twitch sign-in callback (GET /auth/twitch/callback, issue
+    # #160) is a cross-site top-level GET from id.twitch.tv and needs the session
+    # cookie to know which player started the flow. "strict" would drop the cookie
+    # there and every callback would fail with "no session".
     same_site="lax",
     https_only=_https_only,
     path="/",
@@ -417,8 +499,8 @@ def _url_host(url: str, scheme_hint: str | None = None) -> str | None:
 
 
 # /twitch/* routes use a Twitch JWT, except these, which use the session cookie
-# (called from the main site's Profile tab) and so get the Origin check too.
-_COOKIE_AUTH_TWITCH_PATHS = {"/twitch/link-code"}
+# (called from the main site's Profile tab, issue #160) and so get the Origin check too.
+_COOKIE_AUTH_TWITCH_PATHS = {"/twitch/merge/confirm", "/twitch/disconnect"}
 
 
 class OriginCheckMiddleware(BaseHTTPMiddleware):
@@ -503,12 +585,14 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(twitch_router)
+app.include_router(twitch_oauth.router)
 app.include_router(players_router.router)
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(leaderboard_router.router)
 app.include_router(cards_router.router)
 app.include_router(admin_users_router.router)
+app.include_router(admin_twitch_router.router)
 app.include_router(admin_ingest_router.router)
 app.include_router(admin_weeks_router.router)
 app.include_router(admin_notifications_router.router)
@@ -520,6 +604,15 @@ app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
 app.include_router(weekly_summary_router.router)
+
+
+@app.api_route("/twitch/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+               include_in_schema=False)
+def _twitch_unknown_route(rest: str):
+    """Unknown /twitch/* paths, such as the retired POST /twitch/link-code, POST
+    /twitch/link and GET /twitch/status (issue #160), answer 404 rather than the
+    static frontend mount's 405 for non-GET methods."""
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 @app.get("/config")

@@ -25,7 +25,7 @@ The background maintenance loop still auto-locks weeks whose start time has pass
 
 ### `POST /admin/season/end`
 Body: `{"season_label": "Season 15"}`. Snapshots the current season leaderboard
-(username, points, rank; testers excluded) into `season_archive`, computed via the shared
+(username, points, rank; testers and Twitch viewer soft accounts excluded, issue #157) into `season_archive`, computed via the shared
 `compute_season_standings()` helper also used by `GET /leaderboard/season`. 409 if the label
 is already archived. Logged as `admin_season_archived`. The stored `points` are the standings' one-decimal display values (`scoring.display_points`, issue #149).
 

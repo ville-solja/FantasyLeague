@@ -164,6 +164,7 @@ class _Env:
 def session_env():
     import rate_limit
     import twitch
+    import twitch_oauth
     from database import Base, get_db
     from deps import get_current_user
     from routers import admin_users as admin_users_router
@@ -186,7 +187,7 @@ def session_env():
         finally:
             s.close()
 
-    modules = (auth_router, profile_router, admin_users_router, cards_router, twitch)
+    modules = (auth_router, profile_router, admin_users_router, cards_router, twitch, twitch_oauth)
     # Disable the limiter each router was decorated with too, in case another
     # test reloaded rate_limit after these routers were imported.
     limiters = {id(rate_limit.limiter): rate_limit.limiter}
@@ -580,21 +581,21 @@ def test_get_current_user_logged_out_request_raises_401_without_db():
     assert exc.value.status_code == 401
 
 
-def test_twitch_link_code_with_valid_session_succeeds(session_env):
-    """POST /twitch/link-code with a current session returns a code (get_session_user delegates to get_current_user)."""
+def test_twitch_connection_with_valid_session_succeeds(session_env):
+    """GET /twitch/connection (session cookie, issue #160; replaced the retired POST /twitch/link-code here) with a current session returns the connection state."""
     session_env.add_user()
     client = session_env.login()
-    resp = client.post("/twitch/link-code")
+    resp = client.get("/twitch/connection")
     assert resp.status_code == 200, resp.text
-    assert len(resp.json()["code"]) == 6
+    assert resp.json()["connected"] is False
 
 
-def test_twitch_link_code_with_revoked_session_returns_401(session_env):
-    """Failure path: POST /twitch/link-code with a revoked session (session rows deleted in the DB) returns 401."""
+def test_twitch_connection_with_revoked_session_returns_401(session_env):
+    """Failure path: GET /twitch/connection with a revoked session (session rows deleted in the DB) returns 401."""
     uid = session_env.add_user()
     client = session_env.login()
     session_env.revoke_in_db(uid)
-    assert client.post("/twitch/link-code").status_code == 401
+    assert client.get("/twitch/connection").status_code == 401
 
 
 def test_deck_with_revoked_session_treated_as_logged_out(session_env):

@@ -302,19 +302,21 @@ def test_origin_check_twitch_paths_exempt(main_client):
     assert resp.status_code != 403
 
 
-def test_origin_check_applies_to_cookie_auth_twitch_link_code(main_client):
-    """POST /twitch/link-code uses the session cookie, so a sibling-subdomain Origin is refused."""
+@pytest.mark.parametrize("path", ["/twitch/disconnect", "/twitch/merge/confirm"])
+def test_origin_check_applies_to_cookie_auth_twitch_routes(main_client, path):
+    """The session-cookie /twitch/* routes (issue #160; POST /twitch/link-code is retired) refuse a sibling-subdomain Origin."""
     resp = main_client.post(
-        "/twitch/link-code",
+        path,
         headers={"Host": "kana-cards.com", "Origin": "https://test.kana-cards.com"},
     )
     assert _is_refused(resp)
 
 
-def test_origin_check_allows_same_origin_twitch_link_code(main_client):
-    """A same-origin POST /twitch/link-code is not refused by the Origin check (auth decides next)."""
+@pytest.mark.parametrize("path", ["/twitch/disconnect", "/twitch/merge/confirm"])
+def test_origin_check_allows_same_origin_cookie_auth_twitch_routes(main_client, path):
+    """A same-origin POST to a session-cookie /twitch/* route is not refused by the Origin check (auth decides next)."""
     resp = main_client.post(
-        "/twitch/link-code",
+        path,
         headers={"Host": "kana-cards.com", "Origin": "https://kana-cards.com"},
     )
     assert not _is_refused(resp)
@@ -451,7 +453,7 @@ def test_frontend_register_and_username_forms_show_allowed_chars_hint():
 
 def _preflight(client, origin):
     return client.options(
-        "/twitch/status",
+        "/twitch/me",
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "POST",

@@ -360,10 +360,12 @@ async function confirmReroll() {
 
 async function loadDeck() {
   try {
-    const cfg = await (await fetch(`${API}/config`)).json();
+    const res = await fetch(`${API}/config`);
+    const cfg = await res.json();
+    if (!res.ok) throw new Error(cfg.detail || "Failed to load draw rates");
     const rates = cfg.draw_rates || { common: 60, rare: 25, epic: 10, legendary: 5 };
     for (const r of DRAW_RARITY_KEYS) {
-      document.getElementById(`deck-${r}`).textContent = `${rates[r]}%`;
+      renderIfChanged(document.getElementById(`deck-${r}`), _escHtml(`${rates[r]}%`));
     }
 
     // The token balance is shown once, in #drawCounter. #deckStatus only carries
@@ -403,21 +405,31 @@ async function loadBoosterTeams() {
   const costLabel = document.getElementById("boosterCostLabel");
   const drawBtn = document.getElementById("boosterDrawBtn");
   if (!grid) return;
-  grid.innerHTML = '<span style="color:#555;font-size:0.85rem;">Loading…</span>';
+  // Issue #159: the placeholder shows only on the very first load; later the
+  // previous tiles stay until the new list replaces them.
+  const firstLoad = grid.innerHTML.trim() === "";
+  if (firstLoad) renderIfChanged(grid, '<span style="color:#555;font-size:0.85rem;">Loading…</span>');
   if (drawBtn) drawBtn.disabled = true;
   _selectedBoosterTeamId = null;
+  // A kept tile may still carry the previous selection.
+  grid.querySelectorAll(".booster-team-tile--selected").forEach(t => t.classList.remove("booster-team-tile--selected"));
+  const showError = msg => {
+    if (firstLoad) renderIfChanged(grid, `<span style="color:#c44;">${_escHtml(msg)}</span>`);
+    else setStatus("boosterStatus", msg, false);
+  };
 
   try {
     const res = await fetch(`${API}/deck/booster`);
     const teams = await res.json();
-    if (!res.ok) { grid.innerHTML = `<span style="color:#c44;">${teams.detail ?? "Error"}</span>`; return; }
+    if (!res.ok) { showError(teams.detail ?? "Error"); return; }
+    setStatus("boosterStatus", "");
 
     const cost = _teamBoosterCost ?? 3;
     if (costLabel) costLabel.textContent = `Costs ${cost} ${_tokenName} for 1 card`;
 
-    if (!teams.length) { grid.innerHTML = '<span style="color:#555;">No teams available.</span>'; return; }
+    if (!teams.length) { renderIfChanged(grid, '<span style="color:#555;">No teams available.</span>'); return; }
 
-    grid.innerHTML = teams.map(t => {
+    renderIfChanged(grid, teams.map(t => {
       const exhausted = t.remaining === 0;
       const logo = t.logo_url
         ? `<img src="${_escHtml(t.logo_url)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-bottom:6px;" onerror="this.style.display='none'">`
@@ -430,9 +442,9 @@ async function loadBoosterTeams() {
         <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;line-height:1.2;">${_escHtml(t.team_name ?? "")}</div>
         <div style="font-size:0.7rem;color:${exhausted ? "#444" : "#888"};margin-top:3px;">${exhausted ? "Complete" : `${t.remaining} left`}</div>
       </div>`;
-    }).join("");
+    }).join(""));
   } catch (e) {
-    grid.innerHTML = `<span style="color:#c44;">${e.message}</span>`;
+    showError(e.message);
   }
 }
 

@@ -18,6 +18,7 @@ session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they 
 - `DELETE /admin/leagues/{league_id}/data`
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
+- `DELETE /admin/users/{user_id}` (Twitch viewer soft accounts, issue #157)
 
 The check is the `require_recent_reauth` dependency (`backend/deps.py`), added at route level so
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
@@ -29,8 +30,24 @@ work without re-authentication.
 
 ## User Management
 
-### `GET /users`
-Returns a list of all registered users. Each entry contains `id`, `username`, `tokens`, `is_tester`, `is_admin`, and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
+### `GET /users?account_type=full|twitch|all`
+Returns the user list, filtered by account type (issue #157): `full` (website accounts, the
+default), `twitch` (Twitch viewer soft accounts created by the panel's Join) or `all`. Any other
+value returns 422. Each entry contains `id`, `username`, `account_type`, `tokens`, `card_count`,
+`created_at`, `last_seen_at`, `twitch_linked`, `twitch_identity_shared`, `is_tester`, `is_admin`,
+and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
+`username` is the user's display name: a soft account has no username and shows as
+`Twitch viewer #{id}`. `twitch_linked` and `twitch_identity_shared` are booleans; the Twitch ids
+themselves are never returned. The admin search box filters the loaded list, so soft accounts
+only appear under the **Twitch viewers** filter. See
+`reference/twitch-extension-policy-compliance.md`.
+
+### `DELETE /admin/users/{user_id}`
+Deletes a Twitch viewer soft account and every row it owns (cards, modifiers, stored card
+points, roster entries, per-user state, presence) through `soft_accounts.delete_soft_account`.
+Requires re-authentication. Website accounts cannot be deleted here (409); unknown ids return
+404. Returns `{ deleted: true, user_id }`. Logged as `twitch_soft_account_deleted` with
+`reason=admin`.
 
 ### `POST /users/{user_id}/toggle-tester`
 Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
@@ -170,10 +187,10 @@ one. See `reference/opendota-parse-retry.md` and `reference/unparseable-match-ha
 The fixture list has two possible sources: a structured JSON feed (`SCHEDULE_FIXTURES_URL`, preferred when set) or the legacy Google Sheets CSV (`SCHEDULE_SHEET_URL`, the fallback). Both are parsed into the same shape, so everything downstream is source-agnostic. See [Schedule Fixtures API Source](../reference/schedule-fixtures-api.md).
 
 ### `GET /schedule`
-Returns the current season fixture list from the active source (cached for 1 hour). No authentication required. Used by the frontend to display upcoming and past series. The response includes a top-level `source` field (`"fixtures_json"` | `"sheet_csv"`); JSON-sourced series also carry a `scheduled` boolean.
+Returns the current season fixture list from the active source (cached for 1 hour). No authentication required. Used by the Schedule tab. The response includes a top-level `source` field (`"fixtures_json"` | `"sheet_csv"`); JSON-sourced series also carry a `scheduled` boolean. Two fields are added on every request and never cached: `live` (team pairs with a game in progress, from `live_matches`) and `fantasy_weeks` (the admin weeks, ordered by start time). See [Schedule Visuals](../reference/schedule-visuals.md).
 
 ### `POST /schedule/refresh`
-Clears the 1-hour schedule cache, forcing the next `GET /schedule` request to re-fetch from the active source.
+Clears the 1-hour schedule cache, forcing the next `GET /schedule` request to re-fetch from the active source. Returns the same shape as `GET /schedule`, including `live` and `fantasy_weeks`.
 
 ### `GET /schedule/debug`
 Returns detailed schedule parsing information for troubleshooting. Reports the active `source`. For the CSV source: team-name mapping and row parsing details. For the JSON feed: HTTP `status_code`/`content_type`, the feed's `season`/`count`, `weeks_parsed`, and `fixtures_dropped` (fixtures with a missing/unknown `week` or `division`), or a clear `error` string on a bad response.
@@ -217,7 +234,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_toggle_admin` | Admin toggled admin flag on a user |
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
-| `admin_reauth` | User confirmed their password via `POST /reauth` (`detail` is `ok` or `failed: …`) |
+| `admin_reauth` | An admin confirmed their password via `POST /reauth` (`detail` is `ok` or `failed: …`) |
+| `player_reauth` | A non-admin user confirmed their password via `POST /reauth`, e.g. before connecting, merging or disconnecting Twitch (issue #160; `detail` is `ok` or `failed: …`) |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |
@@ -241,6 +259,14 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`) |
 | `admin_token_grant_event_created` | Admin created a token grant event |
 | `admin_token_grant_event_deleted` | Admin deleted a token grant event |
+| `twitch_soft_account_created` | A viewer pressed Join in the Twitch panel and a soft account was created (`detail` has `user_id=`; the opaque Twitch id is never logged) |
+| `twitch_soft_account_deleted` | A soft account was deleted (`detail` has `user_id=` and `reason=leave` from the panel's Leave, `reason=admin` from `DELETE /admin/users/{user_id}`, or `reason=retention` from the daily purge) |
+| `twitch_account_unlinked` | A website account — connected with Twitch sign-in or code-linked before #160 — that pressed Leave in the panel; only `twitch_user_id` was cleared |
+| `twitch_connected` | A player connected Twitch on Profile with Twitch sign-in (issue #160; `detail` has `user_id=` and, when a Twitch collection is waiting, `pending_merge_user_id=`; no Twitch ids) |
+| `twitch_disconnected` | A player disconnected Twitch on Profile (`detail` has `user_id=`) |
+| `twitch_account_merged` | A soft account's cards and tokens were merged into a website account (`detail` has `full_user_id=`, `soft_user_id=`, `cards=`, `tokens=`, `roster_entries=`, `log_id=`) |
+| `twitch_merge_reversed` | An admin reversed a merge (`detail` has `log_id=`, `full_user_id=`, the new `soft_user_id=`, `cards=`, `tokens=`, `token_shortfall=`, `roster_entries=`) |
+| `twitch_panel_recognised` | The Twitch panel recognised a connected account by the JWT's `user_id` and attached the viewer's opaque id to it (`detail` has `user_id=`) |
 | `admin_notification_created` | Admin created a broadcast notification |
 | `admin_notification_deleted` | Admin deleted a notification |
 | `admin_tag_definition_created` | Admin created a tag definition |

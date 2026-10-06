@@ -1,4 +1,4 @@
-<!-- version: 8 -->
+<!-- version: 9 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -22,7 +22,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 
 **Backend structure:**
 - `backend/main.py` — middleware, lifespan setup, and router mounts
-- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py`, `backend/routers/weekly_summary.py`, `backend/routers/admin_backups.py` — all endpoint implementations
+- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py`, `backend/routers/weekly_summary.py`, `backend/routers/admin_backups.py`, `backend/routers/admin_twitch.py` — all endpoint implementations
 - `backend/deps.py` — shared dependencies: session validation (`get_current_user`), `require_admin`, audit helper
 - `backend/rate_limit.py` — shared in-memory slowapi limiter (single-process constraint)
 - `backend/models.py` — SQLAlchemy models and relationships
@@ -37,6 +37,10 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/weeks.py` — week locking (admin-created; no auto-generation)
 - `backend/clock.py` — demo-clock override read by week-locking logic under `DEMO_MODE`
 - `backend/twitch.py` — Twitch EBS router
+- `backend/twitch_oauth.py` — Twitch sign-in connection routes (OIDC), merge and disconnect
+- `backend/soft_accounts.py` — Twitch soft accounts: creation, deletion, merge, reverse, retention purge
+- `backend/steam_live.py` — Steam live-game client used by the separate live-poll thread
+- `backend/sessions.py` — server-side session rows and re-auth recency
 - `backend/database.py` — database setup and session factory
 - `backend/seed.py` — seeding and DEFAULT_WEIGHTS
 - `backend/email_utils.py` — email sending helpers

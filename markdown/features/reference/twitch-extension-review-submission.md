@@ -7,24 +7,26 @@ needs to load for a reviewer, plus the fixes made to satisfy
 [Extension Guidelines & Policies](https://dev.twitch.tv/docs/extensions/guidelines-and-policies/)
 in the process. See [Review history](#review-history) for past rejections.
 
-**Package to submit:** `twitch-extension-1.1.7.zip` (or later), built with
-`bash twitch-extension/package.sh 1.1.7`. Version `1.1.5` was the first with the XSS fix below;
+**Package to submit:** `twitch-extension-1.2.0.zip` (or later), built with
+`bash twitch-extension/package.sh 1.2.0`. Version `1.1.5` was the first with the XSS fix below;
 `1.1.6` adds the chat disclosure copy required by the 2026-09 review; `1.1.7` adds the Live /
-Stats pending labels for early MVP selection (issue #139). Do not resubmit `1.1.6` or
+Stats pending labels for early MVP selection (issue #139); `1.2.0` makes the panel a complete
+game on Twitch with no website login (policy 4.5, issue #157). Do not resubmit `1.1.7` or
 earlier — Twitch requires a new version for every resubmission.
 
 ---
 
 ## Submission checklist (work through in order)
 
-- [ ] **Version** — create version `1.1.7` in the dev console and upload `twitch-extension-1.1.7.zip`
+- [ ] **Version** — create version `1.2.0` in the dev console and upload `twitch-extension-1.2.0.zip`
 - [ ] **Listing copy** — name, summary, and description (below)
 - [ ] **Category** — below
 - [ ] **Icon & screenshots** — below (verify existing assets meet the size specs)
 - [ ] **Legal** — Privacy Policy and Terms of Service URLs (already published, below)
 - [ ] **Support contact** — an email or URL viewers/reviewers can reach you at
-- [ ] **Capabilities declared** — Extension Configuration Service, Chat. Chat use is disclosed in
-      the **Twitch Chat** paragraph of the listing description (below) — the reviewer checks it
+- [ ] **Capabilities declared** — Extension Configuration Service, Chat, and **Request Identity
+      Link** (the panel's Join asks for Twitch's identity share). Chat use is disclosed in the
+      **Twitch Chat** paragraph of the listing description (below) — the reviewer checks it
 - [ ] **Notes for reviewer** — paste the EBS URL disclosure block verbatim (below)
 - [ ] **Testing instructions** — paste the numbered steps-to-reproduce below (Twitch's form asks
       for this explicitly, separate from "Notes for reviewer")
@@ -36,13 +38,13 @@ earlier — Twitch requires a new version for every resubmission.
 - [ ] **URL Fetching allowlist** — Version → Capabilities → Allowlist for URL Fetching Domains:
       `https://kana-cards.com`. No other entry is needed. Without it, Twitch's Content Security
       Policy blocks every EBS call
-- [ ] **Backend setting** — set `TWITCH_EXTENSION_VERSION=1.1.7` on the EBS host once this
+- [ ] **Backend setting** — set `TWITCH_EXTENSION_VERSION=1.2.0` on the EBS host once this
       version is installed on the channel, and confirm **Chat** is enabled for it. Without it the
       MVP chat announcement is skipped
 - [ ] **Hosted Test verification** — move the version to **Hosted Test**, then load the panel,
       config and live config views on the review channel with browser dev tools open. Confirm no
-      404, no CSP `connect-src` violation, and that the panel reaches the unlinked or linked
-      state (never "not configured")
+      404, no CSP `connect-src` violation, and that the panel opens on the Live tab (never a
+      login prompt and never "not configured")
 - [ ] Submit
 
 ---
@@ -52,31 +54,36 @@ earlier — Twitch requires a new version for every resubmission.
 **Name:** Kanaliiga Kana-Cards
 
 **Summary** (one line):
-> Link your Kanaliiga Fantasy account to receive live token drops when the broadcaster names a
-> match MVP.
+> Live Kanaliiga fantasy results on stream, and a card game you play right in the panel with your
+> Twitch login.
 
 **Description** (full):
-> This extension connects your stream to the Kanaliiga Fantasy League (kana-cards.com).
+> Kana Cards brings the Kanaliiga Dota 2 fantasy league into the stream.
 >
-> **For viewers:** the panel below the stream lets you link your Kanaliiga Fantasy account. Once
-> linked, you're eligible for token drops whenever the broadcaster selects a match MVP — no
-> purchase or payment involved.
+> **For every viewer:** the panel shows the latest match MVPs, the top fantasy performers of the
+> latest games and the next scheduled match. No account is needed.
+>
+> **Play on Twitch:** viewers logged in to Twitch press **Join Kana Cards** to start. Join uses
+> only the Twitch login: there is no sign-up, email or password. Players draw player cards, build
+> a collection and set a weekly roster that scores from real league matches, all inside the
+> panel. Tokens for draws come from a weekly grant and from MVP drops — no purchase or payment
+> involved. Players can leave at any time in the panel's Settings, which deletes their game data.
+> Kana Cards never asks for your Twitch or website password inside Twitch.
 >
 > **For broadcasters:** MVP selection and token drops live in Stream Manager → Quick Actions.
 > Open Stream Manager, find the Kana Cards tile in the Quick Actions bar, and use it during or
-> after a match to name the MVP and trigger a chat announcement plus a token drop to linked
+> after a match to name the MVP and trigger a chat announcement plus a token drop to joined
 > viewers currently watching.
 >
 > **Twitch Chat:** when the broadcaster confirms a match MVP, the extension posts one message to
-> the channel's chat, for example: "Match MVP: PlayerName! Token drop winners (+1 Kana Tokens): user1,
-> user2". The names listed are the winners' Kanaliiga Fantasy usernames. If no linked viewers are
-> watching, the message says so instead. Changing the MVP for a match that already had a drop
-> does not drop tokens again. The extension posts nothing else, and it never reads, stores or
-> moderates chat messages.
+> the channel's chat, for example: "Match MVP: PlayerName! 3 viewers received a token." It names
+> the MVP and says how many viewers received a token; no viewer names are posted. If no joined
+> viewers are watching, the message says no tokens were dropped. Changing the MVP for a match
+> that already had a drop does not drop tokens again. The extension posts nothing else, and it
+> never reads, stores or moderates chat messages.
 
 This wording is deliberately consistent with `twitch-extension/config.html`'s broadcaster setup
-copy and the chat note in `twitch-extension/panel.html`'s unlinked view — keep all three in sync
-if any changes.
+copy and the panel's Settings privacy note — keep them in sync if any changes.
 
 ## Category
 
@@ -100,8 +107,8 @@ periodically adjusts these):
 | Legal/panel preview | as prompted in the console |
 
 Screenshots must **accurately represent current functionality** per Twitch's guidelines — capture
-both the viewer panel (linked and unlinked states) and the broadcaster's live_config MVP-selection
-flow, not just the marketing/config page. `assets/logo_kanaliiga_primary.png` is available in this
+the viewer panel (Live tab, not joined; Cards tab with a card reveal; Roster tab) and the
+broadcaster's live_config MVP-selection flow, not just the marketing/config page. `assets/logo_kanaliiga_primary.png` is available in this
 repo as a possible source image if a fresh icon render is needed, though the extension's icon is
 configured once in the dev console independent of code version and does not need to change for
 this submission unless it's currently missing or undersized.
@@ -109,7 +116,7 @@ this submission unless it's currently missing or undersized.
 ## Legal
 
 Twitch's Extension Settings "Legal" tab requires a Privacy Policy URL (and typically Terms of
-Service) since this Extension links a Twitch identity to a Service account. Both are published
+Service) since this Extension stores a Twitch id with game progress (soft accounts, issue #157). Both are published
 and reachable directly, no login required:
 
 - Privacy Policy: `https://kana-cards.com/privacy.html`
@@ -145,22 +152,28 @@ the zip's source. **Paste this into the submission's "Notes for reviewer" field:
 
 | Path | Method | Called from | Purpose |
 |---|---|---|---|
-| `/twitch/status` | GET | `panel.js` | Whether the viewer's Twitch session is linked to a Fantasy account; token balance |
-| `/twitch/heartbeat` | POST | `extension.js` (`startHeartbeat`) | Keeps a linked viewer in the token-drop eligibility pool (~every 55s while the panel is open) |
-| `/twitch/link` | POST | `panel.js` | Consumes the one-time linking code the viewer generated on kana-cards.com |
-| `/twitch/matches/current` | GET | `live_config.js` | Broadcaster-only: recent series/matches with player stats, for MVP selection |
+| `/twitch/panel` | GET | `panel.js` | Live tab for every viewer: top performers of the latest games, next scheduled match |
+| `/twitch/matches/current` | GET | `panel.js`, `live_config.js` | Recent series with MVPs (Live tab); MVP selection (broadcaster) |
+| `/twitch/me` | GET | `panel.js` | The viewer's own game state: tokens, collection, roster, week points |
+| `/twitch/join` | POST | `panel.js` | Creates the viewer's game account from the Twitch login (no sign-up) |
+| `/twitch/draw` | POST | `panel.js` | Draw one card |
+| `/twitch/teams` | GET | `panel.js` | Team draw picker: teams and players left to collect |
+| `/twitch/draw/booster/{team_id}` | POST | `panel.js` | Team draw |
+| `/twitch/roster/activate/{card_id}`, `/twitch/roster/deactivate/{card_id}`, `/twitch/roster/swap` | POST | `panel.js` | Roster changes |
+| `/twitch/leave` | POST | `panel.js` | Leave: deletes the viewer's game data |
+| `/twitch/heartbeat` | POST | `extension.js` (`startHeartbeat`) | Keeps a joined viewer in the token-drop pool (~every 55s while the panel is open) |
 | `/twitch/mvp` | POST | `live_config.js` | Broadcaster-only: sets a match's MVP, triggers the token drop and chat announcement |
 
-`POST /twitch/link-code` also exists on the backend but is called from the **main kana-cards.com
-website** (session-authenticated), never from the Extension frontend — it generates the code a
-viewer then enters into the panel.
+The panel no longer calls `/twitch/status` or `/twitch/link` (the link-code step was removed in
+1.2.0). Since #160, `POST /twitch/link-code`, `POST /twitch/link` and `GET /twitch/status` are
+removed from the backend (404); Twitch sign-in on the website replaces the code.
 
 ## Chat capability disclosure
 
 The Extension uses Twitch's Extension Chat capability to post one message when a broadcaster
 confirms a match MVP, e.g.:
 
-> `Match MVP: PlayerName! Token drop winners (+1 Kana Tokens): viewer1, viewer2`
+> `Match MVP: PlayerName! 3 viewers received a token.`
 
 No other chat activity is read, stored, or posted. This does not use Twitch Bits — "tokens" here
 are the Service's own internal, non-monetary virtual currency (see Monetization below), unrelated
@@ -176,60 +189,55 @@ have no monetary value.
 
 ## Reviewer test setup
 
-The Extension's real functionality (account linking, MVP selection, token drops) only has
-something to show when: (a) a viewer account exists on kana-cards.com to generate a linking
-code, and (b) at least one match with ingested player stats exists for `live_config.js`'s MVP
-flow to list. Per Twitch's requirement that *"all submitted review channels must be live during
-the time of review"* and third-party setup must be ready on that channel:
+The Extension's real functionality only has something to show when at least one match with
+ingested player stats exists. Per Twitch's requirement that *"all submitted review channels must
+be live during the time of review"*:
 
-- Provide the reviewer a working kana-cards.com test account and a fresh linking code (codes
-  expire after 10 minutes — generate one right before the review session, not in advance)
 - Schedule the review during an active match week where `GET /twitch/matches/current` returns at
-  least one series — an idle/off-season review will show empty states throughout and give the
-  reviewer nothing to validate
-- Make sure the review channel is actually live at review time — Twitch requires this
-  independent of anything above
+  least one series — an idle/off-season review will show empty states throughout
+- Make sure the review channel is actually live at review time
 - If `TWITCH_MVP_CHANNEL_IDS` is set on the server, add the review channel's ID to it before
-  the review, or Flow 2 (MVP selection) fails with 403
+  the review, or Flow 3 (MVP selection) fails with 403
+- No website test account is needed: the reviewer joins with their own Twitch login
+
+**Notes for reviewer (paste with the EBS block):**
+
+> The panel works without an account: the Live tab shows MVPs, top performers and the next match
+> to every viewer. Join uses only the Twitch login (plus Twitch's own identity-share dialog, which
+> the viewer may decline). There is no link to, mention of, or login on any external website.
+> Cards, the collection and the weekly roster are all played inside the panel.
 
 ## Steps to reproduce (paste into "Testing Instructions")
 
-Two independent flows to exercise — viewer linking/token-drop eligibility, and broadcaster MVP
-selection. Both use the same review channel; the broadcaster steps trigger the viewer-visible
-result in the first flow, so run flow 1 first and leave that viewer account linked and eligible.
+**Flow 1 — Viewer, logged out of Twitch**
+1. Open the review channel logged out and expand the Kana Cards panel.
+   **Expected:** the Live tab shows the latest MVPs, top performers and the next match, and the
+   join box reads "Log in to Twitch to join".
 
-**Flow 1 — Viewer: link account, become drop-eligible**
-1. As the test viewer account, open the review channel and expand the Kana Cards panel below the
-   video player.
-2. Unlinked state: the panel shows "Link your account," a 6-character code field, and
-   instructions to visit kana-cards.com.
-3. In a separate tab, log into the provided kana-cards.com test account → Profile → Generate
-   Twitch Code. Copy the 6-character code (expires in 10 minutes).
-4. Back in the Twitch panel, enter the code and click **Link**.
-   **Expected:** the panel switches to the linked view, showing the account's username and
-   current token balance.
-5. Leave the panel open (a heartbeat keeps the account eligible for token drops roughly every
-   55 seconds while it's open).
+**Flow 2 — Viewer, logged in: join and play**
+1. Log in to Twitch, open the panel and press **Join Kana Cards**. Twitch shows its
+   identity-share dialog; either answer works.
+   **Expected:** the token count appears in the panel header.
+2. Cards tab → **Draw · 1**. **Expected:** the drawn card is shown and added to the collection.
+3. Cards tab → **Team draw · 3** → pick a team → **Draw from {team} · 3**.
+4. Roster tab → **Change** or **+ Add a card** on a slot → pick a bench card.
+   **Expected:** the roster shows the new card and a confirmation line.
+5. Leave the panel open (a heartbeat keeps the viewer in the token-drop pool).
 
-**Flow 2 — Broadcaster: select MVP, trigger token drop and chat announcement**
+**Flow 3 — Broadcaster: select MVP, trigger token drop and chat announcement**
 1. As the broadcaster, go to the Twitch Creator Dashboard → **Stream Manager**.
-2. In the **Quick Actions** bar at the bottom, click the **Kana Cards** tile (only visible while
-   live or in Stream Manager — it will not appear on the public channel page).
-3. Click **Select match MVP**.
-4. A list of recent series (team1 vs team2), sourced from real ingested match data, appears —
-   select one.
-5. Select the specific match within that series.
-6. A grid of players from both teams appears — select the match MVP, then click
-   **Confirm MVP & Drop Tokens**.
+2. In the **Quick Actions** bar at the bottom, click the **Kana Cards** tile.
+3. Click **Select match MVP**, select a series, a match and the MVP, then **Confirm MVP & Drop
+   Tokens**.
    **Expected, all at once:**
-   - The channel's Twitch chat receives an announcement: `Match MVP: <PlayerName>! ...`
-   - Every currently-eligible linked viewer (anyone who completed Flow 1 and still has the panel
-     open) receives +1 token
-   - The test viewer account from Flow 1 shows the incremented token balance next time its panel
-     refreshes or reopens
-7. Optional: re-open **Select match MVP** and re-confirm the same match with a different player.
-   **Expected:** the MVP name updates, but tokens are **not** dropped a second time for that
-   match (idempotent by design).
+   - The channel's chat receives: `Match MVP: <PlayerName>! N viewers received a token.`
+   - The joined viewer from Flow 2 sees "+1 token from the MVP drop" in the panel
+4. Optional: re-confirm the same match with a different player.
+   **Expected:** the MVP name updates, but tokens are **not** dropped a second time.
+
+**Flow 4 — Leave**
+1. As the viewer, open Settings (gear icon) → **Leave Kana Cards** → press again to confirm.
+   **Expected:** the panel returns to the not-joined Live tab.
 
 ## Security fix made for this submission
 
@@ -247,10 +255,12 @@ every untrusted name before it's concatenated into an HTML string, in `twitch-ex
 - No Flash, no iframes, unminified human-readable JS, package well under the 1MB mobile load cap
 - Twitch Extension Helper script is the first `<script>` in every real front-end HTML file
   (`panel.html`, `config.html`, `live_config.html`)
-- No off-site links in the Extension's own HTML (account-linking instructions are plain text, not
-  a clickable redirect)
-- No elevated identity request (`requestIdShare`) — only the default opaque per-extension user ID
-  plus the account's own one-time linking code are used
+- No off-site links, website mentions or login prompts in the viewer files; `package.sh` refuses to
+  build if `panel.html`, `panel.js`, `extension.js`, `extension.css` or any `video*` component file
+  contains "kana-cards.com", "Log into", "Generate Twitch Code" or "Link your account", or a
+  password field
+- Identity: Join calls `Twitch.ext.actions.requestIdShare()` (Twitch's own consent dialog). A
+  viewer who declines still plays with the opaque id only
 - No user-submitted content is shown to other users anywhere in the Extension, so the
   user-generated-content moderation rules don't apply
 
@@ -272,3 +282,19 @@ Details: [Twitch Review Resubmission](twitch-review-resubmission.md).
 | File | Change |
 |---|---|
 | `live_config.js` | Matches seen live but not yet ingested are listed and marked **Live** or **Stats pending**; their player tiles show the team name without points; the confirmation banner says the fantasy bonus is applied when the stats arrive; the empty-state copy no longer mentions the ingest cycle. All names still go through `_escHtml`. See [Early MVP Selection](early-mvp-selection.md) |
+
+### 2026-10 — Policy 4.5 rejection (version 1.1.7)
+
+Finding: *"Extensions cannot require viewers to login to external sites in order to use them."*
+The panel opened on "Log into kana-cards.com → Profile → Generate Twitch Code", and linking was
+its only viewer value.
+
+| File | Change (version 1.2.0, issue #157) |
+|---|---|
+| `panel.html`, `panel.js` | Live / Cards / Roster tabs and Settings; Join with the Twitch login and identity share; draws, team draw picker, collection, slot-first roster; Leave. Link-code UI and all website text removed; heartbeat only for joined viewers |
+| `extension.css` | Kanaliiga design system (Big Shoulders packaged under `fonts/`) |
+| `config.html`, `live_config.*` | Chat and drop copy reports a winner count, no viewer names |
+| `live_config.html`, `live_config.js` | From #161: a freshness line above the MVP series list ("Live games checked N s ago", or an amber warning when the live check is stale or off) and a **Refresh** button that reloads the list. See [MVP Selection Delays](mvp-selection-delays.md) |
+| `package.sh` | Forbidden-text and password-field self-check over the viewer files; packages the font |
+
+Details: [Twitch Extension Policy Compliance](twitch-extension-policy-compliance.md).

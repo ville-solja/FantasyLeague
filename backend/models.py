@@ -112,6 +112,24 @@ class User(Base):
     temp_password_expires_at = Column(Integer, nullable=True)  # Unix timestamp; NULL when no temp password is active
     twitch_user_id = Column(String, nullable=True, unique=True)  # opaque Twitch user ID from extension JWT
     session_version = Column(Integer, nullable=False, default=0)  # issue #119; no longer read since #117 (see UserSession)
+    # Issue #157: "full" = website account, "twitch" = soft account created by the
+    # extension's Join (no username, email or password; hidden from every ranking).
+    account_type = Column(String, nullable=False, default="full", server_default="full")
+    last_seen_at = Column(Integer, nullable=True)  # Unix timestamp of last panel activity (soft-account retention)
+    twitch_account_id = Column(String, nullable=True, unique=True)  # real Twitch user id, after the extension's identity share
+    # Issue #160: when this website account absorbed a soft account (one merge ever),
+    # and the soft account waiting to be merged (its Twitch id moved here at connect).
+    merged_soft_account_at = Column(Integer, nullable=True)
+    pending_merge_user_id = Column(Integer, nullable=True)
+
+    @property
+    def is_soft(self) -> bool:
+        return self.account_type == "twitch"
+
+    @property
+    def display_name(self) -> str:
+        """Username, or the admin label of a soft account (which has none)."""
+        return self.username or f"Twitch viewer #{self.id}"
 
 
 class League(Base):
@@ -249,6 +267,35 @@ class TwitchLinkCode(Base):
     expires_at = Column(Integer)                         # Unix timestamp
 
 
+class TwitchOAuthState(Base):
+    """One Twitch sign-in attempt started by GET /auth/twitch/start (issue #160).
+    Only sha256(state) is stored; the row is consumed by the first callback that
+    presents it and expires after 10 minutes."""
+    __tablename__ = "twitch_oauth_states"
+
+    state_hash    = Column(String(64), primary_key=True)
+    user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
+    nonce         = Column(String, nullable=False)
+    code_verifier = Column(String, nullable=True)   # PKCE verifier (NULL when PKCE is off)
+    expires_at    = Column(Integer, nullable=False)
+    used_at       = Column(Integer, nullable=True)
+
+
+class TwitchMergeLog(Base):
+    """Undo log of one soft-account merge (issue #160), kept 30 days so an admin can
+    reverse a bad merge. JSON columns are stored as text."""
+    __tablename__ = "twitch_merge_log"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    full_user_id   = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    merged_at      = Column(Integer, nullable=False)
+    soft_snapshot  = Column(Text, nullable=False)   # twitch_user_id, twitch_account_id, created_at, last_seen_at, tokens
+    card_ids       = Column(Text, nullable=False)   # JSON list of the moved card ids
+    tokens_moved   = Column(Integer, nullable=False, default=0)
+    roster_entries = Column(Text, nullable=False)   # JSON list of the deleted locked-week roster rows
+    reversed_at    = Column(Integer, nullable=True)
+
+
 class PasswordResetToken(Base):
     """Single-use, expiring token for POST /reset-password (issue #123). Created by
     POST /forgot-password, which never touches user.password_hash itself — only a
@@ -335,8 +382,9 @@ class TwitchTokenDrop(Base):
 
 
 class LiveMatch(Base):
-    """A monitored-league game seen in OpenDota's /live, kept until its stats are
-    ingested so the Twitch MVP panel can offer it early (see ingest.store_live_matches)."""
+    """A monitored-league game seen in Steam's live league list (steam_live), kept until
+    its stats are ingested so the Twitch MVP panel can offer it early (see
+    ingest.store_live_matches)."""
     __tablename__ = "live_matches"
 
     match_id        = Column(Integer, primary_key=True)
@@ -349,6 +397,20 @@ class LiveMatch(Base):
     first_seen_at   = Column(Integer)
     last_seen_at    = Column(Integer)
     ended_at        = Column(Integer, nullable=True)  # set when a poll no longer sees it
+
+
+class MatchTiming(Base):
+    """When a match was first seen live, ingested and given an MVP (issue #161), so admins
+    can see where MVP-selection delays come from. Each field is set once, while empty
+    (see ingest.record_timing). No foreign key: a match is seen live before its
+    matches row exists."""
+    __tablename__ = "match_timings"
+
+    match_id           = Column(Integer, primary_key=True)
+    live_first_seen_at = Column(Integer, nullable=True)
+    ingested_at        = Column(Integer, nullable=True)
+    mvp_confirmed_at   = Column(Integer, nullable=True)
+    mvp_provisional    = Column(Boolean, nullable=True)  # MVP confirmed before ingest
 
 
 class MatchBan(Base):

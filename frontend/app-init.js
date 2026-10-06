@@ -94,7 +94,7 @@ function _getVisibleModal() {
 
 function _getFocusableIn(container) {
   return [...container.querySelectorAll(
-    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    'a[href], button:not([disabled]), input:not([disabled]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
   )].filter(el => el.offsetParent !== null);
 }
 
@@ -154,6 +154,7 @@ async function init() {
   await loadMe();
   applyAuthState();
   _handleResetTokenParam();
+  handleTwitchReturn();
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();

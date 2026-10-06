@@ -1,4 +1,4 @@
-<!-- version: 8 -->
+<!-- version: 9 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -42,6 +42,11 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/auth.py` — `hash_password` and `verify_password` helpers
 - `backend/deps.py` — `get_current_user` and `require_admin` dependency definitions
 - `backend/twitch.py` — Twitch EBS router (if it exists)
+- `backend/twitch_oauth.py` — Twitch sign-in connection routes: `/auth/twitch/start`, `/auth/twitch/callback`, `/twitch/connection`, `/twitch/merge/confirm`, `/twitch/disconnect`
+- `backend/routers/admin_twitch.py` — admin Twitch merge list and reverse endpoints
+- `backend/soft_accounts.py` — Twitch soft accounts: creation, deletion, merge and reverse
+- `backend/sessions.py` — server-side sessions and re-auth recency (`reauth_is_recent`)
+- `backend/steam_live.py` — Steam Web API client (`STEAM_API_KEY` handling)
 - `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
 - `backend/requirements.txt`, `backend/requirements-dev.txt` — pinned package versions, for the dependency check below
 - `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
@@ -57,7 +62,9 @@ Classify each endpoint as one of:
 - **Public** — intentionally no auth (login, logout, register, forgot-password, /me with session check, /config, /schedule, /health, /top, /leaderboard, /simulate, /players, /teams, /weeks, /deck)
 - **Auth required** — should have `Depends(get_current_user)` or `Depends(require_admin)`
 - **Admin required** — routes under `/admin/`, `/ingest/`, `/grant-tokens`, `/codes`, `/audit-logs`, `/recalculate`
-- **Twitch JWT required** — `/twitch/*` routes validated by `verify_twitch_jwt`
+- **Twitch JWT required** — `/twitch/*` routes validated by `verify_twitch_jwt`, except:
+  - `/twitch/connection`, `/twitch/merge/confirm`, `/twitch/disconnect` — website session (`get_current_user` / `require_recent_player_reauth`)
+  - `/auth/twitch/start`, `/auth/twitch/callback` — browser redirects with no `Depends()`; they check the session (and, for start, a recent password check) inside the function and redirect on failure
 
 Flag any endpoint that is **not public** but is missing the appropriate `Depends()`.
 

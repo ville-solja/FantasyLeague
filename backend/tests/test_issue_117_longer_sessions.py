@@ -173,6 +173,7 @@ class _Env:
 def session_env():
     import rate_limit
     import twitch
+    import twitch_oauth
     from database import Base, get_db
     from deps import get_current_user
     from routers import admin_backups as admin_backups_router
@@ -198,7 +199,7 @@ def session_env():
         finally:
             s.close()
 
-    modules = (auth_router, profile_router, admin_users_router, cards_router, twitch,
+    modules = (auth_router, profile_router, admin_users_router, cards_router, twitch, twitch_oauth,
                admin_season_router, admin_leagues_router, admin_backups_router)
     limiters = {id(rate_limit.limiter): rate_limit.limiter}
     for m in modules:
@@ -536,16 +537,16 @@ def test_legacy_sv_cookie_without_sid_returns_401(session_env):
     assert client.get("/me").status_code == 401
 
 
-def test_twitch_link_code_with_deleted_session_row_returns_401(session_env):
-    """Failure path: POST /twitch/link-code gets the same checks — after the session row is deleted it returns 401."""
+def test_twitch_connection_with_deleted_session_row_returns_401(session_env):
+    """Failure path: GET /twitch/connection (session cookie, issue #160; replaced the retired POST /twitch/link-code here) gets the same checks — after the session row is deleted it returns 401."""
     uid = session_env.add_user()
     client = session_env.login()
-    assert client.post("/twitch/link-code").status_code == 200
+    assert client.get("/twitch/connection").status_code == 200
     db = session_env.Session()
     db.query(UserSession).filter_by(user_id=uid).delete()
     db.commit()
     db.close()
-    assert client.post("/twitch/link-code").status_code == 401
+    assert client.get("/twitch/connection").status_code == 401
 
 
 def test_deck_with_deleted_session_row_treated_as_logged_out(session_env):
@@ -942,7 +943,10 @@ def test_frontend_reauth_prompt_never_uses_confirm_or_prompt():
     assert m, "reauthModal markup missing"
     assert 'data-close="closeReauthModal"' in html
     assert re.search(r'<input id="reauthPassword" type="password"', m.group(1))
-    assert "submitReauth()" in m.group(1)
+    # Since #158 the prompt is <form id="reauthForm"> and submitReauth() runs from its
+    # submit listener (app-admin.js), not from inline onclick/onkeydown handlers.
+    assert '<form id="reauthForm"' in m.group(1)
+    assert re.search(r'getElementById\("reauthForm"\)\.addEventListener\("submit",[^\n]*submitReauth\(\)', js)
 
 
 def test_frontend_destructive_admin_calls_use_admin_fetch():

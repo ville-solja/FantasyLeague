@@ -3,6 +3,12 @@ let _weeklySummaryActiveWeekId = null;
 // card_id -> roster card of the week on screen, for the thumbnail's card viewer.
 let _weeklySummaryRosterCards = {};
 let _weeklyRecapPromptWeek = null;
+// Issue #159: bumped on every week selection; a response for an older selection is ignored.
+let _weeklySummaryReq = 0;
+// week_id -> week data fetched while the popup is open; cleared on close and on reveal.
+const _weeklySummaryCache = new Map();
+// week_id:label:revealed of the tab buttons on screen; they are rebuilt only when it changes.
+let _weeklySummaryTabsSig = null;
 
 async function checkWeeklySummaryHighlight() {
   try {
@@ -24,6 +30,9 @@ async function openWeeklySummary(weekId) {
 
 function closeWeeklySummary() {
   _stopRecap();
+  _weeklySummaryReq += 1;
+  _weeklySummaryCache.clear();
+  _setWeeklySummaryLoading(false);
   document.getElementById('weeklySummaryModal').classList.add('hidden');
 }
 
@@ -32,8 +41,8 @@ function _weeklySummaryMessage(text, isError) {
 }
 
 function _setWeeklySummaryColumns(rosterHtml, resultsHtml) {
-  document.getElementById('weeklySummaryRoster').innerHTML = rosterHtml;
-  document.getElementById('weeklySummaryContent').innerHTML = resultsHtml;
+  renderIfChanged(document.getElementById('weeklySummaryRoster'), rosterHtml);
+  renderIfChanged(document.getElementById('weeklySummaryContent'), resultsHtml);
   document.getElementById('weeklySummaryRosterTotal').textContent = '';
   document.getElementById('weeklySummaryRosterMeta').textContent = '';
   document.getElementById('weeklySummaryResultsMeta').textContent = '';
@@ -52,6 +61,7 @@ async function loadWeeklySummaryList(weekId) {
       else await selectWeeklySummaryTab(_weeklySummaryWeeks[0].week_id);
     } else {
       document.getElementById('weeklySummaryTabs').innerHTML = '';
+      _weeklySummaryTabsSig = null;
       _setWeeklySummaryColumns('', _weeklySummaryMessage('No weekly reports available yet.'));
       _updateWeeklySummaryRevealFooter();
     }
@@ -60,17 +70,24 @@ async function loadWeeklySummaryList(weekId) {
   }
 }
 
+// Updates the week tab bar in place: the buttons are rebuilt only when the list of
+// weeks (ids, labels, reveal state) changed; otherwise only the active mark moves.
 function renderWeeklySummaryTabs() {
   const bar = document.getElementById('weeklySummaryTabs');
-  bar.innerHTML = '';
-  _weeklySummaryWeeks.forEach(w => {
-    const btn = document.createElement('button');
-    btn.className = 'weekly-summary-tab-btn';
-    btn.textContent = w.label;
-    btn.dataset.weekId = w.week_id;
-    btn.onclick = () => selectWeeklySummaryTab(w.week_id);
-    bar.appendChild(btn);
-  });
+  const sig = _weeklySummaryWeeks.map(w => `${w.week_id}:${w.label}:${w.revealed}`).join('|');
+  if (sig !== _weeklySummaryTabsSig || bar.children.length !== _weeklySummaryWeeks.length) {
+    _weeklySummaryTabsSig = sig;
+    bar.innerHTML = '';
+    _weeklySummaryWeeks.forEach(w => {
+      const btn = document.createElement('button');
+      btn.className = 'weekly-summary-tab-btn';
+      btn.textContent = w.label;
+      btn.dataset.weekId = w.week_id;
+      btn.onclick = () => selectWeeklySummaryTab(w.week_id);
+      bar.appendChild(btn);
+    });
+  }
+  _markActiveWeeklySummaryTab(_weeklySummaryActiveWeekId);
   _updateWeeklySummaryRevealFooter();
 }
 
@@ -80,23 +97,60 @@ function _markActiveWeeklySummaryTab(weekId) {
   });
 }
 
+// Dims both columns (keeping what they show) while a week loads.
+function _setWeeklySummaryLoading(on) {
+  ['weeklySummaryRoster', 'weeklySummaryContent'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('is-loading', on);
+    if (on) el.setAttribute('aria-busy', 'true');
+    else el.removeAttribute('aria-busy');
+  });
+}
+
+function _scrollWeeklySummaryColumnsTop() {
+  document.getElementById('weeklySummaryRoster').scrollTop = 0;
+  document.getElementById('weeklySummaryContent').scrollTop = 0;
+}
+
+// Issue #159: the frame never empties. A cached week renders at once and refreshes
+// quietly; otherwise the previous week stays, dimmed, until the new one arrives,
+// and both columns swap in one update. "Loading…" shows only in empty columns.
 async function selectWeeklySummaryTab(weekId) {
+  const req = ++_weeklySummaryReq;
   _stopRecap();
   const weekChanged = _weeklySummaryActiveWeekId !== weekId;
   _weeklySummaryActiveWeekId = weekId;
   _markActiveWeeklySummaryTab(weekId);
-  if (weekChanged) {
+  const rosterBody = document.getElementById('weeklySummaryRoster');
+  const resultsBody = document.getElementById('weeklySummaryContent');
+  const cached = _weeklySummaryCache.get(weekId);
+  if (cached) {
+    _setWeeklySummaryLoading(false);
+    renderWeeklySummaryContent(cached, {playRecap: false});
+    if (weekChanged) _scrollWeeklySummaryColumnsTop();
+  } else if (rosterBody.innerHTML.trim() === '' && resultsBody.innerHTML.trim() === '') {
     _setWeeklySummaryColumns(_weeklySummaryMessage('Loading…'), _weeklySummaryMessage('Loading…'));
-    document.getElementById('weeklySummaryRoster').scrollTop = 0;
-    document.getElementById('weeklySummaryContent').scrollTop = 0;
+  } else {
+    _setWeeklySummaryLoading(true);
   }
   try {
     const res = await fetch(`${API}/weekly-summary/${weekId}`);
     const data = await res.json();
-    if (!res.ok) { _setWeeklySummaryColumns('', _weeklySummaryMessage(data.detail, true)); return; }
-    renderWeeklySummaryContent(data);
+    if (req !== _weeklySummaryReq) return;
+    _setWeeklySummaryLoading(false);
+    if (!res.ok) {
+      if (!cached) _setWeeklySummaryColumns('', _weeklySummaryMessage(data.detail, true));
+      return;
+    }
+    _weeklySummaryCache.set(weekId, data);
+    // A cached week has had its first view in this opening: never replay the recap.
+    renderWeeklySummaryContent(data, {playRecap: !cached});
+    if (weekChanged && !cached) _scrollWeeklySummaryColumnsTop();
   } catch (e) {
-    _setWeeklySummaryColumns('', _weeklySummaryMessage(e.message, true));
+    if (req !== _weeklySummaryReq) return;
+    _setWeeklySummaryLoading(false);
+    if (!cached) _setWeeklySummaryColumns('', _weeklySummaryMessage(e.message, true));
   }
 }
 
@@ -405,8 +459,8 @@ function skipWeeklyRecap() {
   _stopRecap();
   if (!data) return;
   _markRecapPlayed(data.week_id);
-  document.getElementById('weeklySummaryRoster').innerHTML =
-    _weeklySummaryRosterHtml(data.roster || {cards: []}, data.revealed);
+  renderIfChanged(document.getElementById('weeklySummaryRoster'),
+    _weeklySummaryRosterHtml(data.roster || {cards: []}, data.revealed));
   _renderWeeklySummaryRosterHeader(data);
   _updateRecapButtons();
 }
@@ -429,6 +483,8 @@ async function _playRecap(data) {
   const counted = cards.filter(c => c.counted);
   const didNotPlay = cards.filter(c => c.subbed_out);
   _weeklySummaryRosterHtml(roster, true);  // fills the card lookup for thumbnails
+  // The animation rebuilds the column by hand, so the next render must write it.
+  forgetRendered(body);
   body.innerHTML = '';
   body.setAttribute('aria-busy', 'true');
   body.scrollTop = 0;
@@ -634,11 +690,14 @@ function _weeklySummaryMatchHtml(m, revealed, subbedInPlayerIds) {
   return html;
 }
 
-function renderWeeklySummaryContent(data) {
+// Renders both columns and their headers in one synchronous update; unchanged
+// columns are left alone (renderIfChanged). playRecap: false when re-rendering a
+// week already shown during this opening, so the #152 recap never replays.
+function renderWeeklySummaryContent(data, {playRecap = true} = {}) {
   const content = document.getElementById('weeklySummaryContent');
   const roster = data.roster || {cards: []};
   const subbedInPlayerIds = new Set((roster.cards || []).filter(c => c.subbed_in).map(c => c.player_id));
-  document.getElementById('weeklySummaryRoster').innerHTML = _weeklySummaryRosterHtml(roster, data.revealed);
+  renderIfChanged(document.getElementById('weeklySummaryRoster'), _weeklySummaryRosterHtml(roster, data.revealed));
   _renderWeeklySummaryRosterHeader(data);
   _recapAnimation.data = data;
 
@@ -654,7 +713,7 @@ function renderWeeklySummaryContent(data) {
         ${s.matches.map(m => _weeklySummaryMatchHtml(m, data.revealed, subbedInPlayerIds)).join('')}
       </div>`).join('');
   }
-  content.innerHTML = html;
+  renderIfChanged(content, html);
   // Issue #129: bench substitutions run some hours after the week ends; until then
   // the "on roster" marks may still change. Shown in the roster column header.
   if (data.revealed && data.substitutions_pending) {
@@ -663,7 +722,8 @@ function renderWeeklySummaryContent(data) {
     note.textContent = `Bench substitutions are made ${data.substitution_delay_hours} hours after the week ends; roster marks may change.`;
     document.getElementById('weeklySummaryRosterMeta').appendChild(note);
   }
-  _maybePlayRecap(data.week_id, data);
+  if (playRecap) _maybePlayRecap(data.week_id, data);
+  else _updateRecapButtons();
 }
 
 // Shows the docked reveal footer whenever at least one currently-listed week is
@@ -680,7 +740,8 @@ async function revealAllWeeklySummaries() {
   try {
     const res = await fetch(`${API}/weekly-summary/reveal-all`, { method: 'POST' });
     if (!res.ok) return;
-    _weeklySummaryWeeks.forEach(w => { w.revealed = true; });
+    // Revealed data must never come from a pre-reveal cache entry.
+    _weeklySummaryWeeks.forEach(w => { _weeklySummaryCache.delete(w.week_id); w.revealed = true; });
     _updateWeeklySummaryRevealFooter();
     if (_weeklySummaryActiveWeekId != null) {
       await selectWeeklySummaryTab(_weeklySummaryActiveWeekId);

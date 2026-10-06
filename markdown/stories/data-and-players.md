@@ -43,14 +43,17 @@ automatically while a monitored league has a match in progress, so OpenDota's ra
 spent on non-urgent work exactly when a broadcaster is waiting to select an MVP.
 
 **Acceptance criteria**
-- A single `GET /live` call, filtered to leagues currently marked `is_monitored`, determines
-  whether any monitored league has a match in progress this poll cycle
+- The stored live games (`live_matches`, written by the separate live thread from Steam's live
+  league list since #161; originally a single OpenDota `GET /live` call), filtered to leagues
+  currently marked `is_monitored`, determine whether any monitored league has a match in
+  progress this poll cycle: a game not ended and seen in the last 15 minutes counts
 - While at least one monitored league has a live match, `run_enrichment()` is skipped for that
   cycle — ingestion of new match data for monitored leagues is never paused, only enrichment
 - Once no monitored league has a live match, enrichment resumes on its normal cadence the next
   cycle
-- The live-match check costs exactly one OpenDota request per poll cycle regardless of how many
-  leagues are monitored, so it never meaningfully competes for rate-limit budget itself
+- The live-match check costs no OpenDota request at all (since #161 it reads `live_matches`; the
+  live thread makes one Steam request per check regardless of how many leagues are monitored),
+  so it never competes for OpenDota's rate-limit budget
 
 ---
 
@@ -63,7 +66,7 @@ processed, so I'm not stuck waiting on the standard poll interval before I can s
 - While the live-match check finds a monitored league's match in progress, the ingest poll loop
   uses a shorter interval than the existing `INGEST_LIVE_POLL_INTERVAL` "active week" cadence —
   a match actively being played is a stronger, more specific signal than "some week is open"
-- As soon as the live match disappears from `GET /live` (i.e. has ended), the next poll's normal
+- As soon as the live match disappears from the live list (i.e. has ended), the next poll's normal
   match-ingest step picks it up, subject only to OpenDota having finished processing it
 - `GET /twitch/matches/current` reflects the newly-ingested match (with player stats) as soon as
   ingestion completes, so `live_config.js`'s MVP flow lists it without a manual "Ingest Now" click

@@ -11,8 +11,8 @@ As the league operator, I want MVP selection and token drops to accept only real
 - It returns 403 when the match is not one of the series `GET /twitch/matches/current` offers, meaning a started match with ingested stats in one of the 5 most recent series. There is no separate monitored-league check (only monitored leagues are ingested)
 - It returns 404 when the player did not play in that match
 - When `TWITCH_MVP_CHANNEL_IDS` is set (comma-separated channel IDs), only those channels can set an MVP; others get 403, checked before the match and player checks so they learn nothing about IDs. Unset keeps today's behaviour for any channel
-- The linking code in `POST /twitch/link-code` is generated with `secrets`, not `random`
-- `POST /twitch/link` is limited to 10 requests a minute per client IP
+- The linking code in `POST /twitch/link-code` is generated with `secrets`, not `random` *(route retired in #160; Twitch sign-in's state, nonce and PKCE verifier use `secrets.token_urlsafe`)*
+- `POST /twitch/link` is limited to 10 requests a minute per client IP *(route retired in #160; `GET /auth/twitch/start` and `/auth/twitch/callback` carry the same per-IP limit, `RATE_LIMIT_TWITCH_OAUTH`)*
 
 
 ---
@@ -78,7 +78,7 @@ As the operator, I want third-party scripts pinned and local files protected so 
 As a logged-in player, I want the server to refuse state-changing requests that come from another site, including sibling subdomains, so that a malicious page cannot act with my session.
 
 **Acceptance criteria**
-- For `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus `POST /twitch/link-code`, which uses the session cookie), the server returns 403 when the `Origin` header is present and its host matches neither the request's `Host` nor the host of `APP_BASE_URL`
+- For `POST`, `PUT`, `PATCH` and `DELETE` requests outside `/twitch/` (plus the session-cookie `POST /twitch/merge/confirm` and `POST /twitch/disconnect` since #160; originally `POST /twitch/link-code`), the server returns 403 when the `Origin` header is present and its host matches neither the request's `Host` nor the host of `APP_BASE_URL`
 - When `Origin` is absent, the same check applies to the `Referer` header. When both are absent the request is allowed, as for API clients and tests
 - `GET`, `HEAD` and `OPTIONS` requests are never blocked
 - `CSRF_ORIGIN_CHECK=false` disables the check; it is on by default

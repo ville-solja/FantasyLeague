@@ -85,14 +85,16 @@
       <h2 style="margin-bottom:0;">Login</h2>
       <button class="ghost" onclick="closeLoginModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <input id="loginUsername" type="text" placeholder="Username" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') login()" />
-    <input id="loginPassword" type="password" placeholder="Password" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') login()" />
-    <button style="width:100%;margin-bottom:10px;" onclick="login()">Login</button>
-    <button class="secondary" style="width:100%;" onclick="showForgotPassword()">Forgot password</button>
-    <div class="status" id="loginStatus"></div>
-    <div style="text-align:center;margin-top:12px;">
-      <button class="ghost" style="font-size:0.8rem;" onclick="showRegister()">Create new account</button>
-    </div>
+    <form id="loginForm" method="post" autocomplete="on" novalidate>
+      <input id="loginUsername" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" style="width:100%;margin-bottom:10px;" />
+      <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Password" style="width:100%;margin-bottom:16px;" />
+      <button type="submit" style="width:100%;margin-bottom:10px;">Login</button>
+      <button type="button" class="secondary" style="width:100%;" onclick="showForgotPassword()">Forgot password</button>
+      <div class="status" id="loginStatus"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <button type="button" class="ghost" style="font-size:0.8rem;" onclick="showRegister()">Create new account</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -124,13 +126,16 @@
       <button class="ghost" onclick="showLogin()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
     <p style="font-size:0.85rem;color:#888;margin-bottom:16px;">Paste the reset code from your email (or follow the link directly) and choose a new password.</p>
-    <input id="resetToken" type="text" placeholder="Reset code" style="width:100%;margin-bottom:10px;" onkeydown="if(event.key==='Enter') submitResetPassword()" />
-    <input id="resetNewPassword" type="password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:16px;" onkeydown="if(event.key==='Enter') submitResetPassword()" />
-    <button style="width:100%;" onclick="submitResetPassword()">Set new password</button>
-    <div class="status" id="resetPasswordStatus"></div>
-    <div style="text-align:center;margin-top:12px;">
-      <button class="ghost" style="font-size:0.8rem;" onclick="showLogin()">Back to login</button>
-    </div>
+    <form id="resetPasswordForm" method="post" novalidate>
+      <input id="resetUsername" class="visually-hidden" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly />
+      <input id="resetToken" name="code" type="text" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" placeholder="Reset code" style="width:100%;margin-bottom:10px;" />
+      <input id="resetNewPassword" name="new-password" type="password" autocomplete="new-password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:16px;" />
+      <button type="submit" style="width:100%;">Set new password</button>
+      <div class="status" id="resetPasswordStatus"></div>
+      <div style="text-align:center;margin-top:12px;">
+        <button type="button" class="ghost" style="font-size:0.8rem;" onclick="showLogin()">Back to login</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -141,16 +146,18 @@
       <h2 style="margin-bottom:0;">Create account</h2>
       <button class="ghost" onclick="closeRegisterModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <input id="regUsername" type="text" placeholder="Username" aria-describedby="regUsernameHint" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regUsername','regUsernameErr')" />
-    <p id="regUsernameHint" style="font-size:0.75rem;color:#888;margin:0 0 4px;">Letters, digits, underscore (_) and hyphen (-) only.</p>
-    <span class="field-error" id="regUsernameErr"></span>
-    <input id="regEmail" type="email" placeholder="Email" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regEmail','regEmailErr')" />
-    <span class="field-error" id="regEmailErr"></span>
-    <input id="regPassword" type="password" placeholder="Password (min 6 chars)" style="width:100%;margin-bottom:4px;" onkeydown="if(event.key==='Enter') register()" oninput="_regClearField('regPassword','regPasswordErr')" />
-    <span class="field-error" id="regPasswordErr"></span>
-    <button style="width:100%;margin-bottom:10px;margin-top:10px;" onclick="register()">Create account</button>
-    <button class="ghost" style="width:100%;" onclick="showLogin()">Back to login</button>
-    <div class="status" id="registerStatus"></div>
+    <form id="registerForm" method="post" novalidate>
+      <input id="regUsername" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" aria-describedby="regUsernameHint" style="width:100%;margin-bottom:4px;" oninput="_regClearField('regUsername','regUsernameErr')" />
+      <p id="regUsernameHint" style="font-size:0.75rem;color:#888;margin:0 0 4px;">Letters, digits, underscore (_) and hyphen (-) only.</p>
+      <span class="field-error" id="regUsernameErr"></span>
+      <input id="regEmail" name="email" type="email" autocomplete="email" placeholder="Email" style="width:100%;margin-bottom:4px;" oninput="_regClearField('regEmail','regEmailErr')" />
+      <span class="field-error" id="regEmailErr"></span>
+      <input id="regPassword" name="new-password" type="password" autocomplete="new-password" placeholder="Password (min 6 chars)" style="width:100%;margin-bottom:4px;" oninput="_regClearField('regPassword','regPasswordErr')" />
+      <span class="field-error" id="regPasswordErr"></span>
+      <button type="submit" style="width:100%;margin-bottom:10px;margin-top:10px;">Create account</button>
+      <button type="button" class="ghost" style="width:100%;" onclick="showLogin()">Back to login</button>
+      <div class="status" id="registerStatus"></div>
+    </form>
   </div>
 </div>
 
@@ -380,9 +387,12 @@
       </div>
       <div>
         <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Password</div>
-        <input id="pwCurrent" type="password" placeholder="Current password" style="width:100%;margin-bottom:8px;" />
-        <input id="pwNew" type="password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:8px;" />
-        <button onclick="changePassword()">Change password</button>
+        <form id="changePasswordForm" method="post" novalidate>
+          <input id="pwUsername" class="visually-hidden" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly />
+          <input id="pwCurrent" name="current-password" type="password" autocomplete="current-password" placeholder="Current password" style="width:100%;margin-bottom:8px;" />
+          <input id="pwNew" name="new-password" type="password" autocomplete="new-password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:8px;" />
+          <button type="submit">Change password</button>
+        </form>
         <div class="status" id="passwordStatus"></div>
         <p style="font-size:0.75rem;color:#888;margin:16px 0 8px;">Changing your password logs out your other devices. To end every session now, including this one:</p>
         <button class="secondary" onclick="logoutEverywhere()">Log out everywhere</button>
@@ -423,21 +433,31 @@
       <div id="profilePastSeasonsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;"></div>
     </div>
 
-    <div class="panel">
-      <h2>Twitch Account</h2>
-      <div id="twitchLinked" style="display:none">
-        <p style="color:#9147ff;font-weight:600;margin-bottom:6px"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Twitch account linked</p>
-        <p style="font-size:0.8rem;color:#555">You can win token drops when a streamer confirms a match MVP while you watch.</p>
+    <div class="panel" id="profileTwitchPanel">
+      <h2>Twitch</h2>
+      <!-- Issue #160: Twitch sign-in connects a Twitch account; states come from GET /twitch/connection. -->
+      <div id="twitchConnectState" style="display:none">
+        <p class="profile-twitch-copy">Connect your Twitch account so the Kana Cards panel on Twitch uses this account: its cards, roster and tokens, and token drops when a streamer confirms a match MVP while you watch. You sign in on Twitch's own page; only your Twitch user id is kept.</p>
+        <button id="btnConnectTwitch" onclick="connectTwitch()">Connect Twitch</button>
       </div>
-      <div id="twitchUnlinked" style="display:none">
-        <p style="font-size:0.8rem;color:#555;margin-bottom:16px">Link your Twitch account to win token drops during live streams.</p>
-        <button onclick="generateTwitchCode()">Generate Twitch Code</button>
-        <div id="twitchCodeSection" style="display:none;margin-top:16px">
-          <p style="font-size:0.8rem;color:#555;margin-bottom:8px">Open the Kana Cards extension panel on a Twitch stream and enter this code:</p>
-          <div style="font-size:2rem;letter-spacing:0.3em;font-weight:700;color:#9147ff;padding:8px 0" id="twitchCode">------</div>
-          <div class="status" id="twitchCodeExpiry"></div>
+      <div id="twitchUnavailableState" style="display:none">
+        <p class="profile-twitch-copy">Connecting Twitch is not available right now.</p>
+      </div>
+      <div id="twitchConnectedState" style="display:none">
+        <p class="profile-twitch-status"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Connected to Twitch</p>
+        <p class="profile-twitch-copy">The Kana Cards panel on Twitch uses this account. Disconnecting keeps your cards and tokens here.</p>
+        <p class="profile-twitch-copy" id="twitchLastActivity"></p>
+        <button class="secondary" id="btnDisconnectTwitch" onclick="disconnectTwitch()">Disconnect</button>
+      </div>
+      <div id="twitchMergePrompt" class="profile-twitch-merge" style="display:none">
+        <p id="twitchMergeText" class="profile-twitch-merge-text"></p>
+        <div class="row" id="twitchMergeActions">
+          <button id="btnTwitchMerge" onclick="confirmTwitchMerge()">Add to my account</button>
+          <button class="secondary" onclick="dismissTwitchMerge()">Not now</button>
         </div>
       </div>
+      <p class="profile-twitch-copy" id="twitchGuidance" style="display:none">Joined on Twitch first? In the Kana Cards Twitch panel, open Settings and choose Share your Twitch identity, then reload this page.</p>
+      <p class="profile-twitch-copy profile-twitch-note">Kana Cards never asks for your Twitch or website password inside Twitch.</p>
       <div class="status" id="twitchStatus"></div>
     </div>
 
@@ -631,10 +651,18 @@
 <!-- TAB: SCHEDULE -->
 <div id="tab-schedule" class="tab-content">
   <div class="grid">
-    <div class="panel" style="grid-column: span 2;">
-      <h2>Season Schedule</h2>
-      <button class="secondary" onclick="loadSchedule()" style="margin-bottom:12px;">Refresh</button>
+    <div class="panel schedule-panel" style="grid-column: span 2;">
+      <div class="schedule-head">
+        <h2>Season Schedule</h2>
+        <div class="schedule-head-actions">
+          <!-- Issue #156: spoiler-free hide mode, on by default; loadSchedule sets the label and aria-pressed -->
+          <button type="button" id="scheduleHideToggle" class="schedule-hide-toggle" aria-pressed="true" onclick="toggleScheduleHide()">Hide results</button>
+          <button type="button" class="secondary schedule-refresh" onclick="loadSchedule()">Refresh</button>
+        </div>
+      </div>
       <div id="scheduleStale" class="stale-notice" style="display:none;"></div>
+      <div id="scheduleNow" class="schedule-now" role="region" aria-label="Right now" style="display:none;"></div>
+      <div id="scheduleWeeks" class="schedule-weeks" role="group" aria-label="Weeks"></div>
       <div id="scheduleContent"></div>
       <div class="status" id="scheduleStatus"></div>
     </div>
@@ -685,7 +713,7 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Earning Tokens</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li><strong>+1 token</strong> at the start of each new week.</li>
-        <li>Token drops on Twitch: linked viewers can win one each time the streamer confirms a match MVP.</li>
+        <li>Token drops on Twitch: viewers who joined in the Kana Cards panel can win one each time the streamer confirms a match MVP.</li>
         <li><strong>Promo codes</strong> from admins give bonus tokens.</li>
       </ul>
     </div>
@@ -693,12 +721,13 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Watching on Twitch</h2>
 
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Link your account</h3>
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Play in the panel</h3>
       <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>In Kana Cards, go to <strong>Profile → Generate Twitch Code</strong>.</li>
-        <li>On the league's Twitch stream, open the Kana Cards panel and enter the 6-character code within 10 minutes.</li>
+        <li>On the league's Twitch stream, open the Kana Cards panel. The Live tab shows MVPs, top performers and the next match to everyone.</li>
+        <li>Logged in to Twitch, press <strong>Join Kana Cards</strong>. It uses your Twitch login, with no sign-up or password.</li>
+        <li>Draw cards, build your collection and set your weekly roster in the panel's Cards and Roster tabs.</li>
       </ol>
-      <p style="margin-bottom:8px;color:#ccc;font-size:0.9rem;line-height:1.7;">Once linked, the panel shows your token balance, and watching the stream makes you eligible for a token drop whenever the streamer confirms a match MVP.</p>
+      <p style="margin-bottom:8px;color:#ccc;font-size:0.9rem;line-height:1.7;">Panel players keep their own collection, separate from website accounts, and do not appear on the leaderboards. Keeping the panel open makes you eligible for a token drop whenever the streamer confirms a match MVP. Already have a website account? Connect Twitch on your <strong>Profile</strong> (you sign in on Twitch), and the panel then plays with that account; a collection you started in the panel can be added to it once.</p>
       <p style="color:#999;font-size:0.8rem;">Looking to broadcast instead of watch? See the <strong>Streamers</strong> subtab above.</p>
     </div>
 
@@ -803,7 +832,7 @@
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What confirming does</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Linked viewers watching your stream get a one-time token drop. Changing the MVP for the same match later doesn't drop tokens again.</li>
+        <li>Viewers who joined in the Kana Cards panel and are watching your stream get a one-time token drop (the chat names the MVP and how many viewers received a token). Changing the MVP for the same match later doesn't drop tokens again.</li>
         <li>The MVP gets a fantasy score bonus for that match, which shows in every leaderboard and roster total.</li>
       </ul>
     </div>
@@ -869,6 +898,10 @@
     <div class="panel">
       <h2>User Management</h2>
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+        <select id="userAccountType" onchange="loadUsers()" aria-label="Account type" style="max-width:180px;">
+          <option value="full" selected>Website accounts</option>
+          <option value="twitch">Twitch viewers</option>
+        </select>
         <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
         <button class="secondary" onclick="loadUsers()">Refresh</button>
       </div>
@@ -877,6 +910,16 @@
         <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="usersStatus"></div>
+
+      <!-- Issue #160: recent Twitch collection merges with Reverse (admin password re-check). -->
+      <div class="twitch-merges-title">Twitch collection merges</div>
+      <p class="twitch-merges-note">Merges of a Twitch panel collection into a website account in the last 30 days. Reverse recreates the Twitch viewer account and moves its cards, tokens and locked-week rosters back. Showing or reversing merges needs your password.</p>
+      <button class="secondary" onclick="loadTwitchMerges()">Show recent merges</button>
+      <table id="twitchMergesTable" style="display:none;margin-top:8px;">
+        <thead><tr><th>Website account</th><th>Merged</th><th>Moved</th><th>Actions</th></tr></thead>
+        <tbody id="twitchMergesBody"></tbody>
+      </table>
+      <div class="status" id="twitchMergesStatus"></div>
     </div>
   </div>
 
@@ -1120,8 +1163,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Parse</th><th>Scoring</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="10" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Live seen</th><th>Stats in</th><th>MVP picked</th><th>Parse</th><th>Scoring</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="13" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>
@@ -1184,11 +1227,14 @@
       <button class="ghost" onclick="closeReauthModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
     <p style="font-size:0.85rem;color:#888;margin-bottom:12px;">This admin action needs your password again. It stays confirmed on this device for a few minutes.</p>
-    <input id="reauthPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:12px;" onkeydown="if(event.key==='Enter') submitReauth()" />
-    <div style="display:flex;gap:8px;">
-      <button style="flex:1;" onclick="submitReauth()">Confirm</button>
-      <button class="secondary" onclick="closeReauthModal()">Cancel</button>
-    </div>
+    <form id="reauthForm" method="post" novalidate>
+      <input id="reauthUsername" class="visually-hidden" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly />
+      <input id="reauthPassword" type="password" name="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:12px;" />
+      <div style="display:flex;gap:8px;">
+        <button type="submit" style="flex:1;">Confirm</button>
+        <button type="button" class="secondary" onclick="closeReauthModal()">Cancel</button>
+      </div>
+    </form>
     <div class="status err" id="reauthStatus" style="margin-top:8px;"></div>
   </div>
 </div>

@@ -76,6 +76,7 @@ async function adminFetch(url, options) {
 
 function _promptReauth() {
   if (_reauthResolve) _finishReauth(false);
+  document.getElementById("reauthUsername").value = activeUsername || "";
   document.getElementById("reauthPassword").value = "";
   document.getElementById("reauthStatus").textContent = "";
   document.getElementById("reauthModal").classList.remove("hidden");
@@ -93,6 +94,8 @@ function _finishReauth(confirmed) {
 function closeReauthModal() {
   _finishReauth(false);
 }
+
+document.getElementById("reauthForm").addEventListener("submit", e => { e.preventDefault(); submitReauth(); });
 
 async function submitReauth() {
   const input = document.getElementById("reauthPassword");

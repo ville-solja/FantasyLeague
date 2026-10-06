@@ -503,6 +503,51 @@ def _m030_weekly_summary_seen_last_prompted(conn):
         logger.info("Migration: weekly_summary_seen — added last_prompted_week_id column")
 
 
+def _m031_users_twitch_soft_accounts(conn):
+    """Issue #157: soft accounts created by the Twitch extension's Join.
+
+    account_type ("full" for every existing account), last_seen_at and the optional
+    real Twitch id from the identity share (twitch_account_id, unique). Migration 003
+    added twitch_user_id without a unique index on legacy databases; Join relies on it
+    for race safety, so it is added here when the data allows."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "account_type" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN account_type TEXT NOT NULL DEFAULT 'full'"))
+    if "last_seen_at" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN last_seen_at INTEGER"))
+    if "twitch_account_id" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN twitch_account_id TEXT"))
+    conn.execute(text("UPDATE users SET account_type = 'full' WHERE account_type IS NULL"))
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_twitch_account_id ON users(twitch_account_id)"
+    ))
+    duplicate = conn.execute(text(
+        "SELECT twitch_user_id FROM users WHERE twitch_user_id IS NOT NULL "
+        "GROUP BY twitch_user_id HAVING COUNT(*) > 1 LIMIT 1"
+    )).first()
+    if duplicate is None:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_twitch_user_id ON users(twitch_user_id)"
+        ))
+    else:
+        logger.warning("Migration 031: duplicate users.twitch_user_id values — unique index not added")
+    conn.commit()
+    logger.info("Migration: users — added account_type, last_seen_at and twitch_account_id columns")
+
+
+def _m032_users_merged_soft_account_at(conn):
+    """Issue #160: Twitch account connection. merged_soft_account_at (one merge per
+    website account, ever) and pending_merge_user_id (the soft account whose Twitch id
+    moved to this account at connect time, until it is merged or dropped)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "merged_soft_account_at" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN merged_soft_account_at INTEGER"))
+    if "pending_merge_user_id" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN pending_merge_user_id INTEGER"))
+    conn.commit()
+    logger.info("Migration: users — added merged_soft_account_at and pending_merge_user_id columns")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -557,6 +602,8 @@ MIGRATIONS = [
     ("028_users_session_version",    _m028_users_session_version),
     ("029_weekly_roster_entries_substitution", _m029_weekly_roster_entries_substitution),
     ("030_weekly_summary_seen_last_prompted", _m030_weekly_summary_seen_last_prompted),
+    ("031_users_twitch_soft_accounts", _m031_users_twitch_soft_accounts),
+    ("032_users_merged_soft_account_at", _m032_users_merged_soft_account_at),
 ]
 
 

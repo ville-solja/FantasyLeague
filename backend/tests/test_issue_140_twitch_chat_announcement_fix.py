@@ -26,7 +26,8 @@ Testing approach:
 
   Message text (`twitch._mvp_chat_text`)
     - Call the helper directly:
-      `_mvp_chat_text(player_name, winner_names, token_name, pool_empty)`.
+      `_mvp_chat_text(player_name, winner_count, pool_empty)` (a count, not
+      usernames, since issue #157).
 
   Endpoint (`twitch.set_mvp`)
     - Call the router function directly (precedent: Story 1 of
@@ -234,72 +235,58 @@ def test_post_chat_message_local_dev_logs_instead_of_calling_twitch(post_recorde
 # ===========================================================================
 
 def test_mvp_chat_text_all_winners_fit_within_280(monkeypatch):
-    """AC: the announcement text is at most 280 characters (short winner list is listed in full).
+    """AC: the announcement text is at most 280 characters.
 
-    Approach: _mvp_chat_text("PlayerOne", ["alice", "bob"], "tokens", False);
-    assert len <= 280, starts with "Match MVP: PlayerOne!", both names present,
-    no "more" suffix. Also check pool_empty=True with no winners keeps
-    "(No linked viewers in the drop pool.)".
+    Updated for issue #157: the text names the MVP and only how many viewers
+    received a token, never their usernames. With no joined viewers in the pool
+    the chat says no tokens were dropped.
     """
     import twitch
-    text = twitch._mvp_chat_text("PlayerOne", ["alice", "bob"], "tokens", False)
+    text = twitch._mvp_chat_text("PlayerOne", 2, False)
     assert len(text) <= 280
-    assert text == "Match MVP: PlayerOne! Token drop winners (+1 tokens): alice, bob"
-    assert "more" not in text
+    assert text == "Match MVP: PlayerOne! 2 viewers received a token."
+    assert twitch._mvp_chat_text("PlayerOne", 1, False) == "Match MVP: PlayerOne! 1 viewer received a token."
 
-    empty = twitch._mvp_chat_text("PlayerOne", [], "tokens", True)
-    assert empty == "Match MVP: PlayerOne! (No linked viewers in the drop pool.)"
-    assert twitch._mvp_chat_text("PlayerOne", [], "tokens", False) == "Match MVP: PlayerOne!"
+    empty = twitch._mvp_chat_text("PlayerOne", 0, True)
+    assert empty == "Match MVP: PlayerOne! No tokens were dropped: no joined viewers were watching."
+    assert twitch._mvp_chat_text("PlayerOne", 0, False) == "Match MVP: PlayerOne!"
 
 
 def test_mvp_chat_text_too_many_winners_truncates_with_and_n_more():
-    """AC: when the winners don't all fit, the message lists as many as fit, followed by "and N more".
+    """AC: a large drop still fits in 280 characters.
 
-    Approach: 20 winners with 25-character usernames; assert len <= 280, the text
-    ends with f"and {N} more" where N == 20 - (number of names listed), and
-    listed names are a prefix of the input order.
-    """
-    import re
+    Updated for issue #157: there is no winner list to truncate any more; 20
+    winners are reported as a count ("20 viewers received a token")."""
     import twitch
-    winners = [f"viewer{i:02d}".ljust(25, "x") for i in range(20)]
-    text = twitch._mvp_chat_text("PlayerOne", winners, "tokens", False)
+    text = twitch._mvp_chat_text("PlayerOne", 20, False)
     assert len(text) <= 280
-    m = re.search(r"Token drop winners \(\+1 tokens\): (.*), and (\d+) more$", text)
-    assert m, text
-    listed = m.group(1).split(", ")
-    assert listed == winners[:len(listed)]
-    assert int(m.group(2)) == 20 - len(listed)
-    assert 0 < len(listed) < 20
-    # One more name would not have fit.
-    longer = (text[:m.start(1)] + ", ".join(winners[:len(listed) + 1])
-              + f", and {20 - len(listed) - 1} more")
-    assert len(longer) > 280
+    assert text == "Match MVP: PlayerOne! 20 viewers received a token."
+    assert "more" not in text
 
 
 def test_mvp_chat_text_long_mvp_name_always_included_in_full():
     """AC: the MVP name is always included in full.
 
-    Approach: a long player name (e.g. 60 chars) plus 20 long winners; assert the
-    full name is in the text and len <= 280.
+    Approach: a long player name (60 chars) plus a 20-winner drop; the full name
+    is in the text and len <= 280.
     """
     import twitch
     name = "M" * 60
-    winners = [f"viewer{i:02d}".ljust(25, "x") for i in range(20)]
-    text = twitch._mvp_chat_text(name, winners, "tokens", False)
+    text = twitch._mvp_chat_text(name, 20, False)
     assert text.startswith(f"Match MVP: {name}!")
     assert len(text) <= 280
-    assert text.endswith("more")
+    assert text.endswith("received a token.")
 
 
 def test_set_mvp_large_token_drop_chat_message_within_280(db, twitch_prod_env, post_recorder, monkeypatch):
     """AC: a 20-winner drop with long usernames yields a chat message of 280 characters
-    or fewer ending in "and N more" (endpoint wiring).
+    or fewer (endpoint wiring). Since issue #157 it names the MVP and the winner
+    count only, so no username appears in chat.
 
     Approach: seed match 1001 (teams 11 vs 12, now - 3600, player_ids=(102, 103))
     and 20 linked viewers with 25-char usernames present in TwitchPresence for
     _CHANNEL; patch twitch._post_chat_message with a recorder; call
-    _call_set_mvp(db, 1001, 102); assert the recorded message is <= 280 chars
-    and ends with "more".
+    _call_set_mvp(db, 1001, 102); assert the recorded message.
     """
     import twitch
     from models import TwitchPresence, User
@@ -314,13 +301,15 @@ def test_set_mvp_large_token_drop_chat_message_within_280(db, twitch_prod_env, p
     monkeypatch.setattr(twitch, "_post_chat_message",
                         lambda channel_id, message: chat.append((channel_id, message)))
     result = _call_set_mvp(db, 1001, 102)
-    assert len(result["token_drop"]["winners"]) == 20
+    assert result["token_drop"]["winner_count"] == 20
+    assert "winners" not in result["token_drop"]
+    assert result["token_drop"]["winner_count"] == 20
     assert len(chat) == 1
     channel_id, message = chat[0]
     assert channel_id == _CHANNEL
-    assert message.startswith("Match MVP: Player102!")
+    assert message == "Match MVP: Player102! 20 viewers received a token."
     assert len(message) <= 280
-    assert message.endswith("more")
+    assert "viewer00" not in message
 
 
 # ===========================================================================
@@ -425,7 +414,8 @@ def test_set_mvp_chat_and_pubsub_failure_still_returns_result_and_keeps_drop(db,
         calls_before = len(post_recorder.calls)
         result = _call_set_mvp(db, match_id, 102)
         assert len(post_recorder.calls) - calls_before == 2  # PubSub + chat both attempted
-        assert result["token_drop"]["winners"] == ["viewer"]
+        assert result["token_drop"]["winner_count"] == 1
+        assert "winners" not in result["token_drop"]
         assert db.query(TwitchMVP).filter_by(match_id=match_id, player_id=102).count() == 1
         row = db.query(PlayerMatchStats).filter_by(player_id=102, match_id=match_id).one()
         assert row.is_mvp is True

@@ -1,6 +1,6 @@
 # Twitch Extension
 
-A Twitch Panel Extension that connects the broadcaster's stream to Kana Cards. Viewers link their accounts, receive token drops on MVP selection, and see MVP announcements — all without leaving Twitch.
+A Twitch Panel Extension that brings Kana Cards into the stream as a complete game on Twitch (issue #157, version 1.2.0). Every viewer sees live fantasy results; a viewer logged in to Twitch joins with one button (a **soft account**, no sign-up), then draws cards, keeps a collection, sets a weekly roster and receives MVP token drops, all inside the panel. The broadcaster names match MVPs from Quick Actions. The extension never requires, mentions or links to the website. Details: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md).
 
 ---
 
@@ -22,7 +22,7 @@ The extension frontend is a standalone HTML/JS bundle uploaded to Twitch CDN. It
 |---|---|
 | **Kana Cards developer** | Register extension in Twitch dev console; set EBS URL once via `set-ebs-url.sh`; upload packaged ZIP |
 | **Broadcaster (streamer)** | Install the extension; use Quick Actions to select MVP |
-| **Viewer** | Open panel to link account, see token balance, receive drops |
+| **Viewer** | Open the panel: follow live results; join with the Twitch login to draw, collect, set a roster and receive drops |
 
 Broadcasters do **not** configure the EBS URL. It is set globally by the developer once and propagates to all channel installs automatically.
 
@@ -32,11 +32,13 @@ Broadcasters do **not** configure the EBS URL. It is set globally by the develop
 
 ```
 twitch-extension/
-├── panel.html          # Viewer-facing panel (account linking + token/MVP display)
+├── panel.html          # Viewer panel: Live / Cards / Roster tabs, Join, Settings
+├── panel.js            # Viewer panel logic (live data, join, draws, collection, roster, leave)
 ├── config.html         # Broadcaster one-time setup page
 ├── live_config.html    # Broadcaster quick actions (MVP selection + token drop)
 ├── extension.js        # Shared JS (EBS URL resolution, API calls, PubSub, heartbeat)
-├── extension.css       # Shared styles
+├── extension.css       # Shared styles (Kanaliiga design tokens)
+├── fonts/              # Big Shoulders Text (packaged; the extension is self-contained)
 ├── dev-harness.html    # Local dev only — not uploaded to Twitch
 ├── package.sh          # Builds Twitch CDN ZIP
 └── set-ebs-url.sh      # Sets EBS URL in the global Configuration Service segment
@@ -57,7 +59,7 @@ twitch-extension/
 | **Extension status** | **Local Test** or higher | Configuration Service API returns 401 if extension is still in "Created" status |
 | **Client ID** | Shown in the top-right corner of Extension Settings | Used as `TWITCH_EXTENSION_CLIENT_ID` |
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
-| **Capabilities** | Enable **Chat** on the version installed on the channel | Without it, Twitch rejects MVP chat announcements with 403 (logged by the EBS) — PubSub/token drops still work |
+| **Capabilities** | Enable **Chat** and **Request Identity Link** on the version installed on the channel | Without Chat, Twitch rejects MVP chat announcements with 403 (logged by the EBS) — PubSub/token drops still work. Without Request Identity Link, Join still works but the identity share never reaches the EBS |
 | **Asset Hosting paths** (per version: Version → Asset Hosting) | Panel Viewer Path `panel.html`, Config Path `config.html`, Live Config Path `live_config.html` | A folder prefix such as `twitch-extension/panel.html` or a leading `/` — Twitch's CDN then returns 404 for the Extension iframe |
 | **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
 | **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
@@ -76,7 +78,7 @@ Add to `.env`:
 ```
 TWITCH_EXTENSION_CLIENT_ID=<Client ID from Extension Settings top-right>
 TWITCH_EXTENSION_SECRET=<Key from Extension Secrets table at bottom of Extension Settings>
-TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.1.7>
+TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.2.0>
 TWITCH_DROP_MAX=20
 ```
 
@@ -95,10 +97,10 @@ Leave it unset in production. See `reference/security-headers.md`.
 The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
 
 ```bash
-bash twitch-extension/package.sh 1.1.7
+bash twitch-extension/package.sh 1.2.0
 ```
 
-The script refuses to run without a version, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. On success it prints the Asset Hosting paths and URL Fetching allowlist entry to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
+The script refuses to run without a version, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the Asset Hosting paths and URL Fetching allowlist entry to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
 
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, move it to **Hosted Test** and verify all three views before submitting for review. See [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md).
 
@@ -128,14 +130,14 @@ The broadcaster adds the extension to their channel from the Twitch extension di
 
 ---
 
-## Account Linking (story 13.3)
+## Joining and soft accounts
 
-Users link their Fantasy account to Twitch across two surfaces:
-
-1. **Fantasy site (Profile tab):** User clicks "Generate Twitch Code" → `POST /twitch/link-code` → a 6-character alphanumeric code appears with a 10-minute countdown.
-2. **Twitch extension panel:** User enters the code in the panel → `POST /twitch/link` → backend validates and stores `twitch_user_id` on the user record. Returns 400 if the viewer's Twitch identity is anonymous (`opaque_user_id` starting with `A` — Twitch's convention for a not-logged-in viewer) — the viewer must be logged into Twitch to link.
-
-Once linked, the panel shows token balance and the viewer enters the drop pool.
+- **Join:** the panel's **Join Kana Cards** calls `Twitch.ext.actions.requestIdShare()` (Twitch's own consent dialog) and `POST /twitch/join`. The EBS creates a `users` row with `account_type="twitch"`, `twitch_user_id` = the opaque id and no username, email or password. Logged-out viewers (`A…` ids) get 403 `twitch_login_required`; the panel shows "Log in to Twitch to join".
+- **Identity share:** when the viewer agrees, the JWT carries `user_id`, stored in `users.twitch_account_id` (unique, never overwritten).
+- **Website accounts (#160):** a player connects Twitch on the website's Profile with Twitch sign-in ([Twitch Account Connection](../reference/twitch-account-connection.md)). The panel looks the caller up by opaque id first, then by `twitch_account_id` = the JWT's `user_id`, and acts as that website account (its opaque id is attached; drops reach it). A soft account that played first keeps playing until its collection is merged on the website. A website account linked with a code before 1.2.0 is still recognised by `twitch_user_id`.
+- **Link codes:** retired. The panel has no code field (since #157), and `POST /twitch/link-code`, `POST /twitch/link` and `GET /twitch/status` were removed in #160 (404).
+- **Hidden:** soft accounts never appear on leaderboards, season standings, archives, tag lists or public profiles; admins see them under User Management › Twitch viewers.
+- **Leave and retention:** Settings › **Leave Kana Cards** deletes a soft account with all its data (a website account is only unlinked; its Twitch connection stays until Disconnect on Profile); soft accounts idle for `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` (365) are purged daily.
 
 ---
 
@@ -147,7 +149,12 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 
 1. Broadcaster clicks **"Select match MVP"**
 2. The 5 most recently played series (regardless of week boundaries) are listed. A match appears
-   as soon as OpenDota's live feed shows it, before its stats are ingested
+   about a minute after it goes live (Steam's live league list, checked every
+   `LIVE_POLL_INTERVAL` seconds), before its stats are ingested. Above the list, a line says
+   "Live games checked N s ago" (or "N min ago"), with a **Refresh** button that reloads the
+   list. When the last check is over 5 minutes old, there has been none, or `STEAM_API_KEY` is
+   not set, the line instead reads "Live games not checked recently — your match will appear
+   once its stats are in" in amber (see `reference/mvp-selection-delays.md`)
 3. Broadcaster selects the series (team1 vs team2), then the specific match (Match 1, Match 2…).
    A match without ingested stats is marked **Live** while the game runs, otherwise
    **Stats pending**
@@ -160,25 +167,28 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 ### Token drop rules
 - Fires on MVP confirmation — no separate trigger
 - **Once per match**: re-confirming a different MVP for the same match does not re-drop tokens
-- Up to `TWITCH_DROP_MAX` (default 20) random linked viewers from the pool receive +1 token
-- Result broadcast via Twitch PubSub — all open panels show the MVP announcement
+- Up to `TWITCH_DROP_MAX` (default 20) random joined viewers (soft accounts and website accounts the panel recognises) from the pool receive +1 token
+- `TWITCH_DROPS_ENABLED=false` turns drops off: the MVP and the fantasy bonus are still set
+- Result broadcast via Twitch PubSub with the winner count only — all open panels show the MVP, and joined panels refresh their balance and show "+1 token from the MVP drop" when it went up
+- The confirmation banner shows how many viewers received a token, not their names
 
 ---
 
 ## Viewer Panel (panel.html)
 
-1. Panel reads EBS URL from `Twitch.ext.configuration.global.content` at startup
-2. Calls `GET /twitch/status` to determine linked state
-3. **Unlinked:** shows account linking instructions (enter 6-char code from Fantasy Profile)
-4. **Linked:** shows token balance and username; heartbeat keeps viewer in the drop pool
-5. PubSub messages trigger MVP banner and token drop announcements
-6. If EBS URL is missing from config or unreachable after 8 seconds, shows `"Extension not configured — contact the broadcaster."` rather than a blank panel
+A 318 × 500 panel styled with the Kanaliiga design system. Full description: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#panel-318--500).
+
+1. Reads the EBS URL from `Twitch.ext.configuration.global.content` at startup
+2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
+3. Calls `GET /twitch/me`: not joined shows the Join box (or "Log in to Twitch to join"); joined shows the token count, the Cards tab (draw, team draw picker, card reveal, collection with rarity filters) and the Roster tab (slot-first bench picker, lock countdown, week points)
+4. Settings: share the Twitch identity, Leave Kana Cards
+5. A section the EBS can't fill shows a short neutral message; a missing EBS URL after 8 seconds shows "Kana Cards is not available on this channel right now." — never a blank panel or a login prompt
 
 ---
 
 ## Presence Pool
 
-Viewers call `POST /twitch/heartbeat` every ~55 seconds while the panel is open. Only viewers with a linked account and a heartbeat within the last 10 minutes are eligible for drops.
+Joined viewers' panels call `POST /twitch/heartbeat` every ~55 seconds while open (viewers who haven't joined send none). Only viewers with an account (soft, or a website account the panel recognises) and a heartbeat within the last 10 minutes are eligible for drops.
 
 ---
 
@@ -210,18 +220,15 @@ broadcaster's channel; Twitch rejects the call if `broadcaster_id` differs from 
 | `extension_id` | `TWITCH_EXTENSION_CLIENT_ID` |
 | `extension_version` | `TWITCH_EXTENSION_VERSION`, the version installed on the channel |
 
-Message text (built by `_mvp_chat_text` in `backend/twitch.py`) follows the pattern
-`"Match MVP: {player_name}!"`, appended with
-`" Token drop winners (+1 {TOKEN_NAME}): {names}"` when viewers received tokens, or
-`" (No linked viewers in the drop pool.)"` when the pool was empty. When no tokens were dropped
-for another reason (a re-selection on a match that already dropped, or no pooled viewer resolved to
-a user), the message is just `"Match MVP: {player_name}!"`. Twitch caps a message at
-**280 characters**: winners are listed until the next one would pass the limit, followed by
-`", and N more"`; if not even one name fits, the winners become
-`"Match MVP: {player_name}! {N} viewers won +1 {TOKEN_NAME}."`. The MVP name is always kept in
-full, so only an MVP name of about 260+ characters could exceed the limit (Dota names are far
-shorter). Twitch also allows **12 messages per
-minute per channel**; one MVP confirmation sends one message.
+Message text (built by `_mvp_chat_text` in `backend/twitch.py`) names the MVP and only how many
+viewers received a token, never their names (issue #157: soft accounts have no username, and a
+linked player's website username is not revealed in chat):
+`"Match MVP: {player_name}! {N} viewers received a token."` ("1 viewer" for one), or
+`"Match MVP: {player_name}! No tokens were dropped: no joined viewers were watching."` when the
+pool was empty. A re-selection on a match that already dropped, or a confirmation with
+`TWITCH_DROPS_ENABLED=false`, posts just `"Match MVP: {player_name}!"`. The text is cut at
+Twitch's **280-character** limit, which only an MVP name of about 230+ characters could reach.
+Twitch also allows **12 messages per minute per channel**; one MVP confirmation sends one message.
 
 Requires the **Chat** capability to be enabled on the installed extension version in the
 Twitch developer console (Extension Settings → Capabilities), in addition to the
@@ -252,32 +259,41 @@ traceback.
 
 The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
 
-The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/link-code` is the exception: it uses the session cookie (called from the main site's Profile tab), so it gets the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
+The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/merge/confirm` and `POST /twitch/disconnect` (#160) are the exceptions: they use the session cookie (called from the main site's Profile tab), so they get the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
 
 ---
 
 ## Endpoints
 
-### `POST /twitch/link-code`
-Authenticated Fantasy session. Generates a 6-char linking code (`A-Z0-9`, drawn with Python's
-`secrets` module). TTL: 10 minutes.
+### Panel game endpoints (issue #157)
+`GET /twitch/panel`, `POST /twitch/join`, `GET /twitch/me`, `POST /twitch/draw`, `GET /twitch/teams`,
+`POST /twitch/draw/booster/{team_id}`, `POST /twitch/roster/activate/{card_id}`,
+`POST /twitch/roster/deactivate/{card_id}`, `POST /twitch/roster/swap`, `POST /twitch/leave`. All take
+the Twitch JWT; the game routes answer 404 `not_joined` without an account and run the website's
+own card functions for the caller's account. Shapes, limits and errors:
+[Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#live-tab-and-game-endpoints).
 
-### `POST /twitch/link`
-Twitch JWT. Body: `{code}`. Consumes code, stores Twitch opaque user ID on the user record.
-Limited to 10 requests a minute per client IP (`RATE_LIMIT_TWITCH_LINK`) so codes cannot be
-brute-forced; the 11th returns 429.
+### Website Twitch connection (issue #160)
+`GET /auth/twitch/start`, `GET /auth/twitch/callback`, `GET /twitch/connection`,
+`POST /twitch/merge/confirm`, `POST /twitch/disconnect` use the website session (not a Twitch JWT)
+and live in `backend/twitch_oauth.py`; admin `GET /admin/twitch/merges` and
+`POST /admin/twitch/merges/{log_id}/reverse` in `routers/admin_twitch.py`. See
+[Twitch Account Connection](../reference/twitch-account-connection.md).
+
+### Retired: `POST /twitch/link-code`, `POST /twitch/link`, `GET /twitch/status`
+Removed in #160 and answer 404. The 6-character link code (#135 drew it with `secrets` and
+rate-limited `POST /twitch/link`) is replaced by Twitch sign-in; `GET /twitch/status` by
+`GET /twitch/me`. The `twitch_link_codes` table and the `TwitchLinkCode` model remain for a later clean-up migration; only `soft_accounts.delete_soft_account` still deletes its rows, and no route reads or writes it.
 
 ### `POST /twitch/heartbeat`
 Twitch JWT. Records viewer presence. Call every ~55 seconds.
 
-### `GET /twitch/status`
-Twitch JWT. Returns `{linked, tokens, username}` for the calling viewer.
-
 ### `GET /twitch/matches/current`
 Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
-data, regardless of week boundaries, with per-match player lists. Games seen in OpenDota's live
-feed but not yet ingested are included with `"provisional": true` and a `live` flag (issue
-#139). See `reference/twitch-mvp-series-window.md` and `reference/early-mvp-selection.md`. The series selection lives in
+data, regardless of week boundaries, with per-match player lists. Games seen live (Steam's live
+league list since #161) but not yet ingested are included with `"provisional": true` and a `live` flag (issue
+#139). The response also carries `live_checked_at` and `live_source_configured`, which the MVP
+picker uses for its freshness line (see `reference/mvp-selection-delays.md`). See `reference/twitch-mvp-series-window.md` and `reference/early-mvp-selection.md`. The series selection lives in
 `twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
@@ -302,7 +318,7 @@ it when the match arrives (`ingest._reapply_mvp_bonus`), and the audit detail ca
 `provisional=True`. The player's display name is the known `players` name, else the live feed
 name, else `Player {account_id}`.
 
-On success it upserts the MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {winners, pool_size, already_dropped}}`.
+On success it upserts the MVP, triggers one-time token drop (skipped if match already dropped), broadcasts via PubSub, and posts a chat announcement (see Twitch Extension Chat below). Also busts the schedule cache so the new MVP appears on the Schedule tab immediately — see `reference/mvp-schedule-cache-bust.md`. Returns `{match_id, player_id, player_name, token_drop: {enabled, winner_count, pool_size, already_dropped}}`. No winner names are returned (a website-account winner's name is their username); chat and PubSub carry the count, and the names stay in the admin-only audit log.
 
 ---
 
@@ -310,13 +326,16 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 
 | Table | Purpose |
 |---|---|
-| `twitch_link_codes` | Temporary 6-char codes with 10-min TTL |
+| `twitch_link_codes` | Retired 6-char link codes (#160). The table and `TwitchLinkCode` model remain until a clean-up migration; only `soft_accounts.delete_soft_account` still deletes its rows, and no route reads or writes it |
+| `twitch_oauth_states` | Twitch sign-in attempts (#160): sha256(state), nonce, PKCE verifier, 10-minute expiry, one-time |
+| `twitch_merge_log` | Soft-account merge undo log (#160), kept 30 days for admin reversal |
 | `twitch_presence` | Viewer heartbeat timestamps for pool eligibility |
 | `twitch_mvp` | One MVP selection per match, broadcaster-updatable. Unique on `match_id`; both MVP paths write through `twitch.upsert_mvp()` (`INSERT ... ON CONFLICT DO UPDATE`), so simultaneous confirmations update one row |
-| `live_matches` | Monitored-league games seen in OpenDota's `/live`, kept until their stats are ingested (or 24 h after last seen) so the MVP panel can offer them early. See `reference/early-mvp-selection.md` |
+| `live_matches` | Monitored-league games seen in Steam's live league list (OpenDota's `/live` before #161), kept until their stats are ingested (or 24 h after last seen) so the MVP panel can offer them early. See `reference/early-mvp-selection.md` |
+| `match_timings` | Per match: when it was first seen live, ingested and given its first MVP (`mvp_provisional` when before ingest). Shown in the admin Matches table. See `reference/mvp-selection-delays.md` |
 | `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. Unique on `(channel_id, series_id)`: `_claim_drop()` inserts this row (`ON CONFLICT DO NOTHING`) before any tokens are granted, and only the request whose insert lands pays out, so two simultaneous confirmations cannot drop twice. Migration `026_twitch_mvp_drop_unique` removed pre-existing duplicates and added both unique indexes. |
 
-`users.twitch_user_id` stores the Twitch opaque user ID once linked.
+`users.twitch_user_id` stores the Twitch opaque user ID of a soft account or a website account the panel recognises. `users.account_type` (`full` / `twitch`), `users.last_seen_at` and `users.twitch_account_id` (real Twitch id after the identity share or Twitch sign-in, unique) were added by migration `031_users_twitch_soft_accounts`; `users.merged_soft_account_at` and `users.pending_merge_user_id` by `032_users_merged_soft_account_at` (#160).
 
 ---
 
@@ -326,10 +345,16 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 |---|---|---|
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
-| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.1.7`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
+| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.2.0`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
+| `TWITCH_DROPS_ENABLED` | `true` | Kill switch for MVP token drops; `false` sets the MVP and bonus only |
+| `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join and draws per IP; draws, roster changes and Leave per viewer |
+| `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
+| `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
-| `RATE_LIMIT_TWITCH_LINK` | `10/minute` | Per-IP limit on `POST /twitch/link` |
+| `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
+| `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `*.ext-twitch.tv`; `http://localhost:8080` for Local Test |
 | `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |

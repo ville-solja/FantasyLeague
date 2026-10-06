@@ -1,6 +1,6 @@
 # Schedule Series Game Breakdown
 
-Expands each resolved series in the Schedule tab's Results section from a single aggregate
+Expands each resolved series in the Schedule tab (since issue #156, folded behind an "N games" button on played series; see [Schedule Visuals](schedule-visuals.md)) from a single aggregate
 score into a parent row with an expandable child row per individual game, showing duration,
 each team's kills, and each team's hero picks. Visible to everyone (same audience as the
 Schedule tab itself). Results also include series derived directly from ingested match data
@@ -79,8 +79,8 @@ database:
   "claimed." Those matches now surface correctly via this same unclaimed-match path.
 
 Frontend: `loadSchedule()` merges `data.extra_results` into the same `past` array built from the
-sheet, before the upcoming/past split — so derived series sort into the existing Results list
-chronologically alongside sheet-resolved ones, not a separate section. The division badge
+sheet, so derived series are placed into fantasy weeks alongside sheet-resolved ones (issue #156),
+not a separate section. The division badge
 renders nothing when `division` is `null` instead of assuming `div1`/`div2`.
 
 ## Endpoints
@@ -114,9 +114,9 @@ Response also gains a top-level `extra_results` array — see "Schedule-independ
 
 ## Frontend rendering
 
-`frontend/app-players.js`'s `renderRow(s)` (used by `loadSchedule()`'s Results section) renders
-one `.game-row` `<div>` per entry in `series_result.games`, appended as a sibling immediately
-after the series' `.series-row` header:
+`frontend/app-players.js`'s `loadSchedule()` builds the game rows in `gameRowsHtml`, called from
+`seriesRow` for a revealed series whose games are unfolded (issue #156). It renders one `.game-row`
+`<div>` per entry in `series_result.games`:
 - `_formatGameDuration(seconds)` — `mm:ss`, or `"—"` when `null`.
 - `_gameHeroIconsHtml(heroUrls)` — one `<img class="hero-icon">` per resolved URL (with
   `onerror="this.style.display='none'"`, the same broken-image guard used for player avatars in

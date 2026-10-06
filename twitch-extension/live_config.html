@@ -54,6 +54,11 @@
   }
   .back-link:hover { color: #efeff1; }
 
+  .freshness-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .freshness { flex: 1; font-size: 0.75rem; color: #adadb8; }
+  .freshness.warn { color: #d29922; }
+  .freshness-bar button { width: auto; margin-top: 0; padding: 4px 10px; font-size: 12px; }
+
   .drop-result {
     font-size: 0.75rem; color: #adadb8; margin-top: 6px; padding: 6px 8px;
     background: #1a1a24; border-radius: 4px;
@@ -69,13 +74,17 @@
 <!-- Step 0: entry -->
 <div id="mvp-step-0" class="step active" style="padding-top:8px">
   <p style="font-weight:700;margin-bottom:4px">Kana Cards Quick Actions</p>
-  <p class="muted" style="margin-bottom:12px">After a match ends, appoint the MVP. This also drops tokens to viewers currently in the panel pool.</p>
+  <p class="muted" style="margin-bottom:12px">After a match ends, appoint the MVP. This also drops tokens to joined viewers who have the panel open.</p>
   <button id="btn-start-mvp">Select match MVP</button>
 </div>
 
 <!-- Step 1: series list -->
 <div id="mvp-step-1" class="step">
   <button class="back-link" id="btn-back-0">← Cancel</button>
+  <div class="freshness-bar">
+    <span class="freshness" id="live-freshness" role="status"></span>
+    <button id="btn-refresh-series" type="button">Refresh</button>
+  </div>
   <p class="muted" style="margin-bottom:4px">Select a series:</p>
   <div id="series-list"></div>
 </div>

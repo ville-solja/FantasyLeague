@@ -31,8 +31,9 @@ DB or endpoint surface):
       lock, earning tokens)
     - Contains the existing Scoring & Modifiers content (live stat weight table,
       rarity bonus table, modifier table, MVP bonus value, loaded from GET /weights)
-    - Contains the viewer half of the existing Twitch & MVP content (linking via
-      Profile → Generate Twitch Code, token drops for linked viewers)
+    - Contains the viewer half of the existing Twitch & MVP content (joining in
+      the Twitch panel with Join Kana Cards since issue #157, token drops for
+      joined viewers)
     - Renders correctly with no active session, since GET /weights is public
       (failure case: Users panel content gated behind an auth check)
 
@@ -201,7 +202,9 @@ class TestRoleBasedHowToPlaySubtabs:
         assert "howtoplay-rarity-tbody" in html
         assert "howtoplay-mods-tbody" in html
         assert "howtoplay-mvp-bonus" in html
-        assert "Generate Twitch Code" in html
+        # Issue #157: the link-code flow is gone; viewers join in the Twitch panel.
+        assert "Generate Twitch Code" not in html
+        assert "Join Kana Cards" in html
         assert "Select match MVP" in html
         # Corrected during the content audit: cards are generated per-draw, not
         # pulled from a shared pre-built deck (see reference/dynamic-card-creation.md)
@@ -246,11 +249,13 @@ class TestUsersSubtab:
 
     def test_users_subtab_contains_viewer_linking_content(self):
         """#howtoplay-panel-users contains the viewer half of the existing Twitch
-        & MVP content: linking a Fantasy account via Profile → Generate Twitch
-        Code, and that watching linked streams makes a viewer eligible for token
+        & MVP content: since issue #157, joining in the Twitch panel with the
+        Twitch login (Join Kana Cards) and, since #160, connecting Twitch on
+        Profile, and that watching makes a joined viewer eligible for token
         drops."""
         panel = _extract_panel(_read(INDEX_HTML_PATH), "users")
-        assert "Generate Twitch Code" in panel
+        assert "Join Kana Cards" in panel
+        assert "Generate Twitch Code" not in panel
         assert "Profile" in panel
         assert "token drop" in panel.lower() or "eligible" in panel.lower()
 

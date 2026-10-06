@@ -59,7 +59,9 @@ def delete_tag(tag_id: int, db=Depends(get_db), admin=Depends(require_admin)):
 
 @router.post("/admin/users/{user_id}/tags/{tag_id}")
 def grant_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(require_admin)):
-    if not db.get(User, user_id):
+    user = db.get(User, user_id)
+    # Twitch viewer soft accounts (issue #157) are hidden from tag lists.
+    if not user or user.account_type == "twitch":
         raise HTTPException(status_code=404, detail="User not found")
     tag = db.get(TagDefinition, tag_id)
     if not tag:

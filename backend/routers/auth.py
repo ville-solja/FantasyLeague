@@ -184,11 +184,14 @@ def logout_everywhere(request: Request, db=Depends(get_db),
 def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
            current_user: dict = Depends(get_current_user)):
     """Confirm the current user's password for this session (issue #117). Destructive
-    admin endpoints (deps.require_recent_reauth) accept the session for
-    ADMIN_REAUTH_SECONDS afterwards. Shares the login lockout and rate limit."""
+    admin endpoints (deps.require_recent_reauth) and the player's Twitch connection
+    actions (deps.require_recent_player_reauth, issue #160) accept the session for
+    ADMIN_REAUTH_SECONDS afterwards. Shares the login lockout and rate limit. Audited
+    as admin_reauth for admins and player_reauth for everyone else."""
     username = current_user["username"]
+    action = "admin_reauth" if current_user.get("is_admin") else "player_reauth"
     if _is_locked_out(username):
-        _audit(db, "admin_reauth", actor_id=current_user["user_id"], actor_username=username,
+        _audit(db, action, actor_id=current_user["user_id"], actor_username=username,
                detail="failed: locked out")
         db.commit()
         raise HTTPException(status_code=429, detail=_LOGIN_LOCKOUT_MESSAGE)
@@ -198,13 +201,13 @@ def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not verify_password(body.password, user.password_hash):
         _record_failed_login(username)
-        _audit(db, "admin_reauth", actor_id=user.id, actor_username=username,
+        _audit(db, action, actor_id=user.id, actor_username=username,
                detail="failed: wrong password")
         db.commit()
         raise HTTPException(status_code=401, detail="Incorrect password")
     row.reauth_at = sessions._now()
     _clear_failed_logins(username)
-    _audit(db, "admin_reauth", actor_id=user.id, actor_username=username, detail="ok")
+    _audit(db, action, actor_id=user.id, actor_username=username, detail="ok")
     db.commit()
     return {"status": "ok", "valid_seconds": sessions.ADMIN_REAUTH_SECONDS}
 
@@ -268,8 +271,7 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
     user_id       = user.id
 
     # Invalidate any prior unused token for this account before issuing a new one —
-    # only one live reset token per user at a time (mirrors TwitchLinkCode's
-    # invalidate-on-regenerate pattern in twitch.py's generate_link_code()).
+    # only one live reset token per user at a time.
     db.query(PasswordResetToken).filter_by(user_id=user_id).delete()
     token = secrets.token_urlsafe(32)
     ttl_hours = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_HOURS", "1"))

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build a Twitch CDN-ready ZIP of the extension.
-# Usage: bash twitch-extension/package.sh <version>
+# Usage: bash twitch-extension/package.sh <version>   (current release: 1.2.0)
 # Output: twitch-extension/twitch-extension-<version>.zip
 #
 # The EBS URL is no longer baked in at build time — it is read at runtime
@@ -8,7 +8,7 @@
 
 set -e
 
-VERSION=${1:?"Usage: package.sh <version>  (e.g. 1.1.7)"}
+VERSION=${1:?"Usage: package.sh <version>  (e.g. 1.2.0)"}
 OUT="twitch-extension-${VERSION}.zip"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -22,7 +22,15 @@ FILES=(
     live_config.js
     extension.js
     extension.css
+    fonts/BigShouldersText-VariableFont_wght.ttf
+    fonts/BigShouldersText-OFL.txt
 )
+
+# Viewer-facing files (Twitch policy 4.5, issue #157): no login, link-code,
+# registration or website call-to-action. config.html and live_config.* are
+# broadcaster-only and are not checked.
+VIEWER_FILES=(panel.html panel.js extension.js extension.css)
+FORBIDDEN_TEXT=("kana-cards.com" "Log into" "Generate Twitch Code" "Link your account")
 
 cd "$SCRIPT_DIR"
 
@@ -42,6 +50,24 @@ for html in "${FILES[@]}"; do
     done
 done
 
+# Video component files, if any, are viewer-facing too.
+for f in video*.html video*.js video*.css; do
+    if [ -e "$f" ]; then VIEWER_FILES+=("$f"); fi
+done
+
+for f in "${VIEWER_FILES[@]}"; do
+    for phrase in "${FORBIDDEN_TEXT[@]}"; do
+        if grep -qiF -- "$phrase" "$f"; then
+            echo "ERROR: viewer file $f contains forbidden text \"$phrase\" (Twitch policy 4.5: no outside call-to-action)." >&2
+            exit 1
+        fi
+    done
+    if grep -qiE 'type="?password' "$f"; then
+        echo "ERROR: viewer file $f contains a password field." >&2
+        exit 1
+    fi
+done
+
 echo "Packaging extension v${VERSION}..."
 zip "$SCRIPT_DIR/$OUT" "${FILES[@]}" > /dev/null
 
@@ -53,4 +79,6 @@ echo "  Config Path:        config.html"
 echo "  Live Config Path:   live_config.html"
 echo "Dev console → Version → Capabilities → Allowlist for URL Fetching Domains:"
 echo "  https://kana-cards.com"
+echo "Team logos in the panel's team draw load from the logo host; without an image"
+echo "allowlist entry for it the panel shows monograms instead."
 echo "Upload the zip, move the version to Hosted Test, verify all three views, then submit."

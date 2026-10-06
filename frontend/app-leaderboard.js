@@ -1,4 +1,6 @@
 var _allLeaderboardRows = [];
+// Whether "Show all" is on in Top players by avg; kept across quiet refreshes.
+var _lbShowAll = false;
 
 async function onLbWeekChange() {
   const sel = document.getElementById("lbWeekSelect");
@@ -43,12 +45,14 @@ async function loadSeasonLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard/season`);
     const rows = await res.json();
+    if (!res.ok) throw new Error(rows.detail || "Failed to load");
     const tbody = document.getElementById("seasonStandingsBody");
+    setStatus("seasonStandingsStatus", "");
     if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
+      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>");
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "season_points", false)).join("");
+    renderIfChanged(tbody, rows.map((r, i) => _lbStandingsRow(r, i, "season_points", false)).join(""));
     setStatus("seasonStandingsStatus", "");
   } catch (e) {
     setStatus("seasonStandingsStatus", e.message, false);
@@ -59,12 +63,14 @@ async function loadWeeklyLeaderboard(weekId) {
   try {
     const res = await fetch(`${API}/leaderboard/weekly?week_id=${weekId}`);
     const rows = await res.json();
+    if (!res.ok) throw new Error(rows.detail || "Failed to load");
     const tbody = document.getElementById("weeklyStandingsBody");
+    setStatus("weeklyStandingsStatus", "");
     if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>";
+      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>");
       return;
     }
-    tbody.innerHTML = rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join("");
+    renderIfChanged(tbody, rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join(""));
     setStatus("weeklyStandingsStatus", "");
   } catch (e) {
     setStatus("weeklyStandingsStatus", e.message, false);
@@ -82,8 +88,8 @@ async function loadPastSeasons() {
     }
     if (panel) panel.style.display = "";
     const sel = document.getElementById("pastSeasonSelect");
-    sel.innerHTML = seasons.map(s => `<option value="${s.id}">${_escHtml(s.season_label)}</option>`).join("");
-    await loadPastSeasonStandings(seasons[0].id);
+    renderSelectIfChanged(sel, seasons.map(s => `<option value="${s.id}">${_escHtml(s.season_label)}</option>`).join(""));
+    await loadPastSeasonStandings(parseInt(sel.value) || seasons[0].id);
   } catch (e) {
     if (panel) panel.style.display = "none";
   }
@@ -100,14 +106,14 @@ async function loadPastSeasonStandings(seasonId) {
     const data = await res.json();
     const tbody = document.getElementById("pastSeasonStandingsBody");
     if (!res.ok) return setStatus("pastSeasonStatus", data.detail, false);
+    setStatus("pastSeasonStatus", "");
     if (!data.standings.length) {
-      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No data</td></tr>";
+      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data</td></tr>");
       return;
     }
-    tbody.innerHTML = data.standings.map(r => `<tr>
+    renderIfChanged(tbody, data.standings.map(r => `<tr>
       <td>${r.rank}</td><td>${_escHtml(r.username)}</td><td>${Number(r.points).toFixed(1)}</td>
-    </tr>`).join("");
-    setStatus("pastSeasonStatus", "");
+    </tr>`).join(""));
   } catch (e) {
     setStatus("pastSeasonStatus", e.message, false);
   }
@@ -117,11 +123,10 @@ function _populateLbWeekSelect() {
   const sel = document.getElementById("lbWeekSelect");
   if (!sel) return;
   const locked = _weeks.filter(w => w.is_locked);
-  sel.innerHTML = locked.map(w => `<option value="${w.id}">${w.label}</option>`).join("");
+  renderSelectIfChanged(sel, locked.map(w => `<option value="${w.id}">${_escHtml(w.label)}</option>`).join(""));
   if (!locked.length) {
     sel.style.display = "none";
-    const tbody = document.getElementById("weeklyStandingsBody");
-    if (tbody) tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No weeks locked yet</td></tr>";
+    renderIfChanged(document.getElementById("weeklyStandingsBody"), "<tr><td colspan='3' style='color:#444'>No weeks locked yet</td></tr>");
   } else {
     sel.style.display = "";
   }
@@ -130,8 +135,10 @@ function _populateLbWeekSelect() {
 async function loadLeaderboard() {
   try {
     const res = await fetch(`${API}/leaderboard`);
-    _allLeaderboardRows = await res.json();
-    _renderLeaderboard(false);
+    const rows = await res.json();
+    if (!res.ok) throw new Error(rows.detail || "Failed to load");
+    _allLeaderboardRows = rows;
+    _renderLeaderboard(_lbShowAll);
     setStatus("leaderboardStatus", "");
   } catch (e) {
     setStatus("leaderboardStatus", e.message, false);
@@ -142,19 +149,20 @@ function _renderLeaderboard(showAll) {
   const tbody = document.getElementById("leaderboardBody");
   const toggleBtn = document.getElementById("leaderboardToggle");
   const rows = _allLeaderboardRows;
+  _lbShowAll = showAll;
   if (!rows.length) {
-    tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>";
+    renderIfChanged(tbody, "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>");
     if (toggleBtn) toggleBtn.style.display = "none";
     return;
   }
   const visible = showAll ? rows : rows.slice(0, 10);
-  tbody.innerHTML = visible.map((r, i) => `
+  renderIfChanged(tbody, visible.map((r, i) => `
     <tr>
       <td>${i + 1}</td>
       <td class="lb-name-cell"><div class="lb-name-inner"><img src="${r.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
       <td>${r.matches}</td>
       <td>${Number(r.avg_points).toFixed(1)}</td>
-    </tr>`).join("");
+    </tr>`).join(""));
   if (toggleBtn) {
     if (rows.length > 10) {
       toggleBtn.style.display = "";
@@ -170,12 +178,13 @@ async function loadTop() {
   try {
     const res = await fetch(`${API}/top`);
     const rows = await res.json();
-    document.getElementById("topBody").innerHTML = rows.map((r, i) => `
+    if (!res.ok) throw new Error(rows.detail || "Failed to load");
+    renderIfChanged(document.getElementById("topBody"), rows.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
         <td><img src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
         <td>${Number(r.fantasy_points).toFixed(1)}</td>
-      </tr>`).join("");
+      </tr>`).join(""));
     setStatus("topStatus", "");
   } catch (e) {
     setStatus("topStatus", e.message, false);

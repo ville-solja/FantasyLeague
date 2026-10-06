@@ -184,7 +184,7 @@ class TestUnscheduledFixturesStillAppear:
 
     def test_fixture_to_series_uses_real_starts_at_and_marks_scheduled_true(self, db):
         """A fixture with a real starts_at (ISO datetime) uses that as its datetime_iso,
-        converted to local time, and is marked scheduled: true; when both starts_at and
+        converted to league time (Europe/Helsinki), and is marked scheduled: true; when both starts_at and
         date/time are present, starts_at wins."""
         from datetime import datetime
 
@@ -197,9 +197,9 @@ class TestUnscheduledFixturesStillAppear:
 
         s = schedule._fixture_to_series(f)
 
-        expected = (datetime.fromisoformat("2026-09-14T15:00:00+00:00")
-                    .astimezone().replace(tzinfo=None).isoformat())
-        assert s["datetime_iso"] == expected
+        # Converted to league time (Europe/Helsinki, UTC+3 in September), whatever the
+        # server's own timezone is: the container runs on UTC.
+        assert s["datetime_iso"] == "2026-09-14T18:00:00"
         assert s["datetime_iso"] != "2026-09-14T19:00:00"  # date/time did not win
         assert s["scheduled"] is True
 
@@ -296,3 +296,23 @@ class TestDiagnoseTheActiveScheduleSource:
         monkeypatch.setattr("requests.get", lambda *a, **k: _Resp())
         result = schedule_debug()
         assert result["error"] == "response is not a fixtures.json payload"
+
+
+def test_fixture_times_use_league_timezone_not_server_timezone(monkeypatch):
+    """Issue #156 follow-up: the container runs on UTC; starts_at is still converted to
+    Europe/Helsinki wall-clock time, and upcoming/past is judged against league time."""
+    import time as _time
+    monkeypatch.setenv("TZ", "UTC")
+    if hasattr(_time, "tzset"):
+        _time.tzset()
+    try:
+        s = schedule._fixture_to_series({
+            "week": 4, "division": "upper", "team1": "Reaktor", "team2": "Innofactor",
+            "starts_at": "2026-10-07T18:00:00Z", "time": "21:00", "week_start": "2026-10-05",
+        })
+        assert s["datetime_iso"] == "2026-10-07T21:00:00"
+        assert schedule.LEAGUE_TZ.key == "Europe/Helsinki"
+    finally:
+        monkeypatch.undo()
+        if hasattr(_time, "tzset"):
+            _time.tzset()
