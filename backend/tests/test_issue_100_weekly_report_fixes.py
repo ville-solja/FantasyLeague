@@ -85,7 +85,7 @@ def _make_week(db, label="Week 1", offset_start=-172800, offset_end=-86400):
 
 
 def _make_team(db, team_id, name):
-    t = Team(id=team_id, name=name, logo_url=f"https://example.com/{team_id}.png")
+    t = Team(id=team_id, name=name, logo_url=f"https://steamcdn-a.akamaihd.net/apps/dota2/images/team_logos/{team_id}.png")
     db.add(t)
     db.flush()
     return t

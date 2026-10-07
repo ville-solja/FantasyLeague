@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import threading
 import time
 import warnings
@@ -555,18 +556,24 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(OriginCheckMiddleware)
-# Only the Twitch extension iframe (https://<client-id>.ext-twitch.tv) calls
-# the API cross-origin; the main site is same-origin and needs no CORS. All
-# /twitch/* endpoints authenticate via JWT in the Authorization header, not
-# cookies, so allow_credentials stays False. CORS_EXTRA_ORIGINS adds origins
-# such as http://localhost:8080 for Twitch Local Test.
+# Only our Twitch extension iframe (https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv)
+# calls the API cross-origin; the main site is same-origin and needs no CORS.
+# Issue #171: other extensions' origins are refused, and without a client id no
+# ext-twitch.tv origin is allowed. All /twitch/* endpoints authenticate via JWT in
+# the Authorization header, not cookies, so allow_credentials stays False.
+# CORS_EXTRA_ORIGINS adds origins such as http://localhost:8080 for Twitch Local Test.
 _cors_extra_origins = [
     o.strip() for o in os.getenv("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()
 ]
+_ext_client_id = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "").strip()
+_ext_origin_regex = (rf"^https://{re.escape(_ext_client_id)}\.ext-twitch\.tv$"
+                     if _ext_client_id else None)
+if not _ext_client_id:
+    logger.warning("TWITCH_EXTENSION_CLIENT_ID unset: no Twitch extension origin is allowed by CORS")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_extra_origins,
-    allow_origin_regex=r"^https://[a-z0-9]+\.ext-twitch\.tv$",
+    allow_origin_regex=_ext_origin_regex,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

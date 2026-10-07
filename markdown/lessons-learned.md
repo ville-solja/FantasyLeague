@@ -9,6 +9,14 @@ Format:
 
 ---
 
+### 2026-10-07 — developer — testing
+**Problem:** For #171, adding `@limiter.limit(...)` to the existing `POST /twitch/heartbeat` made every direct call of the handler in tests raise ("parameter `request` must be an instance of starlette.requests.Request"): slowapi checks the `request` argument whenever the limiter is enabled, which it is in the suite. Separately, `test_issue_136._build_main_client` read `TWITCH_EXTENSION_CLIENT_ID` from the developer shell once CORS started depending on it.
+**Solution:** When a route gains a limit, split it like the other panel routes: a plain `heartbeat(payload, db)` with the logic and a `heartbeat_route(request, ...)` wrapper carrying the decorators; unit tests call the plain function, rate-limit tests go through `_twitch_app` + TestClient. Any import-time env read that a shared test helper depends on must be cleared in that helper (`monkeypatch.delenv`) before applying the test's own env.
+
+### 2026-10-07 — test-planner — endpoints
+**Problem:** Plan #171 lists `GET /teams` and `GET /teams/{team_id}` (routers/players.py) among responses that must sanitise team logos, but neither returns a logo field; the plan also misses `backend/image.py`, which fetches `team_logo_url` server-side for card images. Separately, a new eligibility rule on the drop pool (soft accounts must be 24 h old) silently breaks older drop tests that build pools from brand-new `_join` accounts.
+**Solution:** Before pinning "every response that carries X" in tests, grep the field across `backend/` (`grep -rn logo_url --include=*.py`) and compare with the plan's list; report extra and missing call sites. When a rule narrows who qualifies, grep tests for the fixtures that create the affected rows (`_join`, `TwitchPresence(`) and list them for the developer.
+
 ### 2026-10-07 — security-reviewer — endpoints
 **Problem:** An env-based admin list that is re-applied on every sign-in (`_apply_admin_seed` for `SEED_ADMIN_STEAM_IDS`) silently undoes an in-app demotion: a demoted account whose id is still listed is promoted again at its next login, so demoting a compromised admin does nothing until the env changes and the app restarts.
 **Solution:** Apply env promotions once per id (record that the seed was applied, or skip accounts with a later demotion in the audit log) so an in-app demotion sticks; review any "promote on login" path for this.

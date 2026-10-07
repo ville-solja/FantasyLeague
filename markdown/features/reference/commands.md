@@ -127,6 +127,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TOORNAMENT_API_KEY` | *(empty)* | `X-Api-Key` header for toornament.com |
 | `TOORNAMENT_TOURNAMENT_ID` | *(empty)* | Toornament tournament UUID |
 | `DOTABUFF_LEAGUE_LOGO_PAGES` | *(Kanaliiga URLs)* | Dotabuff league overview URLs to scrape team logos from |
+| `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team `logo_url` may use (https, no port); others are not stored, returned or fetched (#171) |
 | `WEIGHTS_JSON` | *(empty)* | JSON overrides for scoring weights applied at startup |
 | `TOKEN_NAME` | `Tokens` | Display name for the token currency |
 | `INITIAL_TOKENS` | `5` | Tokens granted to newly registered users |
@@ -148,20 +149,21 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
 | `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, typically port 465); takes priority over `SMTP_TLS` |
 | `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |
-| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console |
+| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console; also the only `ext-twitch.tv` origin CORS allows (none when unset, with a start-up warning) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |
 | `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel (e.g. `1.2.0`); required for MVP chat announcements, which are skipped with one warning when empty |
 | `TWITCH_DROP_MAX` | `20` | Server-side cap on viewers per token drop |
 | `TWITCH_DROPS_ENABLED` | `true` | `false` turns MVP token drops off (MVP and bonus still set); see `twitch-extension-policy-compliance.md` |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Idle days before a Twitch viewer soft account is purged by the daily job |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join and draws per IP; draws, roster changes and Leave per viewer |
+| `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in MVP drop pools; `0` turns it off; website accounts always eligible (#171) |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs allowed to set MVPs; empty allows any channel |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `GET /auth/twitch/callback` (#160; replaced `RATE_LIMIT_TWITCH_LINK` with the retired `POST /twitch/link`) |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |
 | `BACKGROUND_TASKS_ENABLED` | `true` | `false` skips starting the four background threads (ingest poll, week maintenance, profile enrichment, DB backup). The backend test conftest sets it `false` — **do not set `false` in production** |
 | `ENV` | *(unset)* | Set `production` in production. Startup then fails if `DEBUG=true` or `TWITCH_LOCAL_DEV=true`, or if `SECRET_KEY` is shorter than 32 characters; the Twitch JWT bypass also refuses to run (500) |
 | `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except the session-cookie `/twitch/merge/confirm` and `/twitch/disconnect`. Set `false` if the proxy rewrites `Host` |
-| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<client-id>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
 | `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup unless an account with that username already exists (ignoring letter case; reserved words are allowed here). Skipped with a warning when `LOGIN_METHOD=steam_signup`. See `reference/env-based-admin-seeding.md` |

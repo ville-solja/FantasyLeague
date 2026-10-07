@@ -33,7 +33,8 @@ first, fully-collected teams last — alphabetically by name within each bucket 
 sort on `remaining`). Each entry contains per-team counts of players the authenticated user
 does not yet own any card of. Unauthenticated callers see the total player count per team.
 Teams with no players in the DB are omitted. Each entry contains `team_id`, `team_name`,
-`logo_url`, and `remaining`.
+`logo_url`, and `remaining`. `logo_url` is null when the stored logo's host isn't in
+`LOGO_HOST_ALLOWLIST` (#171; see [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md)).
 
 ### `POST /draw/booster/{team_id}`
 Auth required. Spends `team_booster_cost` Tokens, rolls a rarity using the standard

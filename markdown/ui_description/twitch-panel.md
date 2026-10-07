@@ -26,6 +26,8 @@ Three sections, each with an eyebrow heading:
 
 Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Empty or unreachable sections show a short neutral line ("No games scored yet.", "No match scheduled.", "Live results are unavailable right now.").
 
+**Drops start line (#171):** a joined viewer whose soft account is younger than the drop age (`TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS`, default 24 h) sees a muted note above the sections: "Drops start for your account on Tue 8 Oct, 18:00." (local date and time). It disappears once that time has passed; website accounts never see it.
+
 ## Cards tab
 
 - **Draw · 1** (disabled without tokens, with a note on how tokens are earned) and **Team draw · 3**.
@@ -35,7 +37,7 @@ Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Emp
 ## Team draw view
 
 - **Back** and the "Team draw" heading, then "Pick a team. You get one of its players you don't own yet. Costs 3 tokens."
-- A scrolling two-column list of 44 px team rows: logo (or a 28 × 28 monogram chip), team name, and "N left" or "Complete" (dimmed, disabled). Available teams first, alphabetically; Complete teams last. The selected row has an orange border and accent-ghost background (`aria-pressed`).
+- A scrolling two-column list of 44 px team rows: logo (only from an allowlisted host, #171; otherwise a 28 × 28 monogram chip), team name, and "N left" or "Complete" (dimmed, disabled). Available teams first, alphabetically; Complete teams last. The selected row has an orange border and accent-ghost background (`aria-pressed`).
 - Pinned at the bottom: **Draw from {team} · 3**, disabled until a team is picked or while the player has fewer than 3 tokens ("You need 3 tokens for a team draw"). A draw returns to the Cards tab with the reveal.
 
 ## Roster tab

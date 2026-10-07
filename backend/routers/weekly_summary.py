@@ -10,6 +10,7 @@ from database import get_db
 from deps import get_current_user
 from dotabuff_league_logos import resolve_local_team_logo_path
 from image import _ASSETS_DIR
+from logo_hosts import safe_logo_url
 from match_scoring import counted_roster_entry_sql, scored_match_sql
 from routers.cards import _build_roster_response
 from scoring import STAT_LABELS, display_points, stat_dict_from_row
@@ -59,7 +60,7 @@ def _team_logo_url(team) -> str | None:
         local_path = resolve_local_team_logo_path(_LOGO_DIR, team.name)
         if local_path:
             return f"/assets/dotabuff_league_logos/{os.path.basename(local_path)}"
-    return team.logo_url if team else None
+    return safe_logo_url(team.logo_url) if team else None
 
 
 def _team_dict(team):

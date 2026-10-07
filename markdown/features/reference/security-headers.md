@@ -36,7 +36,7 @@ HSTS is only absent in local development.
 
 `CORSMiddleware` no longer uses a wildcard (issue #136). Its settings are:
 
-- `allow_origin_regex=r"^https://[a-z0-9]+\.ext-twitch\.tv$"`. The Twitch panel extension is served from `https://<client-id>.ext-twitch.tv`, a different origin, and calls `/twitch/*` endpoints with an `Authorization` header carrying a Twitch-signed JWT.
+- `allow_origin_regex` is `^https://<TWITCH_EXTENSION_CLIENT_ID>\.ext-twitch\.tv$`, with the client id regex-escaped (issue #171; #136 allowed any `[a-z0-9]+` client id). Our Twitch panel extension is served from that origin and calls `/twitch/*` endpoints with an `Authorization` header carrying a Twitch-signed JWT. Without `TWITCH_EXTENSION_CLIENT_ID` the regex is unset, no extension origin is allowed, and start-up logs one warning. The CSP `frame-ancestors` below still lists `https://*.ext-twitch.tv`: it controls embedding, not cross-origin calls.
 - `allow_origins` holds the parsed, comma-separated `CORS_EXTRA_ORIGINS` list, empty by default. Set it to `http://localhost:8080` for Twitch Local Test. It is read at startup.
 - `allow_credentials=False`. Browsers never attach session cookies to allowed cross-origin requests. All `/twitch/*` endpoints authenticate via JWT (`verify_twitch_jwt`), not cookies.
 

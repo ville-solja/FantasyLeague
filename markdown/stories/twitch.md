@@ -577,3 +577,55 @@ As a caster, I want the MVP picker to tell me when it last checked for live game
 - The panel's series list shows "Live games checked N s ago" (or "N min ago"), and a Refresh button that fetches the list again.
 - When `live_checked_at` is more than 5 minutes old or `null`, or the source isn't configured, the line reads "Live games not checked recently — your match will appear once its stats are in" in the warning colour.
 - Failure path: if the request fails, the panel shows its existing error state and the Refresh button stays usable.
+
+---
+
+## Twitch Panel Abuse Limits (#171)
+
+### New Accounts Wait a Day Before Joining Drops
+**User story**
+As a viewer, I want drops to go to real viewers, so that someone who makes a stack of Twitch accounts during a broadcast can't crowd out my chance to win.
+
+**Acceptance criteria**
+- `_active_pool` includes a soft account only when `users.created_at` is at least `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` (default `24`) before the drop. Website accounts are always included. `0` turns the age rule off.
+- The panel tells a newly joined viewer: "Drops start for your account on <date>." It does this in the Live tab until the account is old enough.
+- Each `twitch_token_drop` audit entry keeps `count=<winners>` and adds `pool_size=<n>` and `excluded_new=<count>`.
+- When the pool is empty only because every present account is too new, the server still writes a `twitch_token_drop` entry with `count=0 pool_size=0 excluded_new=<count>`. The drop is not claimed, so a later confirmation of the same match can still drop. Chat then says "No tokens were dropped: new accounts join drops <N> hours after joining." (the configured age) instead of "no joined viewers were watching."
+- When a drop's `pool_size` is more than three times the median of that channel's last ten `twitch_token_drop` entries (only with at least five earlier entries), the server logs a warning and the audit detail includes `pool_spike=true`. Entries without `pool_size=` (written before #171) and empty pools are left out of the median.
+- **Failure path:** a soft account created one hour before a drop is not in the pool and gets no token. The drop still goes to the eligible viewers, and the chat count reflects only them.
+
+### Logged-Out Viewers Don't Fill the Presence Table
+**User story**
+As the operator, I want heartbeats from logged-out viewers to be ignored, so that people who can't join or win don't add rows or load.
+
+**Acceptance criteria**
+- `POST /twitch/heartbeat` with an opaque id not starting with `U` returns `{"ok": true}` and writes no `twitch_presence` row.
+- The route is limited per viewer (`key_by_twitch_viewer_or_ip`, `RATE_LIMIT_TWITCH_ACTION`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`), like the other panel routes.
+- **Failure path:** a heartbeat with an `A…` id leaves `twitch_presence` unchanged, and a `U…` heartbeat still upserts its row.
+
+### Team Logos Only From Known Hosts
+**User story**
+As a viewer, I want team logos to load only from known image hosts, so that opening Kana Cards or the panel doesn't show my IP address to arbitrary servers.
+
+**Acceptance criteria**
+- A new `backend/logo_hosts.py` has `safe_logo_url(url) -> str | None`. It returns the URL only when it is `https:`, has no explicit port and no userinfo (`user@host`), and its host is in `LOGO_HOST_ALLOWLIST`:
+  - comma-separated, compared case-insensitively;
+  - an empty value falls back to the default Steam CDN list.
+  
+  Otherwise it returns `None`.
+- `ingest._match_logo_url` turns `//host/...` into `https://host/...` and then stores only URLs that pass `safe_logo_url`.
+- Every response that carries `team_logo_url` or a team `logo_url` passes it through `safe_logo_url`: the card and roster routes, `GET /deck/booster`, the panel's teams and collection, and the Weekly Report fallback. `GET /teams` and `GET /teams/{team_id}` return no logo field, and the schedule returns no logos. The local `/assets/` logo stays preferred wherever it is used today.
+- The card image (`GET /cards/{card_id}/image`) also passes the logo through `safe_logo_url` before the server fetches it, so the server never requests a logo from an unknown host.
+- When the logo is `null`, the panel shows the team monogram, the website's team draw shows its blank circle placeholder and the Weekly Report shows the team name alone. This already happens for teams without a logo.
+- **Failure path:** a team whose stored `logo_url` is `https://evil.example/logo.png` is returned with `logo_url: null`, and an ingest of such a URL stores nothing.
+
+### Only Our Extension Can Call the Backend Cross-Origin
+**User story**
+As the operator, I want CORS to allow only our own extension's origin, so that another extension's iframe gets no `Access-Control-Allow-Origin` from our backend.
+
+**Acceptance criteria**
+- With `TWITCH_EXTENSION_CLIENT_ID=abc123`, a preflight from `https://abc123.ext-twitch.tv` gets `Access-Control-Allow-Origin` and one from `https://other999.ext-twitch.tv` doesn't.
+- The client id is regex-escaped when the rule is built.
+- Without `TWITCH_EXTENSION_CLIENT_ID`, no `*.ext-twitch.tv` origin is allowed. A warning is logged once at start-up, and `CORS_EXTRA_ORIGINS` origins keep working.
+- `allow_credentials` stays false.
+- **Failure path:** a preflight from another extension's origin gets no `Access-Control-Allow-Origin` header.

@@ -20,6 +20,7 @@ calls for local development.
 import base64
 import json
 import logging
+import math
 import os
 import random
 import time
@@ -54,6 +55,39 @@ router = APIRouter(prefix="/twitch", tags=["twitch"])
 
 _PRESENCE_TTL     = 600   # seconds — viewers expire from pool after 10 min inactive
 _TWITCH_DROP_MAX  = int(os.getenv("TWITCH_DROP_MAX", "20"))
+
+# Issue #171: pool-size spike watch. A drop whose pool is more than
+# _POOL_SPIKE_FACTOR times the median of the channel's last _POOL_SPIKE_WINDOW drops
+# (with at least _POOL_SPIKE_MIN_HISTORY of them) is logged and audited.
+_POOL_SPIKE_FACTOR      = 3
+_POOL_SPIKE_WINDOW      = 10
+_POOL_SPIKE_MIN_HISTORY = 5
+
+
+def drop_min_account_age_seconds() -> int:
+    """TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS (default 24) in seconds: how old a soft
+    account must be to be in a drop pool (issue #171). 0 turns the rule off; an
+    invalid or negative value falls back to the default."""
+    raw = os.getenv("TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS", "24").strip()
+    try:
+        hours = float(raw)
+    except ValueError:
+        hours = 24.0
+    if not math.isfinite(hours) or hours < 0:
+        hours = 24.0
+    return int(hours * 3600)
+
+
+def drops_from(user: User, now: int | None = None) -> int | None:
+    """Unix time from which a soft account is in drop pools, while that is still in
+    the future; None for website accounts, old-enough soft accounts, or when the
+    age rule is off."""
+    min_age = drop_min_account_age_seconds()
+    if min_age <= 0 or user.account_type != soft_accounts.SOFT or user.created_at is None:
+        return None
+    eligible_at = int(user.created_at) + min_age
+    now = int(time.time()) if now is None else now
+    return eligible_at if eligible_at > now else None
 
 # Issue #157 panel game routes: Join and draws are limited per viewer (opaque id)
 # and per IP; roster changes and Leave per viewer only. Plain functions stay
@@ -176,13 +210,21 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         logger.exception("Twitch PubSub broadcast failed")
 
 
+def _min_age_hours_text() -> str:
+    """The drop age as chat copy: "24 hours", "1 hour", "1.5 hours"."""
+    hours = drop_min_account_age_seconds() / 3600
+    number = f"{hours:g}"
+    return f"{number} hour" if number == "1" else f"{number} hours"
+
+
 def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
-                   drops_enabled: bool = True) -> str:
+                   drops_enabled: bool = True, only_new_accounts: bool = False) -> str:
     """Build the MVP chat announcement within Twitch's 280-character limit.
 
     Names the MVP and, for a token drop, only how many viewers received a token:
     soft accounts have no username, and a linked player's website username is
-    never revealed in chat (issue #157).
+    never revealed in chat (issue #157). `only_new_accounts`: the pool was empty
+    only because every present account was too new for drops (issue #171).
     """
     base = f"Match MVP: {player_name}!"
     if not drops_enabled:
@@ -190,6 +232,9 @@ def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
     elif winner_count > 0:
         noun = "viewer" if winner_count == 1 else "viewers"
         text = f"{base} {winner_count} {noun} received a token."
+    elif pool_empty and only_new_accounts:
+        text = (f"{base} No tokens were dropped: new accounts join drops "
+                f"{_min_age_hours_text()} after joining.")
     elif pool_empty:
         text = f"{base} No tokens were dropped: no joined viewers were watching."
     else:
@@ -258,13 +303,14 @@ def _post_chat_message(channel_id: str, message: str):
 # Viewer presence (heartbeat)
 # ---------------------------------------------------------------------------
 
-@router.post("/heartbeat")
-def heartbeat(
-    payload: dict = Depends(verify_twitch_jwt),
-    db: Session = Depends(get_db),
-):
-    """Called by the extension panel to record viewer presence. Eligible for giveaway pool."""
-    twitch_user_id = payload.get("opaque_user_id", "")
+def heartbeat(payload: dict, db: Session) -> dict:
+    """Record a logged-in viewer's presence for the drop pool.
+
+    Issue #171: logged-out viewers (opaque id not starting with U) can't join or
+    win, so their heartbeats are acknowledged without writing anything."""
+    twitch_user_id = str(payload.get("opaque_user_id") or "")
+    if not twitch_user_id.startswith("U"):
+        return {"ok": True}
     channel_id = payload.get("channel_id", "")
     now = int(time.time())
 
@@ -276,6 +322,18 @@ def heartbeat(
         db.add(TwitchPresence(twitch_user_id=twitch_user_id, channel_id=channel_id, seen_at=now))
     db.commit()
     return {"ok": True}
+
+
+@router.post("/heartbeat")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def heartbeat_route(
+    request: Request,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """Called by the extension panel every few minutes while the viewer is joined."""
+    return heartbeat(payload, db)
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +470,7 @@ def _me_state(db: Session, user: User) -> dict:
         "team_draw_cost": int(weights.get("team_booster_cost", 3)),
         "identity_shared": bool(user.twitch_account_id),
         "website_account": user.account_type != soft_accounts.SOFT,
+        "drops_from": drops_from(user),
     }
 
 
@@ -911,19 +970,84 @@ def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, we
 # Presence pool helper
 # ---------------------------------------------------------------------------
 
-def _active_pool(db: Session, channel_id: str) -> list[str]:
-    """Viewers with an account (soft account or recognised website account, both via
-    users.twitch_user_id) who sent a heartbeat within the presence TTL."""
-    cutoff = int(time.time()) - _PRESENCE_TTL
+# A website account (any account_type other than soft) is always old enough; a
+# soft account needs created_at at least the minimum age ago (NULL counts as new).
+_OLD_ENOUGH_SQL = ("(u.account_type IS NULL OR u.account_type <> :soft"
+                   " OR (u.created_at IS NOT NULL AND u.created_at <= :min_created))")
+
+
+def _present_accounts(db: Session, channel_id: str, old_enough: bool) -> list[str]:
     from sqlalchemy import text as _text
-    rows = db.execute(_text("""
+    now = int(time.time())
+    rows = db.execute(_text(f"""
         SELECT p.twitch_user_id
         FROM twitch_presence p
         JOIN users u ON u.twitch_user_id = p.twitch_user_id
         WHERE p.channel_id = :channel_id
           AND p.seen_at >= :cutoff
-    """), {"channel_id": channel_id, "cutoff": cutoff}).fetchall()
+          AND {"" if old_enough else "NOT "}{_OLD_ENOUGH_SQL}
+    """), {"channel_id": channel_id, "cutoff": now - _PRESENCE_TTL, "soft": soft_accounts.SOFT,
+           "min_created": now - drop_min_account_age_seconds()}).fetchall()
     return [r[0] for r in rows]
+
+
+def _active_pool(db: Session, channel_id: str) -> list[str]:
+    """Viewers with an account (soft account or recognised website account, both via
+    users.twitch_user_id) who sent a heartbeat within the presence TTL. A soft
+    account must also be TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS old (issue #171)."""
+    return _present_accounts(db, channel_id, old_enough=True)
+
+
+def _excluded_new_count(db: Session, channel_id: str) -> int:
+    """Present soft accounts left out of the pool for being too new (issue #171)."""
+    return len(_present_accounts(db, channel_id, old_enough=False))
+
+
+def _recent_pool_sizes(db: Session, channel_id: str) -> list[int]:
+    """pool_size of the channel's last _POOL_SPIKE_WINDOW token drops, newest first.
+    Entries without pool_size= (written before issue #171) and empty pools are skipped."""
+    prefix = f"channel={channel_id} "
+    rows = (db.query(AuditLog.detail)
+              .filter(AuditLog.action == "twitch_token_drop", AuditLog.detail.like(f"{prefix}%"))
+              .order_by(AuditLog.id.desc())
+              .limit(_POOL_SPIKE_WINDOW * 10)
+              .all())
+    sizes: list[int] = []
+    for (detail,) in rows:
+        if not detail or not detail.startswith(prefix):
+            continue
+        for part in detail.split(" "):
+            if part.startswith("pool_size="):
+                try:
+                    size = int(part[len("pool_size="):])
+                except ValueError:
+                    break
+                if size > 0:
+                    sizes.append(size)
+                break
+        if len(sizes) >= _POOL_SPIKE_WINDOW:
+            break
+    return sizes
+
+
+def _is_pool_spike(db: Session, channel_id: str, pool_size: int) -> bool:
+    import statistics
+    earlier = _recent_pool_sizes(db, channel_id)
+    if len(earlier) < _POOL_SPIKE_MIN_HISTORY:
+        return False
+    median = statistics.median(earlier)
+    if pool_size > _POOL_SPIKE_FACTOR * median:
+        logger.warning("Twitch token drop pool spike on channel %s: pool_size=%d, median of last %d drops=%s",
+                       channel_id, pool_size, len(earlier), median)
+        return True
+    return False
+
+
+def _drop_audit_detail(channel_id: str, match_id: int, count: int, pool_size: int,
+                       excluded_new: int, spike: bool, winner_names: list[str]) -> str:
+    return (f"channel={channel_id} match={match_id} count={count} pool_size={pool_size}"
+            f" excluded_new={excluded_new}" + (" pool_spike=true" if spike else "")
+            + f" winners={','.join(winner_names)}")
 
 
 # ---------------------------------------------------------------------------
@@ -947,10 +1071,19 @@ def _execute_token_drop(
     if not already_dropped:
         pool = _active_pool(db, channel_id)
         pool_size = len(pool)
+        excluded_new = _excluded_new_count(db, channel_id)
+        if not pool and excluded_new:
+            # Only too-new soft accounts were watching: record it, claim nothing.
+            db.add(AuditLog(
+                timestamp=int(time.time()), actor_id=None, actor_username="twitch",
+                action="twitch_token_drop",
+                detail=_drop_audit_detail(channel_id, match_id, 0, 0, excluded_new, False, []),
+            ))
         if pool and not _claim_drop(db, channel_id, drop_key):
             # Another confirmation claimed this drop between the check above and now.
             return winner_names, pool_size, True
         if pool:
+            spike = _is_pool_spike(db, channel_id, pool_size)
             count = min(_TWITCH_DROP_MAX, len(pool))
             winner_ids = random.sample(pool, count)
             users_by_twitch_id = {
@@ -969,7 +1102,8 @@ def _execute_token_drop(
                 actor_id=None,
                 actor_username="twitch",
                 action="twitch_token_drop",
-                detail=f"channel={channel_id} match={match_id} count={len(winner_names)} winners={','.join(winner_names)}",
+                detail=_drop_audit_detail(channel_id, match_id, len(winner_names), pool_size,
+                                          excluded_new, spike, winner_names),
             ))
 
     return winner_names, pool_size, already_dropped
@@ -1082,9 +1216,11 @@ def set_mvp(
         "token_drop": {"count": len(winner_names), "refresh": bool(winner_names)},
     })
 
+    pool_empty = enabled and not already_dropped and pool_size == 0
     chat_msg = _mvp_chat_text(player_name, len(winner_names),
-                              pool_empty=not already_dropped and pool_size == 0,
-                              drops_enabled=enabled)
+                              pool_empty=pool_empty,
+                              drops_enabled=enabled,
+                              only_new_accounts=pool_empty and _excluded_new_count(db, channel_id) > 0)
     _post_chat_message(channel_id, chat_msg)
 
     return {

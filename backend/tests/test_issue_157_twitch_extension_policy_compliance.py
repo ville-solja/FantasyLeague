@@ -215,6 +215,14 @@ def _join(db, opaque_id="Uviewer1", user_id=None, role="viewer"):
     return twitch.join(_viewer(opaque_id, user_id=user_id, role=role), db)
 
 
+def _backdate(db, opaque_id, hours=25):
+    """Age a soft account past the drop pool's minimum account age (issue #171, default 24 h)."""
+    user = _user_by_opaque(db, opaque_id)
+    user.created_at = int(time.time()) - hours * 3600
+    db.commit()
+    return user
+
+
 def _user_by_opaque(db, opaque_id):
     from models import User
     return db.query(User).filter(User.twitch_user_id == opaque_id).first()
@@ -1233,6 +1241,7 @@ class TestTokenDropsForTwitchPlayers:
         """AC Who is eligible: the drop pool is every present viewer with an account (soft or website-linked) via users.twitch_user_id."""
         import twitch
         _join(db, "Usoft")
+        _backdate(db, "Usoft")
         _website_user(db, "linked", twitch_user_id="Ulinked")
         _join(db, "Ustale")
         for oid in ("Usoft", "Ulinked", "Unoaccount"):
@@ -1249,6 +1258,7 @@ class TestTokenDropsForTwitchPlayers:
         _seed_series_match(db)
         for oid in ("Us1", "Us2", "Us3"):
             _join(db, oid)
+            _backdate(db, oid)
             _present(db, oid)
         start = {u.id: u.tokens for u in db.query(User).all()}
         result = _set_mvp(db)
@@ -1271,6 +1281,7 @@ class TestTokenDropsForTwitchPlayers:
         _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
         _present(db, "Ulinked")
         _join(db, "Usoft")
+        _backdate(db, "Usoft")
         _present(db, "Usoft")
         _set_mvp(db)
         assert chat == ["Match MVP: Player102! 2 viewers received a token."]
@@ -1344,6 +1355,7 @@ class TestTokenDropsForTwitchPlayers:
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
         _join(db, "Usoft")
+        _backdate(db, "Usoft")
         _present(db, "Usoft")
         assert _set_mvp(db)["token_drop"]["winner_count"] == 1
         db.expire_all()
