@@ -247,6 +247,20 @@ class TestPinnedBackendOrigins:
         assert '["https://league.example", "https://test.league.example"]' in baked
         assert re.search(r"var EBS_ALLOWED_ORIGINS = \[\];", _read(ext / "ebs-origins.js"))
 
+    def test_every_workflow_packaging_call_passes_an_ebs_origin(self):
+        """package.sh refuses to build without --ebs-origin, so every CI call must pass one
+        (the Docker publish workflow broke on exactly this after #164)."""
+        calls = []
+        for wf in (REPO_ROOT / ".github" / "workflows").glob("*.y*ml"):
+            for line in _read(wf).splitlines():
+                if "package.sh" in line and not line.strip().startswith("#"):
+                    calls.append((wf.name, line))
+        assert calls, "expected the publish workflow to package the extension"
+        for name, line in calls:
+            assert "--ebs-origin" in line or "ORIGIN_ARGS" in line, (name, line)
+        publish = _read(REPO_ROOT / ".github" / "workflows" / "docker-publish.yml")
+        assert "--ebs-origin" in publish and "EBS_ORIGINS" in publish
+
     def test_set_ebs_url_never_puts_the_secret_on_a_command_line_or_screen(self):
         src = _read(EXT_DIR / "set-ebs-url.sh")
         assert 'python3 - "$secret"' not in src
