@@ -9,6 +9,38 @@ Format:
 
 ---
 
+### 2026-10-07 — security-patcher — security
+**Problem:** CodeQL `py/url-redirection` flagged a redirect built from a query parameter even though it was checked with `value in ALLOWED` first, and `py/clear-text-logging-sensitive-data` flagged logging a login-mode name because the constant holding it was named `PASSWORD`.
+**Solution:** Redirect with the allowlist's own constant (`next((t for t in ALLOWED if t == value), default)`), so no request string reaches the URL; name constants that are not secrets without "password" in them (`LOCAL_LOGIN = "password"`), since CodeQL treats such names as sensitive sources.
+
+### 2026-10-07 — developer — testing
+**Problem:** For #171, adding `@limiter.limit(...)` to the existing `POST /twitch/heartbeat` made every direct call of the handler in tests raise ("parameter `request` must be an instance of starlette.requests.Request"): slowapi checks the `request` argument whenever the limiter is enabled, which it is in the suite. Separately, `test_issue_136._build_main_client` read `TWITCH_EXTENSION_CLIENT_ID` from the developer shell once CORS started depending on it.
+**Solution:** When a route gains a limit, split it like the other panel routes: a plain `heartbeat(payload, db)` with the logic and a `heartbeat_route(request, ...)` wrapper carrying the decorators; unit tests call the plain function, rate-limit tests go through `_twitch_app` + TestClient. Any import-time env read that a shared test helper depends on must be cleared in that helper (`monkeypatch.delenv`) before applying the test's own env.
+
+### 2026-10-07 — test-planner — endpoints
+**Problem:** Plan #171 lists `GET /teams` and `GET /teams/{team_id}` (routers/players.py) among responses that must sanitise team logos, but neither returns a logo field; the plan also misses `backend/image.py`, which fetches `team_logo_url` server-side for card images. Separately, a new eligibility rule on the drop pool (soft accounts must be 24 h old) silently breaks older drop tests that build pools from brand-new `_join` accounts.
+**Solution:** Before pinning "every response that carries X" in tests, grep the field across `backend/` (`grep -rn logo_url --include=*.py`) and compare with the plan's list; report extra and missing call sites. When a rule narrows who qualifies, grep tests for the fixtures that create the affected rows (`_join`, `TwitchPresence(`) and list them for the developer.
+
+### 2026-10-07 — security-reviewer — endpoints
+**Problem:** An env-based admin list that is re-applied on every sign-in (`_apply_admin_seed` for `SEED_ADMIN_STEAM_IDS`) silently undoes an in-app demotion: a demoted account whose id is still listed is promoted again at its next login, so demoting a compromised admin does nothing until the env changes and the app restarts.
+**Solution:** Apply env promotions once per id (record that the seed was applied, or skip accounts with a later demotion in the audit log) so an in-app demotion sticks; review any "promote on login" path for this.
+
+### 2026-10-07 — developer — frontend
+**Problem:** Plan #169 asked for the ADMIN badge and the Verified/Self-reported label on "own Profile and the user profile view", but the website has no view of another user's profile: `loadProfile` only fetches `GET /profile/{activeUserId}`, and the past-season and leaderboard rows don't link to profiles. Separately, a "no exact `User.username ==` query left" source check over whole modules fails on `POST /login` and `/forgot-password`, which deliberately keep exact lookups.
+**Solution:** Grep the frontend for the endpoint (`profile/\${`) before planning UI on a "view" of it, and say in the plan and UI docs where the element really appears. Scope source-pattern tests to the functions that create names (`inspect.getsource(module.register)` etc.), not whole files.
+
+### 2026-10-07 — test-planner — endpoints
+**Problem:** Plan #169 puts the reserved-word check in `auth.check_username` with a 422 "This name is reserved" and a skip when the rename keeps the current name, but `check_username` is a Pydantic field-validator body: its ValueError becomes FastAPI's list-shaped 422 `detail`, and it can't see the current user. Separately, "the leak test" for user `player_id` can't search bodies for the number: card rows carry public league-player `player_id`s that may equal a user's linked id.
+**Solution:** Before pinning an error string or a context-dependent rule on a validator helper, check whether it runs as a `field_validator` (grep `field_validator(...)(check_...)`); context-dependent checks go in the handler as `HTTPException`. Scope "no id leak" assertions to objects that carry a user identity (`id`/`user_id` + `username`).
+
+### 2026-10-07 — developer — endpoints
+**Problem:** For #150, two Python details nearly let forged Steam OpenID input through or crash the callback: `re.match(r"...(\d{17})$")` accepts a trailing newline (`$` matches before a final `\n`) and `\d` matches non-ASCII digits; and `hmac.compare_digest(a, b)` on `str` raises `TypeError` when either side has a non-ASCII character, which a query string can carry (a 500 instead of a refusal). Separately, test_issue_117's `#reauthModal` regex ends at the first `</div>\s*</div>`, so a nested block placed before the form cut the match short.
+**Solution:** Use `re.fullmatch` with `[0-9]{17}` for ids from untrusted input, and compare with `hmac.compare_digest(a.encode(), b.encode())`. When adding markup to a modal that older tests parse with a non-greedy `</div></div>` regex, put the new block after the elements those tests look for.
+
+### 2026-10-07 — test-planner — endpoints
+**Problem:** Plan #150 lists "token grants" among destructive admin actions that keep "the recent re-auth" plus a typed `confirm` field, but `POST /grant-tokens` has no `require_recent_reauth` today; the backup download it also lists is a `GET` (no body for `confirm`); and "demo accounts" have no flag on `User` (only `demo%` usernames / `@demo.local` emails from `/admin/demo/seed-accounts`).
+**Solution:** Before pinning "in addition to X" or "demo accounts can't Y" in tests, grep the route's `dependencies=` and the model for the marker; list the gaps in the stub module docstring and the report so the developer adds the guard, uses a query parameter for GET routes, and picks a reliable demo marker.
+
 ### 2026-10-06 — developer — endpoints
 **Problem:** For #160, removing `POST /twitch/link-code` made it answer 405, not 404: the `/` `StaticFiles` mount catches every unmatched path and refuses non-GET methods. Separately, a callback URL's one-time code and state would reach uvicorn's access log (it logs the full path with query), and `caplog` in a TestClient test also captures httpx's own "HTTP Request: GET …?code=…" lines from the client side.
 **Solution:** Register an app-level catch-all (`@app.api_route("/twitch/{rest:path}", …)` raising 404) after the routers and before the static mount. Add a `logging.Filter` on `uvicorn.access` that strips the query of sensitive paths (`twitch_oauth.RedactSignInQuery`). In log-secret tests, ignore records from `httpx`/`httpcore` loggers (the browser side) and assert on the app's records.

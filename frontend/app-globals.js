@@ -4,6 +4,14 @@ let activeUserId   = null;
 let activeUsername = localStorage.getItem("username");
 let activeIsAdmin  = false;
 let activeMustChangePassword = false;
+// Issue #150: from GET /me (booleans only; the Steam id never reaches the page).
+let activeSteamLinked  = false;
+let activeHasPassword  = true;
+let activeIsDemo       = false;
+// Issue #169: Unix time the next rename is possible (null = now), from GET /me.
+let activeUsernameChangeAvailableAt = null;
+// Issue #150: password | both | steam_signup, from GET /config.
+let _loginMethod = "password";
 let _tokenName        = "Tokens";
 let _tokenBalance     = null;
 let _teamBoosterCost  = 3;
@@ -29,6 +37,8 @@ async function loadConfig() {
       _tokenName = cfg.token_name || "Tokens";
       if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
       _tourAutostart = cfg.tour_autostart === true;
+      _loginMethod = cfg.login_method || "password";
+      if (typeof applyLoginMode === "function") applyLoginMode();
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
       const hintCostEl = document.getElementById("boosterHintCost");
@@ -155,6 +165,12 @@ function setStatus(id, msg, ok = true) {
   const el = document.getElementById(id);
   el.textContent = Array.isArray(msg) ? msg.map(e => e.msg ?? JSON.stringify(e)).join("; ") : (msg ?? "Unknown error");
   el.className = "status " + (ok ? "ok" : "err");
+}
+
+// Issue #169: the ADMIN badge comes only from the server's is_admin flag. A fixed
+// string, styled apart from the filled tag chips (style.css .admin-badge).
+function adminBadgeHtml(isAdmin) {
+  return isAdmin === true ? `<span class="admin-badge" title="Kana Cards admin">ADMIN</span>` : "";
 }
 
 function _escHtml(s) {

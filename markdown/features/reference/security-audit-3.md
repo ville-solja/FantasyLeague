@@ -26,7 +26,7 @@ If a reverse proxy rewrites `Host`, same-site requests will get 403. Set `APP_BA
 
 ## CORS
 
-`CORSMiddleware` allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$` (the Twitch extension iframe), plus any comma-separated origins in `CORS_EXTRA_ORIGINS`. The extra origins are read at startup. `allow_credentials` stays `False`. The main site is same-origin and needs no CORS.
+`CORSMiddleware` allows our Twitch extension iframe's origin, plus any comma-separated origins in `CORS_EXTRA_ORIGINS`. The extra origins are read at startup. `allow_credentials` stays `False`. Issue #136 matched any extension (`^https://[a-z0-9]+\.ext-twitch\.tv$`); since #171 the rule is `^https://<TWITCH_EXTENSION_CLIENT_ID>\.ext-twitch\.tv$` (client id regex-escaped), and without a client id no extension origin is allowed. See `twitch-panel-abuse-limits.md`. The main site is same-origin and needs no CORS.
 
 ## Production guards
 

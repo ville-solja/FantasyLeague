@@ -88,7 +88,7 @@ def _make_week(db, label="Week 1", offset_start=-172800, offset_end=-86400):
 
 
 def _make_team(db, team_id, name):
-    t = Team(id=team_id, name=name, logo_url=f"https://example.com/{team_id}.png")
+    t = Team(id=team_id, name=name, logo_url=f"https://steamcdn-a.akamaihd.net/apps/dota2/images/team_logos/{team_id}.png")
     db.add(t)
     db.flush()
     return t
@@ -141,7 +141,7 @@ class TestTeamLogoResolution:
 
         user = _make_user(db)
         week = _make_week(db)
-        _make_team(db, 1, "Radiant Squad")  # DB logo_url = https://example.com/1.png
+        _make_team(db, 1, "Radiant Squad")  # DB logo_url = Steam CDN .../team_logos/1.png
         _make_team(db, 2, "Dire Squad")
         _make_match(db, 9001, week)
         _generate(db, week)
@@ -167,7 +167,7 @@ class TestTeamLogoResolution:
         result = get_weekly_summary(week.id, db=db, current_user=_current_user(user))
 
         radiant_logo = result["series"][0]["matches"][0]["radiant_team"]["logo_url"]
-        assert radiant_logo == "https://example.com/1.png"
+        assert radiant_logo == "https://steamcdn-a.akamaihd.net/apps/dota2/images/team_logos/1.png"
 
 
 # ---------------------------------------------------------------------------

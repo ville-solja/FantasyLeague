@@ -1,6 +1,6 @@
 # Longer Sessions
 
-Server-side session management: players stay logged in while active (14 days idle, 30 days at most), admins get short sessions and confirm their password before destructive actions, and logging out ends the session on the server. Designed against the OWASP Session Management Cheat Sheet. Resolves GitHub issue #117 and replaces the session-version check from #119 (`reference/session-revocation.md`).
+Server-side session management: players stay logged in while active (14 days idle, 30 days at most), admins get short sessions and pass a recent identity check (password or Steam) before destructive actions, and logging out ends the session on the server. Designed against the OWASP Session Management Cheat Sheet. Resolves GitHub issue #117 and replaces the session-version check from #119 (`reference/session-revocation.md`).
 
 ---
 
@@ -19,6 +19,9 @@ Server-side session management: players stay logged in while active (14 days idl
   - `DELETE /admin/leagues/{league_id}/data`
   - `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}`
   - `POST /users/{user_id}/toggle-admin`
+  - `POST /grant-tokens` and `DELETE /admin/users/{user_id}` (Twitch viewer accounts) (#150)
+
+  A Steam re-auth satisfies the same check: `GET /auth/steam/start?purpose=reauth` and its callback call `sessions.mark_reauth` on the session when the verified Steam ID is the account's (issue #150). Accounts without a password (created through Steam) must use it; `POST /reauth` answers them 409 `use_steam_reauth`. Six admin actions also need a typed phrase (`require_typed_confirmation`, see `reference/steam-login.md`).
 - **Cookie.** Under `HTTPS_ONLY=true` the cookie is named `__Host-session` (`Secure`, `Path=/`, no `Domain`); otherwise `session` for local development. `HttpOnly` and `SameSite=Lax` are always set. Its `Max-Age` is the larger of the two absolute limits; the server enforces the real limits.
 - **Per-user rate limits.** The cookie no longer carries a user id, so `get_current_user` puts it on `request.state.session_user_id`, and `rate_limit.key_by_user_or_ip` reads it from there.
 - **Cleanup.** The week maintenance loop (`_week_maintenance_loop` in `backend/main.py`) calls `sessions.cleanup_expired(db)` on its first pass after the app starts and then once a day (the first pass at least 24 hours after the previous cleanup), deleting rows past their role's limits or whose user is gone.
@@ -34,7 +37,7 @@ Server-side session management: players stay logged in while active (14 days idl
 ## Endpoints
 
 ### `POST /reauth`
-Login required; open to any logged-in user, not only admins (the audit action is still `admin_reauth`). Body `{"password"}`. Checks the current user's password and sets `reauth_at` on the current session row; returns `{"status": "ok", "valid_seconds": ADMIN_REAUTH_SECONDS}`. Wrong password: 401 `"Incorrect password"`, recorded as a failed login for the username. Locked-out username (`LOGIN_LOCKOUT_THRESHOLD` failures within `LOGIN_LOCKOUT_WINDOW_SECONDS`): 429 with the login lockout message. If the current session row is missing (defensive; `get_current_user` has just validated it): 401 `"Not authenticated"`. Rate limit `RATE_LIMIT_LOGIN`. Audit `admin_reauth` with detail `ok`, `failed: wrong password` or `failed: locked out`.
+Login required; open to any logged-in user with a password, not only admins. Body `{"password"}`. Checks the current user's password and sets `reauth_at` on the current session row; returns `{"status": "ok", "valid_seconds": ADMIN_REAUTH_SECONDS}`. Wrong password: 401 `"Incorrect password"`, recorded as a failed login for the username. Locked-out username (`LOGIN_LOCKOUT_THRESHOLD` failures within `LOGIN_LOCKOUT_WINDOW_SECONDS`): 429 with the login lockout message. If the current session row is missing (defensive; `get_current_user` has just validated it): 401 `"Not authenticated"`. Rate limit `RATE_LIMIT_LOGIN`. Audit `admin_reauth` for admins and `player_reauth` for everyone else, with detail `ok`, `failed: wrong password` or `failed: locked out`. An account without a password gets 409 `use_steam_reauth` (not a failed login) and confirms through Steam instead.
 
 ### `GET /sessions`
 Login required. The caller's unexpired sessions, newest activity first: `[{"id", "created_at", "last_seen_at", "current"}]`. `id` is the row handle; the session ID and its hash are never returned.
@@ -51,7 +54,7 @@ Login required. Ends one of the caller's sessions and returns `{"status": "ok", 
 | `SESSION_TOUCH_SECONDS` | `300` | Minimum interval between `last_seen_at` writes |
 | `ADMIN_SESSION_IDLE_SECONDS` | `7200` (2 h) | Admin idle limit |
 | `ADMIN_SESSION_ABSOLUTE_SECONDS` | `43200` (12 h) | Admin limit from login |
-| `ADMIN_REAUTH_SECONDS` | `600` (10 min) | How long a password re-entry covers destructive admin actions |
+| `ADMIN_REAUTH_SECONDS` | `600` (10 min) | How long a recent identity check (password or Steam re-auth) covers destructive admin actions |
 
 The values are read and validated when `backend/sessions.py` is imported, so `import main` fails with a `RuntimeError` naming the variable when:
 
@@ -63,7 +66,7 @@ The values are read and validated when `backend/sessions.py` is imported, so `im
 
 ## Accepted risk
 
-The 14-day player idle limit is longer than the OWASP Session Management Cheat Sheet's typical examples. It is accepted because player accounts hold no payment data, every session can be revoked on the server, and the 30-day absolute limit meets NIST SP 800-63B AAL1 (re-authenticate at least every 30 days). Admin limits are much shorter, plus password re-entry, because admin actions can destroy data or expose password hashes (backup download).
+The 14-day player idle limit is longer than the OWASP Session Management Cheat Sheet's typical examples. It is accepted because player accounts hold no payment data, every session can be revoked on the server, and the 30-day absolute limit meets NIST SP 800-63B AAL1 (re-authenticate at least every 30 days). Admin limits are much shorter, plus a recent identity check (password or Steam), because admin actions can destroy data or expose password hashes (backup download).
 
 ## Release note
 

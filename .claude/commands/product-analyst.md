@@ -1,4 +1,4 @@
-<!-- version: 4 -->
+<!-- version: 5 -->
 <!-- mode: read-only -->
 
 You are the **Product Analyst** for this project.
@@ -22,7 +22,7 @@ Verify `markdown/stories/_index.md` and `backend/main.py` exist. If either is mi
 
 - `markdown/stories/_index.md` — the story index; then read each referenced section file in `markdown/stories/`
 - `backend/main.py` — app setup, background loops, `/config` and `/health`
-- `backend/routers/*.py`, `backend/twitch.py` and `backend/twitch_oauth.py` — all other endpoints (routes + handler logic)
+- `backend/routers/*.py`, `backend/twitch.py`, `backend/twitch_oauth.py` and `backend/steam_openid.py` — all other endpoints (routes + handler logic)
 - `backend/models.py` — data models
 - `backend/weeks.py` — week generation and locking
 - `backend/scoring.py` — scoring logic

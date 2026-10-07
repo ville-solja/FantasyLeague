@@ -246,11 +246,28 @@ function doJoin(btn) {
     }).finally(function () { btn.disabled = false; });
 }
 
+// Issue #171: a new account is in MVP drops only once it is old enough.
+function dropsStartText(me) {
+    if (!me || !me.drops_from) return "";
+    var d = new Date(me.drops_from * 1000);
+    if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return "";
+    return "Drops start for your account on " +
+        d.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ".";
+}
+
+function renderDropsStart() {
+    var line = el("drops-start");
+    var text = isJoined() ? dropsStartText(state.me) : "";
+    line.textContent = text;
+    line.hidden = !text;
+}
+
 function renderAll() {
     var joined = isJoined();
     el("token-chip").hidden = !joined;
     el("btn-settings").hidden = !joined;
     if (joined) el("token-count").textContent = String(state.me.tokens);
+    renderDropsStart();
     el("cards-main").hidden = !joined;
     el("roster-main").hidden = !joined;
     renderJoinSlots();

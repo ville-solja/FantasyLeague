@@ -91,10 +91,18 @@
       <button type="submit" style="width:100%;margin-bottom:10px;">Login</button>
       <button type="button" class="secondary" style="width:100%;" onclick="showForgotPassword()">Forgot password</button>
       <div class="status" id="loginStatus"></div>
-      <div style="text-align:center;margin-top:12px;">
+      <div id="createAccountLink" style="text-align:center;margin-top:12px;">
         <button type="button" class="ghost" style="font-size:0.8rem;" onclick="showRegister()">Create new account</button>
       </div>
     </form>
+    <!-- Issue #150: shown in LOGIN_METHOD both / steam_signup (applyLoginMode). A full-page
+         navigation to steamcommunity.com, never a pop-up or an embedded frame. -->
+    <div id="steamLoginBlock" class="steam-login-block" style="display:none;">
+      <p class="steam-login-divider">or</p>
+      <button type="button" style="width:100%;" onclick="startSteamLogin()">Sign in with Steam</button>
+      <p class="steam-login-note">Sign-in happens on steamcommunity.com. Kana Cards never asks for your Steam password.</p>
+    </div>
+    <p id="steamSignupNotice" class="steam-login-note" style="display:none;">New players: sign in with Steam to create your account.</p>
   </div>
 </div>
 
@@ -157,6 +165,23 @@
       <button type="submit" style="width:100%;margin-bottom:10px;margin-top:10px;">Create account</button>
       <button type="button" class="ghost" style="width:100%;" onclick="showLogin()">Back to login</button>
       <div class="status" id="registerStatus"></div>
+    </form>
+  </div>
+</div>
+
+<!-- STEAM SIGN-UP MODAL (issue #150): a verified new Steam player picks a display name -->
+<div class="modal-overlay hidden" id="steamSignupModal" role="dialog" aria-modal="true" aria-labelledby="steamSignupTitle" data-close="closeSteamSignup" onclick="if(event.target===this)closeSteamSignup()">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h2 id="steamSignupTitle" style="margin-bottom:0;">Choose your name</h2>
+      <button class="ghost" onclick="closeSteamSignup()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <p class="profile-twitch-copy">Steam confirmed your account. Pick the name other players see on Kana Cards. You can change it later in Profile.</p>
+    <form id="steamSignupForm" method="post" novalidate>
+      <input id="steamSignupUsername" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Display name" aria-describedby="steamSignupHint" style="width:100%;margin-bottom:4px;" />
+      <p id="steamSignupHint" style="font-size:0.75rem;color:#888;margin:0 0 12px;">Letters, digits, underscore (_) and hyphen (-) only.</p>
+      <button type="submit" style="width:100%;">Create account</button>
+      <div class="status" id="steamSignupStatus"></div>
     </form>
   </div>
 </div>
@@ -377,12 +402,13 @@
     <div class="panel">
       <h2>Account</h2>
       <div style="margin-bottom:24px;">
-        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Username</div>
+        <div style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Username <span id="profileAdminBadge"></span></div>
         <div class="row">
           <input id="profileUsername" type="text" placeholder="Username" aria-describedby="profileUsernameHint" />
           <button onclick="saveUsername()">Save</button>
         </div>
-        <p id="profileUsernameHint" style="font-size:0.75rem;color:#888;margin:6px 0 0;">Letters, digits, underscore (_) and hyphen (-) only.</p>
+        <p id="profileUsernameHint" style="font-size:0.75rem;color:#888;margin:6px 0 0;">Letters, digits, underscore (_) and hyphen (-) only. Names that look like staff or the league (admin, Kanaliiga, support…) are not available.</p>
+        <p id="profileRenameHint" style="display:none;font-size:0.75rem;color:#888;margin:6px 0 0;"></p>
         <div class="status" id="usernameStatus"></div>
       </div>
       <div>
@@ -393,6 +419,7 @@
           <input id="pwNew" name="new-password" type="password" autocomplete="new-password" placeholder="New password (min 6 chars)" style="width:100%;margin-bottom:8px;" />
           <button type="submit">Change password</button>
         </form>
+        <p id="profileNoPasswordNote" class="profile-twitch-copy" style="display:none;">This account signs in with Steam and has no password.</p>
         <div class="status" id="passwordStatus"></div>
         <p style="font-size:0.75rem;color:#888;margin:16px 0 8px;">Changing your password logs out your other devices. To end every session now, including this one:</p>
         <button class="secondary" onclick="logoutEverywhere()">Log out everywhere</button>
@@ -406,16 +433,34 @@
       </div>
     </div>
 
+    <!-- Issue #150: Steam link (yes/no only; the Steam id is never shown). Hidden in password mode. -->
+    <div class="panel" id="steamProfilePanel" style="display:none;">
+      <h2>Steam</h2>
+      <p id="steamLinkReminder" class="steam-reminder" style="display:none;">Link Steam now. Password sign-in will end in a later update.</p>
+      <div id="steamUnlinkedState" style="display:none">
+        <p class="profile-twitch-copy">Link your Steam account to sign in with Steam and verify your Dota player id. Sign-in happens on steamcommunity.com; Kana Cards never asks for your Steam password.</p>
+        <button id="btnLinkSteam" onclick="linkSteam()">Link Steam</button>
+      </div>
+      <div id="steamLinkedState" style="display:none">
+        <p class="profile-twitch-status">Steam linked</p>
+        <p class="profile-twitch-copy">Your Dota player id is verified with Steam.</p>
+        <button class="secondary" id="btnUnlinkSteam" onclick="unlinkSteam()">Unlink Steam</button>
+      </div>
+      <div class="status" id="steamStatus"></div>
+    </div>
+
     <div class="panel">
       <h2>Dota 2 Player</h2>
       <p style="font-size:0.8rem;color:#555;margin-bottom:16px;">If you play in the league, link your OpenDota account ID. Tags an admin has given you then appear as stickers on your cards and next to your name on the leaderboard.</p>
       <div class="row">
         <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
-        <button onclick="savePlayerId()">Save</button>
+        <button id="btnSavePlayerId" onclick="savePlayerId()">Save</button>
       </div>
+      <p id="profilePlayerIdVerified" class="profile-twitch-copy" style="display:none;margin-top:8px;">Verified with Steam.</p>
       <div id="profilePlayerPreview" style="display:none;margin-top:12px;display:flex;align-items:center;gap:8px;">
         <img id="profilePlayerAvatar" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'" />
         <span id="profilePlayerName" style="font-size:0.9rem;color:#e0e0e0;"></span>
+        <span id="profilePlayerSource" class="player-source"></span>
       </div>
       <div class="status" id="playerIdStatus"></div>
     </div>
@@ -882,6 +927,7 @@
 
 <!-- TAB: ADMIN -->
 <div id="tab-admin" class="tab-content">
+  <div class="status" id="adminSteamStatus"></div>
 
   <!-- Admin tab bar -->
   <div id="admin-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
@@ -920,6 +966,15 @@
         <tbody id="twitchMergesBody"></tbody>
       </table>
       <div class="status" id="twitchMergesStatus"></div>
+
+      <!-- Issue #150: self-reported player ids cleared when a verified Steam account took the id. -->
+      <div class="twitch-merges-title">Superseded player id claims</div>
+      <p class="twitch-merges-note">Accounts whose self-reported player id was cleared because a Steam-verified account has that id.</p>
+      <table id="playerIdClaimsTable">
+        <thead><tr><th>Cleared on</th><th>Verified account</th><th>Player id</th><th>When</th></tr></thead>
+        <tbody id="playerIdClaimsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+      </table>
+      <div class="status" id="playerIdClaimsStatus"></div>
     </div>
   </div>
 
@@ -1208,7 +1263,7 @@
       live leaderboard data. Users will need to draw new cards and you will need to
       re-add players via Player Management afterward.
     </p>
-    <label style="font-size:0.8rem;">Type <strong>RESET</strong> to confirm<br>
+    <label style="font-size:0.8rem;">Type <strong>RESET SEASON</strong> to confirm<br>
       <input type="text" id="seasonResetConfirmInput" style="width:100%;margin-top:6px;margin-bottom:12px;" autocomplete="off">
     </label>
     <div style="display:flex;gap:8px;">
@@ -1219,6 +1274,26 @@
   </div>
 </div>
 
+<!-- Typed confirmation for destructive admin actions (issue #150) -->
+<div class="modal-overlay hidden" id="typedConfirmModal" role="dialog" aria-modal="true" aria-labelledby="typedConfirmTitle" data-close="closeTypedConfirm" onclick="if(event.target===this)closeTypedConfirm()">
+  <div class="modal" style="max-width:420px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 id="typedConfirmTitle" style="margin:0;">Confirm action</h2>
+      <button class="ghost" onclick="closeTypedConfirm()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <p id="typedConfirmText" class="profile-twitch-copy"></p>
+    <form id="typedConfirmForm" method="post" novalidate>
+      <label for="typedConfirmInput" style="font-size:0.8rem;">Type <strong id="typedConfirmPhrase"></strong> to confirm</label>
+      <input id="typedConfirmInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" style="width:100%;margin:6px 0 12px;" />
+      <div style="display:flex;gap:8px;">
+        <button type="submit" class="danger" style="flex:1;">Confirm</button>
+        <button type="button" class="secondary" onclick="closeTypedConfirm()">Cancel</button>
+      </div>
+    </form>
+    <div class="status err" id="typedConfirmStatus" style="margin-top:8px;"></div>
+  </div>
+</div>
+
 <!-- Admin re-authentication prompt (issue #117); last overlay so it stacks above other modals -->
 <div class="modal-overlay hidden" id="reauthModal" role="dialog" aria-modal="true" aria-labelledby="reauthTitle" data-close="closeReauthModal" onclick="if(event.target===this)closeReauthModal()">
   <div class="modal" style="max-width:420px;">
@@ -1226,7 +1301,7 @@
       <h2 id="reauthTitle" style="margin:0;">Confirm your password</h2>
       <button class="ghost" onclick="closeReauthModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
-    <p style="font-size:0.85rem;color:#888;margin-bottom:12px;">This admin action needs your password again. It stays confirmed on this device for a few minutes.</p>
+    <p id="reauthPasswordText" style="font-size:0.85rem;color:#888;margin-bottom:12px;">This admin action needs your password again. It stays confirmed on this device for a few minutes.</p>
     <form id="reauthForm" method="post" novalidate>
       <input id="reauthUsername" class="visually-hidden" type="text" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" readonly />
       <input id="reauthPassword" type="password" name="password" placeholder="Password" autocomplete="current-password" style="width:100%;margin-bottom:12px;" />
@@ -1235,6 +1310,14 @@
         <button type="button" class="secondary" onclick="closeReauthModal()">Cancel</button>
       </div>
     </form>
+    <!-- Issue #150: accounts without a password confirm through a Steam round trip. -->
+    <div id="reauthSteamBlock" style="display:none;">
+      <p class="profile-twitch-copy">This action needs a fresh sign-in. Confirm with Steam; you come back here and repeat the action. It stays confirmed on this device for a few minutes.</p>
+      <div style="display:flex;gap:8px;">
+        <button type="button" style="flex:1;" onclick="startSteamReauth()">Confirm with Steam</button>
+        <button type="button" class="secondary" onclick="closeReauthModal()">Cancel</button>
+      </div>
+    </div>
     <div class="status err" id="reauthStatus" style="margin-top:8px;"></div>
   </div>
 </div>

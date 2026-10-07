@@ -74,6 +74,40 @@ def require_recent_player_reauth(request: Request, current_user: dict = Depends(
     return current_user
 
 
+# Issue #150: destructive admin actions also need the admin to type the action's
+# name. Steam OpenID cannot force a fresh password prompt, so a hijacked admin tab
+# with a recent Steam re-auth still needs this deliberate step. Compared without
+# regard to case or surrounding spaces.
+CONFIRM_PHRASES = {
+    "season_end": "END SEASON",
+    "season_reset": "RESET SEASON",
+    "toggle_admin": "CHANGE ADMIN",
+    "grant_tokens": "GRANT TOKENS",
+    "backup_download": "DOWNLOAD BACKUP",
+    "delete_user": "DELETE USER",
+}
+
+
+def require_typed_confirmation(action: str):
+    """A route dependency: the request must carry `confirm` equal to the action's
+    phrase (CONFIRM_PHRASES), as a query parameter or a JSON body field; otherwise
+    400 {"detail": "confirmation_required"}. List it after require_recent_reauth."""
+    expected = CONFIRM_PHRASES[action]
+
+    async def _check(request: Request):
+        value = request.query_params.get("confirm")
+        if value is None and request.method != "GET":
+            try:
+                body = await request.json()
+            except Exception:
+                body = None
+            if isinstance(body, dict):
+                value = body.get("confirm")
+        if not isinstance(value, str) or value.strip().upper() != expected:
+            raise HTTPException(status_code=400, detail="confirmation_required")
+    return _check
+
+
 def _audit(db, action: str, actor_id=None, actor_username=None, detail=None):
     db.add(AuditLog(
         timestamp=int(time.time()),

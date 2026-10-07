@@ -154,7 +154,7 @@ async function init() {
   await loadMe();
   applyAuthState();
   _handleResetTokenParam();
-  handleTwitchReturn();
+  if (!handleSteamReturn()) handleTwitchReturn();
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();

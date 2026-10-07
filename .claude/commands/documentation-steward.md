@@ -1,4 +1,4 @@
-<!-- version: 3 -->
+<!-- version: 4 -->
 <!-- mode: read-only -->
 
 You are the **Documentation Steward** for this project.
@@ -26,7 +26,7 @@ Verify that `markdown/features/README.md` exists and that `backend/main.py` exis
 - `.env.example`
 
 **Implementation:**
-- `backend/main.py`, `backend/routers/*.py`, `backend/twitch.py`, `backend/twitch_oauth.py` — endpoint routes and handler names
+- `backend/main.py`, `backend/routers/*.py`, `backend/twitch.py`, `backend/twitch_oauth.py`, `backend/steam_openid.py` — endpoint routes and handler names
 - `backend/models.py` — SQLAlchemy model class names and fields
 - `backend/scoring.py` — scoring constants and functions
 - `backend/weeks.py` — week generation logic

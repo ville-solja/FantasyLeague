@@ -1,13 +1,15 @@
 import json
 import logging
 import os
+import re
 import time
 from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 from models import User, Weight, TagDefinition
-from auth import hash_password
+from auth import hash_password, username_taken
+import login_mode
 from scoring import SCORING_STATS
 
 SEED_DIR = os.path.join(os.path.dirname(__file__), "seed")
@@ -49,7 +51,16 @@ def seed_admin_from_env():
     For each set, creates an admin user unless a user with that username
     already exists (in which case it is skipped). Safe to call multiple
     times (idempotent).
+
+    Skipped with one warning when LOGIN_METHOD=steam_signup (issue #150): these
+    would be password accounts, and that mode creates accounts only through Steam.
     """
+    if login_mode.current() == login_mode.STEAM_SIGNUP:
+        if os.environ.get("SEED_ADMIN_USERNAME", "").strip():
+            logger.warning("Admin seed: SEED_ADMIN_USERNAME (and numbered sets) ignored because "
+                           "LOGIN_METHOD=steam_signup creates accounts only through Steam; "
+                           "name admins with SEED_ADMIN_STEAM_IDS")
+        return
     db = SessionLocal()
     try:
         i = 1
@@ -62,8 +73,9 @@ def seed_admin_from_env():
             if not (username and email and password):
                 break  # env vars absent or incomplete — stop seeding here
 
-            existing = db.query(User).filter_by(username=username).first()
-            if not existing:
+            # Case-insensitive like every other name check (issue #169); env seeding
+            # skips the reserved-word check so an operator can name an admin "admin".
+            if not username_taken(db, username):
                 db.add(User(
                     username=username,
                     email=email,
@@ -87,6 +99,28 @@ def seed_admin_from_env():
             i += 1
     finally:
         db.close()
+
+
+_STEAM64_RE = re.compile(r"[0-9]{17}")
+
+
+def seed_admin_steam_ids(environ=os.environ) -> set[str]:
+    """Steam64 ids from SEED_ADMIN_STEAM_IDS (comma-separated, issue #150). A verified
+    Steam sign-in, sign-up or link with a listed id makes the account an admin
+    (never a demo account). An entry that is not exactly 17 digits is logged by
+    position and skipped. Read on every call; removing an id never demotes anyone."""
+    ids = set()
+    raw = environ.get("SEED_ADMIN_STEAM_IDS", "")
+    for position, entry in enumerate(raw.split(","), start=1):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if _STEAM64_RE.fullmatch(entry):
+            ids.add(entry)
+        else:
+            logger.warning("SEED_ADMIN_STEAM_IDS entry %d is not a 17-digit Steam64 id; skipped",
+                           position)
+    return ids
 
 
 DEFAULT_WEIGHTS = [

@@ -86,7 +86,7 @@ Update `TWITCH_EXTENSION_VERSION` whenever a new extension version is installed 
 
 `TWITCH_EXTENSION_SECRET` is the **base64 key** from the Extension Secrets table. It is not the "Twitch API Client Secret" that appears mid-page.
 
-CORS allows only the extension iframe origin (`https://<client-id>.ext-twitch.tv`, matched by `^https://[a-z0-9]+\.ext-twitch\.tv$`), which covers Hosted Test and released versions. For **Local Test**, the panel is served from the Testing Base URI (`http://localhost:8080`), so add that origin:
+CORS allows only our own extension's iframe origin, `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` (the client id is regex-escaped into `^https://<id>\.ext-twitch\.tv$`), which covers Hosted Test and released versions; other extensions' origins get no `Access-Control-Allow-Origin` (#171). Without `TWITCH_EXTENSION_CLIENT_ID`, no `ext-twitch.tv` origin is allowed and start-up logs one warning, so set it wherever the extension runs (the test extension uses its own client id). For **Local Test**, the panel is served from the Testing Base URI (`http://localhost:8080`), so add that origin:
 ```
 CORS_EXTRA_ORIGINS=http://localhost:8080
 ```
@@ -168,6 +168,8 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 - Fires on MVP confirmation — no separate trigger
 - **Once per match**: re-confirming a different MVP for the same match does not re-drop tokens
 - Up to `TWITCH_DROP_MAX` (default 20) random joined viewers (soft accounts and website accounts the panel recognises) from the pool receive +1 token
+- **Account age (#171):** a soft account is in the pool only once it is `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` old (default 24; `0` turns it off), so alts made during a broadcast can't farm it. Website accounts are always eligible. See [Twitch Panel Abuse Limits](../reference/twitch-panel-abuse-limits.md)
+- Each drop is audited as `twitch_token_drop` with `count`, `pool_size`, `excluded_new` and, for a pool more than three times the channel's recent median, `pool_spike=true` (also logged as a warning)
 - `TWITCH_DROPS_ENABLED=false` turns drops off: the MVP and the fantasy bonus are still set
 - Result broadcast via Twitch PubSub with the winner count only — all open panels show the MVP, and joined panels refresh their balance and show "+1 token from the MVP drop" when it went up
 - The confirmation banner shows how many viewers received a token, not their names
@@ -180,7 +182,7 @@ A 318 × 500 panel styled with the Kanaliiga design system. Full description: [T
 
 1. Reads the EBS URL from `Twitch.ext.configuration.global.content` at startup
 2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
-3. Calls `GET /twitch/me`: not joined shows the Join box (or "Log in to Twitch to join"); joined shows the token count, the Cards tab (draw, team draw picker, card reveal, collection with rarity filters) and the Roster tab (slot-first bench picker, lock countdown, week points)
+3. Calls `GET /twitch/me`: not joined shows the Join box (or "Log in to Twitch to join"); joined shows the token count, the Cards tab (draw, team draw picker, card reveal, collection with rarity filters) and the Roster tab (slot-first bench picker, lock countdown, week points). While a new soft account is too young for drops, the Live tab says "Drops start for your account on <date>." (`drops_from`)
 4. Settings: share the Twitch identity, Leave Kana Cards
 5. A section the EBS can't fill shows a short neutral message; a missing EBS URL after 8 seconds shows "Kana Cards is not available on this channel right now." — never a blank panel or a login prompt
 
@@ -188,7 +190,7 @@ A 318 × 500 panel styled with the Kanaliiga design system. Full description: [T
 
 ## Presence Pool
 
-Joined viewers' panels call `POST /twitch/heartbeat` every ~55 seconds while open (viewers who haven't joined send none). Only viewers with an account (soft, or a website account the panel recognises) and a heartbeat within the last 10 minutes are eligible for drops.
+Joined viewers' panels call `POST /twitch/heartbeat` every ~55 seconds while open (viewers who haven't joined send none). The EBS ignores heartbeats from logged-out viewers (opaque ids not starting with `U`): it answers `{"ok": true}` and writes nothing (#171). Only viewers with an account (soft, or a website account the panel recognises) and a heartbeat within the last 10 minutes are eligible for drops, and a soft account must also be `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` old.
 
 ---
 
@@ -286,7 +288,7 @@ rate-limited `POST /twitch/link`) is replaced by Twitch sign-in; `GET /twitch/st
 `GET /twitch/me`. The `twitch_link_codes` table and the `TwitchLinkCode` model remain for a later clean-up migration; only `soft_accounts.delete_soft_account` still deletes its rows, and no route reads or writes it.
 
 ### `POST /twitch/heartbeat`
-Twitch JWT. Records viewer presence. Call every ~55 seconds.
+Twitch JWT. Records viewer presence (upserts `twitch_presence`). Call every ~55 seconds. A logged-out viewer's heartbeat returns `{"ok": true}` without writing. Rate-limited per viewer (`RATE_LIMIT_TWITCH_ACTION`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`).
 
 ### `GET /twitch/matches/current`
 Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with ingested match
@@ -343,20 +345,22 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 
 | Variable | Default | Description |
 |---|---|---|
-| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner) |
+| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner). Also the only `ext-twitch.tv` origin CORS allows; unset, no extension origin is allowed (#171) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.2.0`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_DROPS_ENABLED` | `true` | Kill switch for MVP token drops; `false` sets the MVP and bonus only |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join and draws per IP; draws, roster changes and Leave per viewer |
+| `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns the rule off. Website accounts are always eligible (#171) |
+| `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team logo URL may use (stored at ingest, returned, or fetched for card images); empty means the default list (#171) |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
 | `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |
-| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `*.ext-twitch.tv`; `http://localhost:8080` for Local Test |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`; `http://localhost:8080` for Local Test |
 | `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |
 
 ---

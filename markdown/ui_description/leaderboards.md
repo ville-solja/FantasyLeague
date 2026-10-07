@@ -9,6 +9,8 @@ Fantasy user standings with two modes toggled by buttons:
 - **Season** (default) — ranks all users by cumulative fantasy points earned across all locked weeks. Points are only counted for cards that were in the user's active roster snapshot for each week, after bench substitution (subbed-in bench cards count, subbed-out cards don't). Shows columns: Rank, User, Season pts.
 - **Weekly** — ranks users by points earned in a single week. A week dropdown appears to select which past locked week to view; the chosen week stays selected when the tab refreshes. Shows columns: Rank, User, Week pts.
 
+A real admin's name carries an **ADMIN** badge (issue #169) in the Season and Weekly views and in Past Seasons: an outlined chip in the accent colour, display type, uppercase, 2px radius, 11px. It comes only from the account's admin flag and looks different from the filled flame tag chips, which no admin can name `admin`. Usernames and tag labels are HTML-escaped.
+
 Tester accounts and Twitch viewer soft accounts (players who joined in the Twitch panel, issue #157) never appear in either view or in Past Seasons.
 
 Card rarity modifiers are applied to points in both views (e.g. a Legendary card gets +3% on top of raw stats).

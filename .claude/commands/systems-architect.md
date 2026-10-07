@@ -1,4 +1,4 @@
-<!-- version: 9 -->
+<!-- version: 10 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -41,6 +41,8 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 - `backend/soft_accounts.py` — Twitch soft accounts: creation, deletion, merge, reverse, retention purge
 - `backend/steam_live.py` — Steam live-game client used by the separate live-poll thread
 - `backend/sessions.py` — server-side session rows and re-auth recency
+- `backend/steam_openid.py` — Steam OpenID sign-in, link, sign-up and re-auth routes
+- `backend/login_mode.py` — `LOGIN_METHOD` switch and its route guards
 - `backend/database.py` — database setup and session factory
 - `backend/seed.py` — seeding and DEFAULT_WEIGHTS
 - `backend/email_utils.py` — email sending helpers

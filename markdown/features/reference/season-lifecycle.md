@@ -102,8 +102,9 @@ explicitly in `.env`.
 ## Admin UI
 
 The Settings tab (admin panel) has a "Season Lifecycle" section: a season-label input with
-an "End Season (Archive)" button, a "Reset Season…" button that opens a type-to-confirm
-modal (must type `RESET`), and a table of previously archived seasons. The Leaderboard tab
+an "End Season (Archive)" button (asks the admin to type `END SEASON`), a "Reset Season…"
+button that opens a type-to-confirm modal (must type `RESET SEASON`; the backend checks it as
+`confirm`, issue #150), and a table of previously archived seasons. The Leaderboard tab
 shows a "Past Seasons" panel with a season selector once at least one archive exists. The
 Profile view shows a "Past Seasons" line per archived season the user appears in
 (e.g. "Season 15 — 3rd, 1240.0 pts"). Week Management's create/edit forms use `<input

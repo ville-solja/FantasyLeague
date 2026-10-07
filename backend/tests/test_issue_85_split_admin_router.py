@@ -280,14 +280,22 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-160-twitch-account-connection-oidc's 81 new tests did after that
         (its retired-route updates: test_issue_136's two link-code Origin tests became
         four parametrized cases, +2; test_issue_135's two link-code secrets tests became
-        one, -1; test_issue_117/119 replaced like for like, net 82)."""
+        one, -1; test_issue_117/119 replaced like for like, net 82), and
+        plan-issue-150-steam-login's 145 new tests did after that (its updates to
+        test_issue_117/135/158 for typed confirmations and the new forms changed no counts), and
+        plan-issue-169-impersonation-hardening's 114 new tests did after that (its updates to
+        test_issue_120/141/150 for the new profile and leaderboard shapes and the newly
+        reserved sign-up names changed no counts), and
+        plan-issue-171-twitch-panel-abuse-limits's 84 new tests (83 plus the chat-copy follow-up) did after that (its updates
+        to test_issue_157 drop tests, test_issue_136 CORS tests and the test_issue_51/100
+        logo fixtures changed no counts)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "1972 passed" in output, output[-3000:]
+        assert "2320 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

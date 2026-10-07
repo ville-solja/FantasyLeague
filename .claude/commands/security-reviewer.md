@@ -1,4 +1,4 @@
-<!-- version: 9 -->
+<!-- version: 10 -->
 <!-- mode: read-only -->
 
 You are the **Security Reviewer** for this project.
@@ -47,6 +47,8 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/soft_accounts.py` — Twitch soft accounts: creation, deletion, merge and reverse
 - `backend/sessions.py` — server-side sessions and re-auth recency (`reauth_is_recent`)
 - `backend/steam_live.py` — Steam Web API client (`STEAM_API_KEY` handling)
+- `backend/steam_openid.py` — Steam sign-in routes: `/auth/steam/start`, `/auth/steam/callback`, `/auth/steam/signup`, `/profile/steam/unlink`; OpenID checks, state and nonce handling, admin seeding by Steam ID
+- `backend/login_mode.py` — `LOGIN_METHOD` (password / both / steam_signup) and the route guards that answer 404 outside a mode
 - `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
 - `backend/requirements.txt`, `backend/requirements-dev.txt` — pinned package versions, for the dependency check below
 - `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
@@ -65,6 +67,7 @@ Classify each endpoint as one of:
 - **Twitch JWT required** — `/twitch/*` routes validated by `verify_twitch_jwt`, except:
   - `/twitch/connection`, `/twitch/merge/confirm`, `/twitch/disconnect` — website session (`get_current_user` / `require_recent_player_reauth`)
   - `/auth/twitch/start`, `/auth/twitch/callback` — browser redirects with no `Depends()`; they check the session (and, for start, a recent password check) inside the function and redirect on failure
+- **Steam sign-in (pre-login)** — `/auth/steam/start`, `/auth/steam/callback`, `/auth/steam/signup` carry only the login-mode guard (`login_mode.require_steam`): start and callback check the session and the one-time state inside the function, and sign-up requires a verified pending sign-up cookie. `/profile/steam/unlink` uses `require_recent_player_reauth`.
 
 Flag any endpoint that is **not public** but is missing the appropriate `Depends()`.
 

@@ -104,7 +104,7 @@ As an admin, I want new usernames limited to plain letters, digits, underscores 
 As the operator, I want cross-origin API access limited to the Twitch extension so that scanners stop flagging a wildcard CORS policy, while the extension keeps working.
 
 **Acceptance criteria**
-- CORS allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$`, plus any comma-separated origins in `CORS_EXTRA_ORIGINS`
+- CORS allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$`, plus any comma-separated origins in `CORS_EXTRA_ORIGINS` (narrowed by #171 to our own extension, `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`; see `twitch.md`, Twitch Panel Abuse Limits)
 - `allow_credentials` stays `False`
 - A preflight from `https://abc123.ext-twitch.tv` succeeds, and one from `https://example.com` gets no `Access-Control-Allow-Origin` header
 - The main site keeps working, because it is same-origin and needs no CORS

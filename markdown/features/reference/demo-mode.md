@@ -71,6 +71,13 @@ than aborting the whole batch. Returns each account's username and a one-time pl
 password (bcrypt-hashed at rest via `hash_password`, exactly like real accounts). Logged as
 `admin_demo_accounts_seeded`.
 
+Seeded accounts get `users.is_demo = True` (issue #150; migration 033 also flags existing
+`demoN@demo.local` accounts). A demo account can never be promoted to admin (the admin toggle
+answers 409 "Demo accounts can't be admins", and `SEED_ADMIN_STEAM_IDS` never applies to it),
+never links Steam (Link Steam is hidden and start answers `steam=not_allowed`), and is never
+matched by the Steam sign-in callback. Demo accounts keep their passwords and are still created
+in `LOGIN_METHOD=steam_signup`. See `reference/steam-login.md`.
+
 ## Effect on background jobs
 
 - The week auto-lock thread keeps running — it is the mechanism that reacts to the demo clock.

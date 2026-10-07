@@ -22,11 +22,11 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
   const pts = Number(r[ptsKey] || 0).toFixed(1);
   const tagChips = (r.tags || []).map(t =>
-    `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.6rem;padding:1px 5px;border-radius:2px;margin-left:4px;vertical-align:middle;">${t.label}</span>`
+    `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.6rem;padding:1px 5px;border-radius:2px;margin-left:4px;vertical-align:middle;">${_escHtml(t.label)}</span>`
   ).join("");
   const mainRow = `<tr style="${baseStyle}${cursorStyle}" ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
     <td>${i + 1}</td>
-    <td>${_escHtml(r.username)}${tagChips}${youLabel}${chevron}</td>
+    <td>${_escHtml(r.username)}${adminBadgeHtml(r.is_admin)}${tagChips}${youLabel}${chevron}</td>
     <td>${pts}</td>
   </tr>`;
   if (!hasCards) return mainRow;
@@ -112,7 +112,7 @@ async function loadPastSeasonStandings(seasonId) {
       return;
     }
     renderIfChanged(tbody, data.standings.map(r => `<tr>
-      <td>${r.rank}</td><td>${_escHtml(r.username)}</td><td>${Number(r.points).toFixed(1)}</td>
+      <td>${r.rank}</td><td>${_escHtml(r.username)}${adminBadgeHtml(r.is_admin)}</td><td>${Number(r.points).toFixed(1)}</td>
     </tr>`).join(""));
   } catch (e) {
     setStatus("pastSeasonStatus", e.message, false);
