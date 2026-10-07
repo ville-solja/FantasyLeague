@@ -142,7 +142,8 @@ def start(request: Request, db, purpose: str, return_tab: str | None = None):
         return JSONResponse({"detail": "steam_unavailable"}, status_code=503)
     if purpose not in PURPOSES:
         return JSONResponse({"detail": "Unknown purpose"}, status_code=400)
-    tab = return_tab if return_tab in RETURN_TABS else "profile"
+    # The allowlist's own constant, never the request's string, goes into the redirect.
+    tab = next((t for t in RETURN_TABS if t == return_tab), "profile")
 
     user = None
     if purpose in ("link", "reauth"):

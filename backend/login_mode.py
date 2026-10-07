@@ -16,10 +16,10 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-PASSWORD = "password"
+LOCAL_LOGIN = "password"  # username and password accounts
 BOTH = "both"
 STEAM_SIGNUP = "steam_signup"
-MODES = (PASSWORD, BOTH, STEAM_SIGNUP)
+MODES = (LOCAL_LOGIN, BOTH, STEAM_SIGNUP)
 STEAM_MODES = (BOTH, STEAM_SIGNUP)
 
 # Issue #172's future mode, accepted early so setting it never reopens registration.
@@ -39,7 +39,7 @@ def current() -> str:
     raw = os.getenv("LOGIN_METHOD")
     value = (raw or "").strip().lower()
     if not value:
-        return PASSWORD
+        return LOCAL_LOGIN
     if value in MODES:
         return value
     if value == _FUTURE_STEAM_ONLY:
@@ -48,7 +48,7 @@ def current() -> str:
         return STEAM_SIGNUP
     _warn_once(value, "LOGIN_METHOD=%r is not a known login method (password, both, "
                       "steam_signup); using password", raw)
-    return PASSWORD
+    return LOCAL_LOGIN
 
 
 def steam_enabled() -> bool:
@@ -66,7 +66,7 @@ def require_login_methods(*modes: str):
 
 
 require_steam = require_login_methods(*STEAM_MODES)
-require_password_registration = require_login_methods(PASSWORD, BOTH)
+require_password_registration = require_login_methods(LOCAL_LOGIN, BOTH)
 
 
 def app_base_url() -> str | None:

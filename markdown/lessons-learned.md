@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-07 — security-patcher — security
+**Problem:** CodeQL `py/url-redirection` flagged a redirect built from a query parameter even though it was checked with `value in ALLOWED` first, and `py/clear-text-logging-sensitive-data` flagged logging a login-mode name because the constant holding it was named `PASSWORD`.
+**Solution:** Redirect with the allowlist's own constant (`next((t for t in ALLOWED if t == value), default)`), so no request string reaches the URL; name constants that are not secrets without "password" in them (`LOCAL_LOGIN = "password"`), since CodeQL treats such names as sensitive sources.
+
 ### 2026-10-07 — developer — testing
 **Problem:** For #171, adding `@limiter.limit(...)` to the existing `POST /twitch/heartbeat` made every direct call of the handler in tests raise ("parameter `request` must be an instance of starlette.requests.Request"): slowapi checks the `request` argument whenever the limiter is enabled, which it is in the suite. Separately, `test_issue_136._build_main_client` read `TWITCH_EXTENSION_CLIENT_ID` from the developer shell once CORS started depending on it.
 **Solution:** When a route gains a limit, split it like the other panel routes: a plain `heartbeat(payload, db)` with the logic and a `heartbeat_route(request, ...)` wrapper carrying the decorators; unit tests call the plain function, rate-limit tests go through `_twitch_app` + TestClient. Any import-time env read that a shared test helper depends on must be cleared in that helper (`monkeypatch.delenv`) before applying the test's own env.
