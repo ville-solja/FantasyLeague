@@ -31,7 +31,7 @@ Fixes from the 2026-10 security review of the Twitch and Steam integrations and 
 
 ## Fail-closed Twitch defaults (#165)
 
-- `twitch.mvp_channel_allowed(channel_id)`: a listed channel is allowed; with an empty list, any channel outside production and **no** channel when `ENV=production`. `warn_if_mvp_channels_unset()` logs a warning at start-up in that case. **Set `TWITCH_MVP_CHANNEL_IDS` before deploying**, or MVP selection is refused.
+- `twitch.mvp_channel_allowed(channel_id)`: a listed channel is allowed; with an empty list, any channel outside production and **no** channel when `ENV=production`. `warn_if_mvp_channels_unset()` logs a warning at start-up in that case. **Set `TWITCH_MVP_CHANNEL_IDS` before deploying**, or MVP selection is refused. *(Since #175, channels approved in the admin portal also count: `mvp_channel_allowed(channel_id, db)` checks env ∪ portal, and with no `db` it keeps this env-only rule. Approving a channel under Admin › Users › Approved streamers is the alternative to the env var; the warning still fires when the env var is empty. See [Approved Streamers Admin](approved-streamers-admin.md).)*
 - `verify_twitch_jwt` requires `exp`, logs only the exception class on an invalid token, and returns 403 `"Viewer token required"` for `role: external` (only this server signs those, for Twitch's PubSub and chat APIs).
 - `main.py` refuses to start with `TWITCH_LOCAL_DEV=true` and `HTTPS_ONLY=true` together, a production signal independent of `ENV`.
 
@@ -97,7 +97,7 @@ No code; confirm each item in issue #170.
 
 | Variable | Default | Description |
 |---|---|---|
-| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Channels allowed to set MVPs. Empty: none in production, any otherwise |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Channels always allowed to set MVPs, in addition to portal-approved ones (#175). Both empty: none in production, any otherwise |
 | `APP_BASE_URL` | *(empty)* | The only host admin notifications may link to |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failures per username and IP before that IP is locked out |
 | `LOGIN_LOCKOUT_USERNAME_THRESHOLD` | `100` | Failures per username from all IPs before it is locked out everywhere |

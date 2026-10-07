@@ -157,7 +157,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Idle days before a Twitch viewer soft account is purged by the daily job |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in MVP drop pools; `0` turns it off; website accounts always eligible (#171) |
 | `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
-| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs allowed to set MVPs; empty allows any channel |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs always allowed to set MVPs, in addition to channels approved in the admin portal (Admin › Users › Approved streamers, #175). Both empty: no channel with `ENV=production`, any channel otherwise (#165) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `GET /auth/twitch/callback` (#160; replaced `RATE_LIMIT_TWITCH_LINK` with the retired `POST /twitch/link`) |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |
 | `BACKGROUND_TASKS_ENABLED` | `true` | `false` skips starting the four background threads (ingest poll, week maintenance, profile enrichment, DB backup). The backend test conftest sets it `false` — **do not set `false` in production** |

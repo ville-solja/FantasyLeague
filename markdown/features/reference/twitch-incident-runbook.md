@@ -14,8 +14,9 @@ What to do if something goes wrong with the Twitch sign-in, the Twitch developer
 
 ## 1. Switch off
 
-- **Twitch sign-in:** unset any of `TWITCH_OAUTH_CLIENT_ID`, `TWITCH_OAUTH_CLIENT_SECRET` or `TWITCH_OAUTH_REDIRECT_URI` and restart. Profile shows "Connecting Twitch is not available right now." and `GET /auth/twitch/start` returns 503. Existing connections, merges and the panel keep working.
+- **Twitch sign-in:** unset any of `TWITCH_OAUTH_CLIENT_ID`, `TWITCH_OAUTH_CLIENT_SECRET` or `TWITCH_OAUTH_REDIRECT_URI` and restart. Profile shows "Connecting Twitch is not available right now." and `GET /auth/twitch/start` returns 503. Existing connections, merges and the panel keep working; the admin Approved streamers list shows numeric channel ids instead of Twitch names (#175).
 - **Drops:** set `TWITCH_DROPS_ENABLED=false` and restart. MVP confirmations stop granting tokens.
+- **One channel setting MVPs** (moves fantasy points and drops tokens): Admin › Users › **Approved streamers** › **Remove** (password check; audited as `twitch_channel_removed`), effective on its next confirmation. A channel listed in `TWITCH_MVP_CHANNEL_IDS` can't be removed there: take it out of the env var and restart. See `approved-streamers-admin.md`.
 - **Everything Twitch-related** (for example a suspected extension secret leak): also unset `TWITCH_EXTENSION_SECRET`. Panel requests then fail with 500 and the website is unaffected.
 
 ## 2. Rotate secrets

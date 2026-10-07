@@ -24,4 +24,5 @@ Short specifications for each tab and major UI element. Use these as the referen
 - **Card reveal modal** — shown after drawing a card. Displays rarity, player avatar, player name, team.
 - **Player detail modal** — opened by clicking any player name. Stats summary + full match history.
 - **Team detail modal** — opened by clicking any team name. Player roster with stats.
+- **Demo notice** (`#demo-mode-badge`) — shown on every tab only when `GET /config` reports `demo_mode: true`: a small "DEMO MODE" chip (white Big Shoulders caps on the flame red, square `--r-xs` corners) fixed to the bottom-right corner, directly above the faint build version badge. It covers nothing in the header or tab bar, takes no clicks and can't be selected, stays above modals and the guided tour, and fits on one line at phone width. Hidden otherwise. See `features/reference/demo-mode.md` (issue #173).
 - **Modals (all)** — every popup closes on Esc or a backdrop click (`data-close`); Tab cycles within the open popup, skipping inputs with `tabindex="-1"` (`_getFocusableIn` in `app-init.js`); focus moves into a popup when it opens.

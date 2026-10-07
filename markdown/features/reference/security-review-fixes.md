@@ -33,7 +33,7 @@ Fixes for the 2026-09-26 external security review attached to GitHub issue #135.
 
 `POST /twitch/mvp` (`set_mvp` in `backend/twitch.py`) runs these checks, in order, before any MVP row, score bonus, token drop or audit entry is written:
 
-1. When `TWITCH_MVP_CHANNEL_IDS` is set, the channel from the JWT is in the list, or 403. Unset keeps the old behaviour: any channel with the extension can set an MVP. This runs first, so a channel outside the list gets the same 403 for every request and learns nothing about which match or player IDs exist.
+1. When `TWITCH_MVP_CHANNEL_IDS` is set, the channel from the JWT is in the list, or 403. Unset keeps the old behaviour: any channel with the extension can set an MVP. *(Since changed: #165 refuses every channel with an empty list when `ENV=production`, and #175 also allows channels approved in the admin portal; see [Approved Streamers Admin](approved-streamers-admin.md).)* This runs first, so a channel outside the list gets the same 403 for every request and learns nothing about which match or player IDs exist.
 2. The match exists, or 404.
 3. The match is one `GET /twitch/matches/current` offers, or 403. Both endpoints use `_current_series()`: started matches with ingested stats, grouped into series by team pair, 5 most recent series. `_eligible_mvp_match_ids()` flattens that to match IDs. The output of `GET /twitch/matches/current` is unchanged.
 4. The player has a `player_match_stats` row for the match, or 404.
@@ -93,7 +93,7 @@ Static checks in the test file parse every `${...}` in these files and fail if a
 
 | Variable | Default | Description |
 |---|---|---|
-| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs and trigger token drops. Empty allows any channel with the extension |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs and trigger token drops, in addition to channels approved in the admin portal (#175). Both empty: no channel with `ENV=production` (#165), any channel otherwise |
 | `RATE_LIMIT_REDEEM` | `5/minute` | Per-user limit on `POST /redeem` |
 | `RATE_LIMIT_RESET_PASSWORD` | `10/minute` | Per-IP limit on `POST /reset-password` |
 | `RATE_LIMIT_CARD_IMAGE` | `60/minute` | Per-IP limit on `GET /cards/{card_id}/image` |

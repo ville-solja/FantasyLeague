@@ -795,3 +795,21 @@ As an admin, I want to download a backup file so that I can keep a copy off the 
 - The filename must exactly match a file returned by the backup listing. Any other value, including path traversal attempts such as `../fantasy.db` or the live database's own name, returns 404
 - Each download is written to the audit log as `admin_db_backup_download` with the filename
 - Non-admin users get 403, and logged-out users get 401
+
+---
+
+## Demo Mode Badge Position (#173)
+
+Plan: `markdown/plans/plan-issue-173-demo-mode-badge-position.md`.
+
+### Demo Notice Out of the Way
+**User story**
+As anyone using a demo deployment, I want the "DEMO MODE" notice in the bottom-right corner so that I always know it is a demo without the notice covering the header or tabs.
+
+**Acceptance criteria**
+- With `demo_mode` true, the notice reads "DEMO MODE" and is fixed to the bottom-right corner of the window, directly above the version badge, on every tab and at every window width
+- It no longer spans the top of the page: the header, tab bar and their buttons are fully visible and clickable
+- It never takes clicks (`pointer-events: none`) and can't be selected, so nothing under it is blocked
+- It stays above page content and open modals, as before
+- On a phone-width window (360px) it fits on one line inside the window, with a gap from the right and bottom edges, and does not overlap the version badge
+- With `demo_mode` false or unset, the notice is not shown

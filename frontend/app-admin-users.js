@@ -14,6 +14,7 @@ async function loadUsers() {
     _renderUsers(rows);
     setStatus("usersStatus", "");
     loadPlayerIdClaims();
+    loadTwitchChannels();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
   }
@@ -465,5 +466,70 @@ async function reverseTwitchMerge(logId) {
     loadUsers();
   } catch (e) {
     setStatus("twitchMergesStatus", e.message, false);
+  }
+}
+
+// Issue #175: approved streamers. Channels from TWITCH_MVP_CHANNEL_IDS are approved
+// from server settings and have no Remove button. Approve / Reject / Remove need the
+// admin password re-check (adminFetch shows the prompt).
+async function loadTwitchChannels() {
+  try {
+    const res = await fetch(`${API}/admin/twitch/channels`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchChannelsStatus", data.detail, false);
+    _renderTwitchChannels(data);
+    setStatus("twitchChannelsStatus", "");
+  } catch (e) {
+    setStatus("twitchChannelsStatus", e.message, false);
+  }
+}
+
+function _twitchChannelRow(c, actions) {
+  const name = c.display_name
+    ? `${_escHtml(c.display_name)}${c.login ? ` <span style="color:#888">(${_escHtml(c.login)})</span>` : ""}`
+    : `<span style="color:#888">Name unknown</span>`;
+  const date = t => t ? new Date(Number(t) * 1000).toLocaleDateString() : "—";
+  const note = c.from_env ? `<div style="color:#888;font-size:12px">from server settings</div>` : "";
+  const buttons = actions.map(([action, label, cls]) =>
+    `<button class="${cls}" onclick="twitchChannelAction('${_escHtml(c.channel_id)}', '${action}')">${label}</button>`).join(" ");
+  return `<tr><td>${name}${note}</td><td>${_escHtml(c.channel_id)}</td>` +
+    `<td>${date(c.first_seen_at)}</td><td>${date(c.last_seen_at)}</td><td>${buttons}</td></tr>`;
+}
+
+function _twitchChannelTable(rows, actions, empty) {
+  if (!rows.length) return `<p style="color:#888">${empty}</p>`;
+  return `<table><thead><tr><th>Channel</th><th>Channel id</th><th>First seen</th><th>Last seen</th><th>Actions</th></tr></thead>` +
+    `<tbody>${rows.map(c => _twitchChannelRow(c, actions(c))).join("")}</tbody></table>`;
+}
+
+function _renderTwitchChannels(data) {
+  const approved = [...(data.env || []), ...(data.approved || [])];
+  const pending = data.pending || [];
+  const rejected = data.rejected || [];
+  document.getElementById("twitchChannels").innerHTML =
+    `<div class="twitch-merges-title">Waiting for approval</div>` +
+    _twitchChannelTable(pending, () => [["approve", "Approve", "secondary"], ["reject", "Reject", "danger"]],
+      "No channels are waiting.") +
+    `<div class="twitch-merges-title">Approved</div>` +
+    _twitchChannelTable(approved, c => c.from_env ? [] : [["remove", "Remove", "danger"]],
+      "No channels are approved. With ENV=production no channel can set match MVPs.") +
+    `<details><summary>Rejected (${rejected.length})</summary>` +
+    _twitchChannelTable(rejected, () => [["approve", "Approve", "secondary"]], "No rejected channels.") +
+    `</details>`;
+}
+
+async function twitchChannelAction(channelId, action) {
+  const verb = { approve: "Approve", reject: "Reject", remove: "Remove" }[action];
+  if (!verb) return;
+  if (action !== "approve" && !confirm(`${verb} channel ${channelId}? It will not be able to set match MVPs.`)) return;
+  try {
+    const res = await adminFetch(`${API}/admin/twitch/channels/${encodeURIComponent(channelId)}/${action}`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchChannelsStatus", data.detail, false);
+    const who = data.display_name || data.channel_id;
+    setStatus("twitchChannelsStatus", action === "approve" ? `${who} can now set match MVPs` : `${who} moved to Rejected`);
+    loadTwitchChannels();
+  } catch (e) {
+    setStatus("twitchChannelsStatus", e.message, false);
   }
 }

@@ -197,8 +197,11 @@ be live during the time of review"*:
 - Schedule the review during an active match week where `GET /twitch/matches/current` returns at
   least one series — an idle/off-season review will show empty states throughout
 - Make sure the review channel is actually live at review time
-- If `TWITCH_MVP_CHANNEL_IDS` is set on the server, add the review channel's ID to it before
-  the review, or Flow 3 (MVP selection) fails with 403
+- Approve the review channel before the review, or Flow 3 (MVP selection) shows "This channel is
+  waiting for the league's approval to set match MVPs." and `POST /twitch/mvp` returns 403: open
+  the MVP tool once on the review channel, then approve it under Admin › Users › **Approved
+  streamers** (issue #175), or add its ID to `TWITCH_MVP_CHANNEL_IDS`. In production one of the
+  two is required (issue #165)
 - No website test account is needed: the reviewer joins with their own Twitch login
 
 **Notes for reviewer (paste with the EBS block):**
