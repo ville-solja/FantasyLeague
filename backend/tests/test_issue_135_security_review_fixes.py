@@ -994,7 +994,11 @@ def test_remove_players_over_500_returns_422():
 
 
 def _grant_client():
+    import deps
     app, Session = _build_app(["routers.admin_users"], admin_override=True)
+    # Issue #150: /grant-tokens needs a recent re-auth (covered in test_issue_150).
+    app.dependency_overrides[deps.require_recent_reauth] = lambda: {
+        "user_id": 1, "username": "admin", "is_admin": True}
     _add_user(Session, user_id=1, username="admin", email="admin@example.com", tokens=0)
     _add_user(Session, user_id=2, username="target", email="target@example.com", tokens=3)
     return TestClient(app), Session
@@ -1003,7 +1007,8 @@ def _grant_client():
 def test_grant_tokens_10000_accepted(db):
     """POST /grant-tokens accepts an amount of 10,000."""
     client, Session = _grant_client()
-    resp = client.post("/grant-tokens", json={"target_user_id": 2, "amount": 10_000})
+    resp = client.post("/grant-tokens", json={"target_user_id": 2, "amount": 10_000,
+                                              "confirm": "GRANT TOKENS"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["tokens"] == 10_003
 
@@ -1011,7 +1016,8 @@ def test_grant_tokens_10000_accepted(db):
 def test_grant_tokens_over_10000_returns_422(db):
     """POST /grant-tokens rejects an amount over 10,000 and grants nothing."""
     client, Session = _grant_client()
-    resp = client.post("/grant-tokens", json={"target_user_id": 2, "amount": 10_001})
+    resp = client.post("/grant-tokens", json={"target_user_id": 2, "amount": 10_001,
+                                              "confirm": "GRANT TOKENS"})
     assert resp.status_code == 422
     with Session() as s:
         assert s.get(User, 2).tokens == 3

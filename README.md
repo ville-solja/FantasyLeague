@@ -39,7 +39,8 @@ Production runs `docker compose up -d` behind a TLS-terminating reverse proxy (n
 | `ENV` | `production` | Turns on the production guards: the app refuses to start if `DEBUG=true` or `TWITCH_LOCAL_DEV=true` is set |
 | `HTTPS_ONLY` | `true` | Marks session cookies `Secure`; see below |
 | `SECRET_KEY` | 32+ random characters | Signs session cookies; shorter keys are refused with `ENV=production` |
-| `APP_BASE_URL` | e.g. `https://your-deployment.example.com` | Links in reset emails; also accepted by the cross-origin check |
+| `APP_BASE_URL` | e.g. `https://your-deployment.example.com` | Links in reset emails; also accepted by the cross-origin check. Required for Steam sign-in when `LOGIN_METHOD` is `both` or `steam_signup` (Steam start answers 503 without it) |
+| `LOGIN_METHOD` | `password`, `both` or `steam_signup` | Whether Steam sign-in is offered and password registration is open; see [Steam Login](markdown/features/reference/steam-login.md) |
 
 ### Production requires HTTPS
 

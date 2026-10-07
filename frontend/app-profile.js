@@ -8,13 +8,16 @@ async function loadProfile() {
   try {
     const res = await fetch(`${API}/profile/${activeUserId}`);
     const data = await res.json();
+    document.getElementById("profileAdminBadge").innerHTML = adminBadgeHtml(data.is_admin);
     if (data.player_id) {
       document.getElementById("profilePlayerId").value = data.player_id;
-      if (data.player_name) showPlayerPreview(data.player_name, data.player_avatar_url);
+      if (data.player_name) _showLinkedPlayer(data.player_name, data.player_avatar_url, data.player_verified === true);
     } else {
       document.getElementById("profilePlayerId").value = "";
     }
+    _renderRenameHint();
     loadTwitchConnection();
+    _renderSteamProfile();
     const tags = data.tags || [];
     const container = document.getElementById("profileTagsContainer");
     if (container) {
@@ -30,6 +33,28 @@ async function loadProfile() {
     loadSessions();
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
+  }
+}
+
+// Issue #169: a claimed player shows its avatar only when the id is verified through
+// Steam; a typed-in id is labelled "Self-reported", as other players see it.
+function _showLinkedPlayer(name, avatarUrl, verified) {
+  showPlayerPreview(name, verified ? avatarUrl : null);
+  const label = document.getElementById("profilePlayerSource");
+  label.textContent = verified ? "Verified with Steam" : "Self-reported";
+  label.className = verified ? "player-source player-source-verified" : "player-source";
+}
+
+function _renderRenameHint() {
+  const hint = document.getElementById("profileRenameHint");
+  if (!hint) return;
+  if (activeUsernameChangeAvailableAt) {
+    const when = new Date(activeUsernameChangeAvailableAt * 1000).toLocaleString(undefined, {dateStyle: "medium", timeStyle: "short"});
+    hint.textContent = `You can rename again on ${when}.`;
+    hint.style.display = "";
+  } else {
+    hint.textContent = "";
+    hint.style.display = "none";
   }
 }
 
@@ -243,6 +268,51 @@ function handleTwitchReturn() {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// Steam link (issue #150). Link navigates to GET /auth/steam/start?purpose=link,
+// which needs a recent identity check (back here with ?steam=reauth_required
+// otherwise; handleSteamReturn in app-auth.js opens the password prompt and starts
+// again). Profile only ever learns linked yes/no, never the Steam id.
+// ---------------------------------------------------------------------------
+
+function _renderSteamProfile() {
+  const me = {steam_linked: activeSteamLinked, has_password: activeHasPassword, is_demo: activeIsDemo};
+  const ui = steamUiState(_loginMethod, me);
+  const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
+  show("steamProfilePanel", ui.profileSteamPanel);
+  show("steamUnlinkedState", ui.linkSteam);
+  show("steamLinkedState", activeSteamLinked);
+  show("btnUnlinkSteam", ui.unlinkSteam);
+  show("steamLinkReminder", ui.linkReminder);
+  // A Steam-only account has no password to change.
+  show("changePasswordForm", activeHasPassword);
+  show("profileNoPasswordNote", !activeHasPassword);
+  // A linked Steam account sets the verified player id.
+  document.getElementById("profilePlayerId").disabled = activeSteamLinked;
+  document.getElementById("btnSavePlayerId").disabled = activeSteamLinked;
+  show("profilePlayerIdVerified", activeSteamLinked);
+}
+
+function linkSteam() {
+  // A top-level navigation: the server checks the recent identity confirmation and
+  // sends the browser to steamcommunity.com, or back here asking for the password.
+  window.location.href = `${API}/auth/steam/start?purpose=link`;
+}
+
+async function unlinkSteam() {
+  if (!confirm("Unlink Steam from this account? Your verified player id stays. You can link Steam again later.")) return;
+  try {
+    const res = await adminFetch(`${API}/profile/steam/unlink`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setStatus("steamStatus", data.detail || "Could not unlink Steam", false);
+    setStatus("steamStatus", "Steam unlinked.");
+    await loadMe();
+    _renderSteamProfile();
+  } catch (e) {
+    setStatus("steamStatus", e.message, false);
+  }
+}
+
 async function saveUsername() {
   const username = document.getElementById("profileUsername").value.trim();
   if (!username) return setStatus("usernameStatus", "Username cannot be empty", false);
@@ -254,6 +324,8 @@ async function saveUsername() {
     const data = await res.json();
     if (!res.ok) return setStatus("usernameStatus", data.detail, false);
     activeUsername = data.username;
+    activeUsernameChangeAvailableAt = data.username_change_available_at ?? null;
+    _renderRenameHint();
     document.getElementById("pwUsername").value = activeUsername;
     localStorage.setItem("username", activeUsername);
     document.getElementById("headerUserLabel").textContent = activeUsername;
@@ -312,7 +384,7 @@ async function savePlayerId() {
     const data = await res.json();
     if (!res.ok) return setStatus("playerIdStatus", data.detail, false);
     if (data.player_name) {
-      showPlayerPreview(data.player_name, data.player_avatar_url);
+      _showLinkedPlayer(data.player_name, data.player_avatar_url, false);
       setStatus("playerIdStatus", "Player linked");
     } else if (player_id) {
       document.getElementById("profilePlayerPreview").style.display = "none";

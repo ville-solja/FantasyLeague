@@ -17,6 +17,130 @@ function applyAuthState() {
   if (!loggedIn) switchTab("leaderboard");
 }
 
+// ---------------------------------------------------------------------------
+// Steam sign-in (issue #150). Sign in, Link and re-auth are full-page navigations
+// to GET /auth/steam/start, which sends the browser to steamcommunity.com; Steam
+// returns to /auth/steam/callback, which redirects back here with
+// /#<tab>?steam=<key> (handleSteamReturn). Never a pop-up or an embedded frame.
+// ---------------------------------------------------------------------------
+
+/** Pure: which Steam elements show for a login method and the /me flags (null when
+ *  logged out). Tested under Node by tests/test_issue_150_steam_login.py. */
+function steamUiState(loginMethod, me) {
+  const steam = loginMethod === "both" || loginMethod === "steam_signup";
+  const loggedIn = !!me;
+  return {
+    steamSignIn: steam && !loggedIn,
+    passwordRegistration: loginMethod !== "steam_signup",
+    steamSignupNotice: loginMethod === "steam_signup",
+    profileSteamPanel: steam && loggedIn,
+    linkSteam: steam && loggedIn && !me.steam_linked && !me.is_demo,
+    unlinkSteam: steam && loggedIn && !!me.steam_linked && !!me.has_password,
+    linkReminder: loginMethod === "steam_signup" && loggedIn && !!me.has_password && !me.steam_linked,
+  };
+}
+
+function applyLoginMode() {
+  const ui = steamUiState(_loginMethod, null);
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? "" : "none"; };
+  show("steamLoginBlock", ui.steamSignIn);
+  show("createAccountLink", ui.passwordRegistration);
+  show("steamSignupNotice", ui.steamSignupNotice);
+}
+
+function startSteamLogin() {
+  window.location.href = `${API}/auth/steam/start?purpose=login`;
+}
+
+const _STEAM_RETURN_MESSAGES = {
+  failed:        ["Steam sign-in did not complete. Nothing was changed. Try again.", false],
+  cancelled:     ["Steam sign-in was cancelled. Nothing was changed.", false],
+  unavailable:   ["Steam sign-in is unavailable right now. Try again later, or sign in with your password.", false],
+  login_required:["Log in to Kana Cards first.", false],
+  no_session:    ["Log in to Kana Cards first, then try again.", false],
+  linked:        ["Steam linked. Your Dota player id is now verified.", true],
+  in_use:        ["This Steam account is linked to another Kana Cards account", false],
+  unlink_first:  ["Unlink your current Steam account first", false],
+  not_allowed:   ["Demo accounts can't link Steam.", false],
+  not_linked:    ["This account has no Steam link to confirm with.", false],
+  reauth_ok:     ["Confirmed with Steam. Repeat the action to continue.", true],
+  reauth_failed: ["That Steam account is not the one linked to this account. Nothing was confirmed.", false],
+};
+
+/** Reads /#<tab>?steam=<key> left by the Steam redirects, strips it from the address
+ *  bar and shows the outcome. Returns true when handled. */
+function handleSteamReturn() {
+  const match = (window.location.hash || "").match(/^#(login|welcome|profile|admin)\?(.*)$/);
+  if (!match) return false;
+  const key = new URLSearchParams(match[2]).get("steam");
+  if (!key) return false;
+  history.replaceState(null, "", window.location.pathname);
+  const [, tab] = match;
+  const msg = _STEAM_RETURN_MESSAGES[key] || _STEAM_RETURN_MESSAGES.failed;
+  if (tab === "welcome") {
+    showSteamSignup();
+    return true;
+  }
+  if (tab === "login" || !activeUserId) {
+    showLogin();
+    setStatus("loginStatus", msg[0], msg[1]);
+    return true;
+  }
+  if (tab === "admin" && activeIsAdmin) {
+    switchTab("admin");
+    setStatus("adminSteamStatus", msg[0], msg[1]);
+    return true;
+  }
+  switchTab("profile");
+  if (key === "reauth_required") {
+    _promptReauth().then(ok => {
+      if (ok) linkSteam();
+      else setStatus("steamStatus", "Confirm your password to link Steam.", false);
+    });
+    return true;
+  }
+  setStatus("steamStatus", msg[0], msg[1]);
+  return true;
+}
+
+function showSteamSignup() {
+  document.getElementById("loginModal").classList.add("hidden");
+  document.getElementById("steamSignupStatus").textContent = "";
+  document.getElementById("steamSignupModal").classList.remove("hidden");
+}
+
+function closeSteamSignup() {
+  document.getElementById("steamSignupModal").classList.add("hidden");
+}
+
+async function submitSteamSignup() {
+  const username = document.getElementById("steamSignupUsername").value.trim();
+  if (!username) return setStatus("steamSignupStatus", "Choose a display name", false);
+  try {
+    const res = await fetch(`${API}/auth/steam/signup`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      let detail = data.detail;
+      if (Array.isArray(detail)) detail = detail.map(err => err.msg).join(". ");
+      if (detail === "signup_expired") detail = "This sign-up has expired. Sign in with Steam again.";
+      return setStatus("steamSignupStatus", detail || "Could not create the account", false);
+    }
+    closeSteamSignup();
+    document.getElementById("steamSignupUsername").value = "";
+    await loadMe();
+    await claimTokenEvents();
+    checkNotifications();
+    applyAuthState();
+    switchTab("team");
+    loadDeck();
+  } catch (e) {
+    setStatus("steamSignupStatus", e.message, false);
+  }
+}
+
 function showLogin() {
   document.getElementById("registerModal").classList.add("hidden");
   document.getElementById("forgotModal").classList.add("hidden");
@@ -270,6 +394,9 @@ function _clearLocalAuthState() {
   activeUserId = activeUsername = null;
   activeIsAdmin = false;
   activeMustChangePassword = false;
+  activeSteamLinked = false;
+  activeHasPassword = true;
+  activeIsDemo = false;
   localStorage.removeItem("username");
   localStorage.removeItem("is_admin");
   updateTokenDisplay(null);
@@ -296,6 +423,10 @@ async function loadMe() {
     activeUsername           = data.username;
     activeIsAdmin            = data.is_admin;
     activeMustChangePassword = data.must_change_password ?? false;
+    activeSteamLinked        = data.steam_linked === true;
+    activeHasPassword        = data.has_password !== false;
+    activeIsDemo             = data.is_demo === true;
+    activeUsernameChangeAvailableAt = data.username_change_available_at ?? null;
     localStorage.setItem("username", activeUsername);
     localStorage.setItem("is_admin", String(activeIsAdmin));
     updateTokenDisplay(data.tokens ?? null);
@@ -314,3 +445,4 @@ function _applyTempPasswordBanner() {
 document.getElementById("loginForm").addEventListener("submit", e => { e.preventDefault(); login(); });
 document.getElementById("registerForm").addEventListener("submit", e => { e.preventDefault(); register(); });
 document.getElementById("resetPasswordForm").addEventListener("submit", e => { e.preventDefault(); submitResetPassword(); });
+document.getElementById("steamSignupForm").addEventListener("submit", e => { e.preventDefault(); submitSteamSignup(); });

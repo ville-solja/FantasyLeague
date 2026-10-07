@@ -477,7 +477,8 @@ class TestNoChangeForEveryoneElse:
     def test_no_form_uses_get_or_url_action(self):
         """Failure path: no <form> has `method="get"` (any case) or a non-empty `action` that would put a password in a URL."""
         forms = _parsed().forms
-        assert len(forms) == 5
+        # Issue #150 added #steamSignupForm and #typedConfirmForm (no password fields).
+        assert len(forms) == 7
         for key, form in forms.items():
             # Explicit post: if the JS listener ever fails to attach, a native submit
             # still cannot put the password in the URL.

@@ -18,6 +18,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
 import twitch_oauth
+import steam_openid
+import login_mode
 import card_points
 import database
 import sessions
@@ -58,7 +60,7 @@ logger = logging.getLogger(__name__)
 # root logger to DEBUG; a logger's own level wins over the root's.
 logging.getLogger("urllib3").setLevel(logging.INFO)
 # Issue #160: the Twitch sign-in callback URL carries a one-time code and state; keep
-# them out of uvicorn's access log.
+# them out of uvicorn's access log. Issue #150: the same for the Steam OpenID assertion.
 logging.getLogger("uvicorn.access").addFilter(twitch_oauth.RedactSignInQuery())
 
 _stop_event = threading.Event()
@@ -92,6 +94,10 @@ _last_soft_account_purge     = 0.0
 # days are deleted once a day by the same loop.
 _TWITCH_OAUTH_CLEANUP_INTERVAL = 86400
 _last_twitch_oauth_cleanup     = 0.0
+# Issue #150: used or expired Steam sign-in attempts and pending sign-ups, and OpenID
+# nonces older than a day, are deleted once a day by the same loop.
+_STEAM_CLEANUP_INTERVAL = 86400
+_last_steam_cleanup     = 0.0
 
 
 def _week_maintenance_loop():
@@ -104,9 +110,11 @@ def _week_maintenance_loop():
     this loop no longer auto-generates them. Once a day it also deletes expired
     login sessions (issue #117), Twitch soft accounts idle for
     TWITCH_SOFT_ACCOUNT_RETENTION_DAYS (issue #157), and expired Twitch sign-in
-    attempts and merge undo-log rows older than 30 days (issue #160).
+    attempts and merge undo-log rows older than 30 days (issue #160), and Steam
+    sign-in attempts, pending sign-ups and day-old OpenID nonces (issue #150).
     """
     global _last_session_cleanup, _last_soft_account_purge, _last_twitch_oauth_cleanup
+    global _last_steam_cleanup
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
@@ -126,6 +134,9 @@ def _week_maintenance_loop():
                 if time.time() - _last_twitch_oauth_cleanup >= _TWITCH_OAUTH_CLEANUP_INTERVAL:
                     twitch_oauth.cleanup(db, int(time.time()))
                     _last_twitch_oauth_cleanup = time.time()
+                if time.time() - _last_steam_cleanup >= _STEAM_CLEANUP_INTERVAL:
+                    steam_openid.cleanup(db, int(time.time()))
+                    _last_steam_cleanup = time.time()
             finally:
                 db.close()
         except Exception:
@@ -369,6 +380,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
     seed_users()
+    login_mode.log_startup()
     seed_admin_from_env()
     seed_weights()
     _ensure_card_points_current()
@@ -586,6 +598,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 app.include_router(twitch_router)
 app.include_router(twitch_oauth.router)
+app.include_router(steam_openid.router)
 app.include_router(players_router.router)
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
@@ -612,6 +625,14 @@ def _twitch_unknown_route(rest: str):
     """Unknown /twitch/* paths, such as the retired POST /twitch/link-code, POST
     /twitch/link and GET /twitch/status (issue #160), answer 404 rather than the
     static frontend mount's 405 for non-GET methods."""
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.api_route("/auth/steam/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+               include_in_schema=False)
+def _steam_unknown_route(rest: str):
+    """Unknown /auth/steam/* paths (and every Steam route in password mode, issue #150)
+    answer 404 rather than the static frontend mount's 405 for non-GET methods."""
     raise HTTPException(status_code=404, detail="Not Found")
 
 
@@ -645,6 +666,8 @@ def get_config(db=Depends(get_db)):
         "demo_mode": os.getenv("DEMO_MODE", "").lower() == "true",
         # Issue #144 — automatic first-visit guided tour; off unless exactly "true".
         "tour_autostart": os.getenv("GUIDED_TOUR_AUTOSTART", "false").strip().lower() == "true",
+        # Issue #150 — password | both | steam_signup; the login page and Profile follow it.
+        "login_method": login_mode.current(),
     }
 
 

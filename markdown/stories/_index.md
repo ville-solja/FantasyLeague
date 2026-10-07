@@ -2,7 +2,7 @@
 
 | File | Covers |
 |---|---|
-| [users-and-access.md](users-and-access.md) | Registration, login, password reset, profile, header link, temporary password expiry, rate limiting, session revocation, longer sessions with server-side session management, password manager autofill |
+| [users-and-access.md](users-and-access.md) | Registration, login, password reset, profile, header link, temporary password expiry, rate limiting, session revocation, longer sessions with server-side session management, password manager autofill, Steam login (Sign in with Steam, Link Steam, Steam-only account creation in S17, Steam admin seeding), impersonation hardening (case-insensitive names, reserved words, admin badge, self-reported player ids, rename cooldown) |
 | [cards.md](cards.md) | Deck generation, draw, rarity, modifiers, card art, blank team-logo placeholder, player popup, mid-season top-up, dynamic card creation, team booster draws, team draw explanation and naming |
 | [user-tags.md](user-tags.md) | User tag system: card stickers, leaderboard badges, admin tag management, user search, profile tag visibility |
 | [team-tokens-scoring.md](team-tokens-scoring.md) | Active roster, roster limit race fix, roster mutation rate limiting, weekly lock, week history, tokens, scoring, weekly summary report, docked reveal-all control, pre-reveal winner hiding, match date display, stored per-match card points, automatic bench substitution, consistent points rounding, Weekly Report roster panel, side-by-side layout, themed scrollbar and new-recap popup, weekly recap reveal animations with per-card points breakdown, Weekly Report readability |

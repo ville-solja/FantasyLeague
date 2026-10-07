@@ -29,6 +29,9 @@ def list_tags(db=Depends(get_db), _=Depends(require_admin)):
 
 @router.post("/admin/tags")
 def create_tag(body: TagBody, db=Depends(get_db), admin=Depends(require_admin)):
+    # Issue #169: the ADMIN badge comes only from users.is_admin; no tag may imitate it.
+    if body.key.strip().lower() == "admin" or body.label.strip().lower() == "admin":
+        raise HTTPException(status_code=422, detail="This tag name is reserved")
     if db.query(TagDefinition).filter_by(key=body.key).first():
         raise HTTPException(status_code=409, detail="Tag key already exists")
     tag = TagDefinition(key=body.key, label=body.label, created_at=int(time.time()))

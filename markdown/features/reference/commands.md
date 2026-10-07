@@ -164,7 +164,12 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<client-id>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
 | `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |
-| `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup if the email isn't already registered. See `reference/env-based-admin-seeding.md` |
+| `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup unless an account with that username already exists (ignoring letter case; reserved words are allowed here). Skipped with a warning when `LOGIN_METHOD=steam_signup`. See `reference/env-based-admin-seeding.md` |
+| `LOGIN_METHOD` | `password` | `password`, `both` or `steam_signup`: whether Steam sign-in is offered and whether password registration is open (#150). See `reference/steam-login.md` |
+| `RESERVED_USERNAME_WORDS` | `admin,kana,liiga,support,official,staff,mod` | Words new usernames can't contain, after look-alike normalisation (#169). See `reference/impersonation-hardening.md` |
+| `USERNAME_CHANGE_COOLDOWN_DAYS` | `7` | Days between username changes; `0` turns the limit off (#169) |
+| `SEED_ADMIN_STEAM_IDS` | *(empty)* | Comma-separated Steam64 IDs that become admins on a verified Steam sign-in, sign-up or link; removing an ID does not demote (#150) |
+| `RATE_LIMIT_STEAM_CALLBACK` | `10/minute` | Per-IP limit on each of the Steam start, callback and sign-up routes (#150) |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy, no longer read: password reset now uses one-time links. See `reference/temp-password-expiry.md` |
 | `ANTHROPIC_API_KEY` | *(empty)* | Enables AI-generated player bios during profile enrichment; facts are stored without a bio if unset. See `reference/player-profile-enrichment.md` |
 | `PROFILE_ENRICHMENT_COOLDOWN_HOURS` | `24` | Minimum hours between re-enrichment for a given player |

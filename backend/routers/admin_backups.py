@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from database import _sqlite_db_path, backup_retention_days, backup_sqlite_db, get_db, list_sqlite_backups
-from deps import require_admin, require_recent_reauth, _audit
+from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
 
 router = APIRouter()
 
@@ -58,10 +58,11 @@ def list_backups(admin: dict = Depends(require_admin)):
     return {"retention_days": backup_retention_days(), "backups": backups}
 
 
-@router.get("/admin/backups/{filename}", dependencies=[Depends(require_recent_reauth)])
+@router.get("/admin/backups/{filename}", dependencies=[Depends(require_recent_reauth),
+                                                     Depends(require_typed_confirmation("backup_download"))])
 def download_backup(filename: str, db=Depends(get_db),
                     admin: dict = Depends(require_admin)):
-    """Stream a backup as an attachment. The filename is only ever matched
+    """Stream a backup as an attachment (needs ?confirm=DOWNLOAD BACKUP, issue #150). The filename is only ever matched
     against the listing's basenames — never joined onto a path — so traversal
     attempts and the live DB's own name simply don't match and 404."""
     match = next((f for f in list_sqlite_backups() if f.name == filename), None)

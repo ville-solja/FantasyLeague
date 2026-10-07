@@ -23,7 +23,7 @@ Backups live on the same disk as the database. Download a copy to keep one off t
 
 ## Endpoints
 
-All three endpoints also need a recent password re-entry on this session (`require_recent_reauth`): without a `POST /reauth` in the last `ADMIN_REAUTH_SECONDS` (default 600) they return 403 `{"detail": "reauth_required"}`. See `reference/longer-sessions.md`.
+All three endpoints also need a recent identity check on this session (`require_recent_reauth`): without a password re-auth (`POST /reauth`) or a Steam re-auth (`GET /auth/steam/start?purpose=reauth`, issue #150) in the last `ADMIN_REAUTH_SECONDS` (default 600) they return 403 `{"detail": "reauth_required"}`. See `reference/longer-sessions.md`. The download also needs the typed confirmation `?confirm=DOWNLOAD BACKUP` (400 `confirmation_required` otherwise; issue #150, see `reference/steam-login.md`); the panel asks for it before downloading.
 
 ### `POST /admin/backups`
 Admin only. Creates a backup now and returns `{filename, size_bytes, created_at}`. Returns 429 if the newest backup is less than 60 seconds old, and 409 if the database is not a local SQLite file. The audit log records it as `admin_db_backup`.

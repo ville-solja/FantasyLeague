@@ -477,3 +477,140 @@ As a player who types my password, I want the login and the other forms to behav
 - The visible layout of the popups and the profile page is unchanged.
 - After a successful login, the password field is cleared as today (the username stays, as before). Password managers that watch the submit event get the chance to offer saving or updating.
 - **Failure path:** a form submit that fails validation, such as an empty username, shows the same error as today.
+
+---
+
+## Steam Login (#150)
+
+### Sign In with Steam
+**User story**
+As a player, I want to sign in with my Steam account, so that I don't need another password and my Kana Cards account carries my verified Dota identity.
+
+**Acceptance criteria**
+- In `both` and `steam_signup` modes, the login page shows **Sign in with Steam** next to the password form. It is a full-page redirect to `https://steamcommunity.com/openid/login`, never a pop-up or an embedded frame.
+- The login page says: "Sign-in happens on steamcommunity.com. Kana Cards never asks for your Steam password."
+- `GET /auth/steam/start?purpose=login` stores `sha256(state)` with purpose, optional user id and a 10-minute expiry. It sets the state in a cookie (`__Host-kc_steam_state`, `Secure`, `HttpOnly`, `SameSite=Lax`, max-age 600) and binds it into `openid.return_to`. `openid.return_to` and `openid.realm` are built from `APP_BASE_URL`.
+- `GET /auth/steam/callback` accepts the sign-in only when all of these hold, each covered by a test with forged input:
+  - `openid.ns` is `http://specs.openid.net/auth/2.0` and `openid.mode` is `id_res`. `cancel`, `setup_needed` or a missing mode is a failed sign-in.
+  - `openid.op_endpoint` is exactly `https://steamcommunity.com/openid/login`.
+  - `openid.claimed_id` fully matches `https://steamcommunity.com/openid/id/` followed by exactly 17 ASCII digits (nothing after them, not even a newline) and equals `openid.identity`.
+  - `openid.return_to` equals the callback URL built from `APP_BASE_URL`, including the state.
+  - The state in `return_to` equals the cookie, its hash is a known, unexpired, unused row, and the row is used up on first use. The cookie is deleted.
+  - `openid.signed` lists at least `op_endpoint`, `claimed_id`, `identity`, `return_to`, `response_nonce` and `assoc_handle`.
+  - `openid.response_nonce` is no older than 5 minutes and hasn't been seen before. Used nonces are stored and pruned after a day.
+  - No `openid.*` parameter repeats, no value is longer than 2048 characters, and the query string is at most 8 KB.
+  - A server-side POST to the hard-coded `https://steamcommunity.com/openid/login` succeeds. It never uses a URL from the request. It sends exactly the received `openid.*` fields with only `openid.mode=check_authentication`, uses verified TLS, doesn't follow redirects and times out after 10 s. The answer must contain a line that is exactly `is_valid:true`. A timeout, an error or anything else fails the sign-in.
+- A known Steam ID (`users.steam_id`) starts a session with a new session id through `sessions.start_session`. The callback then redirects to `/` with no `next=` parameter.
+- An unknown Steam ID never signs in to an existing account by `player_id`, username or email. It creates a pending sign-up (hashed token cookie `__Host-kc_steam_signup`, 15 minutes) and redirects to the display-name step (`/#welcome?steam=choose_name`). `POST /auth/steam/signup` with a valid username creates the account, with `steam_id` set, no password, no email, and `player_id` = Steam64 − 76561197960265728. It then starts the session.
+- **Rate limits:** the callback is limited per IP (`RATE_LIMIT_STEAM_CALLBACK`, default `10/minute`), as are start and sign-up (the same variable covers all three).
+- If `APP_BASE_URL` is unset in `both` or `steam_signup` mode, start-up logs a warning and `GET /auth/steam/start` answers 503 `steam_unavailable`.
+- **Logging:** nothing logs the callback query string. `RedactSignInQuery` covers `/auth/steam/`, and failures log a reason only.
+- **Steam outage:** if the `check_authentication` POST fails, the sign-in fails closed with "Steam sign-in is unavailable right now". Password sign-in and existing sessions are unaffected.
+- **Failure path:** a failed check redirects to `/#login?steam=failed` with no account created and no session started. With `LOGIN_METHOD=password`, every `/auth/steam/*` route and `POST /profile/steam/unlink` answer 404 (a `/auth/steam/{rest:path}` catch-all keeps unknown paths at 404, not the static mount's 405).
+
+### Link Steam to an Existing Account
+**User story**
+As an existing player, I want to link my Steam account, so that my player id is verified and my account carries over when Steam becomes the only way to sign in.
+
+**Acceptance criteria**
+- In `both` and `steam_signup` modes, Profile shows **Link Steam** for a logged-in player without a `steam_id`. It needs a recent check (`require_recent_player_reauth`). Without one, it redirects back to Profile with `steam=reauth_required`, and Profile opens the password prompt and starts again.
+- `GET /auth/steam/start?purpose=link` binds the state row to the logged-in user. The callback accepts the link only when the session user is that user and every check from "Sign In with Steam" passes.
+- On success, `users.steam_id` is set and `player_id` becomes the verified Steam32 id, replacing any self-reported value. The action is audited as `steam_linked`, and the callback redirects to `/#profile?steam=linked`.
+- If another account had self-reported the same `player_id`, that account's `player_id` is cleared and audited as `player_id_claim_superseded` (both user ids). Admin › User Management lists these claims.
+- A Steam ID already stored on another account is refused with "This Steam account is linked to another Kana Cards account". Nothing changes, and only an admin can move it.
+- **Unlink Steam** on Profile needs a recent check, clears `steam_id` (`player_id` stays) and is audited as `steam_unlinked`. It is refused for an account without a password, because it would lock the player out.
+- `PUT /profile/player-id` answers 409 for an account with a linked Steam ID, whose id is verified. Accounts without Steam can still set it as today.
+- From the start of S17 (`LOGIN_METHOD=steam_signup`), Profile reminds accounts that have a password and no Steam link: "Link Steam now. Password sign-in will end in a later update."
+- Demo accounts never see Link Steam and can't link Steam.
+- **Failure path:** a link callback with another user's state, or with no session, changes nothing and redirects with `steam=failed` or `steam=no_session`.
+
+### Steam Is the Only Way to Create Accounts in S17
+**User story**
+As the operator, I want new accounts in S17 to come only from Steam while existing players keep their password sign-in, so that every new player has a verified identity without locking anyone out.
+
+**Acceptance criteria**
+- With `LOGIN_METHOD=steam_signup`, `POST /register` answers 404. The login page hides the registration form and says "New players: sign in with Steam to create your account."
+- Password sign-in, password reset (`/forgot-password`, `/reset-password`), `PUT /profile/password` and `POST /reauth` keep working for existing password accounts.
+- Password admin seeding (`SEED_ADMIN_USERNAME` and the numbered sets) is ignored in `steam_signup` mode, with one warning at start-up, so no account is created outside Steam.
+- Demo accounts (`DEMO_MODE` only) are exempt and are still created by `POST /admin/demo/seed-accounts`.
+- Switching from `both` to `steam_signup` needs no migration or data change, only the env var.
+- `POST /reauth` for an account without a password answers 409 `use_steam_reauth` and does not count as a failed login; such accounts confirm through Steam.
+- **Failure path:** a direct `POST /register` in `steam_signup` mode answers 404 and creates nothing. An unknown `LOGIN_METHOD` value is logged and treated as `password`, except `steam` (issue #172, not built yet), which is logged as not available yet and treated as `steam_signup`, so it never reopens registration. `LOGIN_METHOD` is read at call time.
+
+### Admins Come In Through Steam
+**User story**
+As the operator, I want admins to be named by Steam ID, so that a deploy's admins don't depend on passwords and existing admins keep their rights after linking Steam.
+
+**Acceptance criteria**
+- A new env var, `SEED_ADMIN_STEAM_IDS`: comma-separated Steam64 IDs. An entry that isn't exactly 17 digits is logged and skipped, and start-up continues.
+- A verified Steam sign-in or link whose Steam ID is in the list makes the account an admin. A first-time Steam ID is created as an admin after the display-name step; an existing account is promoted. This is audited as `admin_seeded_from_env` (written only for Steam seeding; password seeding from `SEED_ADMIN_USERNAME` is not audited).
+- Removing an ID from the list does not demote the account. Demotion stays the existing audited admin toggle, and the docs say so.
+- A password admin who links Steam keeps admin rights.
+- Destructive admin actions ask the admin to type the action name in the confirmation, in addition to the recent re-auth. The backend checks a `confirm` value (JSON body field, or query parameter) equal to the action name and otherwise answers 400 `confirmation_required`. This covers season end (`END SEASON`), season reset (`RESET SEASON`), the admin toggle (`CHANGE ADMIN`), token grants (`GRANT TOKENS`, which now also needs the recent re-auth), DB backup download (`GET /admin/backups/{filename}?confirm=DOWNLOAD BACKUP`) and deleting a Twitch viewer account (`DELETE /admin/users/{id}`, which only deletes soft accounts; `DELETE USER`).
+- Admin accounts without a password re-authenticate through Steam (`purpose=reauth`, with an optional `return_tab` of `profile` or `admin`, never a free URL), which marks the session only when the verified Steam ID equals the admin's, and returns to `/#<tab>?steam=reauth_ok`. Connect Twitch, merge and Disconnect (#160) accept the same Steam re-auth for passwordless players.
+- The docs require Steam Guard's mobile authenticator for every listed admin, and describe how to demote an admin quickly if their Steam account is compromised.
+- Demo accounts are marked by `users.is_demo` (migration 033, set by `POST /admin/demo/seed-accounts`; earlier `demoN@demo.local` accounts are flagged by the migration). They keep their passwords, never link Steam and are never matched by the Steam callback.
+- **Failure path:** an unlisted Steam ID signs in as a normal player. A demo account can never become an admin, neither from `SEED_ADMIN_STEAM_IDS` nor through the admin toggle (409).
+
+---
+
+## Impersonation Hardening (#169)
+
+### Usernames Are Unique Regardless of Case
+**User story**
+As a player, I want nobody else to register a name that differs from mine only in letter case, so that people can't pose as me with `ville` when I'm `Ville`.
+
+**Acceptance criteria**
+- `POST /register`, `PUT /profile/username`, `POST /auth/steam/signup`, env admin seeding and demo seeding treat names that differ only in case as the same name. A taken name is refused with 409 "Username already taken".
+- A shared helper, `auth.username_taken(db, name, exclude_user_id=None)`, compares `lower(username)`, and every one of these places uses it.
+- Migration `034` adds a unique index on `lower(username)`. It first checks for case-insensitive duplicates; if any exist, it skips the index and logs a warning naming the user ids.
+- Twitch viewer soft accounts, which have no username, are unaffected.
+- **Failure path:** registering `ville` while `Ville` exists answers 409 and creates nothing. Renaming yourself from `Ville` to `VILLE` is allowed, because the account excluded from the check is your own.
+
+### Reserved Words Can't Be Used in New Names
+**User story**
+As an admin, I want names like `admin`, `kanaliiga` or `support` to be unavailable, so that players can't pose as staff or the league.
+
+**Acceptance criteria**
+- `auth.check_reserved`, called by the handlers, refuses a new name whose normalised form contains a reserved word, with 422 "This name is reserved". `check_username` (the Pydantic field validator) keeps only the ASCII format check. The normalised form is lower-case, with `0→o`, `1→i`, `3→e`, `4→a`, `5→s`, `7→t`, `rn→m`, `vv→w`, and `_` and `-` removed.
+- The list comes from `RESERVED_USERNAME_WORDS` (comma-separated). Default: `admin,kana,liiga,support,official,staff,mod`. Entries are normalised like names (lower-case, look-alikes mapped, `_` and `-` removed), so `m0d` or `kana_liiga` still match. A value with no usable entry (unset, blank or only commas) uses the default, so the check can't be switched off by accident.
+- The check applies to registration, renames, the Steam sign-up and demo seeding. It doesn't apply to env admin seeding, so an operator can still name a seeded admin `admin`.
+- Existing accounts keep their names. They still log in, and saving the unchanged name on Profile succeeds: a rename skips the reserved check when the new name equals the current one ignoring case.
+- **Failure path:** `SuperAdmin1`, `4dmin`, `Kana_Liiga` and `rn0d` are refused. An existing account named `admin_old` still logs in.
+
+### Real Admins Carry a Badge
+**User story**
+As a player, I want to see at a glance who is really an admin, so that a look-alike name can't fool me.
+
+**Acceptance criteria**
+- Every response row that shows another user's name carries `is_admin` (boolean): the roster, season and weekly leaderboards, the season archive standings, and `GET /profile/{user_id}`. Roster leaderboard rows also gain the user `id`.
+- The website shows an **ADMIN** badge next to those usernames: the season and weekly leaderboards, past season standings, and the player's own Profile (the website has no view of another user's profile). It uses the design system (display type, uppercase, the accent colour, a 2 px radius, no pill), and is visually distinct from user tags.
+- No user or tag can produce the same badge: tags with the key or label `admin` are refused at tag creation.
+- **Failure path:** a non-admin named `Admin_Helper` (an existing name) shows no badge.
+
+### Profiles Don't Lend Out Other Players' Identities
+**User story**
+As a league player, I want my picture and Steam-linked id not to appear on someone else's profile just because they typed in my player id, so that nobody can pose as me or pull my Steam profile from Kana Cards.
+
+**Acceptance criteria**
+- `GET /profile/{user_id}` for another user:
+  - never returns the numeric `player_id`;
+  - returns `player_name` and `player_verified`, true when the account has a `steam_id` and a player id;
+  - returns `player_avatar_url` only when `player_verified` is true.
+- The profile shows the in-game name with "Verified with Steam" or "Self-reported", and the avatar only when verified.
+- The player themselves (`GET /profile/{own id}`) and admins (checked against the database, not the session) still see the numeric id and the avatar. `GET /me` is unchanged regarding `player_id`.
+- No other endpoint returns another user's `player_id`. A test checks every response that carries other users' data (leaderboards, weekly report, season archive, profile with its tags) and asserts that no row carrying a user identity (`id`/`user_id` with `username`) has a `player_id` key; card rows carrying a league player's id are fine. Another user's roster view stays admin-only.
+- The privacy page says that a linked player id identifies a Steam account, and that Kana Cards shows it only to the player and to admins.
+- **Failure path:** a profile with a self-reported id of a well-known player shows "Self-reported" and that player's name, with no avatar and no number.
+
+### Renames Are Limited
+**User story**
+As an admin, I want players to be able to rename at most once a week, so that a name can't keep changing to imitate whoever is active.
+
+**Acceptance criteria**
+- `PUT /profile/username` refuses a change within `USERNAME_CHANGE_COOLDOWN_DAYS` (default 7) of the last one, with 429 and the date it becomes possible again.
+- A successful change sets `users.username_changed_at`, a new column added in migration `034`.
+- Saving the unchanged name, or changing only its letter case, doesn't count as a change.
+- `USERNAME_CHANGE_COOLDOWN_DAYS=0` turns the limit off.
+- `GET /me` and `PUT /profile/username` return `username_change_available_at` (Unix time, or null when a rename is allowed now or the cooldown is off). Profile shows "You can rename again on <date>" when it is set.
+- **Failure path:** a second rename two days after the first answers 429 and keeps the current name.

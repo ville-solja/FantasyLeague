@@ -186,6 +186,12 @@ def validate_request(request, db):
     return user
 
 
+def mark_reauth(row: UserSession) -> None:
+    """Record a fresh identity check on this session (POST /reauth with the password,
+    or a Steam re-auth round trip, issue #150). The caller commits."""
+    row.reauth_at = _now()
+
+
 def reauth_is_recent(row: UserSession | None) -> bool:
     return (row is not None and row.reauth_at is not None
             and _now() - row.reauth_at <= ADMIN_REAUTH_SECONDS)

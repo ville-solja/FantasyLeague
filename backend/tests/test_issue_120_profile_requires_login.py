@@ -183,9 +183,10 @@ class TestRequireLoginToViewAProfile:
     def test_authenticated_user_can_view_any_profile_unchanged_shape(self, client, db_session):
         """Any logged-in user (not just the profile's own owner) can view
         another user's profile once authenticated, and the response shape/
-        content is completely unchanged from before this fix (id, username,
-        player_id, player_name, player_avatar_url, twitch_linked, tags,
-        past_seasons)."""
+        content is unchanged from before this fix apart from issue #169 (id,
+        username, player_name, player_avatar_url, twitch_linked, tags,
+        past_seasons; #169 dropped player_id for other viewers and added
+        is_admin and player_verified)."""
         target = _create_user(db_session, username="bob", email="bob@example.com")
         viewer = _create_user(db_session, username="carol", email="carol@example.com")
         _login(client, viewer.username)
@@ -197,7 +198,8 @@ class TestRequireLoginToViewAProfile:
         assert body == {
             "id": target.id,
             "username": "bob",
-            "player_id": None,
+            "is_admin": False,
+            "player_verified": False,
             "player_name": None,
             "player_avatar_url": None,
             "twitch_linked": False,
