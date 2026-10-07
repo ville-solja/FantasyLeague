@@ -837,7 +837,7 @@ def test_extension_package_sh_self_check_passes(tmp_path):
     ext = tmp_path / "twitch-extension"
     shutil.copytree(os.path.dirname(_PACKAGE_SH), ext, ignore=shutil.ignore_patterns("*.zip"))
 
-    result = subprocess.run(["bash", str(ext / "package.sh"), "99.0.0", "--ebs-origin", "https://kana-cards.com"],
+    result = subprocess.run(["bash", str(ext / "package.sh"), "99.0.0", "--ebs-origin", "https://fantasy.example.org"],
                             capture_output=True, text=True, timeout=60)
 
     assert result.returncode == 0, result.stdout + result.stderr

@@ -102,7 +102,7 @@ def _ext_copy(tmp_path):
 
 # Issue #164: package.sh bakes the allowed backend origins into the zip and refuses
 # to build without one; the production package lists the production host.
-_ORIGIN = ("--ebs-origin", "https://kana-cards.com")
+_ORIGIN = ("--ebs-origin", "https://fantasy.example.org")
 
 
 def _run_package(ext_dir, *args):
@@ -189,7 +189,7 @@ def test_package_sh_success_prints_asset_hosting_paths(tmp_path):
 
 
 def test_package_sh_success_prints_fetch_allowlist_entry(tmp_path):
-    """On success, package.sh prints the URL Fetching allowlist entry https://kana-cards.com."""
+    """On success, package.sh prints the URL Fetching allowlist entry: the --ebs-origin given (issue #164)."""
     _require_zip()
     ext = _ext_copy(tmp_path)
     result = _run_package(ext, "9.9.9", *_ORIGIN)
@@ -197,7 +197,7 @@ def test_package_sh_success_prints_fetch_allowlist_entry(tmp_path):
     lines = [line.strip() for line in result.stdout.splitlines()]
     heading = next(i for i, line in enumerate(lines)
                    if line.endswith("Allowlist for URL Fetching Domains:"))
-    assert lines[heading + 1] == "https://kana-cards.com"
+    assert lines[heading + 1] == "https://fantasy.example.org"
 
 
 def test_package_sh_no_version_argument_exits_nonzero(tmp_path):

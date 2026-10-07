@@ -259,7 +259,13 @@ class TestPinnedBackendOrigins:
         for name, line in calls:
             assert "--ebs-origin" in line or "ORIGIN_ARGS" in line, (name, line)
         publish = _read(REPO_ROOT / ".github" / "workflows" / "docker-publish.yml")
-        assert "--ebs-origin" in publish and "EBS_ORIGINS" in publish
+        assert "--ebs-origin" in publish and "vars.EBS_ORIGINS" in publish
+        # The origins belong to the deployment: no host is built into the workflow, and
+        # without the variable the package step is skipped rather than failing the build.
+        steps = publish.split("steps:", 1)[1].split("Log in to GHCR", 1)[0]
+        code = "\n".join(l for l in steps.splitlines() if not l.strip().startswith("#"))
+        assert not re.search(r"https://[a-z0-9.-]+\.[a-z]{2,}", code)
+        assert "if: ${{ vars.EBS_ORIGINS != '' }}" in publish
 
     def test_set_ebs_url_never_puts_the_secret_on_a_command_line_or_screen(self):
         src = _read(EXT_DIR / "set-ebs-url.sh")

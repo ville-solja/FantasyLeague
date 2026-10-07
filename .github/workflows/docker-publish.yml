@@ -20,19 +20,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.3.1
 
+      # The Twitch extension package carries the backend origins its panel may call
+      # (issue #164). They belong to the deployment, not to the code, so they come
+      # from the repository variable EBS_ORIGINS (space-separated https origins,
+      # e.g. "https://fantasy.example.org"). Without it the package is skipped and
+      # the Docker image is still built.
       - name: Package Twitch extension
+        if: ${{ vars.EBS_ORIGINS != '' }}
         env:
-          # Backend origins baked into the panel's ebs-origins.js (issue #164); the
-          # panel refuses any other EBS URL. Override with the repository variable
-          # EBS_ORIGINS (space-separated https origins, e.g. to add a test host).
-          EBS_ORIGINS: ${{ vars.EBS_ORIGINS || 'https://kana-cards.com' }}
+          EBS_ORIGINS: ${{ vars.EBS_ORIGINS }}
         run: |
           VERSION="${GITHUB_SHA:0:7}"
           ORIGIN_ARGS=()
           for origin in $EBS_ORIGINS; do ORIGIN_ARGS+=(--ebs-origin "$origin"); done
           bash twitch-extension/package.sh "$VERSION" "${ORIGIN_ARGS[@]}"
 
+      - name: Skip Twitch extension package
+        if: ${{ vars.EBS_ORIGINS == '' }}
+        run: echo "::notice::Twitch extension not packaged - set the repository variable EBS_ORIGINS to the backend origin(s) its panel may call."
+
       - name: Upload extension package
+        if: ${{ vars.EBS_ORIGINS != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: twitch-extension-${{ github.sha }}
