@@ -4,7 +4,7 @@ Visible only to admin users. All actions require an active admin session cookie 
 
 ## Password re-entry prompt
 
-Destructive actions (End Season, Reset Season, league data purge, every Database Backups action, Promote/Demote admin) need the admin's password again if it was not confirmed on this device in the last 10 minutes. The server answers 403 `reauth_required`; `adminFetch()` then opens an in-page **Confirm your password** modal (password field, **Confirm** and **Cancel**, never a browser `confirm()`/`prompt()`). Confirm calls `POST /reauth` (Enter in the field does the same; the field is the `#reauthForm` form, with a hidden username, so password managers fill it, see `features/reference/password-manager-autofill.md`); on success the modal closes and the action is retried once. A wrong password shows the error in the modal's status line and keeps it open. Cancel (or Escape, or a backdrop click) closes it and the action reports the 403 in its usual status line. The modal stacks above the Season Reset confirmation.
+Destructive actions (End Season, Reset Season, league data purge, every Database Backups action, Promote/Demote admin) and, since issue #167, the token-economy and broadcast actions (Grant tokens, create or delete a promo code, create or delete a token grant event, create or delete a notification, Toggle tester) need the admin's password again if it was not confirmed on this device in the last 10 minutes. The server answers 403 `reauth_required`; `adminFetch()` then opens an in-page **Confirm your password** modal (password field, **Confirm** and **Cancel**, never a browser `confirm()`/`prompt()`). Confirm calls `POST /reauth` (Enter in the field does the same; the field is the `#reauthForm` form, with a hidden username, so password managers fill it, see `features/reference/password-manager-autofill.md`); on success the modal closes and the action is retried once. A wrong password shows the error in the modal's status line and keeps it open. Cancel (or Escape, or a backdrop click) closes it and the action reports the 403 in its usual status line. The modal stacks above the Season Reset confirmation.
 
 ## Ingest League panel
 
@@ -32,8 +32,8 @@ Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-
 
 ## Promo Codes panel
 
-- **Create** — enter a code name (auto-uppercased) and a token amount, then click Create. The code can be redeemed by users in the My Team tab.
-- **Table** — lists all existing codes with their token amount and redemption count. Each row has a Delete button.
+- **Create** — enter a code name (auto-uppercased) and a token amount, optionally **Max uses** (total redemptions across all users) and an **Expires** date and time, then click Create (asks for the password if not confirmed recently). The code can be redeemed by users in the My Team tab.
+- **Table** — columns Code, Tokens, Uses ("3" or "3 / 100" with a cap), **Limits** ("Expires …" or "Expired …", "Max N uses", or "—") and a Delete button.
 
 ## Token Balances panel (User Management)
 

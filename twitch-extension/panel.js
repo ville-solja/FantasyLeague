@@ -271,7 +271,7 @@ function renderDrawButtons() {
     var cost = state.me.team_draw_cost || 3;
     el("btn-draw").disabled = tokens < 1;
     el("btn-team-draw").textContent = "Team draw · " + cost;
-    el("draw-note").textContent = tokens < 1 ? "You need a token to draw. Tokens come from MVP drops and the weekly grant." : "";
+    el("draw-note").textContent = tokens < 1 ? "You need a token to draw. Tokens come from the weekly grant and from MVP drops, which need your Twitch identity shared in Settings." : "";
 }
 
 el("btn-draw").addEventListener("click", function () {

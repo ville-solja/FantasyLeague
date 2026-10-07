@@ -464,7 +464,7 @@ class TestLiveFantasyForEveryViewer:
             shutil.copytree(EXTENSION_DIR, ext, ignore=shutil.ignore_patterns("*.zip"))
             target = ext / name
             target.write_text(target.read_text() + "\n" + phrase + "\n")
-            result = subprocess.run(["bash", str(ext / "package.sh"), "9.9.9"],
+            result = subprocess.run(["bash", str(ext / "package.sh"), "9.9.9", "--ebs-origin", "https://kana-cards.com"],
                                     capture_output=True, text=True, timeout=60)
             assert result.returncode != 0
             assert name in result.stderr and "forbidden text" in result.stderr
@@ -1230,12 +1230,15 @@ class TestDrawAndRosterInPanel:
 class TestTokenDropsForTwitchPlayers:
 
     def test_active_pool_includes_present_soft_and_linked_accounts(self, db):
-        """AC Who is eligible: the drop pool is every present viewer with an account (soft or website-linked) via users.twitch_user_id."""
+        """AC Who is eligible: the drop pool is every present viewer with an account (soft or website-linked) via users.twitch_user_id. Since issue #171 the viewer must also have shared their Twitch identity (users.twitch_account_id)."""
         import twitch
-        _join(db, "Usoft")
-        _website_user(db, "linked", twitch_user_id="Ulinked")
-        _join(db, "Ustale")
-        for oid in ("Usoft", "Ulinked", "Unoaccount"):
+        _join(db, "Usoft", user_id="5001")
+        linked = _website_user(db, "linked", twitch_user_id="Ulinked")
+        linked.twitch_account_id = "5002"
+        db.commit()
+        _join(db, "Ustale", user_id="5003")
+        _join(db, "Unoshare")
+        for oid in ("Usoft", "Ulinked", "Unoaccount", "Unoshare"):
             _present(db, oid)
         _present(db, "Ustale", seen_at=int(time.time()) - 3600)
         assert sorted(twitch._active_pool(db, _CHANNEL)) == ["Ulinked", "Usoft"]
@@ -1247,8 +1250,8 @@ class TestTokenDropsForTwitchPlayers:
         _chat_recorder(monkeypatch)
         monkeypatch.setattr(twitch, "_TWITCH_DROP_MAX", 2)
         _seed_series_match(db)
-        for oid in ("Us1", "Us2", "Us3"):
-            _join(db, oid)
+        for i, oid in enumerate(("Us1", "Us2", "Us3")):
+            _join(db, oid, user_id=str(6000 + i))  # identity shared (issue #171)
             _present(db, oid)
         start = {u.id: u.tokens for u in db.query(User).all()}
         result = _set_mvp(db)
@@ -1268,9 +1271,11 @@ class TestTokenDropsForTwitchPlayers:
         assert twitch._mvp_chat_text("Savu", 1, False) == "Match MVP: Savu! 1 viewer received a token."
         chat = _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
+        alice = _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
+        alice.twitch_account_id = "7001"  # identity shared (issue #171)
+        db.commit()
         _present(db, "Ulinked")
-        _join(db, "Usoft")
+        _join(db, "Usoft", user_id="7002")
         _present(db, "Usoft")
         _set_mvp(db)
         assert chat == ["Match MVP: Player102! 2 viewers received a token."]
@@ -1286,7 +1291,9 @@ class TestTokenDropsForTwitchPlayers:
         monkeypatch.setattr(twitch, "_pubsub_broadcast", lambda channel_id, message: sent.append(message))
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
+        alice = _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
+        alice.twitch_account_id = "7003"  # identity shared (issue #171)
+        db.commit()
         _present(db, "Ulinked")
         _set_mvp(db)
         assert len(sent) == 1
@@ -1343,7 +1350,7 @@ class TestTokenDropsForTwitchPlayers:
         assert twitch.drops_enabled() is True
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        _join(db, "Usoft")
+        _join(db, "Usoft", user_id="7004")  # identity shared (issue #171)
         _present(db, "Usoft")
         assert _set_mvp(db)["token_drop"]["winner_count"] == 1
         db.expire_all()
@@ -1358,7 +1365,7 @@ class TestTokenDropsForTwitchPlayers:
         result = _set_mvp(db)
         assert result["token_drop"]["pool_size"] == 0
         assert db.query(TwitchMVP).filter_by(match_id=1001).count() == 1
-        assert chat == ["Match MVP: Player102! No tokens were dropped: no joined viewers were watching."]
+        assert chat == ["Match MVP: Player102! No tokens were dropped: no eligible viewers were watching."]
 
 
 # ---------------------------------------------------------------------------
@@ -1390,10 +1397,12 @@ class TestNoLinkCodesInExtension:
         assert "alice" not in json.dumps(data)
 
     def test_code_linked_website_account_still_in_drop_pool(self, db, twitch_env, monkeypatch):
-        """AC Players linked before: a code-linked website account still receives drops."""
+        """AC Players linked before: a code-linked website account still receives drops (once its Twitch identity is shared, issue #171)."""
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
         alice = _website_user(db, "alice", twitch_user_id="Ulinked", tokens=7)
+        alice.twitch_account_id = "7005"
+        db.commit()
         _present(db, "Ulinked")
         result = _set_mvp(db)
         assert result["token_drop"]["winner_count"] == 1
@@ -1757,7 +1766,7 @@ class TestMigrationAndPackaging:
             return  # the static checks above still ran; the build needs zip
         ext = tmp_path / "twitch-extension"
         shutil.copytree(EXTENSION_DIR, ext, ignore=shutil.ignore_patterns("*.zip"))
-        result = subprocess.run(["bash", str(ext / "package.sh"), "1.2.0"],
+        result = subprocess.run(["bash", str(ext / "package.sh"), "1.2.0", "--ebs-origin", "https://kana-cards.com"],
                                 capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stdout + result.stderr
         with zipfile.ZipFile(ext / "twitch-extension-1.2.0.zip") as zf:

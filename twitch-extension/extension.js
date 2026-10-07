@@ -22,11 +22,27 @@ var ext = {
 var _cfgReady  = false;
 var _authReady = false;
 
+// The configured EBS URL is used only when its origin was baked into the package
+// (ebs-origins.js, written by package.sh; issue #164). Anyone holding the
+// extension secret can rewrite the configuration, but not the reviewed package.
+// With no packaged origins, only the local dev harness accepts any URL.
+function _ebsUrlAllowed(url) {
+    var allowed = (typeof EBS_ALLOWED_ORIGINS !== "undefined" && EBS_ALLOWED_ORIGINS) || [];
+    if (!allowed.length) return window.__EXT_DEV_HARNESS === true;
+    var parsed;
+    try { parsed = new URL(url); } catch (e) { return false; }
+    return parsed.protocol === "https:" && allowed.indexOf(parsed.origin) !== -1;
+}
+
 function _onCfgChanged() {
     var global = window.Twitch.ext.configuration.global;
     if (global && global.content) {
         try {
             var cfg = JSON.parse(global.content);
+            if (cfg.ebs_url && !_ebsUrlAllowed(cfg.ebs_url)) {
+                console.warn("[ext] configured EBS URL is not an approved origin; not calling it");
+                return;
+            }
             if (cfg.ebs_url) {
                 ext.ebsUrl = cfg.ebs_url;
                 _cfgReady  = true;

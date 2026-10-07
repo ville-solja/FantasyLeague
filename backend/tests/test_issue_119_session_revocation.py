@@ -61,6 +61,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import itsdangerous
 import pytest
+
+from routers.auth import hash_reset_token
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -343,7 +345,7 @@ def test_reset_password_revokes_all_existing_sessions(session_env):
     a = session_env.login()
     b = session_env.login()
     db = session_env.Session()
-    db.add(PasswordResetToken(token="tok-119", user_id=uid, expires_at=int(time.time()) + 3600))
+    db.add(PasswordResetToken(token=hash_reset_token("tok-119"), user_id=uid, expires_at=int(time.time()) + 3600))
     db.commit()
     db.close()
     resp = session_env.client().post("/reset-password",

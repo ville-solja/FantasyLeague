@@ -28,7 +28,7 @@ Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Emp
 
 ## Cards tab
 
-- **Draw · 1** (disabled without tokens, with a note on how tokens are earned) and **Team draw · 3**.
+- **Draw · 1** (disabled without tokens, with a note on how tokens are earned: the weekly grant and MVP drops, which need the Twitch identity shared in Settings) and **Team draw · 3**.
 - **Card reveal** after a draw: the card art in its rarity treatment (tinted art, rarity border, glow on the art only, player initials), rarity, player name, team, and "Added to your roster" or "Added to your bench".
 - **Collection:** a count ("22 cards"), rarity filter chips with counts (All, Leg, Epic, Rare, Com), and a five-per-row grid of 48 × 66 card art with names, rarest first then by name. Scrolls inside the panel.
 
@@ -56,6 +56,6 @@ Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Emp
 
 ## Settings
 
-- **Share your Twitch identity** with a short explanation (hidden once shared).
+- **Share your Twitch identity** with a short explanation: sharing makes the viewer eligible for MVP token drops (issue #171) and lets progress follow the Twitch account later (hidden once shared).
 - **Leave Kana Cards**: the first press changes it to "Press again to leave"; the second deletes the soft account and its game data (a website account (connected with Twitch sign-in, or linked earlier by code) is only disconnected; the text says so). The panel then returns to the not-joined Live tab.
 - Privacy note: what is stored and why; "Kana Cards never asks for a password."

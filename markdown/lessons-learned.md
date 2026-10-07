@@ -103,7 +103,7 @@ Format:
 
 ### 2026-09-30 — developer — file-paths
 **Problem:** `twitch-extension/*.zip` is gitignored, so building a zip with `package.sh` does not record an extension version bump. The submitted version is tracked in `markdown/features/reference/twitch-extension-review-submission.md` (header and checklist), and `backend/tests/test_twitch_review_resubmission.py::test_submission_doc_references_current_version` asserts that exact version.
-**Solution:** To bump the extension version, update the submission doc's header, checklist and review-history change log, the `package.sh` usage example, the `package.sh <version>` line in `markdown/features/core/twitch-extension.md`, and that test's expected version. The operator builds the zip with `bash twitch-extension/package.sh <version>` at release time.
+**Solution:** To bump the extension version, update the submission doc's header, checklist and review-history change log, the `package.sh` usage example, the `package.sh <version>` line in `markdown/features/core/twitch-extension.md`, and that test's expected version. The operator builds the zip with `bash twitch-extension/package.sh <version> --ebs-origin <https-origin>` at release time (the origin is required since issue #164).
 
 ---
 

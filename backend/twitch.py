@@ -48,6 +48,7 @@ from rate_limit import key_by_twitch_viewer_or_ip, limiter
 from schedule import bust_cache
 from scoring import apply_mvp_bonus_to_row, display_points
 import soft_accounts
+import text_safety
 from routers.cards import SwapRequest
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
@@ -113,17 +114,22 @@ def verify_twitch_jwt(request: Request = None, authorization: str = Header(...))
             token,
             secret_bytes,
             algorithms=["HS256"],
+            options={"require": ["exp"]},
         )
     except pyjwt.ExpiredSignatureError:
         logger.error("Twitch JWT expired")
         raise HTTPException(status_code=401, detail="Twitch token expired")
     except pyjwt.InvalidTokenError as exc:
-        logger.error("Twitch JWT invalid (secret len=%d decoded_bytes=%d): %s",
-                     len(secret_b64), len(secret_bytes), exc)
+        # Exception class only (issue #165): nothing about the secret or the token.
+        logger.error("Twitch JWT invalid: %s", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Invalid Twitch token")
     except Exception as exc:
-        logger.error("Twitch JWT decode unexpected error: %s", exc)
+        logger.error("Twitch JWT decode unexpected error: %s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="JWT decode error")
+    # role "external" is what this server signs for Twitch's own APIs (PubSub, chat);
+    # no viewer or broadcaster route ever needs one (issue #165).
+    if payload.get("role") == "external":
+        raise HTTPException(status_code=403, detail="Viewer token required")
     return _remember_viewer(request, payload)
 
 
@@ -176,6 +182,19 @@ def _pubsub_broadcast(channel_id: str, message: dict):
         logger.exception("Twitch PubSub broadcast failed")
 
 
+_CHAT_NAME_MAX = 32
+
+
+def chat_safe_name(name, account_id) -> str:
+    """The player name as the league repeats it to a channel (issue #166): no control,
+    zero-width or bidi characters, at most 32 characters, and "Player {id}" when the
+    player-chosen name looks like a link."""
+    cleaned = text_safety.clean_display_text(name, _CHAT_NAME_MAX)
+    if not cleaned or text_safety.looks_like_url(cleaned):
+        return f"Player {account_id}"
+    return cleaned
+
+
 def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
                    drops_enabled: bool = True) -> str:
     """Build the MVP chat announcement within Twitch's 280-character limit.
@@ -191,7 +210,7 @@ def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
         noun = "viewer" if winner_count == 1 else "viewers"
         text = f"{base} {winner_count} {noun} received a token."
     elif pool_empty:
-        text = f"{base} No tokens were dropped: no joined viewers were watching."
+        text = f"{base} No tokens were dropped: no eligible viewers were watching."
     else:
         text = base
     return text[:_CHAT_TEXT_MAX]
@@ -259,12 +278,18 @@ def _post_chat_message(channel_id: str, message: str):
 # ---------------------------------------------------------------------------
 
 @router.post("/heartbeat")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
 def heartbeat(
+    request: Request,
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
 ):
-    """Called by the extension panel to record viewer presence. Eligible for giveaway pool."""
+    """Called by the extension panel to record viewer presence. Eligible for giveaway pool.
+    Logged-out viewers (A… ids) can't join or win drops, so nothing is stored for them
+    (issue #171)."""
     twitch_user_id = payload.get("opaque_user_id", "")
+    if not str(twitch_user_id).startswith("U"):
+        return {"ok": True}
     channel_id = payload.get("channel_id", "")
     now = int(time.time())
 
@@ -807,6 +832,9 @@ def current_matches(
                     {
                         "player_id": p["account_id"],
                         "player_name": _live_display_name(p["account_id"], p.get("name"), known_names),
+                        "chat_name": chat_safe_name(
+                            _live_display_name(p["account_id"], p.get("name"), known_names),
+                            p["account_id"]),
                         "team_name": side_names.get(p.get("side"), ""),
                         "fantasy_points": 0,
                     }
@@ -823,6 +851,7 @@ def current_matches(
                     {
                         "player_id": pms.player_id,
                         "player_name": p.name,
+                        "chat_name": chat_safe_name(p.name, pms.player_id),
                         "team_name": t.name,
                         "fantasy_points": display_points(pms.fantasy_points),
                     }
@@ -913,7 +942,9 @@ def _apply_mvp_bonus(db: Session, player_id: int, match_id: int, apply: bool, we
 
 def _active_pool(db: Session, channel_id: str) -> list[str]:
     """Viewers with an account (soft account or recognised website account, both via
-    users.twitch_user_id) who sent a heartbeat within the presence TTL."""
+    users.twitch_user_id) who sent a heartbeat within the presence TTL and shared their
+    Twitch identity (users.twitch_account_id). Issue #171: the identity share ties a
+    pool entry to a real Twitch account, so free alt accounts can't farm drops."""
     cutoff = int(time.time()) - _PRESENCE_TTL
     from sqlalchemy import text as _text
     rows = db.execute(_text("""
@@ -922,6 +953,7 @@ def _active_pool(db: Session, channel_id: str) -> list[str]:
         JOIN users u ON u.twitch_user_id = p.twitch_user_id
         WHERE p.channel_id = :channel_id
           AND p.seen_at >= :cutoff
+          AND u.twitch_account_id IS NOT NULL
     """), {"channel_id": channel_id, "cutoff": cutoff}).fetchall()
     return [r[0] for r in rows]
 
@@ -982,9 +1014,29 @@ def drops_enabled() -> bool:
 
 
 def _mvp_allowed_channels() -> set[str]:
-    """Channel IDs from TWITCH_MVP_CHANNEL_IDS (comma-separated). Empty set = any channel."""
+    """Channel IDs from TWITCH_MVP_CHANNEL_IDS (comma-separated)."""
     raw = os.getenv("TWITCH_MVP_CHANNEL_IDS", "")
     return {c.strip() for c in raw.split(",") if c.strip()}
+
+
+def _is_production() -> bool:
+    return os.getenv("ENV", "").strip().lower() == "production"
+
+
+def mvp_channel_allowed(channel_id: str) -> bool:
+    """Whether a channel may set MVPs. A listed channel always may. An empty list
+    allows any channel outside production only (issue #165: fail closed)."""
+    allowed = _mvp_allowed_channels()
+    if allowed:
+        return channel_id in allowed
+    return not _is_production()
+
+
+def warn_if_mvp_channels_unset() -> None:
+    """Startup warning (main.lifespan): production with no MVP channel list."""
+    if _is_production() and not _mvp_allowed_channels():
+        logger.warning("TWITCH_MVP_CHANNEL_IDS is empty: with ENV=production no channel "
+                       "can set match MVPs until it lists the league's channel IDs")
 
 
 class MVPBody(BaseModel):
@@ -1008,8 +1060,7 @@ def set_mvp(
 
     # Every check runs before any MVP row, bonus or token drop is written. The
     # channel allowlist goes first so other channels learn nothing about IDs.
-    allowed_channels = _mvp_allowed_channels()
-    if allowed_channels and channel_id not in allowed_channels:
+    if not mvp_channel_allowed(channel_id):
         raise HTTPException(status_code=403, detail="This channel cannot set match MVPs")
     match = db.get(Match, body.match_id)
     live_row = db.get(LiveMatch, body.match_id)
@@ -1075,14 +1126,15 @@ def set_mvp(
     bust_cache()
     # No winner names or ids go to the channel: every joined panel re-reads its own
     # balance from GET /twitch/me and shows the drop when it went up.
+    announced_name = chat_safe_name(player_name, body.player_id)
     _pubsub_broadcast(channel_id, {
         "type": "mvp",
-        "player_name": player_name,
+        "player_name": announced_name,
         "match_id": body.match_id,
         "token_drop": {"count": len(winner_names), "refresh": bool(winner_names)},
     })
 
-    chat_msg = _mvp_chat_text(player_name, len(winner_names),
+    chat_msg = _mvp_chat_text(announced_name, len(winner_names),
                               pool_empty=not already_dropped and pool_size == 0,
                               drops_enabled=enabled)
     _post_chat_message(channel_id, chat_msg)

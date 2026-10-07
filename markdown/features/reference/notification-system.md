@@ -22,6 +22,11 @@ reappearing. Players who load the app after the window ends never see the notifi
 
 ### `POST /admin/notifications` Body: `{ message: str, start_time: int, end_time: int }`. Admin only. Validates
 `end_time > start_time` and `1 ≤ len(message) ≤ 500`. Returns `{ id }`.
+Since issue #166/#167 it also needs a recent `POST /reauth` (403 `reauth_required` otherwise;
+`DELETE` too), drops control and invisible characters (line breaks are kept), and returns 422
+`"Notifications may only link to this site (APP_BASE_URL)"` when the message contains a link-like
+part whose host is not the host of `APP_BASE_URL` (with `APP_BASE_URL` unset, no links at all). The
+popup speaks with the league's authority, so it must never carry a link someone else chose.
 
 ### `DELETE /admin/notifications/{id}` Admin only. Deletes the notification. Existing dismissals are unaffected.
 

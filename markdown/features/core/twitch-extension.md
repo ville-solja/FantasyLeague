@@ -36,7 +36,8 @@ twitch-extension/
 ├── panel.js            # Viewer panel logic (live data, join, draws, collection, roster, leave)
 ├── config.html         # Broadcaster one-time setup page
 ├── live_config.html    # Broadcaster quick actions (MVP selection + token drop)
-├── extension.js        # Shared JS (EBS URL resolution, API calls, PubSub, heartbeat)
+├── ebs-origins.js      # Backend origins the panel may call; empty here, written by package.sh (#164)
+├── extension.js        # Shared JS (EBS URL resolution and origin check, API calls, PubSub, heartbeat)
 ├── extension.css       # Shared styles (Kanaliiga design tokens)
 ├── fonts/              # Big Shoulders Text (packaged; the extension is self-contained)
 ├── dev-harness.html    # Local dev only — not uploaded to Twitch
@@ -94,13 +95,14 @@ Leave it unset in production. See `reference/security-headers.md`.
 
 ### Step 4 — Package and upload
 
-The EBS URL is not baked into the package — it is set separately in Step 5. No environment variables are needed for packaging, but a version argument is required:
+The EBS URL itself is set separately in Step 5, but since issue #164 the package carries the list of backend origins the panel may call: `extension.js` uses the configured `ebs_url` only when it is `https:` and its origin is one of them, so someone holding the extension secret cannot point every panel at another server. Give each allowed origin with `--ebs-origin` (an `https://` origin, no path or trailing slash). The production package lists only the production host; a package for the test server may add the test host:
 
 ```bash
-bash twitch-extension/package.sh 1.2.0
+bash twitch-extension/package.sh 1.2.0 --ebs-origin https://kana-cards.com
+# test build: … --ebs-origin https://kana-cards.com --ebs-origin https://test.kana-cards.com
 ```
 
-The script refuses to run without a version, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the Asset Hosting paths and URL Fetching allowlist entry to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
+The origins are written into a generated `ebs-origins.js` inside the zip only; the repository copy stays an empty list, which only the local dev harness accepts (it sets `window.__EXT_DEV_HARNESS`). Changing the list therefore needs a new extension version and a Twitch review. The script refuses to run without a version or without an origin, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the packaged origins, the Asset Hosting paths and the URL Fetching allowlist entries (the same origins) to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
 
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, move it to **Hosted Test** and verify all three views before submitting for review. See [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md).
 
@@ -112,10 +114,10 @@ Run once after the first deploy, and again any time the backend URL changes:
 bash twitch-extension/set-ebs-url.sh https://your-domain.example.com
 ```
 
-The script prompts for three values if not pre-filled at the top of the file:
+The script prompts for three values unless they are exported in the environment (`TWITCH_CLIENT_ID`, `TWITCH_EXT_SECRET`, `TWITCH_OWNER_USER_ID`). Never write the secret into the script: it is tracked in git. The secret prompt is hidden, and the secret reaches the embedded Python through the environment, never as a command-line argument (issue #164):
 - **Client ID** — Extension Settings, top-right
 - **Extension Secret** — Extension Secrets table → Key column (bottom of Extension Settings)
-- **Your Twitch User ID** — the numeric ID of the account that owns the extension (look up at https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/) It writes the URL into the extension's **global** Configuration Service segment. All channel installs pick up the change immediately on next panel load — no rebuild or re-upload required.
+- **Your Twitch User ID** — the numeric ID of the account that owns the extension (look up at https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/) It writes the URL into the extension's **global** Configuration Service segment. All channel installs pick up the change immediately on next panel load — no rebuild or re-upload required. The URL must be `https://` and its origin must be one the installed package was built with (`--ebs-origin`, Step 4), or the panel refuses to call it.
 
 To debug a failed run:
 ```bash
@@ -159,7 +161,9 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
    A match without ingested stats is marked **Live** while the game runs, otherwise
    **Stats pending**
 4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**.
-   Tiles of a Live / Stats pending match show the team name without points
+   Tiles of a Live / Stats pending match show the team name without points. Under the confirm bar
+   a line shows the exact start of the chat message, "Chat will say: "Match MVP: {chat_name}!"",
+   using the cleaned name (issue #166)
 5. MVP is saved; tokens drop automatically to the presence pool. On a Live / Stats pending match
    the banner adds that the fantasy bonus is applied when the stats arrive (see
    `reference/early-mvp-selection.md`)
@@ -167,7 +171,7 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 ### Token drop rules
 - Fires on MVP confirmation — no separate trigger
 - **Once per match**: re-confirming a different MVP for the same match does not re-drop tokens
-- Up to `TWITCH_DROP_MAX` (default 20) random joined viewers (soft accounts and website accounts the panel recognises) from the pool receive +1 token
+- Up to `TWITCH_DROP_MAX` (default 20) random joined viewers (soft accounts and website accounts the panel recognises) from the pool receive +1 token. Since issue #171 the pool holds only viewers who shared their Twitch identity (`users.twitch_account_id` set), so free alt accounts cannot farm drops; the panel's Settings share box says so. Heartbeats from logged-out viewers (`A…` ids) store nothing, and heartbeats use the per-viewer `RATE_LIMIT_TWITCH_ACTION` limit
 - `TWITCH_DROPS_ENABLED=false` turns drops off: the MVP and the fantasy bonus are still set
 - Result broadcast via Twitch PubSub with the winner count only — all open panels show the MVP, and joined panels refresh their balance and show "+1 token from the MVP drop" when it went up
 - The confirmation banner shows how many viewers received a token, not their names
@@ -224,10 +228,18 @@ Message text (built by `_mvp_chat_text` in `backend/twitch.py`) names the MVP an
 viewers received a token, never their names (issue #157: soft accounts have no username, and a
 linked player's website username is not revealed in chat):
 `"Match MVP: {player_name}! {N} viewers received a token."` ("1 viewer" for one), or
-`"Match MVP: {player_name}! No tokens were dropped: no joined viewers were watching."` when the
+`"Match MVP: {player_name}! No tokens were dropped: no eligible viewers were watching."` when the
 pool was empty. A re-selection on a match that already dropped, or a confirmation with
 `TWITCH_DROPS_ENABLED=false`, posts just `"Match MVP: {player_name}!"`. The text is cut at
-Twitch's **280-character** limit, which only an MVP name of about 230+ characters could reach.
+Twitch's **280-character** limit.
+
+`{player_name}` is the cleaned name from `chat_safe_name` (issue #166): players choose their own
+Dota/Steam names, so control, zero-width and bidi characters are removed, the name is cut to 32
+characters, and a name that looks like a link (`://`, `www.`, or a dot followed by letters such as
+`.gg`) becomes `Player {account_id}`. The PubSub message carries the same name, and
+`GET /twitch/matches/current` returns it per player as `chat_name`, which the MVP picker shows as
+"Chat will say: …" before the broadcaster confirms.
+
 Twitch also allows **12 messages per minute per channel**; one MVP confirmation sends one message.
 
 Requires the **Chat** capability to be enabled on the installed extension version in the
@@ -304,7 +316,7 @@ pass these checks in order (issue #135):
 
 | Check | Failure |
 |---|---|
-| When `TWITCH_MVP_CHANNEL_IDS` is set, the calling channel is in it (checked first, so other channels learn nothing about IDs) | 403 |
+| The calling channel is in `TWITCH_MVP_CHANNEL_IDS` (checked first, so other channels learn nothing about IDs). An empty list allows any channel outside production, and no channel with `ENV=production` (issue #165) | 403 |
 | The match exists: an ingested match or a stored live match (`live_matches`) | 404 `Match not found` |
 | The match is one `GET /twitch/matches/current` offers: started, has ingested stats or is a stored live match, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
 | The player has a stat row for that match, or for a provisional match is one of its stored live players | 404 `Player did not play in this match` |
@@ -352,7 +364,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join and draws per IP; draws, roster changes and Leave per viewer |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
-| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops). Empty allows any channel with the extension; others get 403 |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops); others get 403. Empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |
 | `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |

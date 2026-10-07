@@ -20,7 +20,7 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 
 | Field | Rule | Error |
 |---|---|---|
-| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 409 if already taken. |
+| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 409 if already taken, compared case-insensitively (`Ville` blocks `ville`). 422 `"That username is reserved. Please choose another."` if it contains a word from `RESERVED_USERNAME_WORDS` (issue #169, see below). |
 | `email` | Required. 3–254 characters. Must fully match `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, so spaces, CR and LF are rejected. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
 | `password` | Required. 6–128 characters and at most 72 UTF-8 bytes (bcrypt's limit). | 422 if missing or outside length bounds. |
 
@@ -28,6 +28,13 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 passwords, and bcrypt 4.x truncates the same way when hashing and verifying. Nor does it apply
 the username character rule, so accounts created before the rule keep logging in with their
 existing name.
+
+**Reserved words and case (issue #169).** `username_policy_error()` in `backend/auth.py` checks new
+and renamed usernames (never existing ones, which keep working): a case-insensitive clash with
+another account is 409, and a name containing a word from `RESERVED_USERNAME_WORDS` (default
+`admin,administrator,moderator,mod,support,official,staff`; a league adds its own name) is 422.
+Words of 4+ letters match anywhere (`SuperAdmin1`); shorter ones only as a whole part between `_`,
+`-` and digits (`mod_ville`, not `Commodore`). Login still matches the exact username.
 
 The register form shows the allowed username characters under the field before submission.
 
@@ -48,6 +55,12 @@ Authenticates with username and password.
 ```
 
 - Returns 401 if credentials are invalid.
+- Returns 429 when the username is locked out (issue #168): `LOGIN_LOCKOUT_THRESHOLD` (default 10)
+  failures for that username from the same source IP within `LOGIN_LOCKOUT_WINDOW_SECONDS` lock it
+  out from that IP only, so nobody can lock another player out from their own connection;
+  `LOGIN_LOCKOUT_USERNAME_THRESHOLD` (default 100) failures from all IPs together lock it out
+  everywhere. A successful login clears the username's counter and that IP's counter; a completed
+  password reset clears every counter for the username. In memory, reset on restart.
 - Returns 401 with `"Temporary password has expired. Please request a new password reset."` if the
   account still holds an outstanding **pre-fix legacy** temporary password (`must_change_password`
   set and `temp_password_expires_at` in the past). This check is legacy-only — no current code
@@ -82,7 +95,7 @@ current user's password for this session and stores `reauth_at` on the session r
 admin endpoints (`deps.require_recent_reauth`) and a player's Twitch connection actions
 (`deps.require_recent_player_reauth`: Connect, merge and Disconnect, issue #160) then accept the
 session for `ADMIN_REAUTH_SECONDS` (default 600). Wrong password: 401 `"Incorrect password"`, counted toward
-the per-username login lockout (`LOGIN_LOCKOUT_THRESHOLD`); a locked-out username gets 429 with the
+the login lockout (per username and source IP, see `POST /login`); a locked-out username gets 429 with the
 same message as `/login`. If the current session row is missing (a defensive check), 401
 `"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an audit entry on success (`ok`) and
 on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for everyone else.
@@ -128,7 +141,12 @@ flag on login and redirects to the profile password change form before allowing 
 Returns basic profile information for any user by ID. Requires login — any authenticated
 account can view any other user's profile (this is not an ownership restriction, just a
 login requirement; see `reference/profile-requires-login.md`). Returns 401 if unauthenticated.
-The response shape and content for an authenticated request are otherwise unchanged.
+
+Since issue #169 another user's profile (not your own, and not for admins) leaves out the linked
+player's numeric `player_id` (a Steam32 id that leads to a Steam profile) and `player_avatar_url`,
+because the link is self-reported and anyone could otherwise borrow a known player's picture.
+`player_name` is still shown and `player_self_reported` is `true` whenever a player is linked.
+`is_admin` marks real admins.
 
 ```json
 {
@@ -137,6 +155,8 @@ The response shape and content for an authenticated request are otherwise unchan
   "player_id": 123456789,
   "player_name": "SomePlayer",
   "player_avatar_url": "https://...",
+  "player_self_reported": true,
+  "is_admin": false,
   "twitch_linked": true,
   "tags": [{"key": "caster", "label": "Caster"}],
   "past_seasons": [{"season_label": "Season 15", "points": 1240.0, "rank": 3}]
@@ -163,7 +183,9 @@ Changes the authenticated user's display name. Requires login.
 { "username": "NewName" }
 ```
 
-- Returns 409 if the username is already taken by another account.
+- Returns 409 if the username is already taken by another account, compared case-insensitively;
+  changing only the letter case of your own name is allowed.
+- Returns 422 if the new name contains a reserved word (see **Registration**, issue #169).
 - Returns 422 unless the value matches the same rule as registration: 1–64 characters of
   letters, digits, `_` and `-` (see `reference/security-audit-3.md`). Surrounding whitespace
   is rejected rather than stripped; the profile form trims it before sending and shows the
@@ -208,6 +230,8 @@ Changes the authenticated user's password. Requires login and the current passwo
 - Deletes every other session of the user and gives the requester's session a new ID (a new row
   and cookie): the requester stays logged in and every other session gets 401 on its next request.
   A rejected change (wrong current password) changes nothing.
+- Emails the account a "Your password was changed" notice (issue #168; best effort, never blocks
+  the change), so a takeover is noticed.
 
 ---
 
@@ -233,13 +257,16 @@ Requests a password reset for the given username. Does **not** change the accoun
    with the bcrypt timing-equalization call and returns `{"status": "ok"}` — no state changes.
 2. Any existing `PasswordResetToken` row for the account is deleted (only one live token per
    user at a time — same invalidate-on-regenerate precedent as the retired `TwitchLinkCode`).
-3. A new single-use token is generated (`secrets.token_urlsafe(32)`) and stored with an
-   `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS` hours (default `1`).
+3. A new single-use token is generated (`secrets.token_urlsafe(32)`). Only its SHA-256 hash
+   (`hash_reset_token`) is stored, with an `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS`
+   hours (default `1`), so a leaked database or backup holds no working reset link (issue #168).
 4. A `password_reset_requested` audit log entry is written.
 5. An email is sent to the address on file containing a clickable link
    (`{APP_BASE_URL}/?reset_token={token}`, only if `APP_BASE_URL` is configured) and the raw
-   token as a manual-entry fallback (always included). The wording states the current password
-   remains valid and nothing changes until the reset is completed.
+   token as a manual-entry fallback (always included). The email opens with "Never share this
+   code or link with anyone. {APP_NAME} staff will never ask you for it." (issue #168: the classic
+   scam is asking a victim to forward a code they did not request). The wording states the current
+   password remains valid and nothing changes until the reset is completed.
 
 The endpoint returns `{"status": "ok"}` regardless of whether the username exists, to
 prevent username enumeration. The one exception: when SMTP is configured and the send fails or
@@ -271,7 +298,12 @@ authentication required (the token itself is the credential).
   3. Deletes every session row of the user, so every existing session gets 401.
   4. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
   5. Records a `password_reset_completed` audit log entry (detail `all sessions revoked`).
-  6. Returns `{"status": "ok"}`.
+  6. Clears the username's login lockout and emails a "Your password was changed" notice (best
+     effort).
+  7. Returns `{"status": "ok"}`.
+
+The submitted token is hashed and looked up by hash; a stored hash submitted as a token never
+matches.
 
 Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next returns 429.
 
@@ -374,6 +406,10 @@ The login, registration, password reset, profile change-password and admin re-lo
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
 | `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |
+| `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed logins for one username from one IP before it is locked out from that IP (issue #168) |
+| `LOGIN_LOCKOUT_USERNAME_THRESHOLD` | `100` | Failed logins for one username from all IPs before it is locked out everywhere |
+| `LOGIN_LOCKOUT_WINDOW_SECONDS` | `300` | Window the lockout counters cover |
+| `RESERVED_USERNAME_WORDS` | `admin,administrator,moderator,mod,support,official,staff` | Words new or renamed usernames may not contain (issue #169) |
 | `APP_BASE_URL` | *(empty)* | Public base URL used to build a clickable reset link in emails; if unset, only the raw code is emailed |
 | `SMTP_HOST` | *(empty — disables email)* | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP port |

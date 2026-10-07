@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import threading
 import time
 import warnings
@@ -17,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
+import twitch as twitch_module
 import twitch_oauth
 import card_points
 import database
@@ -379,6 +381,7 @@ async def lifespan(app: FastAPI):
                 "TWITCH_LOCAL_DEV=true must not be set when SECRET_KEY is configured — "
                 "this bypass must never run in production"
             )
+    twitch_module.warn_if_mvp_channels_unset()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
@@ -425,6 +428,12 @@ if not _secret_key:
     )
     _secret_key = "dev-secret-change-me"
 _https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
+if _https_only and os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
+    # HTTPS_ONLY is a production signal that doesn't depend on ENV (issue #165).
+    raise RuntimeError(
+        "[SECURITY] TWITCH_LOCAL_DEV=true is not allowed with HTTPS_ONLY=true. "
+        "The Twitch JWT bypass must never run on a TLS-served deployment."
+    )
 if not _https_only and not _is_dev:
     raise RuntimeError(
         "[SECURITY] HTTPS_ONLY is not set. Session cookies would be sent without the Secure "
@@ -548,13 +557,22 @@ app.add_middleware(OriginCheckMiddleware)
 # /twitch/* endpoints authenticate via JWT in the Authorization header, not
 # cookies, so allow_credentials stays False. CORS_EXTRA_ORIGINS adds origins
 # such as http://localhost:8080 for Twitch Local Test.
+def _twitch_extension_origin_regex() -> str:
+    """CORS origin pattern for the extension iframe: only our extension's origin when
+    TWITCH_EXTENSION_CLIENT_ID is set (issue #171), else any extension origin."""
+    client_id = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "").strip().lower()
+    if client_id and re.fullmatch(r"[a-z0-9]+", client_id):
+        return rf"^https://{re.escape(client_id)}\.ext-twitch\.tv$"
+    return r"^https://[a-z0-9]+\.ext-twitch\.tv$"
+
+
 _cors_extra_origins = [
     o.strip() for o in os.getenv("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()
 ]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_extra_origins,
-    allow_origin_regex=r"^https://[a-z0-9]+\.ext-twitch\.tv$",
+    allow_origin_regex=_twitch_extension_origin_regex(),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

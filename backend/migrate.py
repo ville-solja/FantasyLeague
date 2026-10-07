@@ -548,6 +548,19 @@ def _m032_users_merged_soft_account_at(conn):
     logger.info("Migration: users — added merged_soft_account_at and pending_merge_user_id columns")
 
 
+def _m033_promo_codes_limits(conn):
+    """Issue #167: optional expiry and redemption cap on promo codes."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(promo_codes)")).fetchall()}
+    if not cols:
+        return  # table created by create_all with the columns already present
+    if "expires_at" not in cols:
+        conn.execute(text("ALTER TABLE promo_codes ADD COLUMN expires_at INTEGER"))
+    if "max_redemptions" not in cols:
+        conn.execute(text("ALTER TABLE promo_codes ADD COLUMN max_redemptions INTEGER"))
+    conn.commit()
+    logger.info("Migration: promo_codes — added expires_at and max_redemptions columns")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -604,6 +617,7 @@ MIGRATIONS = [
     ("030_weekly_summary_seen_last_prompted", _m030_weekly_summary_seen_last_prompted),
     ("031_users_twitch_soft_accounts", _m031_users_twitch_soft_accounts),
     ("032_users_merged_soft_account_at", _m032_users_merged_soft_account_at),
+    ("033_promo_codes_limits",       _m033_promo_codes_limits),
 ]
 
 

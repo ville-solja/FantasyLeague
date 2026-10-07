@@ -37,7 +37,7 @@ async function createNotification() {
   const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
   if (end_time <= start_time) return setStatus("notifAdminStatus", "End time must be after start time", false);
   try {
-    const res = await fetch(`${API}/admin/notifications`, {
+    const res = await adminFetch(`${API}/admin/notifications`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({message, start_time, end_time}),
     });
@@ -55,7 +55,7 @@ async function createNotification() {
 
 async function deleteNotification(notifId) {
   try {
-    const res = await fetch(`${API}/admin/notifications/${notifId}`, { method: "DELETE" });
+    const res = await adminFetch(`${API}/admin/notifications/${notifId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("notifAdminStatus", d.detail, false); }
     setStatus("notifAdminStatus", "Notification deleted");
     loadNotifications();
@@ -101,7 +101,7 @@ async function createTokenGrantEvent() {
   const end_time   = Math.floor(new Date(endVal).getTime()   / 1000);
   if (end_time <= start_time) return setStatus("tokenGrantStatus", "End time must be after start time", false);
   try {
-    const res = await fetch(`${API}/admin/token-grant-events`, {
+    const res = await adminFetch(`${API}/admin/token-grant-events`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({amount, start_time, end_time}),
     });
@@ -119,7 +119,7 @@ async function createTokenGrantEvent() {
 
 async function deleteTokenGrantEvent(eventId) {
   try {
-    const res = await fetch(`${API}/admin/token-grant-events/${eventId}`, { method: "DELETE" });
+    const res = await adminFetch(`${API}/admin/token-grant-events/${eventId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("tokenGrantStatus", d.detail, false); }
     setStatus("tokenGrantStatus", "Event deleted");
     loadTokenGrantEvents();

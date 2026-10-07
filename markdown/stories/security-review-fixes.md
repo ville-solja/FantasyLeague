@@ -122,3 +122,80 @@ As the operator, I want production to refuse insecure dev shortcuts and CI to fl
 - With `ENV=production`, startup fails when `SECRET_KEY` is shorter than 32 characters
 - The unit-test GitHub workflow runs `pip-audit -r backend/requirements.txt` and fails on a known vulnerability
 - The deploy notes say to set `ENV=production` (README.md Deployment section in the repo; the hoster's external notes should match)
+
+---
+
+## Twitch, Steam and Account Hardening (issue #163)
+
+Stories from the 2026-10 security review of the Twitch and Steam integrations and social-engineering risks (issue #163, sub-issues #164–#171). The plan is `markdown/plans/plan-issue-163-twitch-steam-account-hardening.md`.
+
+### Panel Talks Only to the Approved Backend
+**User story**
+As a viewer, I want the Twitch panel to call only the backend it was approved with so that a leaked extension secret cannot redirect my Twitch token or show me someone else's messages.
+
+**Acceptance criteria**
+- `twitch-extension/ebs-origins.js` defines `EBS_ALLOWED_ORIGINS`; the repository copy is an empty list
+- `package.sh <version> --ebs-origin <https-origin> [--ebs-origin …]` writes the listed origins into the packaged `ebs-origins.js`; packaging fails without at least one origin, or with a non-https origin, a path, or a trailing slash
+- `extension.js` accepts the configured `ebs_url` only when it is `https:` and its origin is in `EBS_ALLOWED_ORIGINS`; otherwise it never calls it and the panel shows the "not available" state
+- With an empty list, only the local dev harness (which sets `window.__EXT_DEV_HARNESS`) accepts any URL
+- `set-ebs-url.sh` reads the secret only from the environment or the hidden prompt, has no pre-set secret variables, and never passes it on a command line
+
+### Twitch Defaults Fail Closed
+**User story**
+As the league operator, I want the Twitch backend to refuse anything it was not explicitly configured to accept so that a missing setting cannot open MVP selection to every channel.
+
+**Acceptance criteria**
+- With `ENV=production` and an empty `TWITCH_MVP_CHANNEL_IDS`, `POST /twitch/mvp` returns 403 for every channel and startup logs a warning; outside production an empty list still allows any channel
+- A correctly signed extension JWT without `exp` gets 401
+- A JWT with `role: external` gets 403 on every `/twitch/*` route that takes a viewer token
+- The invalid-token log line contains no secret length
+- `TWITCH_LOCAL_DEV=true` refuses to start when `HTTPS_ONLY=true`
+
+### No Phishing Text in Trusted Channels
+**User story**
+As a viewer or player, I want messages that come from the league itself to never carry links someone else chose so that I can trust them.
+
+**Acceptance criteria**
+- MVP chat announcements use a cleaned name: control, zero-width and bidi characters removed, at most 32 characters, and `Player {id}` when the name looks like a link
+- The broadcaster's MVP picker shows the exact chat text before confirming
+- An admin notification containing a URL that does not point to `APP_BASE_URL` is refused with 422
+
+### Admin Token Actions Need a Fresh Password Check
+**User story**
+As the league operator, I want token-economy and broadcast actions to need a recent password check so that a stolen admin session cannot mint tokens or message every player.
+
+**Acceptance criteria**
+- Creating or deleting notifications, granting tokens, creating or deleting promo codes, creating or deleting token grant events and toggling tester status return 403 `reauth_required` without a recent `POST /reauth`, and the admin views prompt for the password
+- Promo codes can have an optional expiry and a maximum number of redemptions
+- `POST /redeem` answers unknown, expired and used-up codes with the same message
+
+### Reset Codes and Lockouts Resist Abuse
+**User story**
+As a player, I want my password reset and login to resist other people so that nobody can talk me out of a reset code or lock me out of my account.
+
+**Acceptance criteria**
+- The reset email starts with a warning never to share the code
+- A completed reset and a password change each send a "your password was changed" email
+- The database stores only a SHA-256 hash of a reset token; the emailed link and code still work
+- Failed logins lock out a username only from the IP they came from; a much higher per-username ceiling applies across all IPs
+- A completed password reset clears the lockout for that username
+
+### Harder to Impersonate Players and Admins
+**User story**
+As a player, I want to tell real admins and real league players apart from look-alikes so that I am not fooled by an impersonator.
+
+**Acceptance criteria**
+- Registering or renaming to a name that differs from an existing one only by letter case is refused
+- Names containing a word from `RESERVED_USERNAME_WORDS` are refused for new registrations and renames; existing names keep working
+- Admins carry a visible badge on the leaderboard and on profiles
+- Another user's profile never shows a numeric player id or the claimed player's avatar, and marks the linked player as self-reported
+
+### Token Drops Need the Identity Share
+**User story**
+As the league operator, I want only viewers who shared their Twitch identity to win token drops so that free alt accounts cannot farm tokens.
+
+**Acceptance criteria**
+- The drop pool includes only joined viewers whose account has a Twitch account id from the identity share
+- The panel tells viewers that sharing their identity makes them eligible for drops
+- Heartbeats from logged-out viewers write nothing, and heartbeats use the per-viewer rate limit
+- When `TWITCH_EXTENSION_CLIENT_ID` is set, CORS accepts only that extension's origin

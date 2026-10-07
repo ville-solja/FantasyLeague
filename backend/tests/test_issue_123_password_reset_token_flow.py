@@ -117,6 +117,8 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import re
+
 import pytest
 from unittest.mock import patch
 from sqlalchemy import create_engine
@@ -364,7 +366,10 @@ def test_forgot_password_email_includes_link_when_app_base_url_set(monkeypatch, 
 
     token = db.query(PasswordResetToken).filter_by(user_id=user.id).first()
     assert token is not None
-    expected_link = f"https://kana.example.com/?reset_token={token.token}"
+    # Issue #168: the row holds a hash; the email carries the raw token it hashes from.
+    raw = re.search(r"reset_token=(\S+)", calls[0]["body"]).group(1)
+    assert auth_router_module.hash_reset_token(raw) == token.token
+    expected_link = f"https://kana.example.com/?reset_token={raw}"
     assert expected_link in calls[0]["body"]
     db.close()
 
@@ -393,7 +398,9 @@ def test_forgot_password_email_always_includes_raw_token(client, db_session):
 
     token = db_session.query(PasswordResetToken).filter_by(user_id=user.id).first()
     assert token is not None
-    assert token.token in calls[0]["body"]
+    # Issue #168: the row holds a hash of the raw token the email carries.
+    raw = re.search(r"Reset code: (\S+)", calls[0]["body"]).group(1)
+    assert auth_router_module.hash_reset_token(raw) == token.token
 
 
 def test_forgot_password_email_wording_states_password_still_valid(client, db_session):
@@ -435,7 +442,7 @@ def test_reset_password_rejects_new_password_below_min_length(client, db_session
     5-character new_password is rejected (422) even against an otherwise-valid
     token."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-min-length", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-min-length"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -444,7 +451,7 @@ def test_reset_password_rejects_new_password_below_min_length(client, db_session
 
     # No side effects: token still present, password untouched.
     db_session.refresh(user)
-    assert db_session.get(PasswordResetToken, "tok-min-length") is not None
+    assert db_session.get(PasswordResetToken, auth_router_module.hash_reset_token("tok-min-length")) is not None
     assert verify_password("secret123", user.password_hash)
 
 
@@ -452,7 +459,7 @@ def test_reset_password_rejects_new_password_above_max_length(client, db_session
     """AC: a 129-character new_password is rejected (422) even against an
     otherwise-valid token."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-max-length", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-max-length"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -460,7 +467,7 @@ def test_reset_password_rejects_new_password_above_max_length(client, db_session
     assert resp.status_code == 422
 
     db_session.refresh(user)
-    assert db_session.get(PasswordResetToken, "tok-max-length") is not None
+    assert db_session.get(PasswordResetToken, auth_router_module.hash_reset_token("tok-max-length")) is not None
     assert verify_password("secret123", user.password_hash)
 
 
@@ -469,7 +476,7 @@ def test_reset_password_valid_token_changes_password_hash(client, db_session):
     user.password_hash to a hash of the new password (verifiable via
     auth.verify_password)."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-valid-1", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-valid-1"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -493,7 +500,7 @@ def test_reset_password_valid_token_clears_legacy_temp_password_state(client, db
     user.temp_password_expires_at = int(time.time()) + 3600
     db_session.commit()
 
-    db_session.add(PasswordResetToken(token="tok-legacy-cleanup", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-legacy-cleanup"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -509,14 +516,14 @@ def test_reset_password_valid_token_deletes_token_row(client, db_session):
     """AC: after a successful reset, the PasswordResetToken row is deleted from the
     DB (single-use)."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-delete-me", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-delete-me"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
     resp = _do_reset_password(client, "tok-delete-me", "brand-new-password")
     assert resp.status_code == 200
 
-    assert db_session.get(PasswordResetToken, "tok-delete-me") is None
+    assert db_session.get(PasswordResetToken, auth_router_module.hash_reset_token("tok-delete-me")) is None
 
 
 def test_reset_password_token_cannot_be_reused_after_reset(client, db_session):
@@ -525,7 +532,7 @@ def test_reset_password_token_cannot_be_reused_after_reset(client, db_session):
     again -- proves single-use is enforced end-to-end, not just that the row happens
     to be gone."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-reuse", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-reuse"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -545,7 +552,7 @@ def test_reset_password_token_cannot_be_reused_after_reset(client, db_session):
 def test_reset_password_valid_token_returns_status_ok(client, db_session):
     """AC: a successful reset returns HTTP 200 with exactly {"status": "ok"}."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-status-ok", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-status-ok"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 
@@ -576,7 +583,7 @@ def test_reset_password_expired_token_returns_400_no_side_effects(client, db_ses
     partially consumed."""
     user = _create_user(db_session)
     original_hash = user.password_hash
-    db_session.add(PasswordResetToken(token="tok-expired", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-expired"), user_id=user.id,
                                       expires_at=int(time.time()) - 100))
     db_session.commit()
 
@@ -594,7 +601,7 @@ def test_reset_password_records_audit_log_entry(client, db_session):
     action="password_reset_completed" (see backend/deps.py's _audit() and
     backend/models.py's AuditLog), attributed to the resetting user."""
     user = _create_user(db_session)
-    db_session.add(PasswordResetToken(token="tok-audit", user_id=user.id,
+    db_session.add(PasswordResetToken(token=auth_router_module.hash_reset_token("tok-audit"), user_id=user.id,
                                       expires_at=int(time.time()) + 3600))
     db_session.commit()
 

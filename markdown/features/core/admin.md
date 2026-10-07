@@ -19,12 +19,22 @@ session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they 
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
 - `DELETE /admin/users/{user_id}` (Twitch viewer soft accounts, issue #157)
+- Issue #167, the token economy and the site-wide broadcast: `POST /grant-tokens`, `POST /codes`,
+  `DELETE /codes/{code_id}`, `POST /admin/token-grant-events`,
+  `DELETE /admin/token-grant-events/{event_id}`, `POST /admin/notifications`,
+  `DELETE /admin/notifications/{notification_id}` and `POST /users/{user_id}/toggle-tester`
+  (it hides a user from every leaderboard)
 
 The check is the `require_recent_reauth` dependency (`backend/deps.py`), added at route level so
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
 `adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
 `reauth_required`, calls `POST /reauth`, and retries the action once. All other admin endpoints
 work without re-authentication.
+
+**Support rule (issue #167).** Admins never grant tokens or cards, move accounts or change account
+details because someone asks in chat or a DM, however urgent or official it sounds. Lost items
+are restored only from what the audit log shows. A request that pushes for an exception is
+treated as a social-engineering attempt and mentioned to the other admins.
 
 ---
 
@@ -50,7 +60,7 @@ Requires re-authentication. Website accounts cannot be deleted here (409); unkno
 `reason=admin`.
 
 ### `POST /users/{user_id}/toggle-tester`
-Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`.
+Flips the `is_tester` flag for the given user. Tester accounts are excluded from all leaderboards (season and weekly) while remaining fully visible in the admin panel. Returns `{ user_id, username, is_tester }`. Logged as `admin_toggle_tester`. Requires a recent re-authentication (issue #167).
 
 ### `POST /users/{user_id}/toggle-admin`
 Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_admin }`. Logged
@@ -76,7 +86,7 @@ Grants a configurable number of tokens to a specific user.
 { "target_user_id": 5, "amount": 3 }
 ```
 
-Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. All grants are recorded in the audit log.
+Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. All grants are recorded in the audit log. Requires a recent re-authentication (issue #167).
 
 ---
 
@@ -87,12 +97,16 @@ Redeemable codes allow token grants to be distributed without per-user admin act
 ### `POST /codes`
 Creates a new redeemable code.
 ```json
-{ "code": "LAUNCH2026", "token_amount": 5 }
+{ "code": "LAUNCH2026", "token_amount": 5, "expires_at": 1767225600, "max_redemptions": 100 }
 ```
-Codes are stored uppercased. Duplicate codes return 409.
+Codes are stored uppercased. Duplicate codes return 409. `expires_at` (Unix time) and
+`max_redemptions` (total redemptions across all users, at least 1) are optional (issue #167,
+migration `033_promo_codes_limits`); an expiry in the past returns 422. Requires a recent
+re-authentication. The admin panel has optional "Max uses" and "Expires" fields.
 
 ### `GET /codes`
-Lists all created codes with their redemption counts.
+Lists all created codes with their redemption counts, `expires_at` and `max_redemptions`; the
+admin panel shows them in a Limits column.
 
 ### `DELETE /codes/{code_id}`
 Deletes a code. Users who already redeemed it keep their tokens.
@@ -103,7 +117,10 @@ Regular users redeem a code via this endpoint. Returns the number of tokens gran
 { "code": "LAUNCH2026" }
 ```
 Limited to 5 requests a minute per user (`RATE_LIMIT_REDEEM`), so codes cannot be guessed by
-brute force; the next request returns 429.
+brute force; the next request returns 429. An unknown, expired or used-up code all return 404
+`"Invalid or expired code"`, so a code's existence can't be probed (issue #167); a code this user
+already redeemed returns 409. Two simultaneous redemptions of a code's last use can both succeed,
+so `max_redemptions` can be exceeded by one.
 
 ---
 

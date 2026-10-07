@@ -6,7 +6,9 @@ from database import get_db
 from deps import _audit, get_current_user
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
 from scoring import display_points
-from auth import check_password_bytes, check_username, hash_password, verify_password
+from auth import (check_password_bytes, check_username, hash_password, username_policy_error,
+                  verify_password)
+from routers.auth import send_password_changed_notice
 
 router = APIRouter()
 
@@ -46,14 +48,22 @@ def get_profile(user_id: int, db=Depends(get_db),
     # Twitch viewer soft accounts (issue #157) have no public profile.
     if not user or user.account_type == "twitch":
         raise HTTPException(status_code=404, detail="User not found")
-    result = {"id": user.id, "username": user.username, "player_id": user.player_id,
+    # Issue #169: the linked player id is self-reported, so another user's profile
+    # shows only the in-game name, marked self-reported: no Steam-identifying id and
+    # no avatar to borrow. The owner and admins see everything.
+    full_view = current_user["user_id"] == user.id or bool(current_user.get("is_admin"))
+    result = {"id": user.id, "username": user.username,
+              "player_id": user.player_id if full_view else None,
               "player_name": None, "player_avatar_url": None,
+              "player_self_reported": bool(user.player_id),
+              "is_admin": bool(user.is_admin),
               "twitch_linked": bool(user.twitch_user_id)}
     if user.player_id:
         player = db.get(Player, user.player_id)
         if player:
             result["player_name"] = player.name
-            result["player_avatar_url"] = player.avatar_url
+            if full_view:
+                result["player_avatar_url"] = player.avatar_url
     tag_rows = (
         db.query(UserTag, TagDefinition)
         .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
@@ -83,9 +93,10 @@ def update_username(body: UpdateUsernameBody, db=Depends(get_db),
     username = body.username.strip()
     if not username:
         raise HTTPException(status_code=422, detail="Username cannot be empty")
-    existing = db.query(User).filter(User.username == username, User.id != user_id).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Username already taken")
+    if username != user.username:
+        policy_error = username_policy_error(db, username, exclude_user_id=user_id)
+        if policy_error:
+            raise HTTPException(status_code=policy_error[0], detail=policy_error[1])
     old_username = user.username
     user.username = username
     if old_username != username:
@@ -132,4 +143,5 @@ def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_d
     sessions.delete_user_sessions(db, user.id, keep_id=current.id if current else None)
     sessions.start_session(request, db, user)
     db.commit()
+    send_password_changed_notice(user)
     return {"status": "ok"}

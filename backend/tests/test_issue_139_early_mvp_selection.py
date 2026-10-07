@@ -201,7 +201,8 @@ def _seed_five_newer_series(db):
 
 def _add_viewer(db):
     from models import TwitchPresence, User
-    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer"))
+    # twitch_account_id: the identity share drops need since issue #171.
+    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer", twitch_account_id="9050"))
     db.add(TwitchPresence(twitch_user_id="Uviewer", channel_id="test_channel", seen_at=int(time.time())))
     db.commit()
 
@@ -837,7 +838,7 @@ def test_extension_package_sh_self_check_passes(tmp_path):
     ext = tmp_path / "twitch-extension"
     shutil.copytree(os.path.dirname(_PACKAGE_SH), ext, ignore=shutil.ignore_patterns("*.zip"))
 
-    result = subprocess.run(["bash", str(ext / "package.sh"), "99.0.0"],
+    result = subprocess.run(["bash", str(ext / "package.sh"), "99.0.0", "--ebs-origin", "https://kana-cards.com"],
                             capture_output=True, text=True, timeout=60)
 
     assert result.returncode == 0, result.stdout + result.stderr

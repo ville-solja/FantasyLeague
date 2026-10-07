@@ -121,6 +121,7 @@ function selectMatch(match) {
         "Match " + match.match_number + " · " +
         _selectedSeries.team1_name + " vs " + _selectedSeries.team2_name + ":";
     el("confirm-bar").classList.remove("visible");
+    el("chat-preview").hidden = true;
 
     var grid = el("player-grid");
     grid.innerHTML = "";
@@ -156,6 +157,7 @@ function selectMatch(match) {
         if (existing) {
             _selectedPlayer = existing;
             el("selected-player-name").textContent = existing.player_name;
+            showChatPreview(existing);
             el("confirm-bar").classList.add("visible");
         }
     }
@@ -167,7 +169,16 @@ function pickPlayer(player, div) {
     document.querySelectorAll(".player-item").forEach(function(d) { d.classList.remove("selected"); });
     div.classList.add("selected");
     el("selected-player-name").textContent = player.player_name;
+    showChatPreview(player);
     el("confirm-bar").classList.add("visible");
+}
+
+// Shows the exact text the chat announcement will start with (issue #166). The
+// backend cleans player-chosen names before they reach chat; chat_name is that name.
+function showChatPreview(player) {
+    var preview = el("chat-preview");
+    preview.textContent = 'Chat will say: "Match MVP: ' + (player.chat_name || player.player_name) + '!"';
+    preview.hidden = false;
 }
 
 // ── Confirm ─────────────────────────────────────────────────────────────────
@@ -196,7 +207,7 @@ function confirmMVP() {
             // Winner count only (issue #157): no viewer names in the dashboard either.
             dropMsg = " · " + drop.winner_count + (drop.winner_count === 1 ? " viewer" : " viewers") + " received a token";
         } else if (drop.pool_size === 0) {
-            dropMsg = " · No joined viewers in the pool";
+            dropMsg = " · No eligible viewers in the pool (joined, with Twitch identity shared)";
         }
 
         var bonusMsg = _selectedMatch.provisional ? " · Fantasy bonus is applied when the stats arrive" : "";

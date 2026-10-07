@@ -60,6 +60,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import itsdangerous
 import pytest
+
+from routers.auth import hash_reset_token
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -291,10 +293,10 @@ def _clear_login_lockouts():
     from routers import auth as auth_router
     names = ("alice", "bob", "boss", "mallory", "carol")
     for n in names:
-        auth_router._failed_login_attempts.pop(n, None)
+        auth_router._clear_all_failed_logins(n)
     yield
     for n in names:
-        auth_router._failed_login_attempts.pop(n, None)
+        auth_router._clear_all_failed_logins(n)
 
 
 def _cookie_payload(value):
@@ -496,7 +498,7 @@ def test_reset_password_deletes_all_session_rows(session_env):
     a = session_env.login()
     b = session_env.login()
     db = session_env.Session()
-    db.add(PasswordResetToken(token="tok-117", user_id=uid, expires_at=int(time.time()) + 3600))
+    db.add(PasswordResetToken(token=hash_reset_token("tok-117"), user_id=uid, expires_at=int(time.time()) + 3600))
     db.commit()
     db.close()
     resp = session_env.client().post("/reset-password",
@@ -781,11 +783,12 @@ def test_reauth_wrong_password_rejected_counts_toward_lockout_and_audits(session
 
 
 def test_reauth_locked_out_username_rejected_even_with_correct_password(session_env):
-    """Failure path: when the username is locked out (seed _failed_login_attempts to LOGIN_LOCKOUT_THRESHOLD), POST /reauth with the correct password is refused like /login and reauth_at stays unset."""
+    """Failure path: when the username is locked out from this client's IP (seed _failed_login_attempts_by_ip to LOGIN_LOCKOUT_THRESHOLD; per-IP since issue #168), POST /reauth with the correct password is refused like /login and reauth_at stays unset."""
     from routers import auth as auth_router
     session_env.add_user("boss", is_admin=True)
     admin = session_env.login("boss")
-    auth_router._failed_login_attempts["boss"] = [time.time()] * auth_router._LOGIN_LOCKOUT_THRESHOLD
+    auth_router._failed_login_attempts_by_ip[("boss", "testclient")] = (
+        [time.time()] * auth_router._LOGIN_LOCKOUT_THRESHOLD)
     resp = admin.post("/reauth", json={"password": _PASSWORD})
     login_resp = session_env.client().post("/login", json={"username": "boss", "password": _PASSWORD})
     assert resp.status_code == login_resp.status_code == 429
@@ -885,10 +888,11 @@ def test_reauth_on_one_session_does_not_cover_another(session_env, tmp_path, mon
 
 
 def test_non_destructive_admin_endpoint_works_without_reauth(session_env):
-    """Non-destructive admin endpoints (e.g. GET /users, POST /users/{id}/toggle-tester, GET /audit-logs) return 200 for an admin without /reauth."""
+    """Non-destructive admin endpoints (e.g. GET /users, POST /users/{id}/force-logout, GET /audit-logs) return 200 for an admin without /reauth. Toggle tester needs /reauth since issue #167 (it hides a user from every leaderboard)."""
     admin, target = _admin_pair(session_env)
     assert admin.get("/users").status_code == 200
-    assert admin.post(f"/users/{target}/toggle-tester").status_code == 200
+    assert admin.post(f"/users/{target}/force-logout").status_code == 200
+    assert admin.post(f"/users/{target}/toggle-tester").json() == {"detail": "reauth_required"}
     assert admin.get("/audit-logs").status_code == 200
     assert admin.get("/admin/leagues").status_code == 200
 

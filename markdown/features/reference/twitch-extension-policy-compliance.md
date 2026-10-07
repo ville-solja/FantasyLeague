@@ -73,7 +73,7 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 
 - **Pool:** unchanged query (`_active_pool`: presence within 10 minutes joined to `users.twitch_user_id`), which now includes soft accounts. `TWITCH_DROP_MAX` and one drop per match are unchanged.
 - **Heartbeat:** the panel sends `POST /twitch/heartbeat` only while the viewer is joined.
-- **Chat:** `_mvp_chat_text(player_name, winner_count, pool_empty, drops_enabled)` names the MVP and the winner count only: "Match MVP: Savu! 3 viewers received a token.", or "No tokens were dropped: no joined viewers were watching." with an empty pool.
+- **Chat:** `_mvp_chat_text(player_name, winner_count, pool_empty, drops_enabled)` names the MVP and the winner count only: "Match MVP: Savu! 3 viewers received a token.", or "No tokens were dropped: no eligible viewers were watching." with an empty pool (since #171 the pool holds only joined viewers who shared their Twitch identity).
 - **PubSub:** `{"type": "mvp", "player_name", "match_id", "token_drop": {"count", "refresh"}}`, with no names or ids. Every joined panel refreshes `GET /twitch/me` and shows "+1 token from the MVP drop" when its own balance went up.
 - **Broadcaster response:** `token_drop` carries `enabled`, `winner_count`, `pool_size` and `already_dropped`, with no names: a winner on one of the website accounts (code-linked before #160, or connected with Twitch sign-in) has their website username as display name, which is never shown to the channel. Winner names are kept only in the `twitch_token_drop` audit log (admin only).
 - **Kill switch:** `TWITCH_DROPS_ENABLED=false` skips `_execute_token_drop`: confirming an MVP sets the MVP and the fantasy bonus only, and chat says "Match MVP: X!".

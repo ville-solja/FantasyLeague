@@ -147,6 +147,7 @@
 function buildStubScript(ebsUrl, role, userId) {
     var cfgContent = JSON.stringify(JSON.stringify({ ebs_url: ebsUrl }));
     return [
+      "window.__EXT_DEV_HARNESS = true;",
       "window.Twitch = { ext: {",
       "  configuration: {",
       "    global:      { content: " + cfgContent + " },",

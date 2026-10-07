@@ -2286,3 +2286,19 @@ body.roster-dragging * { cursor: grabbing !important; }
   color: var(--fg-dim);
   margin-bottom: 8px;
 }
+
+/* Issue #169: server-set admin badge on leaderboard rows. */
+.lb-admin-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-family: "Big Shoulders Text", sans-serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  opacity: 0.85;
+}

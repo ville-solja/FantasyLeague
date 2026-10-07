@@ -43,6 +43,13 @@ def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
     return result
 
 
+def _admin_ids(db, user_ids: list[int]) -> set[int]:
+    if not user_ids:
+        return set()
+    from models import User
+    return {uid for (uid,) in db.query(User.id).filter(User.id.in_(user_ids), User.is_admin.is_(True)).all()}
+
+
 def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
     """Build leaderboard entries from per-(user, card) stored-point sums.
 
@@ -77,8 +84,11 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
         cards_by_user[uid].append(chip)
 
     tags_by_user = _fetch_tags_for_users(db, list(totals.keys()))
+    # Issue #169: real admins carry a visible badge so look-alike names stand out.
+    admin_ids = _admin_ids(db, list(totals.keys()))
     return sorted(
         [{"id": uid, "username": usernames[uid], "points": display_points(totals[uid]),
+          "is_admin": uid in admin_ids,
           "tags": tags_by_user.get(uid, []),
           "cards": sorted(cards_by_user.get(uid, []), key=lambda c: c["points"], reverse=True)}
          for uid in totals],
@@ -201,7 +211,7 @@ def compute_season_standings(db) -> list[dict]:
 def season_leaderboard(db=Depends(get_db)):
     result = compute_season_standings(db)
     return [{"id": r["id"], "username": r["username"], "season_points": r["points"],
-             "tags": r["tags"], "cards": r["cards"]} for r in result]
+             "is_admin": r["is_admin"], "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +283,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)
     return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
-             "tags": r["tags"], "cards": r["cards"]} for r in result]
+             "is_admin": r["is_admin"], "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 @router.get("/weights")
