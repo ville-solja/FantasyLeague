@@ -2293,7 +2293,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   margin-left: 6px;
   padding: 1px 5px;
   border: 1px solid currentColor;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   font-family: "Big Shoulders Text", sans-serif;
   font-size: 0.6rem;
   font-weight: 700;

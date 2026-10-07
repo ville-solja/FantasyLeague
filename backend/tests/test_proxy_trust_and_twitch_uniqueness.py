@@ -90,7 +90,9 @@ def test_compose_bind_address_is_configurable():
 def seeded(db):
     db.add(Match(match_id=1001))
     db.add_all([Player(id=1, name="Alpha"), Player(id=2, name="Beta")])
-    db.add(User(id=10, username="viewer", password_hash="x", tokens=0, twitch_user_id="Uviewer"))
+    # twitch_account_id: drops need the identity share since issue #171.
+    db.add(User(id=10, username="viewer", password_hash="x", tokens=0, twitch_user_id="Uviewer",
+                twitch_account_id="9010"))
     import time as _t
     db.add(TwitchPresence(twitch_user_id="Uviewer", channel_id="chan", seen_at=int(_t.time())))
     db.commit()

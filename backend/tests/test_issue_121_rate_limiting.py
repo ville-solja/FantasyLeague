@@ -240,25 +240,29 @@ def test_login_per_ip_limit_exceeded_returns_429(client):
 def test_login_username_lockout_triggers_independent_of_source_ip(client):
     """Repeated failed POST /login attempts against the same username, sent
     from varying source IPs so the per-IP RATE_LIMIT_LOGIN limiter never
-    trips on its own, still get locked out once LOGIN_LOCKOUT_THRESHOLD
-    (default 10) failed attempts accumulate within
+    trips on its own, still get locked out once LOGIN_LOCKOUT_USERNAME_THRESHOLD
+    (default 100) failed attempts accumulate within
     LOGIN_LOCKOUT_WINDOW_SECONDS (default 300) — the scenario the per-IP
-    limit alone would not catch."""
+    limit alone would not catch. Since issue #168 the lower
+    LOGIN_LOCKOUT_THRESHOLD (default 10) applies per username and IP, so
+    nobody can lock another player out from the player's own connection."""
+    import routers.auth as auth_router
     username = "ip-rotating-victim"
+    ceiling = auth_router._LOGIN_LOCKOUT_USERNAME_THRESHOLD
     statuses = []
-    for i in range(11):
+    for i in range(ceiling + 1):
         ip_client = TestClient(client.app, raise_server_exceptions=True,
-                                client=(f"10.1.{i}.1", 12345))
+                                client=(f"10.1.{i // 250}.{i % 250 + 1}", 12345))
         resp = ip_client.post("/login", json={"username": username, "password": "wrong"})
         statuses.append(resp.status_code)
 
-    # First LOGIN_LOCKOUT_THRESHOLD (10) failed attempts are ordinary
-    # "invalid credentials" responses — none of them alone trips the per-IP
-    # limiter since each came from a distinct simulated source IP.
-    assert statuses[:10] == [401] * 10
-    # The 11th attempt (still a distinct, never-before-used IP) is blocked by
-    # the per-username lockout instead, proving it is independent of IP.
-    assert statuses[10] == 429
+    # Every attempt below the ceiling is an ordinary "invalid credentials"
+    # response — none trips the per-IP limiter or the per-(username, IP)
+    # lockout since each came from a distinct simulated source IP.
+    assert statuses[:ceiling] == [401] * ceiling
+    # The next attempt (still a distinct, never-before-used IP) is blocked by
+    # the per-username ceiling instead, proving it is independent of IP.
+    assert statuses[ceiling] == 429
 
 
 def test_login_lockout_response_does_not_reveal_username_existence(client):

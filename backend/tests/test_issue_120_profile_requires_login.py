@@ -200,6 +200,8 @@ class TestRequireLoginToViewAProfile:
             "player_id": None,
             "player_name": None,
             "player_avatar_url": None,
+            "player_self_reported": False,  # issue #169
+            "is_admin": False,              # issue #169
             "twitch_linked": False,
             "tags": [],
             "past_seasons": [],

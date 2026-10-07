@@ -288,7 +288,8 @@ def test_set_mvp_eligible_match_sets_mvp_and_drops_tokens(db, twitch_env):
     """An eligible match in the current series window still sets the MVP, applies the bonus and drops tokens."""
     w = _seed_world(db)
     now = int(time.time())
-    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer"))
+    # twitch_account_id: drops need the identity share since issue #171.
+    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer", twitch_account_id="9050"))
     db.add(TwitchPresence(twitch_user_id="Uviewer", channel_id="test_channel", seen_at=now))
     db.commit()
 
@@ -994,7 +995,11 @@ def test_remove_players_over_500_returns_422():
 
 
 def _grant_client():
+    from deps import require_recent_reauth
     app, Session = _build_app(["routers.admin_users"], admin_override=True)
+    # Grant tokens needs a recent /reauth since issue #167; these tests are about amounts.
+    app.dependency_overrides[require_recent_reauth] = lambda: {
+        "user_id": 1, "username": "admin", "is_admin": True}
     _add_user(Session, user_id=1, username="admin", email="admin@example.com", tokens=0)
     _add_user(Session, user_id=2, username="target", email="target@example.com", tokens=3)
     return TestClient(app), Session
