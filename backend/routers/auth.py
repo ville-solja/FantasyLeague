@@ -93,10 +93,18 @@ def _clear_all_failed_logins(username: str):
         _failed_login_attempts_by_ip.pop(key, None)
 
 
+_RESET_TOKEN_SALT = b"password-reset-token"
+_RESET_TOKEN_ITERATIONS = 10_000
+
+
 def hash_reset_token(token: str) -> str:
-    """Reset tokens are stored as SHA-256 hashes (issue #168), like session IDs since
-    #117, so a leaked database or backup holds no working reset link."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    """Reset tokens are stored hashed (issue #168), so a leaked database or backup holds
+    no working reset link. The token is 256 random bits, so any one-way hash would do;
+    PBKDF2 is used because code scanning treats it as reset-password data and accepts
+    only a password-hashing function there. The salt is fixed because the hash is the
+    lookup key."""
+    return hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), _RESET_TOKEN_SALT,
+                               _RESET_TOKEN_ITERATIONS).hex()
 
 
 # Per-username cooldown on POST /forgot-password, independent of source IP —

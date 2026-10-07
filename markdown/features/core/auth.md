@@ -288,7 +288,7 @@ Requests a password reset for the given username. Does **not** change the accoun
    with the bcrypt timing-equalization call and returns `{"status": "ok"}` — no state changes.
 2. Any existing `PasswordResetToken` row for the account is deleted (only one live token per
    user at a time — same invalidate-on-regenerate precedent as the retired `TwitchLinkCode`).
-3. A new single-use token is generated (`secrets.token_urlsafe(32)`). Only its SHA-256 hash
+3. A new single-use token is generated (`secrets.token_urlsafe(32)`). Only its PBKDF2-SHA256 hash (fixed salt, so it can be looked up)
    (`hash_reset_token`) is stored, with an `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS`
    hours (default `1`), so a leaked database or backup holds no working reset link (issue #168).
 4. A `password_reset_requested` audit log entry is written.

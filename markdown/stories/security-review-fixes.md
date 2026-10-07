@@ -176,6 +176,6 @@ As a player, I want my password reset and login to resist other people so that n
 **Acceptance criteria**
 - The reset email starts with a warning never to share the code
 - A completed reset and a password change each send a "your password was changed" email
-- The database stores only a SHA-256 hash of a reset token; the emailed link and code still work
+- The database stores only a one-way hash (PBKDF2-SHA256, fixed salt) of a reset token; the emailed link and code still work
 - Failed logins lock out a username only from the IP they came from; a much higher per-username ceiling applies across all IPs
 - A completed password reset clears the lockout for that username
