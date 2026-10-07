@@ -629,3 +629,43 @@ As the operator, I want CORS to allow only our own extension's origin, so that a
 - Without `TWITCH_EXTENSION_CLIENT_ID`, no `*.ext-twitch.tv` origin is allowed. A warning is logged once at start-up, and `CORS_EXTRA_ORIGINS` origins keep working.
 - `allow_credentials` stays false.
 - **Failure path:** a preflight from another extension's origin gets no `Access-Control-Allow-Origin` header.
+
+---
+
+## Approved Streamers Admin (#175)
+
+Plan: `markdown/plans/plan-issue-175-approved-streamers-admin.md`.
+
+### Broadcaster Asks to Be Approved
+**User story**
+As a broadcaster who installed the extension, I want the MVP tool to tell me my channel is waiting for the league's approval so that I know why I can't set MVPs yet and that the league has been asked.
+
+**Acceptance criteria**
+- When a channel that isn't approved opens the MVP tool (`GET /twitch/matches/current` with `role: broadcaster`) or tries `POST /twitch/mvp`, the backend records a pending request for that channel id, with first and last seen times; repeated visits update the last seen time and create no duplicates
+- `GET /twitch/matches/current` returns `mvp_allowed` (true or false) and `approval` (`approved`, `pending` or `rejected`)
+- When `mvp_allowed` is false, the MVP tool shows "This channel is waiting for the league's approval to set match MVPs." instead of the series list (`rejected`: "This channel isn't approved to set match MVPs.")
+- `POST /twitch/mvp` from a channel that isn't approved still returns 403 before any MVP, bonus or drop is written
+- Viewer and moderator tokens never create a request
+- A rejected channel's later visits update its last seen time but don't move it back to pending
+
+### Approve Streamers in the Portal
+**User story**
+As an admin, I want to see channels waiting for approval and approve or reject them in the portal so that adding a streamer doesn't need a server change.
+
+**Acceptance criteria**
+- The admin panel has an **Approved streamers** section with three lists: Waiting for approval, Approved, and Rejected (collapsed)
+- Each row shows the Twitch display name and login when known, the numeric channel id, and first and last seen dates
+- **Approve** on a waiting or rejected channel makes it approved at once: its next MVP confirmation is accepted
+- **Reject** on a waiting channel moves it to Rejected; **Remove** on an approved channel moves it to Rejected
+- Approve, Reject and Remove ask for the admin's password if it wasn't confirmed in the last 10 minutes, and each writes an audit entry (`twitch_channel_approved`, `twitch_channel_rejected`, `twitch_channel_removed`) with the channel id
+- Channels from `TWITCH_MVP_CHANNEL_IDS` are listed as Approved with a "from server settings" note and no Remove button
+- Non-admins get 403 on every endpoint
+
+### Env Var and Portal Together
+**User story**
+As the league operator, I want the existing `TWITCH_MVP_CHANNEL_IDS` setting to keep working alongside the portal so that nothing breaks when this ships.
+
+**Acceptance criteria**
+- A channel may set MVPs when it is in `TWITCH_MVP_CHANNEL_IDS` or approved in the portal
+- With both lists empty, no channel may set MVPs when `ENV=production` and any channel may otherwise (unchanged from #165); the start-up warning names both places
+- Removing a channel in the portal never affects a channel that is also in the env var
