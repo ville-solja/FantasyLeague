@@ -472,7 +472,7 @@ class TestLiveFantasyForEveryViewer:
             shutil.copytree(EXTENSION_DIR, ext, ignore=shutil.ignore_patterns("*.zip"))
             target = ext / name
             target.write_text(target.read_text() + "\n" + phrase + "\n")
-            result = subprocess.run(["bash", str(ext / "package.sh"), "9.9.9", "--ebs-origin", "https://kana-cards.com"],
+            result = subprocess.run(["bash", str(ext / "package.sh"), "9.9.9", "--ebs-origin", "https://fantasy.example.org"],
                                     capture_output=True, text=True, timeout=60)
             assert result.returncode != 0
             assert name in result.stderr and "forbidden text" in result.stderr
@@ -1769,7 +1769,7 @@ class TestMigrationAndPackaging:
             return  # the static checks above still ran; the build needs zip
         ext = tmp_path / "twitch-extension"
         shutil.copytree(EXTENSION_DIR, ext, ignore=shutil.ignore_patterns("*.zip"))
-        result = subprocess.run(["bash", str(ext / "package.sh"), "1.2.0", "--ebs-origin", "https://kana-cards.com"],
+        result = subprocess.run(["bash", str(ext / "package.sh"), "1.2.0", "--ebs-origin", "https://fantasy.example.org"],
                                 capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, result.stdout + result.stderr
         with zipfile.ZipFile(ext / "twitch-extension-1.2.0.zip") as zf:

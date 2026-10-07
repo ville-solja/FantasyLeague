@@ -95,14 +95,23 @@ Leave it unset in production. See `reference/security-headers.md`.
 
 ### Step 4 — Package and upload
 
-The EBS URL itself is set separately in Step 5, but since issue #164 the package carries the list of backend origins the panel may call: `extension.js` uses the configured `ebs_url` only when it is `https:` and its origin is one of them, so someone holding the extension secret cannot point every panel at another server. Give each allowed origin with `--ebs-origin` (an `https://` origin, no path or trailing slash). The production package lists only the production host; a package for the test server may add the test host:
+**Where the panel's backend address comes from (issue #164).** Two settings work together, and neither is written into the code, so every deployment chooses its own:
+
+| Setting | Where it lives | What it does |
+|---|---|---|
+| Allowed backend origins | Baked into the extension package when it is built (`package.sh --ebs-origin`, written to the packaged `ebs-origins.js`) | The only origins the panel will ever call. Changing them needs a new extension version and a Twitch review |
+| The backend URL (`ebs_url`) | The extension's Twitch configuration, set by `set-ebs-url.sh` (Step 5) | The URL the panel calls. Used only when it is `https:` and its origin is one of the allowed ones |
+
+So someone holding the extension secret can change `ebs_url` but cannot point every panel at their own server. The repository copy of `ebs-origins.js` is an empty list, which only the local dev harness accepts (it sets `window.__EXT_DEV_HARNESS`).
+
+Give each allowed origin with `--ebs-origin` (an `https://` origin, no path or trailing slash). A production package lists only the production host; a package for a test server may add the test host:
 
 ```bash
-bash twitch-extension/package.sh 1.2.0 --ebs-origin https://kana-cards.com
-# test build: … --ebs-origin https://kana-cards.com --ebs-origin https://test.kana-cards.com
+bash twitch-extension/package.sh 1.2.0 --ebs-origin https://fantasy.example.org
+# test build: … --ebs-origin https://fantasy.example.org --ebs-origin https://test.fantasy.example.org
 ```
 
-The origins are written into a generated `ebs-origins.js` inside the zip only; the repository copy stays an empty list, which only the local dev harness accepts (it sets `window.__EXT_DEV_HARNESS`). Changing the list therefore needs a new extension version and a Twitch review. The script refuses to run without a version or without an origin, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the packaged origins, the Asset Hosting paths and the URL Fetching allowlist entries (the same origins) to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
+CI (`.github/workflows/docker-publish.yml`) packages every push to `main` with the origins in the repository variable `EBS_ORIGINS` (space-separated, Settings → Secrets and variables → Actions → Variables). Without it the extension isn't packaged (a notice in the run says so) and the Docker image is still built. The script refuses to run without a version or without an origin, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the packaged origins, the Asset Hosting paths and the URL Fetching allowlist entries (the same origins) to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
 
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, move it to **Hosted Test** and verify all three views before submitting for review. See [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md).
 
