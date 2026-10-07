@@ -343,6 +343,22 @@ class TwitchMergeLog(Base):
     reversed_at    = Column(Integer, nullable=True)
 
 
+class TwitchChannelApproval(Base):
+    """A Twitch channel's request to set match MVPs (issue #175). Rows appear when a
+    broadcaster opens the MVP tool on a channel that isn't approved; admins approve or
+    reject them. TWITCH_MVP_CHANNEL_IDS channels are approved without a row."""
+    __tablename__ = "twitch_channel_approvals"
+
+    channel_id    = Column(String, primary_key=True)        # numeric Twitch channel id
+    status        = Column(String, nullable=False, index=True)  # pending | approved | rejected
+    display_name  = Column(String, nullable=True)           # from Helix, best effort
+    login         = Column(String, nullable=True)
+    first_seen_at = Column(Integer, nullable=False)
+    last_seen_at  = Column(Integer, nullable=False)
+    decided_at    = Column(Integer, nullable=True)
+    decided_by    = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
 class PasswordResetToken(Base):
     """Single-use, expiring token for POST /reset-password (issue #123). Created by
     POST /forgot-password, which never touches user.password_hash itself — only a

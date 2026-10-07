@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-07 — developer — testing
+**Problem:** Plan #175 changed `twitch.mvp_channel_allowed(channel_id)` to `mvp_channel_allowed(db, channel_id)` so portal approvals count, but the #165 tests (`test_issue_163::TestFailClosedDefaults`) call it with one argument and no database; swapping the parameter order would have broken them and any other single-argument caller.
+**Solution:** Add the new dependency as a trailing optional parameter (`mvp_channel_allowed(channel_id, db=None)`), keep the old behaviour when it is omitted (env list only), and pass `db` at every request-path call site (`set_mvp`, `channel_approval`). Before changing a helper's signature, grep `backend/tests` for direct calls to it.
+
 ### 2026-10-07 — developer — security
 **Problem:** CodeQL `py/weak-sensitive-data-hashing` flagged `hashlib.sha256` on a random password-reset token as weak password hashing, failing the required CodeQL check, although the same SHA-256 lookup hash of session ids is not flagged.
 **Solution:** Data reaching a hash from password-named code (reset-password bodies, forgot/reset flows) is treated as a password; use `hashlib.pbkdf2_hmac("sha256", …, fixed_salt, iterations)` there (deterministic, so still usable as a lookup key) instead of plain SHA-256.

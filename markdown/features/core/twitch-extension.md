@@ -149,7 +149,11 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 
 ### Flow
 
-1. Broadcaster clicks **"Select match MVP"**
+1. Broadcaster clicks **"Select match MVP"**. On a channel the league hasn't approved
+   (`mvp_allowed: false`, issue #175) the tool shows "This channel is waiting for the league's
+   approval to set match MVPs." (or, once rejected, "This channel isn't approved to set match
+   MVPs.") instead of the list, and the channel appears under **Approved streamers → Waiting for
+   approval** in the admin portal (see [Approved Streamers Admin](../reference/approved-streamers-admin.md))
 2. The 5 most recently played series (regardless of week boundaries) are listed. A match appears
    about a minute after it goes live (Steam's live league list, checked every
    `LIVE_POLL_INTERVAL` seconds), before its stats are ingested. Above the list, a line says
@@ -294,6 +298,11 @@ and live in `backend/twitch_oauth.py`; admin `GET /admin/twitch/merges` and
 `POST /admin/twitch/merges/{log_id}/reverse` in `routers/admin_twitch.py`. See
 [Twitch Account Connection](../reference/twitch-account-connection.md).
 
+### Approved streamers (issue #175)
+Admin `GET /admin/twitch/channels` and `POST /admin/twitch/channels/{channel_id}/approve|reject|remove`
+(the three actions need a recent password check) in `routers/admin_twitch.py`, logic in
+`backend/twitch_channels.py`. See [Approved Streamers Admin](../reference/approved-streamers-admin.md).
+
 ### Retired: `POST /twitch/link-code`, `POST /twitch/link`, `GET /twitch/status`
 Removed in #160 and answer 404. The 6-character link code (#135 drew it with `secrets` and
 rate-limited `POST /twitch/link`) is replaced by Twitch sign-in; `GET /twitch/status` by
@@ -307,7 +316,10 @@ Twitch JWT. Returns the 5 most-recently-played series (team-pair groups) with in
 data, regardless of week boundaries, with per-match player lists. Games seen live (Steam's live
 league list since #161) but not yet ingested are included with `"provisional": true` and a `live` flag (issue
 #139). The response also carries `live_checked_at` and `live_source_configured`, which the MVP
-picker uses for its freshness line (see `reference/mvp-selection-delays.md`). See `reference/twitch-mvp-series-window.md` and `reference/early-mvp-selection.md`. The series selection lives in
+picker uses for its freshness line (see `reference/mvp-selection-delays.md`), and `mvp_allowed` /
+`approval` (`approved`, `pending`, `rejected`) for the token's channel (issue #175). A broadcaster
+on a channel that may not set MVPs gets an empty `series` list and leaves a pending approval
+request; viewers still get the series. See `reference/approved-streamers-admin.md`. See `reference/twitch-mvp-series-window.md` and `reference/early-mvp-selection.md`. The series selection lives in
 `twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
@@ -318,7 +330,7 @@ pass these checks in order (issue #135):
 
 | Check | Failure |
 |---|---|
-| The calling channel is in `TWITCH_MVP_CHANNEL_IDS` (checked first, so other channels learn nothing about IDs). An empty list allows any channel outside production, and no channel with `ENV=production` (issue #165) | 403 |
+| The calling channel is in `TWITCH_MVP_CHANNEL_IDS` or approved in the admin portal (checked first, so other channels learn nothing about IDs; a refused broadcaster leaves an approval request, issue #175). With both lists empty any channel may outside production, and no channel with `ENV=production` (issue #165) | 403 |
 | The match exists: an ingested match or a stored live match (`live_matches`) | 404 `Match not found` |
 | The match is one `GET /twitch/matches/current` offers: started, has ingested stats or is a stored live match, and belongs to one of the 5 most recent series (`twitch._eligible_mvp_match_ids()`) | 403 |
 | The player has a stat row for that match, or for a provisional match is one of its stored live players | 404 `Player did not play in this match` |
@@ -368,7 +380,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
-| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs allowed to set match MVPs (and so trigger token drops); others get 403. Empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |
+| `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs always allowed to set match MVPs (and so trigger token drops), in addition to channels approved in the admin portal (issue #175); others get 403. Both empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |
 | `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |

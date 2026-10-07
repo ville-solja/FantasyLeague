@@ -291,14 +291,16 @@ class TestPreserveExistingTestCoverageThroughSplit:
         logo fixtures changed no counts), and
         plan-issue-163-twitch-steam-account-hardening's 70 new tests did after that (its
         updates to test_issue_117/119/121/123/139/150/157/160 and test_twitch_review_resubmission
-        for hashed reset tokens, the per-IP lockout and package.sh --ebs-origin changed no counts)."""
+        for hashed reset tokens, the per-IP lockout and package.sh --ebs-origin changed no counts), and
+        plan-issue-173-demo-mode-badge-position's 9 new tests and
+        plan-issue-175-approved-streamers-admin's 49 new tests did after that."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2390 passed" in output, output[-3000:]
+        assert "2448 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

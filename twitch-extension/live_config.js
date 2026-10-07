@@ -53,15 +53,27 @@ function renderFreshness(data) {
     line.classList.toggle("warn", f.warn);
 }
 
+function approvalMessage(approval) {
+    if (approval === "rejected") return "This channel isn't approved to set match MVPs.";
+    return "This channel is waiting for the league's approval to set match MVPs.";
+}
+
 function loadSeries() {
     el("series-list").innerHTML = '<p class="muted">Loading…</p>';
     mvpGoTo(1);
     var refreshBtn = el("btn-refresh-series");
     refreshBtn.disabled = true;
     ebsGet("/twitch/matches/current").then(function(data) {
+        var container = el("series-list");
+        // Issue #175: a channel the league hasn't approved can't set MVPs yet.
+        if (data && data.mvp_allowed === false) {
+            renderFreshness(null);
+            _seriesData = [];
+            container.innerHTML = '<p class="muted">' + approvalMessage(data.approval) + "</p>";
+            return;
+        }
         renderFreshness(data || {});
         _seriesData = (data && data.series) || [];
-        var container = el("series-list");
         if (_seriesData.length === 0) {
             container.innerHTML = '<p class="muted">No recent matches found. A match appears here as soon as it goes live.</p>';
             return;

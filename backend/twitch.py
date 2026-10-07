@@ -43,13 +43,14 @@ from database import get_db
 from ingest import record_timing
 from deps import _audit
 from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
-                    Team, TwitchMVP, TwitchPresence,
+                    Team, TwitchChannelApproval, TwitchMVP, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
 from rate_limit import key_by_twitch_viewer_or_ip, limiter
 from schedule import bust_cache
 from scoring import apply_mvp_bonus_to_row, display_points
 import soft_accounts
 import text_safety
+import twitch_channels
 from routers.cards import SwapRequest
 
 router = APIRouter(prefix="/twitch", tags=["twitch"])
@@ -808,11 +809,23 @@ def current_matches(
     db: Session = Depends(get_db),
 ):
     """Return the 5 most recent series with ingested or live match data, across any week,
-    and how fresh the live-game list is (live_checked_at, live_source_configured)."""
+    and how fresh the live-game list is (live_checked_at, live_source_configured).
+
+    Issue #175: also whether this channel may set MVPs (mvp_allowed, approval). A
+    broadcaster on a channel that may not gets an empty series list and leaves an
+    approval request; viewers still see the series (the panel shows MVP results)."""
+    channel_id = payload.get("channel_id", "")
+    mvp_allowed, approval = channel_approval(channel_id, db)
     freshness = {
         "live_checked_at": steam_live.live_checked_at,
         "live_source_configured": bool(steam_live.STEAM_API_KEY),
+        "mvp_allowed": mvp_allowed,
+        "approval": approval,
     }
+    if not mvp_allowed and payload.get("role") == "broadcaster":
+        if twitch_channels.record_request(db, channel_id) is not None:
+            db.commit()
+        return {"series": [], **freshness}
     series = _current_series(db)
     if not series:
         return {"series": [], **freshness}
@@ -1138,28 +1151,40 @@ def drops_enabled() -> bool:
 
 def _mvp_allowed_channels() -> set[str]:
     """Channel IDs from TWITCH_MVP_CHANNEL_IDS (comma-separated)."""
-    raw = os.getenv("TWITCH_MVP_CHANNEL_IDS", "")
-    return {c.strip() for c in raw.split(",") if c.strip()}
+    return twitch_channels.env_channels()
 
 
 def _is_production() -> bool:
     return os.getenv("ENV", "").strip().lower() == "production"
 
 
-def mvp_channel_allowed(channel_id: str) -> bool:
-    """Whether a channel may set MVPs. A listed channel always may. An empty list
-    allows any channel outside production only (issue #165: fail closed)."""
-    allowed = _mvp_allowed_channels()
+def mvp_channel_allowed(channel_id: str, db: Session | None = None) -> bool:
+    """Whether a channel may set MVPs: it is in TWITCH_MVP_CHANNEL_IDS or approved in
+    the admin portal (issue #175; the portal only counts when `db` is given). With
+    both lists empty, any channel may outside production only (issue #165: fail closed)."""
+    allowed = twitch_channels.approved_channels(db) if db is not None else _mvp_allowed_channels()
     if allowed:
         return channel_id in allowed
     return not _is_production()
 
 
+def channel_approval(channel_id: str, db: Session) -> tuple[bool, str]:
+    """(mvp_allowed, approval) for the MVP tool: approval is approved, pending or rejected."""
+    if mvp_channel_allowed(channel_id, db):
+        return True, twitch_channels.APPROVED
+    row = db.get(TwitchChannelApproval, channel_id) if channel_id else None
+    if row is not None and row.status == twitch_channels.REJECTED:
+        return False, twitch_channels.REJECTED
+    return False, twitch_channels.PENDING
+
+
 def warn_if_mvp_channels_unset() -> None:
-    """Startup warning (main.lifespan): production with no MVP channel list."""
+    """Startup warning (main.lifespan): production with an empty TWITCH_MVP_CHANNEL_IDS.
+    Portal approvals (issue #175) are not counted here, so the text names both places."""
     if _is_production() and not _mvp_allowed_channels():
-        logger.warning("TWITCH_MVP_CHANNEL_IDS is empty: with ENV=production no channel "
-                       "can set match MVPs until it lists the league's channel IDs")
+        logger.warning("TWITCH_MVP_CHANNEL_IDS is empty: with ENV=production only channels approved "
+                       "under Approved streamers in the admin portal can set match MVPs; with none "
+                       "approved there either, no channel can")
 
 
 class MVPBody(BaseModel):
@@ -1182,8 +1207,11 @@ def set_mvp(
     channel_id = payload.get("channel_id", "")
 
     # Every check runs before any MVP row, bonus or token drop is written. The
-    # channel allowlist goes first so other channels learn nothing about IDs.
-    if not mvp_channel_allowed(channel_id):
+    # channel allowlist goes first so other channels learn nothing about IDs. A
+    # refused channel leaves an approval request for the admins (issue #175).
+    if not mvp_channel_allowed(channel_id, db):
+        if twitch_channels.record_request(db, channel_id) is not None:
+            db.commit()
         raise HTTPException(status_code=403, detail="This channel cannot set match MVPs")
     match = db.get(Match, body.match_id)
     live_row = db.get(LiveMatch, body.match_id)

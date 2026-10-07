@@ -873,7 +873,7 @@
         <li>Pick the series (team vs team), then the match (Match 1, Match 2…), then the player, and confirm.</li>
       </ol>
       <p style="margin-bottom:8px;color:#ccc;font-size:0.9rem;line-height:1.7;">Matches appear as soon as they start, so you can pick the MVP right after the game. Until the full match data arrives, the match is marked <strong>Live</strong> or <strong>Stats pending</strong>, and the MVP bonus is added once it does.</p>
-      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">Only matches from the 5 most recent series are listed. If the league limits MVP selection to certain channels, only those channels can confirm.</p>
+      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">Only matches from the 5 most recent series are listed. Your channel needs the league's approval before it can confirm MVPs; until then the MVP tool says it is waiting for approval.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What confirming does</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
@@ -966,6 +966,13 @@
         <tbody id="twitchMergesBody"></tbody>
       </table>
       <div class="status" id="twitchMergesStatus"></div>
+
+      <!-- Issue #175: approved streamers — channels that may set match MVPs. -->
+      <div class="twitch-merges-title">Approved streamers</div>
+      <p class="twitch-merges-note">Twitch channels that may set match MVPs, which also moves fantasy points and drops tokens. A channel appears under Waiting for approval when its broadcaster opens the MVP tool. Approve, Reject and Remove need your password.</p>
+      <button class="secondary" onclick="loadTwitchChannels()">Refresh</button>
+      <div id="twitchChannels" style="margin-top:8px;"></div>
+      <div class="status" id="twitchChannelsStatus"></div>
 
       <!-- Issue #150: self-reported player ids cleared when a verified Steam account took the id. -->
       <div class="twitch-merges-title">Superseded player id claims</div>
