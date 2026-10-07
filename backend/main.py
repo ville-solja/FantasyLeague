@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 from twitch import router as twitch_router
+import twitch as twitch_module
 import twitch_oauth
 import steam_openid
 import login_mode
@@ -392,6 +393,7 @@ async def lifespan(app: FastAPI):
                 "TWITCH_LOCAL_DEV=true must not be set when SECRET_KEY is configured — "
                 "this bypass must never run in production"
             )
+    twitch_module.warn_if_mvp_channels_unset()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
@@ -438,6 +440,12 @@ if not _secret_key:
     )
     _secret_key = "dev-secret-change-me"
 _https_only = os.getenv("HTTPS_ONLY", "false").lower() == "true"
+if _https_only and os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
+    # HTTPS_ONLY is a production signal that doesn't depend on ENV (issue #165).
+    raise RuntimeError(
+        "[SECURITY] TWITCH_LOCAL_DEV=true is not allowed with HTTPS_ONLY=true. "
+        "The Twitch JWT bypass must never run on a TLS-served deployment."
+    )
 if not _https_only and not _is_dev:
     raise RuntimeError(
         "[SECURITY] HTTPS_ONLY is not set. Session cookies would be sent without the Secure "

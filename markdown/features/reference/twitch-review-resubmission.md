@@ -38,12 +38,13 @@ One message each time the broadcaster confirms a match MVP, including re-selecti
 
 ## Package self-check
 
-`bash twitch-extension/package.sh <version>`:
+`bash twitch-extension/package.sh <version> --ebs-origin <https-origin> [--ebs-origin …]`:
 
 - exits non-zero with a usage message when no version is given (it no longer defaults to `1.0.0`)
+- exits non-zero when no `--ebs-origin` is given, or one is not an `https://` origin without a path or trailing slash (issue #164); the origins go into the packaged `ebs-origins.js`
 - exits non-zero with "already exists — bump the version" when `twitch-extension-<version>.zip` exists, so a submitted archive is never updated in place
 - exits non-zero naming the file (e.g. `panel.html references missing.js, which is not packaged.`) when any local `src`/`href` in a packaged HTML file is not in the `FILES` array; absolute `http(s)://` and protocol-relative `//` URLs are ignored
-- on success, prints the Asset Hosting paths and the URL Fetching allowlist entry from the table above
+- on success, prints the packaged origins, the Asset Hosting paths and the URL Fetching allowlist entries (the same origins)
 
 `backend/tests/test_twitch_review_resubmission.py` enforces the same rules in CI: it runs `package.sh` against a `tmp_path` copy of `twitch-extension/` (skipped if `zip` is not installed), statically checks every packaged HTML file's local references against `FILES`, checks the Twitch helper is the first `<script>` in each, checks `dev-harness.html` and `package.sh` are not packaged, and checks the chat disclosure copy in the listing description, `config.html` and `panel.html`.
 

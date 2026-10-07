@@ -247,6 +247,8 @@ class PromoCode(Base):
     code          = Column(String, unique=True)
     token_amount  = Column(Integer)
     created_by_id = Column(Integer, ForeignKey("users.id"))
+    expires_at      = Column(Integer, nullable=True)   # Unix time; None = never (issue #167)
+    max_redemptions = Column(Integer, nullable=True)   # None = unlimited (issue #167)
 
 
 class CodeRedemption(Base):

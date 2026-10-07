@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re as _re
@@ -18,6 +19,7 @@ from auth import (check_email, check_password_bytes, check_reserved, check_usern
                   username_taken, verify_password)
 from email_utils import email_configured, send_email
 from rate_limit import limiter, key_by_user_or_ip
+from slowapi.util import get_remote_address
 
 router = APIRouter()
 
@@ -28,30 +30,81 @@ RATE_LIMIT_REGISTER = os.getenv("RATE_LIMIT_REGISTER", "5/minute")
 RATE_LIMIT_FORGOT_PASSWORD = os.getenv("RATE_LIMIT_FORGOT_PASSWORD", "3/minute")
 RATE_LIMIT_RESET_PASSWORD = os.getenv("RATE_LIMIT_RESET_PASSWORD", "10/minute")
 
-# Per-username failed-login lockout, independent of source IP — catches an
-# attacker rotating IPs against one account, which the per-IP RATE_LIMIT_LOGIN
-# limiter alone would not. In-memory only (same reasoning as the slowapi
-# limiter itself: single-process deployment, no shared-state backend needed;
-# lockout state resetting on restart is an acceptable tradeoff).
+# Failed-login lockout, in memory (single-process deployment; resetting on restart
+# is an acceptable tradeoff). Issue #168: usernames are public, so a lockout keyed by
+# username alone let anyone keep any player or admin locked out. Two counters now:
+#   - per (username, source IP), LOGIN_LOCKOUT_THRESHOLD failures in the window lock
+#     that username out from that IP only;
+#   - per username across all IPs, a much higher LOGIN_LOCKOUT_USERNAME_THRESHOLD
+#     still stops one account being guessed from many IPs.
 _LOGIN_LOCKOUT_THRESHOLD = int(os.getenv("LOGIN_LOCKOUT_THRESHOLD", "10"))
+_LOGIN_LOCKOUT_USERNAME_THRESHOLD = int(os.getenv("LOGIN_LOCKOUT_USERNAME_THRESHOLD", "100"))
 _LOGIN_LOCKOUT_WINDOW_SECONDS = int(os.getenv("LOGIN_LOCKOUT_WINDOW_SECONDS", "300"))
 _LOGIN_LOCKOUT_MESSAGE = "Too many failed login attempts. Please try again later."
-_failed_login_attempts: dict[str, list[float]] = defaultdict(list)
+_failed_login_attempts: dict[str, list[float]] = defaultdict(list)          # by username
+_failed_login_attempts_by_ip: dict[tuple, list[float]] = defaultdict(list)  # by (username, ip)
+_LOCKOUT_PRUNE_AT = 10_000  # entries before stale keys are swept
 
 
-def _is_locked_out(username: str) -> bool:
-    now = time.time()
-    attempts = _failed_login_attempts[username]
+def _recent(attempts: list[float], now: float) -> list[float]:
     attempts[:] = [t for t in attempts if now - t < _LOGIN_LOCKOUT_WINDOW_SECONDS]
-    return len(attempts) >= _LOGIN_LOCKOUT_THRESHOLD
+    return attempts
 
 
-def _record_failed_login(username: str):
-    _failed_login_attempts[username].append(time.time())
+def _prune_lockouts(now: float) -> None:
+    for store in (_failed_login_attempts, _failed_login_attempts_by_ip):
+        if len(store) > _LOCKOUT_PRUNE_AT:
+            for key in [k for k, v in store.items() if not _recent(v, now)]:
+                store.pop(key, None)
 
 
-def _clear_failed_logins(username: str):
+def _client_ip(request: Request | None) -> str | None:
+    return get_remote_address(request) if request is not None else None
+
+
+def _is_locked_out(username: str, ip: str | None = None) -> bool:
+    now = time.time()
+    if len(_recent(_failed_login_attempts[username], now)) >= _LOGIN_LOCKOUT_USERNAME_THRESHOLD:
+        return True
+    if ip is None:
+        return False
+    return len(_recent(_failed_login_attempts_by_ip[(username, ip)], now)) >= _LOGIN_LOCKOUT_THRESHOLD
+
+
+def _record_failed_login(username: str, ip: str | None = None):
+    now = time.time()
+    _failed_login_attempts[username].append(now)
+    if ip is not None:
+        _failed_login_attempts_by_ip[(username, ip)].append(now)
+    _prune_lockouts(now)
+
+
+def _clear_failed_logins(username: str, ip: str | None = None):
+    """After a successful login: the username's counter and this IP's counter."""
     _failed_login_attempts.pop(username, None)
+    if ip is not None:
+        _failed_login_attempts_by_ip.pop((username, ip), None)
+
+
+def _clear_all_failed_logins(username: str):
+    """After a completed password reset: every counter for the username."""
+    _failed_login_attempts.pop(username, None)
+    for key in [k for k in _failed_login_attempts_by_ip if k[0] == username]:
+        _failed_login_attempts_by_ip.pop(key, None)
+
+
+_RESET_TOKEN_SALT = b"password-reset-token"
+_RESET_TOKEN_ITERATIONS = 10_000
+
+
+def hash_reset_token(token: str) -> str:
+    """Reset tokens are stored hashed (issue #168), so a leaked database or backup holds
+    no working reset link. The token is 256 random bits, so any one-way hash would do;
+    PBKDF2 is used because code scanning treats it as reset-password data and accepts
+    only a password-hashing function there. The salt is fixed because the hash is the
+    lookup key."""
+    return hashlib.pbkdf2_hmac("sha256", token.encode("utf-8"), _RESET_TOKEN_SALT,
+                               _RESET_TOKEN_ITERATIONS).hex()
 
 
 # Per-username cooldown on POST /forgot-password, independent of source IP —
@@ -117,11 +170,12 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
     # username exists in the DB (the lockout counter itself is keyed by the
     # submitted username string, existing or not), so this never reveals
     # username existence.
-    if _is_locked_out(body.username):
+    ip = _client_ip(request)
+    if _is_locked_out(body.username, ip):
         raise HTTPException(status_code=429, detail=_LOGIN_LOCKOUT_MESSAGE)
     user = db.query(User).filter(User.username == body.username).first()
     if not user or not verify_password(body.password, user.password_hash):
-        _record_failed_login(body.username)
+        _record_failed_login(body.username, ip)
         raise HTTPException(status_code=401, detail="Invalid username or password")
     if user.must_change_password and user.temp_password_expires_at:
         if int(time.time()) > user.temp_password_expires_at:
@@ -131,7 +185,7 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
             )
     # Always a new session ID at login (issue #117), even if a valid cookie was sent.
     sessions.start_session(request, db, user)
-    _clear_failed_logins(user.username)
+    _clear_failed_logins(user.username, ip)
     _audit(db, "user_login", actor_id=user.id, actor_username=user.username)
     db.commit()
     return {"username": user.username, "is_admin": user.is_admin,
@@ -200,7 +254,8 @@ def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
         # Issue #150: accounts created through Steam have no password; they confirm
         # through GET /auth/steam/start?purpose=reauth. Not a failed login.
         raise HTTPException(status_code=409, detail="use_steam_reauth")
-    if _is_locked_out(username):
+    ip = _client_ip(request)
+    if _is_locked_out(username, ip):
         _audit(db, action, actor_id=current_user["user_id"], actor_username=username,
                detail="failed: locked out")
         db.commit()
@@ -209,13 +264,13 @@ def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
     if row is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not verify_password(body.password, user.password_hash):
-        _record_failed_login(username)
+        _record_failed_login(username, ip)
         _audit(db, action, actor_id=user.id, actor_username=username,
                detail="failed: wrong password")
         db.commit()
         raise HTTPException(status_code=401, detail="Incorrect password")
     sessions.mark_reauth(row)
-    _clear_failed_logins(username)
+    _clear_failed_logins(username, ip)
     _audit(db, action, actor_id=user.id, actor_username=username, detail="ok")
     db.commit()
     return {"status": "ok", "valid_seconds": sessions.ADMIN_REAUTH_SECONDS}
@@ -284,7 +339,7 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
     db.query(PasswordResetToken).filter_by(user_id=user_id).delete()
     token = secrets.token_urlsafe(32)
     ttl_hours = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_HOURS", "1"))
-    db.add(PasswordResetToken(token=token, user_id=user_id,
+    db.add(PasswordResetToken(token=hash_reset_token(token), user_id=user_id,
                               expires_at=int(time.time()) + ttl_hours * 3600))
     _audit(db, "password_reset_requested", actor_id=user_id, actor_username=user_username)
 
@@ -297,6 +352,8 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
             to_address=user_email,
             subject=f"[{app_name}] Password reset requested",
             body=(
+                f"Never share this code or link with anyone. {app_name} staff will never "
+                f"ask you for it.\n\n"
                 f"Hi {user_username},\n\n"
                 f"A password reset was requested for your account.\n\n"
                 f"{link_block}"
@@ -335,7 +392,7 @@ def forgot_password(request: Request, body: ForgotPasswordBody, db=Depends(get_d
 @router.post("/reset-password")
 @limiter.limit(RATE_LIMIT_RESET_PASSWORD)
 def reset_password(request: Request, body: ResetPasswordBody, db=Depends(get_db)):
-    token_row = db.get(PasswordResetToken, body.token)
+    token_row = db.get(PasswordResetToken, hash_reset_token(body.token))
     if not token_row or token_row.expires_at < int(time.time()):
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
     user = db.get(User, token_row.user_id)
@@ -354,7 +411,34 @@ def reset_password(request: Request, body: ResetPasswordBody, db=Depends(get_db)
     _audit(db, "password_reset_completed", actor_id=user.id, actor_username=user.username,
            detail="all sessions revoked")
     db.commit()
+    _clear_all_failed_logins(user.username)
+    send_password_changed_notice(user)
     return {"status": "ok"}
+
+
+def send_password_changed_notice(user: User) -> None:
+    """Tell the account's email that its password changed (issue #168), so a takeover
+    is noticed. Best effort: a failed or unconfigured send never blocks the change."""
+    if not user.email:
+        return
+    app_name = os.getenv("APP_NAME", "Kana Cards")
+    try:
+        send_email(
+            to_address=user.email,
+            subject=f"[{app_name}] Your password was changed",
+            body=(
+                f"Hi {user.username},\n\n"
+                f"The password of your {app_name} account was just changed, and every "
+                f"other signed-in device was logged out.\n\n"
+                f"If this was you, no action is needed.\n\n"
+                f"If it wasn't you, use 'Forgot password' on the login screen right away "
+                f"to set a new password, and tell a league admin. Never share a reset "
+                f"code with anyone.\n"
+            ),
+        )
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "password change notice: email send raised for user %s", user.username)
 
 
 @router.post("/claim-events")

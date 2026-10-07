@@ -1288,12 +1288,16 @@ class TestSteamOnlyAccountCreationS17:
     @pytest.mark.parametrize("login_method", ["password", "both", "steam_signup"])
     def test_password_login_reset_change_and_reauth_work_in_every_mode(self, web, mode, login_method):
         """AC: password sign-in, /forgot-password, /reset-password, PUT /profile/password and POST /reauth keep working for existing password accounts in all three modes."""
-        from models import PasswordResetToken
+        import re
+        from unittest.mock import patch
         mode(login_method)
         web.add_user("alice")
         client = web.login("alice", reauth=True)
-        assert client.post("/forgot-password", json={"username": "alice"}).status_code == 200
-        token = web.rows(PasswordResetToken)[0].token
+        sent = []
+        with patch("routers.auth.send_email", side_effect=lambda **kw: sent.append(kw) or True):
+            assert client.post("/forgot-password", json={"username": "alice"}).status_code == 200
+        # Issue #168: only a hash of the token is stored; the raw one is in the email.
+        token = re.search(r"Reset code: (\S+)", sent[0]["body"]).group(1)
         assert client.post("/reset-password", json={"token": token,
                                                     "new_password": "newpass1"}).status_code == 200
         fresh = web.client()

@@ -1,3 +1,4 @@
+import os
 import time
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -5,8 +6,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from database import get_db
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, _audit
 from models import Notification, NotificationDismissal
+from text_safety import foreign_urls, strip_invisible
 
 router = APIRouter()
 
@@ -33,12 +35,20 @@ def list_notifications(db=Depends(get_db), _: dict = Depends(require_admin)):
     ]
 
 
-@router.post("/admin/notifications")
+# A notification pops up for every player with the league's own authority, so it
+# needs a recent password check and may link only to this site (issue #166, #167).
+@router.post("/admin/notifications", dependencies=[Depends(require_recent_reauth)])
 def create_notification(body: NotificationBody, db=Depends(get_db),
                         admin: dict = Depends(require_admin)):
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=422, detail="end_time must be after start_time")
-    n = Notification(message=body.message, start_time=body.start_time,
+    message = strip_invisible(body.message)
+    if not message:
+        raise HTTPException(status_code=422, detail="Message cannot be empty")
+    if foreign_urls(message, os.getenv("APP_BASE_URL", "")):
+        raise HTTPException(status_code=422,
+                            detail="Notifications may only link to this site (APP_BASE_URL)")
+    n = Notification(message=message, start_time=body.start_time,
                      end_time=body.end_time, created_by=admin["user_id"],
                      created_at=int(time.time()))
     db.add(n)
@@ -49,7 +59,7 @@ def create_notification(body: NotificationBody, db=Depends(get_db),
     return {"id": n.id}
 
 
-@router.delete("/admin/notifications/{notification_id}")
+@router.delete("/admin/notifications/{notification_id}", dependencies=[Depends(require_recent_reauth)])
 def delete_notification(notification_id: int, db=Depends(get_db),
                         admin: dict = Depends(require_admin)):
     n = db.get(Notification, notification_id)

@@ -288,14 +288,17 @@ class TestPreserveExistingTestCoverageThroughSplit:
         reserved sign-up names changed no counts), and
         plan-issue-171-twitch-panel-abuse-limits's 84 new tests (83 plus the chat-copy follow-up) did after that (its updates
         to test_issue_157 drop tests, test_issue_136 CORS tests and the test_issue_51/100
-        logo fixtures changed no counts)."""
+        logo fixtures changed no counts), and
+        plan-issue-163-twitch-steam-account-hardening's 70 new tests did after that (its
+        updates to test_issue_117/119/121/123/139/150/157/160 and test_twitch_review_resubmission
+        for hashed reset tokens, the per-IP lockout and package.sh --ebs-origin changed no counts)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2320 passed" in output, output[-3000:]
+        assert "2390 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

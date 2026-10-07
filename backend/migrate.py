@@ -600,6 +600,17 @@ def _m035_users_admin_seed_applied_at(conn):
         conn.execute(text("ALTER TABLE users ADD COLUMN admin_seed_applied_at INTEGER"))
         conn.commit()
         logger.info("Migration: users — added admin_seed_applied_at column")
+def _m036_promo_codes_limits(conn):
+    """Issue #167: optional expiry and redemption cap on promo codes."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(promo_codes)")).fetchall()}
+    if not cols:
+        return  # table created by create_all with the columns already present
+    if "expires_at" not in cols:
+        conn.execute(text("ALTER TABLE promo_codes ADD COLUMN expires_at INTEGER"))
+    if "max_redemptions" not in cols:
+        conn.execute(text("ALTER TABLE promo_codes ADD COLUMN max_redemptions INTEGER"))
+    conn.commit()
+    logger.info("Migration: promo_codes — added expires_at and max_redemptions columns")
 
 
 def _m018_new_indexes(conn):
@@ -661,6 +672,7 @@ MIGRATIONS = [
     ("033_users_steam_id",           _m033_users_steam_id),
     ("034_username_case_and_rename_time", _m034_username_case_and_rename_time),
     ("035_users_admin_seed_applied_at", _m035_users_admin_seed_applied_at),
+    ("036_promo_codes_limits",       _m036_promo_codes_limits),
 ]
 
 

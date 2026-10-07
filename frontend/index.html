@@ -1078,12 +1078,16 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
             <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
             <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
+            <input id="newCodeMaxUses" type="number" placeholder="Max uses (optional)" style="max-width:150px;" min="1" />
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:0.85rem;">Expires
+              <input id="newCodeExpires" type="datetime-local" />
+            </label>
             <button onclick="createCode()">Create</button>
             <button class="secondary" onclick="loadCodes()">Refresh</button>
           </div>
           <table>
-            <thead><tr><th>Code</th><th>Tokens</th><th>Uses</th><th></th></tr></thead>
-            <tbody id="codesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+            <thead><tr><th>Code</th><th>Tokens</th><th>Uses</th><th>Limits</th><th></th></tr></thead>
+            <tbody id="codesBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
           </table>
           <div class="status" id="codesStatus"></div>
         </div>

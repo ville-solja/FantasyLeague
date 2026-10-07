@@ -11,6 +11,7 @@ from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, Tag
 from scoring import display_points
 from auth import (check_password_bytes, check_reserved, check_username, hash_password,
                   username_taken, verify_password)
+from routers.auth import send_password_changed_notice
 
 router = APIRouter()
 
@@ -184,4 +185,5 @@ def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_d
     sessions.delete_user_sessions(db, user.id, keep_id=current.id if current else None)
     sessions.start_session(request, db, user)
     db.commit()
+    send_password_changed_notice(user)
     return {"status": "ok"}

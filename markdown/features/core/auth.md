@@ -65,6 +65,12 @@ Authenticates with username and password.
 ```
 
 - Returns 401 if credentials are invalid.
+- Returns 429 when the username is locked out (issue #168): `LOGIN_LOCKOUT_THRESHOLD` (default 10)
+  failures for that username from the same source IP within `LOGIN_LOCKOUT_WINDOW_SECONDS` lock it
+  out from that IP only, so nobody can lock another player out from their own connection;
+  `LOGIN_LOCKOUT_USERNAME_THRESHOLD` (default 100) failures from all IPs together lock it out
+  everywhere. A successful login clears the username's counter and that IP's counter; a completed
+  password reset clears every counter for the username. In memory, reset on restart.
 - Returns 401 with `"Temporary password has expired. Please request a new password reset."` if the
   account still holds an outstanding **pre-fix legacy** temporary password (`must_change_password`
   set and `temp_password_expires_at` in the past). This check is legacy-only — no current code
@@ -99,7 +105,7 @@ current user's password for this session and stores `reauth_at` on the session r
 admin endpoints (`deps.require_recent_reauth`) and a player's Twitch connection actions
 (`deps.require_recent_player_reauth`: Connect, merge and Disconnect, issue #160) then accept the
 session for `ADMIN_REAUTH_SECONDS` (default 600). Wrong password: 401 `"Incorrect password"`, counted toward
-the per-username login lockout (`LOGIN_LOCKOUT_THRESHOLD`); a locked-out username gets 429 with the
+the login lockout (per username and source IP, see `POST /login`); a locked-out username gets 429 with the
 same message as `/login`. If the current session row is missing (a defensive check), 401
 `"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an audit entry on success (`ok`) and
 on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for everyone else.
@@ -255,6 +261,8 @@ Changes the authenticated user's password. Requires login and the current passwo
 - Deletes every other session of the user and gives the requester's session a new ID (a new row
   and cookie): the requester stays logged in and every other session gets 401 on its next request.
   A rejected change (wrong current password) changes nothing.
+- Emails the account a "Your password was changed" notice (issue #168; best effort, never blocks
+  the change), so a takeover is noticed.
 
 ---
 
@@ -280,13 +288,16 @@ Requests a password reset for the given username. Does **not** change the accoun
    with the bcrypt timing-equalization call and returns `{"status": "ok"}` — no state changes.
 2. Any existing `PasswordResetToken` row for the account is deleted (only one live token per
    user at a time — same invalidate-on-regenerate precedent as the retired `TwitchLinkCode`).
-3. A new single-use token is generated (`secrets.token_urlsafe(32)`) and stored with an
-   `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS` hours (default `1`).
+3. A new single-use token is generated (`secrets.token_urlsafe(32)`). Only its PBKDF2-SHA256 hash (fixed salt, so it can be looked up)
+   (`hash_reset_token`) is stored, with an `expires_at` of `now + PASSWORD_RESET_TOKEN_TTL_HOURS`
+   hours (default `1`), so a leaked database or backup holds no working reset link (issue #168).
 4. A `password_reset_requested` audit log entry is written.
 5. An email is sent to the address on file containing a clickable link
    (`{APP_BASE_URL}/?reset_token={token}`, only if `APP_BASE_URL` is configured) and the raw
-   token as a manual-entry fallback (always included). The wording states the current password
-   remains valid and nothing changes until the reset is completed.
+   token as a manual-entry fallback (always included). The email opens with "Never share this
+   code or link with anyone. {APP_NAME} staff will never ask you for it." (issue #168: the classic
+   scam is asking a victim to forward a code they did not request). The wording states the current
+   password remains valid and nothing changes until the reset is completed.
 
 The endpoint returns `{"status": "ok"}` regardless of whether the username exists, to
 prevent username enumeration. The one exception: when SMTP is configured and the send fails or
@@ -318,7 +329,12 @@ authentication required (the token itself is the credential).
   3. Deletes every session row of the user, so every existing session gets 401.
   4. Deletes the token row (single-use — resubmitting the same token afterward returns 400).
   5. Records a `password_reset_completed` audit log entry (detail `all sessions revoked`).
-  6. Returns `{"status": "ok"}`.
+  6. Clears the username's login lockout and emails a "Your password was changed" notice (best
+     effort).
+  7. Returns `{"status": "ok"}`.
+
+The submitted token is hashed and looked up by hash; a stored hash submitted as a token never
+matches.
 
 Limited to 10 requests a minute per IP (`RATE_LIMIT_RESET_PASSWORD`); the next returns 429.
 
@@ -446,6 +462,9 @@ The login, registration, password reset, profile change-password and admin re-lo
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
 | `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |
 | `APP_BASE_URL` | *(empty)* | Public base URL used to build a clickable reset link in emails (if unset, only the raw code is emailed) and the Steam OpenID return address (required for Steam sign-in) |
+| `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed logins for one username from one IP before it is locked out from that IP (issue #168) |
+| `LOGIN_LOCKOUT_USERNAME_THRESHOLD` | `100` | Failed logins for one username from all IPs before it is locked out everywhere |
+| `LOGIN_LOCKOUT_WINDOW_SECONDS` | `300` | Window the lockout counters cover |
 | `LOGIN_METHOD` | `password` | `password`, `both` or `steam_signup` (issue #150, see `reference/steam-login.md`) |
 | `SEED_ADMIN_STEAM_IDS` | *(empty)* | Comma-separated Steam64 IDs that become admins on a verified Steam sign-in, sign-up or link |
 | `RATE_LIMIT_STEAM_CALLBACK` | `10/minute` | Per-IP limit on the Steam start, callback and sign-up routes |

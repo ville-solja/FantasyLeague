@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-07 — developer — security
+**Problem:** CodeQL `py/weak-sensitive-data-hashing` flagged `hashlib.sha256` on a random password-reset token as weak password hashing, failing the required CodeQL check, although the same SHA-256 lookup hash of session ids is not flagged.
+**Solution:** Data reaching a hash from password-named code (reset-password bodies, forgot/reset flows) is treated as a password; use `hashlib.pbkdf2_hmac("sha256", …, fixed_salt, iterations)` there (deterministic, so still usable as a lookup key) instead of plain SHA-256.
+
 ### 2026-10-07 — security-patcher — security
 **Problem:** CodeQL `py/url-redirection` flagged a redirect built from a query parameter even though it was checked with `value in ALLOWED` first, and `py/clear-text-logging-sensitive-data` flagged logging a login-mode name because the constant holding it was named `PASSWORD`.
 **Solution:** Redirect with the allowlist's own constant (`next((t for t in ALLOWED if t == value), default)`), so no request string reaches the URL; name constants that are not secrets without "password" in them (`LOCAL_LOGIN = "password"`), since CodeQL treats such names as sensitive sources.
@@ -135,7 +139,7 @@ Format:
 
 ### 2026-09-30 — developer — file-paths
 **Problem:** `twitch-extension/*.zip` is gitignored, so building a zip with `package.sh` does not record an extension version bump. The submitted version is tracked in `markdown/features/reference/twitch-extension-review-submission.md` (header and checklist), and `backend/tests/test_twitch_review_resubmission.py::test_submission_doc_references_current_version` asserts that exact version.
-**Solution:** To bump the extension version, update the submission doc's header, checklist and review-history change log, the `package.sh` usage example, the `package.sh <version>` line in `markdown/features/core/twitch-extension.md`, and that test's expected version. The operator builds the zip with `bash twitch-extension/package.sh <version>` at release time.
+**Solution:** To bump the extension version, update the submission doc's header, checklist and review-history change log, the `package.sh` usage example, the `package.sh <version>` line in `markdown/features/core/twitch-extension.md`, and that test's expected version. The operator builds the zip with `bash twitch-extension/package.sh <version> --ebs-origin <https-origin>` at release time (the origin is required since issue #164).
 
 ---
 

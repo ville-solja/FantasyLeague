@@ -31,8 +31,11 @@ class GrantTokensBody(BaseModel):
 
 
 class CreateCodeBody(BaseModel):
-    code:         str = Field(min_length=1, max_length=64)
-    token_amount: int
+    code:            str = Field(min_length=1, max_length=64)
+    token_amount:    int
+    # Issue #167: optional limits. expires_at is a Unix timestamp.
+    expires_at:      int | None = None
+    max_redemptions: int | None = Field(default=None, ge=1)
 
 
 class RedeemCodeBody(BaseModel):
@@ -128,7 +131,7 @@ def list_superseded_player_id_claims(db=Depends(get_db), _: dict = Depends(requi
             for row, old, new, pid in parsed]
 
 
-@router.post("/users/{user_id}/toggle-tester")
+@router.post("/users/{user_id}/toggle-tester", dependencies=[Depends(require_recent_reauth)])
 def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
     user = db.get(User, user_id)
     if not user:
@@ -189,37 +192,44 @@ def grant_tokens(body: GrantTokensBody, db=Depends(get_db), admin: dict = Depend
     return {"username": target.username, "tokens": target.tokens}
 
 
-@router.post("/codes")
+@router.post("/codes", dependencies=[Depends(require_recent_reauth)])
 def create_code(body: CreateCodeBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
     code = body.code.strip().upper()
     if not code:
         raise HTTPException(status_code=422, detail="Code cannot be empty")
     if body.token_amount < 1:
         raise HTTPException(status_code=422, detail="Token amount must be at least 1")
+    if body.expires_at is not None and body.expires_at <= int(time.time()):
+        raise HTTPException(status_code=422, detail="Expiry must be in the future")
     if db.query(PromoCode).filter(PromoCode.code == code).first():
         raise HTTPException(status_code=409, detail="Code already exists")
-    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=admin["user_id"])
+    promo = PromoCode(code=code, token_amount=body.token_amount, created_by_id=admin["user_id"],
+                      expires_at=body.expires_at, max_redemptions=body.max_redemptions)
     db.add(promo)
     _audit(db, "admin_code_create", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"code={code} tokens={body.token_amount}")
+           detail=f"code={code} tokens={body.token_amount} expires_at={body.expires_at} "
+                  f"max_redemptions={body.max_redemptions}")
     db.commit()
-    return {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount}
+    return {"id": promo.id, "code": promo.code, "token_amount": promo.token_amount,
+            "expires_at": promo.expires_at, "max_redemptions": promo.max_redemptions}
 
 
 @router.get("/codes")
 def list_codes(db=Depends(get_db), _: dict = Depends(require_admin)):
     rows = db.execute(text("""
-        SELECT p.id, p.code, p.token_amount, COUNT(r.id) as redemptions
+        SELECT p.id, p.code, p.token_amount, p.expires_at, p.max_redemptions,
+               COUNT(r.id) as redemptions
         FROM promo_codes p
         LEFT JOIN code_redemptions r ON r.code_id = p.id
-        GROUP BY p.id, p.code, p.token_amount
+        GROUP BY p.id, p.code, p.token_amount, p.expires_at, p.max_redemptions
         ORDER BY p.id
     """)).fetchall()
     return [{"id": r.id, "code": r.code, "token_amount": r.token_amount,
+             "expires_at": r.expires_at, "max_redemptions": r.max_redemptions,
              "redemptions": r.redemptions} for r in rows]
 
 
-@router.delete("/codes/{code_id}")
+@router.delete("/codes/{code_id}", dependencies=[Depends(require_recent_reauth)])
 def delete_code(code_id: int, db=Depends(get_db), admin: dict = Depends(require_admin)):
     promo = db.get(PromoCode, code_id)
     if not promo:
@@ -231,6 +241,21 @@ def delete_code(code_id: int, db=Depends(get_db), admin: dict = Depends(require_
     return {"status": "ok"}
 
 
+INVALID_CODE_DETAIL = "Invalid or expired code"
+
+
+def _code_open(db, promo: PromoCode) -> bool:
+    """A code can still be redeemed: not past its expiry and under its redemption cap."""
+    if promo.expires_at is not None and promo.expires_at <= int(time.time()):
+        return False
+    if promo.max_redemptions is not None:
+        used = db.query(func.count(CodeRedemption.id)).filter(
+            CodeRedemption.code_id == promo.id).scalar() or 0
+        if used >= promo.max_redemptions:
+            return False
+    return True
+
+
 def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -238,8 +263,10 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
         raise HTTPException(status_code=404, detail="User not found")
     code = body.code.strip().upper()
     promo = db.query(PromoCode).filter(PromoCode.code == code).first()
-    if not promo:
-        raise HTTPException(status_code=404, detail="Invalid code")
+    # One answer for unknown, expired and used-up codes (issue #167), so codes
+    # can't be probed. "Already redeemed" stays separate: it is the user's own state.
+    if not promo or not _code_open(db, promo):
+        raise HTTPException(status_code=404, detail=INVALID_CODE_DETAIL)
     already = db.query(CodeRedemption).filter(
         CodeRedemption.code_id == promo.id,
         CodeRedemption.user_id == user_id,
@@ -292,7 +319,7 @@ def list_token_grant_events(db=Depends(get_db), _: dict = Depends(require_admin)
     ]
 
 
-@router.post("/admin/token-grant-events")
+@router.post("/admin/token-grant-events", dependencies=[Depends(require_recent_reauth)])
 def create_token_grant_event(
     body: TokenGrantEventBody,
     db=Depends(get_db),
@@ -316,7 +343,7 @@ def create_token_grant_event(
     return {"id": ev.id, "amount": ev.amount, "start_time": ev.start_time, "end_time": ev.end_time}
 
 
-@router.delete("/admin/token-grant-events/{event_id}")
+@router.delete("/admin/token-grant-events/{event_id}", dependencies=[Depends(require_recent_reauth)])
 def delete_token_grant_event(
     event_id: int,
     db=Depends(get_db),

@@ -391,6 +391,7 @@ def web():
     for lim in limiters.values():
         lim.enabled = False
     auth_router._failed_login_attempts.clear()
+    auth_router._failed_login_attempts_by_ip.clear()
 
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key=_SESSION_SECRET, same_site="lax")

@@ -38,11 +38,19 @@ fi
 
 EBS_URL="${1:-}"
 
-# ── Pre-set values (optional — fill in to skip interactive prompts) ────────────
+# ── Values from the environment (optional — otherwise you are prompted) ────────
+#
+# Never write the secret into this file (it is tracked in git). Either answer the
+# hidden prompt, or export it for this shell only, e.g.:
+#   read -rs TWITCH_EXT_SECRET && export TWITCH_EXT_SECRET
+#
+#   TWITCH_CLIENT_ID      Client ID  (Extension Settings → top-right)
+#   TWITCH_EXT_SECRET     Extension Secret  (Extension Settings → Extension Secrets table → Key column)
+#   TWITCH_OWNER_USER_ID  Numeric Twitch user ID of the extension owner
 
-TWITCH_CLIENT_ID=""      # Client ID  (Extension Settings → top-right)
-TWITCH_EXT_SECRET=""     # Extension Secret  (Extension Settings → Extension Secrets table → Key column)
-TWITCH_OWNER_USER_ID=""  # Numeric Twitch user ID of the extension owner  (https://www.streamweasels.com/tools/convert-twitch-username-to-user-id/)
+TWITCH_CLIENT_ID="${TWITCH_CLIENT_ID:-}"
+TWITCH_EXT_SECRET="${TWITCH_EXT_SECRET:-}"
+TWITCH_OWNER_USER_ID="${TWITCH_OWNER_USER_ID:-}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -67,7 +75,7 @@ validate_ext_secret() {
 
 validate_url() {
     local val="$1"
-    [[ "$val" =~ ^https?:// ]] || { echo "   ERROR: must start with https://"; return 1; }
+    [[ "$val" =~ ^https:// ]] || { echo "   ERROR: must start with https://"; return 1; }
     [[ "${val: -1}" != "/" ]] || { echo "   ERROR: remove the trailing slash."; return 1; }
     [[ ${#val} -le 256 ]] || { echo "   ERROR: URL too long (max 256 characters)."; return 1; }
 }
@@ -75,7 +83,7 @@ validate_url() {
 # ── Prompt helper ─────────────────────────────────────────────────────────────
 
 prompt() {
-    local var_name="$1" label="$2" hint="$3" validate_fn="${4:-}"
+    local var_name="$1" label="$2" hint="$3" validate_fn="${4:-}" hidden="${5:-}"
     local current; eval current=\$$var_name
     [ -n "$current" ] && return
 
@@ -84,7 +92,12 @@ prompt() {
         echo "── $label"
         printf "   %s\n" "$hint"
         echo ""
-        read -rp "   Enter value: " input
+        if [ -n "$hidden" ]; then
+            read -rsp "   Enter value (hidden): " input
+            echo ""
+        else
+            read -rp "   Enter value: " input
+        fi
         [ -z "$input" ] && { echo "   ERROR: value is required."; continue; }
         [ -n "$validate_fn" ] && ! "$validate_fn" "$input" && continue
         eval "$var_name=\"\$input\""
@@ -94,18 +107,18 @@ prompt() {
 
 # ── JWT generation ─────────────────────────────────────────────────────────────
 
+# The secret goes to Python through the environment, never as a command-line
+# argument (arguments are visible to every user of the machine in `ps`).
 make_jwt() {
-    local secret="$1"
-    local user_id="$2"
-    python3 - "$secret" "$user_id" <<'PYEOF'
-import sys, json, base64, hmac, hashlib, time
+    SET_EBS_SECRET="$1" SET_EBS_OWNER_ID="$2" python3 - <<'PYEOF'
+import os, sys, json, base64, hmac, hashlib, time
 
 def b64url(data):
     if isinstance(data, str):
         data = data.encode()
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
-raw, user_id = sys.argv[1], sys.argv[2]
+raw, user_id = os.environ["SET_EBS_SECRET"], os.environ["SET_EBS_OWNER_ID"]
 pad = (4 - len(raw) % 4) % 4
 secret = base64.b64decode(raw + "=" * pad)
 
@@ -115,7 +128,6 @@ payload = b64url(json.dumps(payload_data, separators=(",", ":")))
 
 sig = hmac.new(secret, f"{header}.{payload}".encode(), hashlib.sha256).digest()
 sys.stderr.write(f"[debug] JWT payload: {json.dumps(payload_data)}\n")
-sys.stderr.write(f"[debug] key (hex):   {secret.hex()}\n")
 print(f"{header}.{payload}.{b64url(sig)}")
 PYEOF
 }
@@ -138,7 +150,8 @@ prompt TWITCH_EXT_SECRET \
     "Scroll to the bottom of Extension Settings → 'Extension Secrets' table → Key column.
    Long base64 string (letters, digits, +, /, =).
    NOT the 'Twitch API Client Secret' shown mid-page — that one is not used here." \
-    validate_ext_secret
+    validate_ext_secret \
+    hidden
 
 prompt TWITCH_OWNER_USER_ID \
     "Your Twitch User ID (numeric)" \

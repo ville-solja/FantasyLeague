@@ -100,6 +100,11 @@ def _ext_copy(tmp_path):
     return dest
 
 
+# Issue #164: package.sh bakes the allowed backend origins into the zip and refuses
+# to build without one; the production package lists the production host.
+_ORIGIN = ("--ebs-origin", "https://kana-cards.com")
+
+
 def _run_package(ext_dir, *args):
     return subprocess.run(
         ["bash", str(ext_dir / "package.sh"), *args],
@@ -166,7 +171,7 @@ def test_package_sh_valid_version_exits_zero_and_creates_zip(tmp_path):
     """On a clean tmp copy of twitch-extension/, `bash package.sh 9.9.9` exits 0 and creates twitch-extension-9.9.9.zip in the copy only."""
     _require_zip()
     ext = _ext_copy(tmp_path)
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode == 0, result.stdout + result.stderr
     assert (ext / "twitch-extension-9.9.9.zip").is_file()
     assert not (EXT_DIR / "twitch-extension-9.9.9.zip").exists()
@@ -176,7 +181,7 @@ def test_package_sh_success_prints_asset_hosting_paths(tmp_path):
     """On success, package.sh prints the exact console Asset Hosting paths: panel.html, config.html, live_config.html."""
     _require_zip()
     ext = _ext_copy(tmp_path)
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode == 0, result.stdout + result.stderr
     assert re.search(r"Panel Viewer Path:\s+panel\.html\b", result.stdout)
     assert re.search(r"Config Path:\s+config\.html\b", result.stdout)
@@ -187,7 +192,7 @@ def test_package_sh_success_prints_fetch_allowlist_entry(tmp_path):
     """On success, package.sh prints the URL Fetching allowlist entry https://kana-cards.com."""
     _require_zip()
     ext = _ext_copy(tmp_path)
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode == 0, result.stdout + result.stderr
     lines = [line.strip() for line in result.stdout.splitlines()]
     heading = next(i for i, line in enumerate(lines)
@@ -209,7 +214,7 @@ def test_package_sh_existing_zip_exits_nonzero(tmp_path):
     ext = _ext_copy(tmp_path)
     existing = ext / "twitch-extension-9.9.9.zip"
     existing.write_bytes(b"previously submitted")
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode != 0
     assert "already exists" in result.stdout + result.stderr
     assert existing.read_bytes() == b"previously submitted"
@@ -220,7 +225,7 @@ def test_package_sh_missing_local_reference_exits_nonzero_naming_file(tmp_path):
     ext = _ext_copy(tmp_path)
     panel = ext / "panel.html"
     panel.write_text(panel.read_text().replace("</body>", '<script src="missing.js"></script>\n</body>'))
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode != 0
     assert "missing.js" in result.stdout + result.stderr
     assert not (ext / "twitch-extension-9.9.9.zip").exists()
@@ -236,7 +241,7 @@ def test_package_sh_absolute_urls_not_treated_as_missing(tmp_path):
         '<script src="//cdn.example.com/lib.js"></script>\n'
         '<link rel="stylesheet" href="http://example.com/x.css">\n</body>',
     ))
-    result = _run_package(ext, "9.9.9")
+    result = _run_package(ext, "9.9.9", *_ORIGIN)
     assert result.returncode == 0, result.stdout + result.stderr
     assert TWITCH_HELPER_URL in panel.read_text()
     assert "extension-files.twitch.tv" not in result.stdout + result.stderr

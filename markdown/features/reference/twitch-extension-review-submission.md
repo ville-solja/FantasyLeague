@@ -8,7 +8,8 @@ needs to load for a reviewer, plus the fixes made to satisfy
 in the process. See [Review history](#review-history) for past rejections.
 
 **Package to submit:** `twitch-extension-1.2.0.zip` (or later), built with
-`bash twitch-extension/package.sh 1.2.0`. Version `1.1.5` was the first with the XSS fix below;
+`bash twitch-extension/package.sh 1.2.0 --ebs-origin https://kana-cards.com` (since issue #164 the
+package must name the backend origins the panel may call). Version `1.1.5` was the first with the XSS fix below;
 `1.1.6` adds the chat disclosure copy required by the 2026-09 review; `1.1.7` adds the Live /
 Stats pending labels for early MVP selection (issue #139); `1.2.0` makes the panel a complete
 game on Twitch with no website login (policy 4.5, issue #157). Do not resubmit `1.1.7` or

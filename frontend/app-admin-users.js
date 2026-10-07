@@ -244,7 +244,7 @@ async function deleteTag(tagId) {
 
 async function toggleTester(userId) {
   try {
-    const res = await fetch(`${API}/users/${userId}/toggle-tester`, { method: "POST" });
+    const res = await adminFetch(`${API}/users/${userId}/toggle-tester`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", `${data.username} ${data.is_tester ? "marked as tester" : "unmarked as tester"}`);
@@ -316,14 +316,15 @@ async function loadCodes() {
     const rows = await res.json();
     if (!res.ok) return setStatus("codesStatus", rows.detail, false);
     if (!rows.length) {
-      document.getElementById("codesBody").innerHTML = "<tr><td colspan='4' style='color:#444'>No codes yet</td></tr>";
+      document.getElementById("codesBody").innerHTML = "<tr><td colspan='5' style='color:#444'>No codes yet</td></tr>";
       return;
     }
     document.getElementById("codesBody").innerHTML = rows.map(c => `
       <tr data-code-id="${c.id}">
-        <td><code>${c.code}</code></td>
+        <td><code>${_escHtml(c.code)}</code></td>
         <td>${c.token_amount}</td>
-        <td>${c.redemptions}</td>
+        <td>${c.redemptions}${c.max_redemptions ? " / " + c.max_redemptions : ""}</td>
+        <td>${_codeLimitsText(c)}</td>
         <td><button class="ghost" style="font-size:0.8rem;" onclick="deleteCode(${c.id})">Delete</button></td>
       </tr>`).join("");
     setStatus("codesStatus", "");
@@ -332,17 +333,43 @@ async function loadCodes() {
   }
 }
 
+// Issue #167: a code can expire and can cap its total redemptions.
+function _codeLimitsText(c) {
+  const parts = [];
+  if (c.expires_at) {
+    const expired = c.expires_at * 1000 <= Date.now();
+    parts.push((expired ? "Expired " : "Expires ") + new Date(c.expires_at * 1000).toLocaleString());
+  }
+  if (c.max_redemptions) parts.push(`Max ${c.max_redemptions} uses`);
+  return parts.length ? _escHtml(parts.join(" · ")) : "—";
+}
+
 async function createCode() {
   const code   = document.getElementById("newCodeInput").value.trim().toUpperCase();
   const amount = parseInt(document.getElementById("newCodeAmount").value);
+  const maxUsesRaw = document.getElementById("newCodeMaxUses").value.trim();
+  const expiresRaw = document.getElementById("newCodeExpires").value;
   if (!code)        return setStatus("codesStatus", "Enter a code name", false);
   if (!amount || amount < 1) return setStatus("codesStatus", "Enter a token amount ≥ 1", false);
+  const body = {code, token_amount: amount};
+  if (maxUsesRaw) {
+    const maxUses = parseInt(maxUsesRaw);
+    if (!maxUses || maxUses < 1) return setStatus("codesStatus", "Max uses must be 1 or more", false);
+    body.max_redemptions = maxUses;
+  }
+  if (expiresRaw) {
+    const ts = Math.floor(new Date(expiresRaw).getTime() / 1000);
+    if (!ts) return setStatus("codesStatus", "Enter a valid expiry", false);
+    body.expires_at = ts;
+  }
   try {
-    const res = await fetch(`${API}/codes`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code, token_amount: amount}) });
+    const res = await adminFetch(`${API}/codes`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) return setStatus("codesStatus", data.detail, false);
     document.getElementById("newCodeInput").value  = "";
     document.getElementById("newCodeAmount").value = "";
+    document.getElementById("newCodeMaxUses").value = "";
+    document.getElementById("newCodeExpires").value = "";
     setStatus("codesStatus", `Code ${data.code} created`);
     loadCodes();
   } catch (e) {
@@ -358,7 +385,7 @@ function deleteCode(codeId) {
   const confirm = document.createElement("tr");
   confirm.id = `deleteConfirm_${codeId}`;
   confirm.className = "delete-confirm-row";
-  confirm.innerHTML = `<td colspan="4" style="padding:8px 10px;">
+  confirm.innerHTML = `<td colspan="5" style="padding:8px 10px;">
     <span class="delete-confirm-msg">Delete this code?</span>
     <span style="margin-left:12px;display:inline-flex;gap:6px;">
       <button class="danger" style="padding:3px 10px;" onclick="_confirmDeleteCode(${codeId})">Delete</button>
@@ -370,7 +397,7 @@ function deleteCode(codeId) {
 
 async function _confirmDeleteCode(codeId) {
   try {
-    const res = await fetch(`${API}/codes/${codeId}`, { method: "DELETE" });
+    const res = await adminFetch(`${API}/codes/${codeId}`, { method: "DELETE" });
     if (!res.ok) { const d = await res.json(); return setStatus("codesStatus", d.detail, false); }
     setStatus("codesStatus", "Code deleted");
     loadCodes();
