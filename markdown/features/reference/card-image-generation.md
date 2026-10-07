@@ -31,7 +31,7 @@ The image is built in five layers, in order:
 
 2. **Player avatar** — the player's OpenDota avatar image is downloaded, resized to a 350 × 350 px square (radius 175), circle-cropped with an alpha mask, and pasted onto the base centred at `(298, 375)`. If the avatar URL is unavailable or the download fails, the slot is left as the dark base colour.
 
-3. **Team logo** — the team logo is loaded from the local Dotabuff PNG cache first (`assets/dotabuff_league_logos/<team-name>.png`), falling back to the HTTP `logo_url` stored on the team record. It is resized to 104 × 104 px (radius 52), circle-cropped, and pasted at `(444, 258)`. If neither source resolves, a solid black circular placeholder (`_blank_logo_placeholder`) is pasted in its place instead, so the badge slot is never left unpainted.
+3. **Team logo** — the team logo is loaded from the local Dotabuff PNG cache first (`assets/dotabuff_league_logos/<team-name>.png`), falling back to the HTTP `logo_url` stored on the team record, which is fetched only when `safe_logo_url` passes it (https on a `LOGO_HOST_ALLOWLIST` host, Steam's CDNs by default; see [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md)). It is resized to 104 × 104 px (radius 52), circle-cropped, and pasted at `(444, 258)`. If neither source resolves, a solid black circular placeholder (`_blank_logo_placeholder`) is pasted in its place instead, so the badge slot is never left unpainted.
 
 4. **Template overlay** — the rarity template PNG is alpha-composited on top of the base, covering the avatar/logo layers with its frame. This is what provides the rarity border, name plates, and decorative chrome.
 
@@ -104,7 +104,7 @@ Lines are sorted alphabetically by stat key and stacked from `y=620` downward. I
 The generator prefers locally cached Dotabuff logos over live HTTP fetches for reliability and speed:
 
 1. **Local file** — `assets/dotabuff_league_logos/<team-name>.png` (downloaded during ingest; see `ingest.md`)
-2. **HTTP fallback** — `team.logo_url` stored in the database (Dotabuff CDN URL)
+2. **HTTP fallback** — `team.logo_url` stored in the database (an OpenDota team logo URL on a Steam CDN), fetched only when `safe_logo_url` passes it (`LOGO_HOST_ALLOWLIST`, issue #171; see [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md)). A URL on any other host is never requested
 
 Both are circle-cropped before compositing. If neither source is available (e.g. pre-season, before a team's first match has been ingested and its logo scraped/set), `_blank_logo_placeholder()` supplies a solid black circle of the same size instead, so the slot looks intentional rather than broken. Since the card image is generated fresh on every request with no server-side caching, the placeholder is automatically replaced by the real logo on the very next request once one becomes resolvable — no cache to invalidate.
 

@@ -1,16 +1,37 @@
+import os
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
 import sessions
 from database import get_db
-from deps import _audit, get_current_user
+from deps import _audit, get_current_user, is_admin_fresh
 from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, TagDefinition
 from scoring import display_points
-from auth import (check_password_bytes, check_username, hash_password, username_policy_error,
-                  verify_password)
+from auth import (check_password_bytes, check_reserved, check_username, hash_password,
+                  username_taken, verify_password)
 from routers.auth import send_password_changed_notice
 
 router = APIRouter()
+
+
+def _rename_cooldown_seconds() -> int:
+    """USERNAME_CHANGE_COOLDOWN_DAYS (default 7, 0 = off), read at call time (issue #169)."""
+    try:
+        days = float(os.getenv("USERNAME_CHANGE_COOLDOWN_DAYS", "7"))
+    except ValueError:
+        days = 7.0
+    return max(0, int(days * 86400))
+
+
+def rename_available_at(user, now: int | None = None) -> int | None:
+    """Unix time the next rename becomes possible, or None when one is allowed now."""
+    cooldown = _rename_cooldown_seconds()
+    if not cooldown or not user.username_changed_at:
+        return None
+    available = user.username_changed_at + cooldown
+    return available if available > (now if now is not None else int(time.time())) else None
 
 
 class UpdateUsernameBody(BaseModel):
@@ -38,7 +59,13 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
             "tokens": user.tokens if user.tokens is not None else 0,
-            "must_change_password": bool(user.must_change_password)}
+            "must_change_password": bool(user.must_change_password),
+            # Issue #150: booleans only; the Steam id itself is never returned.
+            "steam_linked": bool(user.steam_id),
+            "has_password": bool(user.password_hash),
+            "is_demo": bool(user.is_demo),
+            # Issue #169: when the next rename is possible (null = now, or no cooldown).
+            "username_change_available_at": rename_available_at(user)}
 
 
 @router.get("/profile/{user_id}")
@@ -48,21 +75,21 @@ def get_profile(user_id: int, db=Depends(get_db),
     # Twitch viewer soft accounts (issue #157) have no public profile.
     if not user or user.account_type == "twitch":
         raise HTTPException(status_code=404, detail="User not found")
-    # Issue #169: the linked player id is self-reported, so another user's profile
-    # shows only the in-game name, marked self-reported: no Steam-identifying id and
-    # no avatar to borrow. The owner and admins see everything.
-    full_view = current_user["user_id"] == user.id or bool(current_user.get("is_admin"))
-    result = {"id": user.id, "username": user.username,
-              "player_id": user.player_id if full_view else None,
-              "player_name": None, "player_avatar_url": None,
-              "player_self_reported": bool(user.player_id),
-              "is_admin": bool(user.is_admin),
+    # Issue #169: the numeric player id (a Steam32 id) is shown only to the player and to
+    # admins; others see the name, and the avatar only for a Steam-verified id.
+    privileged = (user.id == current_user["user_id"]
+                  or is_admin_fresh(db, current_user["user_id"]))
+    verified = bool(user.steam_id and user.player_id)
+    result = {"id": user.id, "username": user.username, "is_admin": bool(user.is_admin),
+              "player_name": None, "player_avatar_url": None, "player_verified": verified,
               "twitch_linked": bool(user.twitch_user_id)}
+    if privileged:
+        result["player_id"] = user.player_id
     if user.player_id:
         player = db.get(Player, user.player_id)
         if player:
             result["player_name"] = player.name
-            if full_view:
+            if privileged or verified:
                 result["player_avatar_url"] = player.avatar_url
     tag_rows = (
         db.query(UserTag, TagDefinition)
@@ -93,17 +120,29 @@ def update_username(body: UpdateUsernameBody, db=Depends(get_db),
     username = body.username.strip()
     if not username:
         raise HTTPException(status_code=422, detail="Username cannot be empty")
-    if username != user.username:
-        policy_error = username_policy_error(db, username, exclude_user_id=user_id)
-        if policy_error:
-            raise HTTPException(status_code=policy_error[0], detail=policy_error[1])
+    # Issue #169: keeping the name or changing only its letter case is not a rename:
+    # no reserved-word check (existing names stay usable) and no cooldown.
+    is_rename = username.lower() != (user.username or "").lower()
+    if is_rename:
+        check_reserved(username)
+    if username_taken(db, username, exclude_user_id=user_id):
+        raise HTTPException(status_code=409, detail="Username already taken")
+    now = int(time.time())
+    if is_rename:
+        available_at = rename_available_at(user, now)
+        if available_at is not None:
+            date = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(available_at))
+            raise HTTPException(status_code=429,
+                                detail=f"You can change your username again on {date}",
+                                headers={"Retry-After": str(available_at - now)})
+        user.username_changed_at = now
     old_username = user.username
     user.username = username
     if old_username != username:
         _audit(db, "username_changed", actor_id=user.id, actor_username=username,
                detail=f"old={old_username} new={username}")
     db.commit()
-    return {"username": username}
+    return {"username": username, "username_change_available_at": rename_available_at(user, now)}
 
 
 @router.put("/profile/player-id")
@@ -112,6 +151,9 @@ def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user:
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.steam_id:
+        # Issue #150: a linked Steam account sets the verified player id.
+        raise HTTPException(status_code=409, detail="Your player id is verified through Steam")
     user.player_id = body.player_id
     db.commit()
     result = {"player_id": body.player_id, "player_name": None, "player_avatar_url": None}

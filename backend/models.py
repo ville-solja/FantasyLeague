@@ -121,6 +121,17 @@ class User(Base):
     # and the soft account waiting to be merged (its Twitch id moved here at connect).
     merged_soft_account_at = Column(Integer, nullable=True)
     pending_merge_user_id = Column(Integer, nullable=True)
+    # Issue #150: verified Steam64 id from Steam sign-in (never returned by the API), and
+    # the marker of throwaway demo accounts (POST /admin/demo/seed-accounts), which can
+    # never become admins or link Steam.
+    steam_id = Column(String(17), nullable=True, unique=True)
+    is_demo = Column(Boolean, nullable=False, default=False, server_default="0")
+    # When SEED_ADMIN_STEAM_IDS was first applied to this account (security review
+    # after #150): the list promotes each account at most once, so a later in-app
+    # demotion sticks even while the id is still listed.
+    admin_seed_applied_at = Column(Integer, nullable=True)
+    # Issue #169: Unix time of the last real rename (rename cooldown); NULL = never renamed.
+    username_changed_at = Column(Integer, nullable=True)
 
     @property
     def is_soft(self) -> bool:
@@ -281,6 +292,40 @@ class TwitchOAuthState(Base):
     code_verifier = Column(String, nullable=True)   # PKCE verifier (NULL when PKCE is off)
     expires_at    = Column(Integer, nullable=False)
     used_at       = Column(Integer, nullable=True)
+
+
+class SteamLoginState(Base):
+    """One Steam sign-in attempt started by GET /auth/steam/start (issue #150). Only
+    sha256(state) is stored; the first callback that presents it uses it up, and it
+    expires after 10 minutes. `user_id` is set for link and re-auth attempts."""
+    __tablename__ = "steam_login_states"
+
+    state_hash = Column(String(64), primary_key=True)
+    purpose    = Column(String(16), nullable=False)    # login | link | reauth
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=True)
+    return_tab = Column(String(16), nullable=True)     # reauth: profile | admin
+    expires_at = Column(Integer, nullable=False)
+    used_at    = Column(Integer, nullable=True)
+
+
+class SteamOpenIdNonce(Base):
+    """sha256 of each accepted openid.response_nonce (issue #150), so an assertion
+    cannot be replayed. Pruned after a day by the daily clean-up."""
+    __tablename__ = "steam_openid_nonces"
+
+    nonce_hash = Column(String(64), primary_key=True)
+    created_at = Column(Integer, nullable=False)
+
+
+class SteamPendingSignup(Base):
+    """A verified Steam id waiting for the player to choose a display name (issue
+    #150). Only sha256 of the cookie token is stored; valid for 15 minutes, single use."""
+    __tablename__ = "steam_pending_signups"
+
+    token_hash = Column(String(64), primary_key=True)
+    steam_id   = Column(String(17), nullable=False)
+    expires_at = Column(Integer, nullable=False)
+    used_at    = Column(Integer, nullable=True)
 
 
 class TwitchMergeLog(Base):

@@ -24,10 +24,12 @@ async function loadSeasonArchives() {
 async function endSeason() {
   const label = document.getElementById("endSeasonLabel").value.trim();
   if (!label) return setStatus("seasonLifecycleStatus", "Enter a season label", false);
+  const confirmText = await typedConfirm("season_end", `Archive the current standings as "${label}".`);
+  if (confirmText === null) return;
   try {
     const res = await adminFetch(`${API}/admin/season/end`, {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({season_label: label}),
+      body: JSON.stringify({season_label: label, confirm: confirmText}),
     });
     const data = await res.json();
     if (!res.ok) return setStatus("seasonLifecycleStatus", data.detail, false);
@@ -51,14 +53,14 @@ function closeSeasonResetConfirm() {
 
 async function confirmSeasonReset() {
   const typed = document.getElementById("seasonResetConfirmInput").value.trim();
-  if (typed !== "RESET") {
-    document.getElementById("seasonResetModalStatus").textContent = 'Type "RESET" to confirm.';
+  if (typed.toUpperCase() !== ADMIN_CONFIRM_PHRASES.season_reset) {
+    document.getElementById("seasonResetModalStatus").textContent = `Type "${ADMIN_CONFIRM_PHRASES.season_reset}" to confirm.`;
     return;
   }
   try {
     const res = await adminFetch(`${API}/admin/season/reset`, {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({force: false}),
+      body: JSON.stringify({force: false, confirm: typed}),
     });
     const data = await res.json();
     if (!res.ok) {

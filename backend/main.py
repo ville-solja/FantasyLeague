@@ -20,6 +20,8 @@ from starlette.requests import Request
 from twitch import router as twitch_router
 import twitch as twitch_module
 import twitch_oauth
+import steam_openid
+import login_mode
 import card_points
 import database
 import sessions
@@ -60,7 +62,7 @@ logger = logging.getLogger(__name__)
 # root logger to DEBUG; a logger's own level wins over the root's.
 logging.getLogger("urllib3").setLevel(logging.INFO)
 # Issue #160: the Twitch sign-in callback URL carries a one-time code and state; keep
-# them out of uvicorn's access log.
+# them out of uvicorn's access log. Issue #150: the same for the Steam OpenID assertion.
 logging.getLogger("uvicorn.access").addFilter(twitch_oauth.RedactSignInQuery())
 
 _stop_event = threading.Event()
@@ -94,6 +96,10 @@ _last_soft_account_purge     = 0.0
 # days are deleted once a day by the same loop.
 _TWITCH_OAUTH_CLEANUP_INTERVAL = 86400
 _last_twitch_oauth_cleanup     = 0.0
+# Issue #150: used or expired Steam sign-in attempts and pending sign-ups, and OpenID
+# nonces older than a day, are deleted once a day by the same loop.
+_STEAM_CLEANUP_INTERVAL = 86400
+_last_steam_cleanup     = 0.0
 
 
 def _week_maintenance_loop():
@@ -106,9 +112,11 @@ def _week_maintenance_loop():
     this loop no longer auto-generates them. Once a day it also deletes expired
     login sessions (issue #117), Twitch soft accounts idle for
     TWITCH_SOFT_ACCOUNT_RETENTION_DAYS (issue #157), and expired Twitch sign-in
-    attempts and merge undo-log rows older than 30 days (issue #160).
+    attempts and merge undo-log rows older than 30 days (issue #160), and Steam
+    sign-in attempts, pending sign-ups and day-old OpenID nonces (issue #150).
     """
     global _last_session_cleanup, _last_soft_account_purge, _last_twitch_oauth_cleanup
+    global _last_steam_cleanup
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
@@ -128,6 +136,9 @@ def _week_maintenance_loop():
                 if time.time() - _last_twitch_oauth_cleanup >= _TWITCH_OAUTH_CLEANUP_INTERVAL:
                     twitch_oauth.cleanup(db, int(time.time()))
                     _last_twitch_oauth_cleanup = time.time()
+                if time.time() - _last_steam_cleanup >= _STEAM_CLEANUP_INTERVAL:
+                    steam_openid.cleanup(db, int(time.time()))
+                    _last_steam_cleanup = time.time()
             finally:
                 db.close()
         except Exception:
@@ -371,6 +382,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     run_migrations(engine)
     seed_users()
+    login_mode.log_startup()
     seed_admin_from_env()
     seed_weights()
     _ensure_card_points_current()
@@ -552,27 +564,24 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(OriginCheckMiddleware)
-# Only the Twitch extension iframe (https://<client-id>.ext-twitch.tv) calls
-# the API cross-origin; the main site is same-origin and needs no CORS. All
-# /twitch/* endpoints authenticate via JWT in the Authorization header, not
-# cookies, so allow_credentials stays False. CORS_EXTRA_ORIGINS adds origins
-# such as http://localhost:8080 for Twitch Local Test.
-def _twitch_extension_origin_regex() -> str:
-    """CORS origin pattern for the extension iframe: only our extension's origin when
-    TWITCH_EXTENSION_CLIENT_ID is set (issue #171), else any extension origin."""
-    client_id = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "").strip().lower()
-    if client_id and re.fullmatch(r"[a-z0-9]+", client_id):
-        return rf"^https://{re.escape(client_id)}\.ext-twitch\.tv$"
-    return r"^https://[a-z0-9]+\.ext-twitch\.tv$"
-
-
+# Only our Twitch extension iframe (https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv)
+# calls the API cross-origin; the main site is same-origin and needs no CORS.
+# Issue #171: other extensions' origins are refused, and without a client id no
+# ext-twitch.tv origin is allowed. All /twitch/* endpoints authenticate via JWT in
+# the Authorization header, not cookies, so allow_credentials stays False.
+# CORS_EXTRA_ORIGINS adds origins such as http://localhost:8080 for Twitch Local Test.
 _cors_extra_origins = [
     o.strip() for o in os.getenv("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()
 ]
+_ext_client_id = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "").strip()
+_ext_origin_regex = (rf"^https://{re.escape(_ext_client_id)}\.ext-twitch\.tv$"
+                     if _ext_client_id else None)
+if not _ext_client_id:
+    logger.warning("TWITCH_EXTENSION_CLIENT_ID unset: no Twitch extension origin is allowed by CORS")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_extra_origins,
-    allow_origin_regex=_twitch_extension_origin_regex(),
+    allow_origin_regex=_ext_origin_regex,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
@@ -604,6 +613,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 app.include_router(twitch_router)
 app.include_router(twitch_oauth.router)
+app.include_router(steam_openid.router)
 app.include_router(players_router.router)
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
@@ -630,6 +640,14 @@ def _twitch_unknown_route(rest: str):
     """Unknown /twitch/* paths, such as the retired POST /twitch/link-code, POST
     /twitch/link and GET /twitch/status (issue #160), answer 404 rather than the
     static frontend mount's 405 for non-GET methods."""
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.api_route("/auth/steam/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+               include_in_schema=False)
+def _steam_unknown_route(rest: str):
+    """Unknown /auth/steam/* paths (and every Steam route in password mode, issue #150)
+    answer 404 rather than the static frontend mount's 405 for non-GET methods."""
     raise HTTPException(status_code=404, detail="Not Found")
 
 
@@ -663,6 +681,8 @@ def get_config(db=Depends(get_db)):
         "demo_mode": os.getenv("DEMO_MODE", "").lower() == "true",
         # Issue #144 — automatic first-visit guided tour; off unless exactly "true".
         "tour_autostart": os.getenv("GUIDED_TOUR_AUTOSTART", "false").strip().lower() == "true",
+        # Issue #150 — password | both | steam_signup; the login page and Profile follow it.
+        "login_method": login_mode.current(),
     }
 
 

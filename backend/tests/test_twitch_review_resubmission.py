@@ -305,12 +305,12 @@ def test_listing_description_has_twitch_chat_paragraph():
 
 
 def test_listing_description_states_message_contents():
-    """The chat paragraph states the message contents: MVP player name and how many viewers received a token (no viewer names since issue #157), or that no tokens were dropped when no eligible viewers were watching (issue #171: eligible = joined with the identity shared)."""
+    """The chat paragraph states the message contents: MVP player name and how many viewers received a token (no viewer names since issue #157), or that no tokens were dropped when no joined viewers were watching."""
     para = _chat_paragraph()
     assert "Match MVP: PlayerName!" in para
     assert "viewers received a token" in para
     assert "no viewer names" in para.lower()
-    assert "no eligible" in para.lower() and "identity shared" in para.lower()
+    assert "no joined viewers" in para.lower()
 
 
 def test_listing_description_states_no_chat_read_store_or_repeat_drop():

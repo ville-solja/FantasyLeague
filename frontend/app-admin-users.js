@@ -13,8 +13,44 @@ async function loadUsers() {
     _cachedUsers = rows;
     _renderUsers(rows);
     setStatus("usersStatus", "");
+    loadPlayerIdClaims();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
+  }
+}
+
+// Issue #150: self-reported player ids cleared because a Steam-verified account has the id.
+async function loadPlayerIdClaims() {
+  const tbody = document.getElementById("playerIdClaimsBody");
+  if (!tbody) return;
+  try {
+    const res = await fetch(`${API}/admin/player-id-claims`);
+    const rows = await res.json();
+    if (!res.ok) return setStatus("playerIdClaimsStatus", rows.detail, false);
+    tbody.replaceChildren();
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.textContent = "None";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      [r.superseded_username || `user ${r.superseded_user_id}`,
+       r.verified_username || `user ${r.verified_user_id}`,
+       String(r.player_id),
+       new Date(Number(r.timestamp) * 1000).toLocaleString()].forEach(text => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    setStatus("playerIdClaimsStatus", e.message, false);
   }
 }
 
@@ -39,9 +75,11 @@ function _renderTwitchViewerRow(u) {
 
 async function deleteTwitchViewer(userId) {
   const user = _cachedUsers.find(u => u.id === userId);
-  if (!confirm(`Delete ${user ? user.username : "this Twitch viewer"} and all their cards? This cannot be undone.`)) return;
+  const confirmText = await typedConfirm("delete_user",
+    `Delete ${user ? user.username : "this Twitch viewer"} and all their cards? This cannot be undone.`);
+  if (confirmText === null) return;
   try {
-    const res = await adminFetch(`${API}/admin/users/${userId}`, { method: "DELETE" });
+    const res = await adminFetch(`${API}/admin/users/${userId}?confirm=${encodeURIComponent(confirmText)}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", "Twitch viewer deleted");
@@ -217,8 +255,13 @@ async function toggleTester(userId) {
 }
 
 async function toggleAdmin(userId) {
+  const user = _cachedUsers.find(u => u.id === userId);
+  const name = user ? user.username : `user ${userId}`;
+  const confirmText = await typedConfirm("toggle_admin",
+    user && user.is_admin ? `Demote ${name} from admin.` : `Promote ${name} to admin.`);
+  if (confirmText === null) return;
   try {
-    const res = await adminFetch(`${API}/users/${userId}/toggle-admin`, { method: "POST" });
+    const res = await adminFetch(`${API}/users/${userId}/toggle-admin?confirm=${encodeURIComponent(confirmText)}`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) return setStatus("usersStatus", data.detail, false);
     setStatus("usersStatus", `${data.username} ${data.is_admin ? "promoted to admin" : "demoted from admin"}`);
@@ -248,10 +291,14 @@ async function grantTokens(targetId) {
   const input = document.getElementById(`grant_${targetId}`);
   const amount = parseInt(input.value);
   if (!amount || amount < 1) return setStatus("usersStatus", "Enter a valid amount", false);
+  const user = _cachedUsers.find(u => u.id === targetId);
+  const confirmText = await typedConfirm("grant_tokens",
+    `Grant ${amount} ${_tokenName} to ${user ? user.username : `user ${targetId}`}.`);
+  if (confirmText === null) return;
   const btn = input.nextElementSibling;
   if (btn) btn.disabled = true;
   try {
-    const res = await adminFetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target_user_id: targetId, amount}) });
+    const res = await adminFetch(`${API}/grant-tokens`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target_user_id: targetId, amount, confirm: confirmText}) });
     const data = await res.json();
     setStatus("usersStatus", res.ok ? `${data.username} now has ${data.tokens} ${_tokenName}` : data.detail, res.ok);
     if (res.ok) loadUsers();

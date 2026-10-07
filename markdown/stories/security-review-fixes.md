@@ -104,7 +104,7 @@ As an admin, I want new usernames limited to plain letters, digits, underscores 
 As the operator, I want cross-origin API access limited to the Twitch extension so that scanners stop flagging a wildcard CORS policy, while the extension keeps working.
 
 **Acceptance criteria**
-- CORS allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$`, plus any comma-separated origins in `CORS_EXTRA_ORIGINS`
+- CORS allows origins matching `^https://[a-z0-9]+\.ext-twitch\.tv$`, plus any comma-separated origins in `CORS_EXTRA_ORIGINS` (narrowed by #171 to our own extension, `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`; see `twitch.md`, Twitch Panel Abuse Limits)
 - `allow_credentials` stays `False`
 - A preflight from `https://abc123.ext-twitch.tv` succeeds, and one from `https://example.com` gets no `Access-Control-Allow-Origin` header
 - The main site keeps working, because it is same-origin and needs no CORS
@@ -127,7 +127,7 @@ As the operator, I want production to refuse insecure dev shortcuts and CI to fl
 
 ## Twitch, Steam and Account Hardening (issue #163)
 
-Stories from the 2026-10 security review of the Twitch and Steam integrations and social-engineering risks (issue #163, sub-issues #164–#171). The plan is `markdown/plans/plan-issue-163-twitch-steam-account-hardening.md`.
+Stories from the 2026-10 security review of the Twitch and Steam integrations and social-engineering risks (issue #163, sub-issues #164–#168 and #170; #169 and #171 shipped with PR 174, see `impersonation-hardening` and `twitch-panel-abuse-limits` stories). The plan is `markdown/plans/plan-issue-163-twitch-steam-account-hardening.md`.
 
 ### Panel Talks Only to the Approved Backend
 **User story**
@@ -179,23 +179,3 @@ As a player, I want my password reset and login to resist other people so that n
 - The database stores only a SHA-256 hash of a reset token; the emailed link and code still work
 - Failed logins lock out a username only from the IP they came from; a much higher per-username ceiling applies across all IPs
 - A completed password reset clears the lockout for that username
-
-### Harder to Impersonate Players and Admins
-**User story**
-As a player, I want to tell real admins and real league players apart from look-alikes so that I am not fooled by an impersonator.
-
-**Acceptance criteria**
-- Registering or renaming to a name that differs from an existing one only by letter case is refused
-- Names containing a word from `RESERVED_USERNAME_WORDS` are refused for new registrations and renames; existing names keep working
-- Admins carry a visible badge on the leaderboard and on profiles
-- Another user's profile never shows a numeric player id or the claimed player's avatar, and marks the linked player as self-reported
-
-### Token Drops Need the Identity Share
-**User story**
-As the league operator, I want only viewers who shared their Twitch identity to win token drops so that free alt accounts cannot farm tokens.
-
-**Acceptance criteria**
-- The drop pool includes only joined viewers whose account has a Twitch account id from the identity share
-- The panel tells viewers that sharing their identity makes them eligible for drops
-- Heartbeats from logged-out viewers write nothing, and heartbeats use the per-viewer rate limit
-- When `TWITCH_EXTENSION_CLIENT_ID` is set, CORS accepts only that extension's origin

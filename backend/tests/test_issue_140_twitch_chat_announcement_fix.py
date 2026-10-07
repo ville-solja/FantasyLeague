@@ -123,8 +123,7 @@ def _seed_match(db, match_id, team1_id, team2_id, start_time, player_ids=(), wit
 
 def _add_viewer(db):
     from models import TwitchPresence, User
-    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer",
-                twitch_account_id="9050"))  # identity shared (#171)
+    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer"))
     db.add(TwitchPresence(twitch_user_id="Uviewer", channel_id=_CHANNEL, seen_at=int(time.time())))
     db.commit()
 
@@ -249,7 +248,7 @@ def test_mvp_chat_text_all_winners_fit_within_280(monkeypatch):
     assert twitch._mvp_chat_text("PlayerOne", 1, False) == "Match MVP: PlayerOne! 1 viewer received a token."
 
     empty = twitch._mvp_chat_text("PlayerOne", 0, True)
-    assert empty == "Match MVP: PlayerOne! No tokens were dropped: no eligible viewers were watching."
+    assert empty == "Match MVP: PlayerOne! No tokens were dropped: no joined viewers were watching."
     assert twitch._mvp_chat_text("PlayerOne", 0, False) == "Match MVP: PlayerOne!"
 
 
@@ -295,7 +294,7 @@ def test_set_mvp_large_token_drop_chat_message_within_280(db, twitch_prod_env, p
     now = int(time.time())
     for i in range(20):
         db.add(User(id=100 + i, username=f"viewer{i:02d}".ljust(25, "x"), tokens=0,
-                    twitch_user_id=f"U{i:03d}", twitch_account_id=str(8000 + i)))  # identity shared (#171)
+                    twitch_user_id=f"U{i:03d}"))
         db.add(TwitchPresence(twitch_user_id=f"U{i:03d}", channel_id=_CHANNEL, seen_at=now))
     db.commit()
     chat = []

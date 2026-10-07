@@ -17,7 +17,7 @@ Checked at planning time and ruled out:
 
 - **Zip layout.** `twitch-extension-1.1.5.zip` is flat, with every referenced local asset at the root.
 - **Backend routing.** `https://kana-cards.com/twitch/*` answers 422 without auth, not 404.
-- **CORS.** A preflight from an `*.ext-twitch.tv` origin succeeds.
+- **CORS.** A preflight from an `*.ext-twitch.tv` origin succeeds. (Since #171 only `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` is allowed.)
 - **Helper script and legal pages.** All return 200.
 
 Remaining suspects are all dev-console settings: the Asset Hosting viewer paths, the Allowlist for URL Fetching Domains, and whether the version was in Hosted Test when submitted.

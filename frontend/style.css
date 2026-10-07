@@ -375,6 +375,35 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   line-height: 1.3;
 }
 
+/* Issue #169: ADMIN badge, set only from the server's is_admin. Outlined in the accent
+   colour so it never looks like the filled flame tag chips an admin can grant. */
+.admin-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--accent-ghost);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+/* Verified / Self-reported label next to a linked player's name. */
+.player-source {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.player-source:empty { display: none; }
+.player-source-verified { color: var(--accent); }
+
 /* ============================================================
    DECK SUMMARY
    ============================================================ */
@@ -2287,18 +2316,32 @@ body.roster-dragging * { cursor: grabbing !important; }
   margin-bottom: 8px;
 }
 
-/* Issue #169: server-set admin badge on leaderboard rows. */
-.lb-admin-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid currentColor;
-  border-radius: var(--r-xs);
-  font-family: "Big Shoulders Text", sans-serif;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+/* Login and Profile › Steam (issue #150) */
+.steam-login-block {
+  margin-top: 16px;
+}
+.steam-login-divider {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider);
   text-transform: uppercase;
-  vertical-align: middle;
-  opacity: 0.85;
+  color: var(--fg-muted);
+  text-align: center;
+  margin: 0 0 10px;
+}
+.steam-login-note {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  color: var(--fg-muted);
+  text-align: center;
+  margin: 8px 0 0;
+}
+.steam-reminder {
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  font-size: var(--fs-sm);
+  color: var(--fg);
+  margin-bottom: 12px;
 }

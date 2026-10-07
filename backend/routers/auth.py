@@ -9,13 +9,14 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
+import login_mode
 import sessions
 from database import get_db
 from deps import _audit, get_current_user
 from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
                     NotificationDismissal, PasswordResetToken, UserSession)
-from auth import (check_email, check_password_bytes, check_username, hash_password,
-                  username_policy_error, verify_password)
+from auth import (check_email, check_password_bytes, check_reserved, check_username, hash_password,
+                  username_taken, verify_password)
 from email_utils import email_configured, send_email
 from rate_limit import limiter, key_by_user_or_ip
 from slowapi.util import get_remote_address
@@ -183,12 +184,13 @@ def login(request: Request, body: LoginBody, db=Depends(get_db)):
             "tokens": user.tokens if user.tokens is not None else 0}
 
 
-@router.post("/register")
+# Issue #150: closed (404) in steam_signup mode, where new accounts come only from Steam.
+@router.post("/register", dependencies=[Depends(login_mode.require_password_registration)])
 @limiter.limit(RATE_LIMIT_REGISTER)
 def register(request: Request, body: RegisterBody, db=Depends(get_db)):
-    policy_error = username_policy_error(db, body.username)
-    if policy_error:
-        raise HTTPException(status_code=policy_error[0], detail=policy_error[1])
+    check_reserved(body.username)
+    if username_taken(db, body.username):
+        raise HTTPException(status_code=409, detail="Username already taken")
     if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
     initial = int(os.getenv("INITIAL_TOKENS", "5"))
@@ -235,16 +237,21 @@ def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
     admin endpoints (deps.require_recent_reauth) and the player's Twitch connection
     actions (deps.require_recent_player_reauth, issue #160) accept the session for
     ADMIN_REAUTH_SECONDS afterwards. Shares the login lockout and rate limit. Audited
-    as admin_reauth for admins and player_reauth for everyone else."""
+    as admin_reauth for admins and player_reauth for everyone else. An account
+    without a password (created through Steam, issue #150) gets 409 use_steam_reauth."""
     username = current_user["username"]
     action = "admin_reauth" if current_user.get("is_admin") else "player_reauth"
+    user = db.get(User, current_user["user_id"])
+    if user is not None and not user.password_hash:
+        # Issue #150: accounts created through Steam have no password; they confirm
+        # through GET /auth/steam/start?purpose=reauth. Not a failed login.
+        raise HTTPException(status_code=409, detail="use_steam_reauth")
     ip = _client_ip(request)
     if _is_locked_out(username, ip):
         _audit(db, action, actor_id=current_user["user_id"], actor_username=username,
                detail="failed: locked out")
         db.commit()
         raise HTTPException(status_code=429, detail=_LOGIN_LOCKOUT_MESSAGE)
-    user = db.get(User, current_user["user_id"])
     row = sessions.current_row(request, db)
     if row is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -254,7 +261,7 @@ def reauth(request: Request, body: ReauthBody, db=Depends(get_db),
                detail="failed: wrong password")
         db.commit()
         raise HTTPException(status_code=401, detail="Incorrect password")
-    row.reauth_at = sessions._now()
+    sessions.mark_reauth(row)
     _clear_failed_logins(username, ip)
     _audit(db, action, actor_id=user.id, actor_username=username, detail="ok")
     db.commit()

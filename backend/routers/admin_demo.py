@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import clock
-from auth import hash_password
+from auth import check_reserved, hash_password, username_taken
 from database import get_db
 from deps import require_admin, _audit
 from models import User
@@ -95,18 +95,18 @@ def seed_demo_accounts(body: SeedDemoAccountsBody, db=Depends(get_db),
     _require_demo_mode()
     count = body.count or 5
     cards_per_account = body.cards_per_account if body.cards_per_account is not None else 3
-    existing = {u.username for u in db.query(User).filter(User.username.like("demo%")).all()}
     created = []
     n = 1
     while len(created) < count:
         username = f"demo{n}"
         n += 1
-        if username in existing:
+        if username_taken(db, username):
             continue
+        check_reserved(username)
         password = secrets.token_urlsafe(9)
         user = User(username=username, email=f"{username}@demo.local",
                     password_hash=hash_password(password),
-                    tokens=cards_per_account)
+                    tokens=cards_per_account, is_demo=True)
         db.add(user)
         db.flush()
         fake_current_user = {"user_id": user.id, "username": username, "is_admin": False}

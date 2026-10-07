@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from database import get_db
 from match_scoring import counted_roster_entry_sql, scored_match_sql, scored_stat_sql
-from models import Match, SeasonArchive, Weight, UserTag, TagDefinition
+from models import Match, SeasonArchive, User, Weight, UserTag, TagDefinition
 from scoring import display_points, fantasy_score, SCORING_STATS
 
 router = APIRouter()
@@ -43,18 +43,11 @@ def _fetch_tags_for_users(db, user_ids: list[int]) -> dict:
     return result
 
 
-def _admin_ids(db, user_ids: list[int]) -> set[int]:
-    if not user_ids:
-        return set()
-    from models import User
-    return {uid for (uid,) in db.query(User.id).filter(User.id.in_(user_ids), User.is_admin.is_(True)).all()}
-
-
 def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
     """Build leaderboard entries from per-(user, card) stored-point sums.
 
-    rows must have: user_id, username, card_id, card_type, player_name, match_count,
-                    points (the SUM of the card's card_match_points rows in scope)
+    rows must have: user_id, username, is_admin, card_id, card_type, player_name,
+                    match_count, points (the SUM of the card's card_match_points rows in scope)
 
     Cards with no scored matches in scope are left out of the card list. Totals are
     summed unrounded; values are rounded once for the response. scope, when given, is
@@ -62,11 +55,13 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
     """
     totals: dict[int, float] = {}
     usernames: dict[int, str] = {}
+    admins: dict[int, bool] = {}
     cards_by_user: dict[int, list] = {}
 
     for r in rows:
         uid = r.user_id
         usernames[uid] = r.username
+        admins[uid] = bool(r.is_admin)
         totals.setdefault(uid, 0.0)
         cards_by_user.setdefault(uid, [])
         if not r.card_id or not r.match_count:
@@ -84,12 +79,9 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
         cards_by_user[uid].append(chip)
 
     tags_by_user = _fetch_tags_for_users(db, list(totals.keys()))
-    # Issue #169: real admins carry a visible badge so look-alike names stand out.
-    admin_ids = _admin_ids(db, list(totals.keys()))
     return sorted(
-        [{"id": uid, "username": usernames[uid], "points": display_points(totals[uid]),
-          "is_admin": uid in admin_ids,
-          "tags": tags_by_user.get(uid, []),
+        [{"id": uid, "username": usernames[uid], "is_admin": admins[uid],
+          "points": display_points(totals[uid]), "tags": tags_by_user.get(uid, []),
           "cards": sorted(cards_by_user.get(uid, []), key=lambda c: c["points"], reverse=True)}
          for uid in totals],
         key=lambda x: x["points"], reverse=True,
@@ -145,7 +137,7 @@ def leaderboard(db=Depends(get_db)):
 @router.get("/leaderboard/roster")
 def roster_leaderboard(db=Depends(get_db)):
     results = db.execute(text(f"""
-        SELECT u.username,
+        SELECT u.id, u.username, u.is_admin,
                COALESCE(owned.total, 0) as total_cards,
                COALESCE(SUM(pts.total), 0) as roster_value
         FROM users u
@@ -162,23 +154,23 @@ def roster_leaderboard(db=Depends(get_db)):
             GROUP BY player_id
         ) pts ON pts.player_id = c.player_id
         WHERE u.is_tester = 0 AND u.account_type = 'full'
-        GROUP BY u.id, u.username, owned.total
+        GROUP BY u.id, u.username, u.is_admin, owned.total
         ORDER BY roster_value DESC
     """)).fetchall()
-    return [dict(r._mapping) for r in results]
+    return [{**r._mapping, "is_admin": bool(r.is_admin)} for r in results]
 
 
 def compute_season_standings(db) -> list[dict]:
     """Compute the live season standings (one dict per non-tester user).
 
-    Returns [{"id", "username", "points", "tags", "cards"}, ...] sorted by
+    Returns [{"id", "username", "is_admin", "points", "tags", "cards"}, ...] sorted by
     points descending. Shared by GET /leaderboard/season and the End Season
     archive action (POST /admin/season/end).
     """
     # Sum stored points per (user, card) over locked weeks in a grouped subquery first,
     # then attach names; grouping the wide joined rows directly was ~4x slower.
     rows = db.execute(text(f"""
-        SELECT u.id as user_id, u.username,
+        SELECT u.id as user_id, u.username, u.is_admin,
                c.id as card_id, c.card_type,
                p.name as player_name,
                COALESCE(agg.match_count, 0) as match_count,
@@ -210,8 +202,9 @@ def compute_season_standings(db) -> list[dict]:
 @router.get("/leaderboard/season")
 def season_leaderboard(db=Depends(get_db)):
     result = compute_season_standings(db)
-    return [{"id": r["id"], "username": r["username"], "season_points": r["points"],
-             "is_admin": r["is_admin"], "tags": r["tags"], "cards": r["cards"]} for r in result]
+    return [{"id": r["id"], "username": r["username"], "is_admin": r["is_admin"],
+             "season_points": r["points"],
+             "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 # ---------------------------------------------------------------------------
@@ -248,12 +241,15 @@ def archived_season_detail(season_id: int, db=Depends(get_db)):
         .order_by(SeasonArchive.rank)
         .all()
     )
+    user_ids = [r.user_id for r in rows if r.user_id is not None]
+    admin_ids = ({u.id for u in db.query(User.id).filter(User.id.in_(user_ids), User.is_admin == True)}  # noqa: E712
+                 if user_ids else set())
     return {
         "id": season_id,
         "season_label": anchor.season_label,
         "archived_at": anchor.archived_at,
         "standings": [{"user_id": r.user_id, "username": r.username,
-                       "points": display_points(r.points), "rank": r.rank} for r in rows],
+                       "is_admin": r.user_id in admin_ids, "points": display_points(r.points), "rank": r.rank} for r in rows],
     }
 
 
@@ -264,7 +260,7 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
     if not week:
         raise HTTPException(status_code=404, detail="Week not found")
     rows = db.execute(text(f"""
-        SELECT u.id as user_id, u.username,
+        SELECT u.id as user_id, u.username, u.is_admin,
                c.id as card_id, c.card_type,
                p.name as player_name,
                {_STORED_POINT_SUMS}
@@ -279,11 +275,12 @@ def weekly_leaderboard(week_id: int, db=Depends(get_db)):
             AND (m.week_override_id = :week_id
                  OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
         WHERE u.is_tester = 0 AND u.account_type = 'full'
-        GROUP BY u.id, u.username, c.id, c.card_type, p.name
+        GROUP BY u.id, u.username, u.is_admin, c.id, c.card_type, p.name
     """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()
     result = _leaderboard_rows(db, rows)
-    return [{"id": r["id"], "username": r["username"], "week_points": r["points"],
-             "is_admin": r["is_admin"], "tags": r["tags"], "cards": r["cards"]} for r in result]
+    return [{"id": r["id"], "username": r["username"], "is_admin": r["is_admin"],
+             "week_points": r["points"],
+             "tags": r["tags"], "cards": r["cards"]} for r in result]
 
 
 @router.get("/weights")

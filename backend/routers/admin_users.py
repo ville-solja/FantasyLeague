@@ -1,4 +1,5 @@
 import os
+import re
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,8 +10,9 @@ from sqlalchemy.exc import IntegrityError
 import sessions
 import soft_accounts
 from database import get_db
-from deps import get_current_user, require_admin, require_recent_reauth, _audit
-from models import Card, PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
+from deps import (get_current_user, require_admin, require_recent_reauth,
+                  require_typed_confirmation, _audit)
+from models import AuditLog, Card, PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
 from rate_limit import limiter, key_by_user_or_ip
 
 router = APIRouter()
@@ -90,7 +92,8 @@ def list_users(account_type: str = "full", db=Depends(get_db), _: dict = Depends
     ]
 
 
-@router.delete("/admin/users/{user_id}", dependencies=[Depends(require_recent_reauth)])
+@router.delete("/admin/users/{user_id}", dependencies=[Depends(require_recent_reauth),
+                                                       Depends(require_typed_confirmation("delete_user"))])
 def delete_twitch_viewer(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
     """Delete a Twitch viewer soft account and all its rows (issue #157). Website
     accounts cannot be deleted here."""
@@ -106,6 +109,28 @@ def delete_twitch_viewer(user_id: int, admin: dict = Depends(require_admin), db=
     return {"deleted": True, "user_id": user_id}
 
 
+_CLAIM_DETAIL_RE = re.compile(r"user_id=(\d+) verified_user_id=(\d+) player_id=(\d+)")
+
+
+@router.get("/admin/player-id-claims")
+def list_superseded_player_id_claims(db=Depends(get_db), _: dict = Depends(require_admin)):
+    """Self-reported player ids cleared because a verified Steam account took the same
+    id (issue #150), newest first, read from the player_id_claim_superseded audit rows."""
+    rows = (db.query(AuditLog).filter(AuditLog.action == "player_id_claim_superseded")
+            .order_by(AuditLog.id.desc()).limit(500).all())
+    parsed = []
+    for row in rows:
+        match = _CLAIM_DETAIL_RE.fullmatch(row.detail or "")
+        if match:
+            parsed.append((row, int(match.group(1)), int(match.group(2)), int(match.group(3))))
+    ids = {uid for _, a, b, _ in parsed for uid in (a, b)}
+    names = {u.id: u.display_name for u in db.query(User).filter(User.id.in_(ids)).all()} if ids else {}
+    return [{"timestamp": row.timestamp, "player_id": pid,
+             "superseded_user_id": old, "superseded_username": names.get(old),
+             "verified_user_id": new, "verified_username": names.get(new)}
+            for row, old, new, pid in parsed]
+
+
 @router.post("/users/{user_id}/toggle-tester", dependencies=[Depends(require_recent_reauth)])
 def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
     user = db.get(User, user_id)
@@ -118,13 +143,16 @@ def toggle_tester(user_id: int, admin: dict = Depends(require_admin), db=Depends
     return {"user_id": user.id, "username": user.username, "is_tester": user.is_tester}
 
 
-@router.post("/users/{user_id}/toggle-admin", dependencies=[Depends(require_recent_reauth)])
+@router.post("/users/{user_id}/toggle-admin", dependencies=[Depends(require_recent_reauth),
+                                                            Depends(require_typed_confirmation("toggle_admin"))])
 def toggle_admin(user_id: int, admin: dict = Depends(require_admin), db=Depends(get_db)):
     if user_id == admin["user_id"]:
         raise HTTPException(status_code=409, detail="Cannot change your own admin status")
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_admin and user.is_demo:
+        raise HTTPException(status_code=409, detail="Demo accounts can't be admins")
     if user.is_admin and db.query(User).filter_by(is_admin=True).count() <= 1:
         raise HTTPException(status_code=409, detail="Cannot demote the last remaining admin")
     user.is_admin = not bool(user.is_admin)
@@ -149,7 +177,8 @@ def force_logout(user_id: int, admin: dict = Depends(require_admin), db=Depends(
     return {"user_id": user.id, "username": user.username}
 
 
-@router.post("/grant-tokens", dependencies=[Depends(require_recent_reauth)])
+@router.post("/grant-tokens", dependencies=[Depends(require_recent_reauth),
+                                            Depends(require_typed_confirmation("grant_tokens"))])
 def grant_tokens(body: GrantTokensBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
     target = db.get(User, body.target_user_id)
     if not target:

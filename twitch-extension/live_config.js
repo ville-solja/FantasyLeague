@@ -207,7 +207,7 @@ function confirmMVP() {
             // Winner count only (issue #157): no viewer names in the dashboard either.
             dropMsg = " · " + drop.winner_count + (drop.winner_count === 1 ? " viewer" : " viewers") + " received a token";
         } else if (drop.pool_size === 0) {
-            dropMsg = " · No eligible viewers in the pool (joined, with Twitch identity shared)";
+            dropMsg = " · No joined viewers in the pool";
         }
 
         var bonusMsg = _selectedMatch.provisional ? " · Fantasy bonus is applied when the stats arrive" : "";

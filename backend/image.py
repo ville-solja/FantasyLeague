@@ -10,6 +10,7 @@ except ImportError:
     PIL_AVAILABLE = False
 
 from dotabuff_league_logos import resolve_local_team_logo_path
+from logo_hosts import safe_logo_url
 from scoring import STAT_LABELS
 
 
@@ -115,8 +116,8 @@ def _get_font(size: int):
 
 
 def _fetch_team_logo_image(team_logo_url: str | None, diameter: int):
-    """Team badge from DB `logo_url` (HTTP)."""
-    u = _normalize_image_url(team_logo_url)
+    """Team badge from DB `logo_url` (HTTP), fetched only from an allowlisted host (issue #171)."""
+    u = safe_logo_url(_normalize_image_url(team_logo_url))
     return _fetch_pil_image(u, diameter) if u else None
 
 

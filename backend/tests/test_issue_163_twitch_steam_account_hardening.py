@@ -1,4 +1,7 @@
-"""Tests for issue #163: Twitch, Steam and account hardening (sub-issues #164-#171).
+"""Tests for issue #163: Twitch, Steam and account hardening (sub-issues #164-#168).
+
+#169 and #171 shipped with PR 174 and are covered by test_issue_169_* and
+test_issue_171_*.
 
 Plan: markdown/plans/plan-issue-163-twitch-steam-account-hardening.md
 
@@ -411,18 +414,18 @@ class TestAdminReauthAndPromoCodes:
                 code="past", token_amount=1, expires_at=int(time.time()) - 1), db, self._admin())
         assert exc.value.status_code == 422
 
-    def test_migration_033_adds_columns_to_legacy_table(self):
+    def test_migration_036_adds_columns_to_legacy_table(self):
         import migrate
         engine = create_engine("sqlite:///:memory:", poolclass=StaticPool)
         with engine.connect() as conn:
             conn.execute(text("CREATE TABLE promo_codes (id INTEGER PRIMARY KEY, code TEXT, "
                               "token_amount INTEGER, created_by_id INTEGER)"))
             conn.commit()
-            migrate._m033_promo_codes_limits(conn)
-            migrate._m033_promo_codes_limits(conn)  # idempotent
+            migrate._m036_promo_codes_limits(conn)
+            migrate._m036_promo_codes_limits(conn)  # idempotent
             cols = {r[1] for r in conn.execute(text("PRAGMA table_info(promo_codes)")).fetchall()}
         assert {"expires_at", "max_redemptions"} <= cols
-        assert ("033_promo_codes_limits", migrate._m033_promo_codes_limits) in migrate.MIGRATIONS
+        assert ("036_promo_codes_limits", migrate._m036_promo_codes_limits) in migrate.MIGRATIONS
 
 
 # ---------------------------------------------------------------------------
@@ -571,151 +574,3 @@ class TestResetAndLockout:
         with patch("routers.auth.send_email", side_effect=_Mail()):
             client.post("/reset-password", json={"token": "tok-y", "new_password": "newpass1"})
         assert not auth_router._is_locked_out("alice", "testclient")
-
-
-# ---------------------------------------------------------------------------
-# #169 — harder to impersonate players and admins
-# ---------------------------------------------------------------------------
-
-class TestImpersonation:
-    @pytest.fixture
-    def setup(self, monkeypatch):
-        monkeypatch.delenv("RESERVED_USERNAME_WORDS", raising=False)
-        engine = _engine()
-        app, auth_router = _auth_app(engine)
-        return TestClient(app), _session(engine)
-
-    def _register(self, client, username):
-        return client.post("/register", json={"username": username, "email": f"{username.lower()}x@example.com",
-                                               "password": "secret123"})
-
-    def test_case_variant_of_existing_name_is_refused(self, setup):
-        client, db = setup
-        _make_user(db, "Ville")
-        assert self._register(client, "ville").status_code == 409
-
-    @pytest.mark.parametrize("name", ["SuperAdmin1", "official_league", "mod_ville", "Support-Desk"])
-    def test_reserved_words_refused(self, setup, name):
-        client, _ = setup
-        resp = self._register(client, name)
-        assert resp.status_code == 422 and "reserved" in resp.json()["detail"]
-
-    @pytest.mark.parametrize("name", ["Commodore", "Modest_Mouse", "Ville"])
-    def test_ordinary_names_allowed(self, setup, name):
-        client, _ = setup
-        assert self._register(client, name).status_code == 200
-
-    def test_league_words_come_from_the_environment(self, setup, monkeypatch):
-        client, _ = setup
-        monkeypatch.setenv("RESERVED_USERNAME_WORDS", "kanaliiga")
-        assert self._register(client, "KanaliigaHelp").status_code == 422
-        assert self._register(client, "AdminFan").status_code == 200  # default list replaced
-
-    def test_rename_rules(self, setup):
-        client, db = setup
-        _make_user(db, "Bob")
-        _make_user(db, "carol")
-        assert client.post("/login", json={"username": "carol", "password": "secret123"}).status_code == 200
-        assert client.put("/profile/username", json={"username": "BOB"}).status_code == 409
-        assert client.put("/profile/username", json={"username": "staffpick"}).status_code == 422
-        assert client.put("/profile/username", json={"username": "Carol"}).status_code == 200
-
-    def test_existing_reserved_name_still_logs_in(self, setup):
-        client, db = setup
-        _make_user(db, "admin")
-        assert client.post("/login", json={"username": "admin", "password": "secret123"}).status_code == 200
-
-    def test_other_users_profile_hides_player_id_and_avatar(self, setup):
-        from models import Player
-        client, db = setup
-        db.add(Player(id=86745912, name="FamousPro", avatar_url="https://cdn.example/p.png"))
-        db.commit()
-        target = _make_user(db, "claimer", player_id=86745912, is_admin=True)
-        _make_user(db, "viewer")
-        assert client.post("/login", json={"username": "viewer", "password": "secret123"}).status_code == 200
-        data = client.get(f"/profile/{target.id}").json()
-        assert data["player_id"] is None and data["player_avatar_url"] is None
-        assert data["player_name"] == "FamousPro" and data["player_self_reported"] is True
-        assert data["is_admin"] is True
-
-    def test_own_profile_keeps_player_id_and_avatar(self, setup):
-        from models import Player
-        client, db = setup
-        db.add(Player(id=555, name="Me", avatar_url="https://cdn.example/me.png"))
-        db.commit()
-        me = _make_user(db, "selfie", player_id=555)
-        assert client.post("/login", json={"username": "selfie", "password": "secret123"}).status_code == 200
-        data = client.get(f"/profile/{me.id}").json()
-        assert data["player_id"] == 555 and data["player_avatar_url"] == "https://cdn.example/me.png"
-
-    def test_leaderboard_rows_carry_admin_flag(self, db):
-        from routers import leaderboard
-        from models import User
-        db.add_all([User(id=1, username="boss", is_admin=True, tokens=0, account_type="full", is_tester=False),
-                    User(id=2, username="pleb", is_admin=False, tokens=0, account_type="full", is_tester=False)])
-        db.commit()
-        rows = {r["username"]: r for r in leaderboard.compute_season_standings(db)}
-        assert rows["boss"]["is_admin"] is True and rows["pleb"]["is_admin"] is False
-
-    def test_leaderboard_renders_server_admin_badge(self):
-        src = _read(REPO_ROOT / "frontend" / "app-leaderboard.js")
-        assert "r.is_admin" in src and "lb-admin-badge" in src
-
-
-# ---------------------------------------------------------------------------
-# #171 — token drops need the identity share; panel limits
-# ---------------------------------------------------------------------------
-
-class TestDropsAndPanelLimits:
-    def _soft(self, db, opaque, real_id=None):
-        from models import TwitchPresence, User
-        u = User(account_type="twitch", twitch_user_id=opaque, twitch_account_id=real_id, tokens=0,
-                 created_at=int(time.time()))
-        db.add(u)
-        db.add(TwitchPresence(twitch_user_id=opaque, channel_id=_CHANNEL, seen_at=int(time.time())))
-        db.commit()
-        return u
-
-    def test_pool_includes_only_identity_shared_viewers(self, db):
-        import twitch
-        self._soft(db, "Ushared", real_id="4242")
-        self._soft(db, "Uanon")
-        assert twitch._active_pool(db, _CHANNEL) == ["Ushared"]
-
-    def test_heartbeat_from_logged_out_viewer_stores_nothing(self, twitch_env):
-        import twitch
-        from models import TwitchPresence
-        engine = _engine()
-        db = _session(engine)
-        from database import get_db
-        twitch.limiter.enabled = False
-        app = FastAPI()
-        app.state.limiter = twitch.limiter
-        app.include_router(twitch.router)
-        app.dependency_overrides[get_db] = lambda: db
-        client = TestClient(app)
-        try:
-            for opaque in ("Aanon", "Ulogged"):
-                resp = client.post("/twitch/heartbeat",
-                                   headers={"Authorization": _signed(_viewer_claims(opaque_id=opaque))})
-                assert resp.status_code == 200
-        finally:
-            twitch.limiter.enabled = True
-        assert [p.twitch_user_id for p in db.query(TwitchPresence).all()] == ["Ulogged"]
-
-    def test_heartbeat_has_per_viewer_limit(self):
-        src = _read(BACKEND_DIR / "twitch.py")
-        block = src[src.index('@router.post("/heartbeat")'):src.index("def heartbeat(")]
-        assert "key_by_twitch_viewer_or_ip" in block
-
-    def test_cors_regex_narrows_to_client_id(self, monkeypatch):
-        import main
-        monkeypatch.setenv("TWITCH_EXTENSION_CLIENT_ID", "abc123xyz")
-        pattern = main._twitch_extension_origin_regex()
-        assert re.fullmatch(pattern, "https://abc123xyz.ext-twitch.tv")
-        assert not re.fullmatch(pattern, "https://other999.ext-twitch.tv")
-        monkeypatch.delenv("TWITCH_EXTENSION_CLIENT_ID")
-        assert re.fullmatch(main._twitch_extension_origin_regex(), "https://other999.ext-twitch.tv")
-
-    def test_panel_tells_viewers_drops_need_the_share(self):
-        assert "eligible for MVP token drops" in _read(EXT_DIR / "panel.html")

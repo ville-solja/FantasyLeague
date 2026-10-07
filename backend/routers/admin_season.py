@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 import card_points
 from database import get_db, backup_sqlite_db
-from deps import require_admin, require_recent_reauth, _audit
+from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
 from models import Card, CardModifier, League, Match, MatchBan, Player, PlayerMatchStats, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
 from routers.leaderboard import compute_season_standings
 
@@ -28,7 +28,8 @@ class SeasonResetBody(BaseModel):
     force: bool = False
 
 
-@router.post("/admin/season/end", dependencies=[Depends(require_recent_reauth)])
+@router.post("/admin/season/end", dependencies=[Depends(require_recent_reauth),
+                                                Depends(require_typed_confirmation("season_end"))])
 def end_season(body: SeasonEndBody, db=Depends(get_db),
                admin: dict = Depends(require_admin)):
     """Snapshot the current season leaderboard into season_archive.
@@ -62,7 +63,8 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
     return {"season_label": season_label, "archived_users": len(standings)}
 
 
-@router.post("/admin/season/reset", dependencies=[Depends(require_recent_reauth)])
+@router.post("/admin/season/reset", dependencies=[Depends(require_recent_reauth),
+                                                  Depends(require_typed_confirmation("season_reset"))])
 def reset_season(body: SeasonResetBody, db=Depends(get_db),
                  admin: dict = Depends(require_admin)):
     """Clear all per-season data so the next season starts from a clean slate.

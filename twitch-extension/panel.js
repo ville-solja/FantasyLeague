@@ -246,11 +246,28 @@ function doJoin(btn) {
     }).finally(function () { btn.disabled = false; });
 }
 
+// Issue #171: a new account is in MVP drops only once it is old enough.
+function dropsStartText(me) {
+    if (!me || !me.drops_from) return "";
+    var d = new Date(me.drops_from * 1000);
+    if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return "";
+    return "Drops start for your account on " +
+        d.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ".";
+}
+
+function renderDropsStart() {
+    var line = el("drops-start");
+    var text = isJoined() ? dropsStartText(state.me) : "";
+    line.textContent = text;
+    line.hidden = !text;
+}
+
 function renderAll() {
     var joined = isJoined();
     el("token-chip").hidden = !joined;
     el("btn-settings").hidden = !joined;
     if (joined) el("token-count").textContent = String(state.me.tokens);
+    renderDropsStart();
     el("cards-main").hidden = !joined;
     el("roster-main").hidden = !joined;
     renderJoinSlots();
@@ -271,7 +288,7 @@ function renderDrawButtons() {
     var cost = state.me.team_draw_cost || 3;
     el("btn-draw").disabled = tokens < 1;
     el("btn-team-draw").textContent = "Team draw · " + cost;
-    el("draw-note").textContent = tokens < 1 ? "You need a token to draw. Tokens come from the weekly grant and from MVP drops, which need your Twitch identity shared in Settings." : "";
+    el("draw-note").textContent = tokens < 1 ? "You need a token to draw. Tokens come from MVP drops and the weekly grant." : "";
 }
 
 el("btn-draw").addEventListener("click", function () {

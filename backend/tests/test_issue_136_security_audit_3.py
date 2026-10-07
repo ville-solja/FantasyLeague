@@ -117,6 +117,8 @@ def _build_main_client(monkeypatch, env=None):
     monkeypatch.delenv("CSRF_ORIGIN_CHECK", raising=False)
     monkeypatch.delenv("APP_BASE_URL", raising=False)
     monkeypatch.delenv("CORS_EXTRA_ORIGINS", raising=False)
+    # Issue #171: CORS allows only this client id's ext-twitch.tv origin.
+    monkeypatch.delenv("TWITCH_EXTENSION_CLIENT_ID", raising=False)
     for key, value in (env or {}).items():
         monkeypatch.setenv(key, value)
 
@@ -462,9 +464,10 @@ def _preflight(client, origin):
     )
 
 
-def test_cors_preflight_from_ext_twitch_origin_allowed(main_client):
-    """Preflight from https://abc123.ext-twitch.tv gets Access-Control-Allow-Origin echoing that origin."""
-    resp = _preflight(main_client, "https://abc123.ext-twitch.tv")
+def test_cors_preflight_from_ext_twitch_origin_allowed(monkeypatch):
+    """Preflight from https://abc123.ext-twitch.tv (TWITCH_EXTENSION_CLIENT_ID=abc123) gets Access-Control-Allow-Origin echoing that origin."""
+    client = _build_main_client(monkeypatch, {"TWITCH_EXTENSION_CLIENT_ID": "abc123"})
+    resp = _preflight(client, "https://abc123.ext-twitch.tv")
     assert resp.status_code == 200
     assert resp.headers.get("access-control-allow-origin") == "https://abc123.ext-twitch.tv"
 
@@ -490,7 +493,8 @@ def test_cors_regex_rejects_lookalike_ext_twitch_origins(main_client):
 def test_cors_extra_origins_env_adds_origin(monkeypatch):
     """CORS_EXTRA_ORIGINS=http://localhost:8080 (reloaded main) makes that origin's preflight succeed."""
     client = _build_main_client(
-        monkeypatch, {"CORS_EXTRA_ORIGINS": " http://localhost:8080 , https://other.test"}
+        monkeypatch, {"CORS_EXTRA_ORIGINS": " http://localhost:8080 , https://other.test",
+                      "TWITCH_EXTENSION_CLIENT_ID": "abc123"}
     )
     for origin in ("http://localhost:8080", "https://other.test"):
         resp = _preflight(client, origin)
@@ -505,9 +509,10 @@ def test_cors_extra_origins_env_adds_origin(monkeypatch):
     assert "access-control-allow-origin" not in resp.headers
 
 
-def test_cors_allow_credentials_stays_false(main_client):
+def test_cors_allow_credentials_stays_false(monkeypatch):
     """An allowed preflight carries no Access-Control-Allow-Credentials: true header."""
-    resp = _preflight(main_client, "https://abc123.ext-twitch.tv")
+    client = _build_main_client(monkeypatch, {"TWITCH_EXTENSION_CLIENT_ID": "abc123"})
+    resp = _preflight(client, "https://abc123.ext-twitch.tv")
     assert resp.headers.get("access-control-allow-origin") == "https://abc123.ext-twitch.tv"
     assert resp.headers.get("access-control-allow-credentials") != "true"
 

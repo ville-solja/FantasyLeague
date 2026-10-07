@@ -2,6 +2,7 @@ import os
 import re
 
 import bcrypt
+from fastapi import HTTPException
 
 # bcrypt only uses the first 72 bytes of a password (4.x truncates silently,
 # 5.x raises), so password fields reject anything longer (issue #135).
@@ -38,6 +39,50 @@ def check_username(username: str) -> str:
     return username
 
 
+# Issue #169: words new names may not contain, matched against normalise_username().
+DEFAULT_RESERVED_WORDS = "admin,kana,liiga,support,official,staff,mod"
+RESERVED_NAME_DETAIL = "This name is reserved"
+_LOOKALIKE = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t"})
+
+
+def normalise_username(name: str) -> str:
+    """Lower-case, drop _ and -, and map look-alikes (0→o 1→i 3→e 4→a 5→s 7→t rn→m vv→w)."""
+    s = name.lower().replace("_", "").replace("-", "").translate(_LOOKALIKE)
+    return s.replace("rn", "m").replace("vv", "w")
+
+
+def reserved_words() -> set[str]:
+    """RESERVED_USERNAME_WORDS (comma-separated), read at call time. Entries are
+    normalised like names (so `m0d` or `kana_liiga` still match). A value with no
+    usable entry (unset, blank, only commas) falls back to the defaults, so the
+    check can't be switched off by accident."""
+    def parse(raw: str) -> set[str]:
+        return {n for n in (normalise_username(w.strip()) for w in raw.split(",")) if n}
+    return parse(os.getenv("RESERVED_USERNAME_WORDS", "")) or parse(DEFAULT_RESERVED_WORDS)
+
+
+def is_reserved(name: str) -> bool:
+    norm = normalise_username(name)
+    return any(word in norm for word in reserved_words())
+
+
+def check_reserved(name: str) -> None:
+    """Handler-side check for new names (register, rename, Steam sign-up, demo seeding).
+    Env admin seeding does not call it."""
+    if is_reserved(name):
+        raise HTTPException(status_code=422, detail=RESERVED_NAME_DETAIL)
+
+
+def username_taken(db, name: str, exclude_user_id: int | None = None) -> bool:
+    """True when another account has this name, ignoring letter case."""
+    from sqlalchemy import func
+    from models import User
+    q = db.query(User.id).filter(func.lower(User.username) == name.lower())
+    if exclude_user_id is not None:
+        q = q.filter(User.id != exclude_user_id)
+    return q.first() is not None
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -46,41 +91,3 @@ def verify_password(password: str, password_hash: str) -> bool:
     if not password_hash:
         return False  # Twitch soft accounts (issue #157) have no password
     return bcrypt.checkpw(password.encode(), password_hash.encode())
-
-
-# Issue #169: names that impersonate staff. League-agnostic default; a league adds its
-# own words (for example its name) through RESERVED_USERNAME_WORDS, comma-separated.
-_DEFAULT_RESERVED_USERNAME_WORDS = "admin,administrator,moderator,mod,support,official,staff"
-
-
-def reserved_username_words() -> list[str]:
-    raw = os.getenv("RESERVED_USERNAME_WORDS", _DEFAULT_RESERVED_USERNAME_WORDS)
-    return [w.strip().lower() for w in raw.split(",") if w.strip()]
-
-
-def reserved_word_in(username: str) -> str | None:
-    """The reserved word a username contains, or None. Words of 4+ letters match
-    anywhere ("SuperAdmin1"); shorter ones only as a whole part between _, - and
-    digits ("mod_ville", not "Commodore")."""
-    lowered = username.lower()
-    parts = set(re.split(r"[_\-0-9]+", lowered))
-    for word in reserved_username_words():
-        if (len(word) >= 4 and word in lowered) or word in parts:
-            return word
-    return None
-
-
-def username_policy_error(db, username: str, exclude_user_id: int | None = None):
-    """(status, detail) when a new or renamed username is not allowed, else None.
-    Case-insensitive clash with another account: 409. Reserved word: 422. Existing
-    names are never re-checked, so they keep working."""
-    from sqlalchemy import func
-    from models import User
-    query = db.query(User.id).filter(func.lower(User.username) == username.lower())
-    if exclude_user_id is not None:
-        query = query.filter(User.id != exclude_user_id)
-    if query.first():
-        return 409, "Username already taken"
-    if reserved_word_in(username):
-        return 422, "That username is reserved. Please choose another."
-    return None

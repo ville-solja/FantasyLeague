@@ -14,6 +14,7 @@ from models import AuditLog, LiveMatch, Match, MatchTiming, Player, PlayerMatchS
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json, post_json as opendota_post_json
 from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
+from logo_hosts import safe_logo_url
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,8 @@ def _match_logo_url(val) -> str | None:
         return None
     if s.startswith("//"):
         s = "https:" + s
-    if s.startswith("http://") or s.startswith("https://"):
-        return s
-    return None
+    # Issue #171: only https URLs on LOGO_HOST_ALLOWLIST hosts are stored.
+    return safe_logo_url(s)
 
 
 # -----------------------

@@ -32,7 +32,9 @@ Returns all defined tag types ordered by key.
 Creates a new tag definition. Body: `{"key": "...", "label": "..."}`. The key names a sticker
 file, so it must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, `_` and `-`, not
 starting with `_` or `-`, at most 50 characters); anything else returns 422 (issue #135).
-Returns 409 if the key already exists. Logged as `admin_tag_definition_created`.
+Returns 409 if the key already exists. Returns 422 "This tag name is reserved" when the key or
+label is `admin` (any case): the ADMIN badge comes only from `users.is_admin` (issue #169).
+Logged as `admin_tag_definition_created`.
 
 ### `DELETE /admin/tags/{tag_id}`
 Deletes a tag definition and cascade-revokes all grants for it. Returns 404 if not found.

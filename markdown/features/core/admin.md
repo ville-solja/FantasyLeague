@@ -1,6 +1,8 @@
 # Admin Features
 
-Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account (and optionally further admins) is bootstrapped at startup via the `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` environment variables and their `_2`, `_3`, ... suffixed counterparts (see `reference/env-based-admin-seeding.md`). Additional admins can also be promoted in-app by an existing admin via the User Management tab's admin toggle, with no DB access required.
+Admin users have access to a set of management endpoints not available to regular users. An admin is identified by the `is_admin` flag on their `User` record. The initial admin account (and optionally further admins) is bootstrapped at startup via the `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` environment variables and their `_2`, `_3`, ... suffixed counterparts (see `reference/env-based-admin-seeding.md`; skipped with a warning when `LOGIN_METHOD=steam_signup`). `SEED_ADMIN_STEAM_IDS` names admins by Steam64 ID instead: a verified Steam sign-in, sign-up or link with a listed ID makes the account an admin once (`users.admin_seed_applied_at`), so a later in-app demotion holds; removing an ID does not demote (issue #150, see `reference/steam-login.md`). Additional admins can also be promoted in-app by an existing admin via the User Management tab's admin toggle, with no DB access required.
+
+Real admins carry an **ADMIN** badge wherever other players see their name (leaderboards and past season standings; admins also see it on their own Profile), driven only by `is_admin`. No user tag can imitate it: `POST /admin/tags` refuses a key or label `admin` (any case), and new usernames can't contain reserved words such as `admin` (issue #169, see `reference/impersonation-hardening.md`).
 
 All admin endpoints require an active admin session. Unauthorized requests receive a 403 response.
 
@@ -19,7 +21,8 @@ session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they 
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
 - `DELETE /admin/users/{user_id}` (Twitch viewer soft accounts, issue #157)
-- Issue #167, the token economy and the site-wide broadcast: `POST /grant-tokens`, `POST /codes`,
+- `POST /grant-tokens` (issue #150)
+- Issue #167, the rest of the token economy and the site-wide broadcast: `POST /codes`,
   `DELETE /codes/{code_id}`, `POST /admin/token-grant-events`,
   `DELETE /admin/token-grant-events/{event_id}`, `POST /admin/notifications`,
   `DELETE /admin/notifications/{notification_id}` and `POST /users/{user_id}/toggle-tester`
@@ -28,8 +31,28 @@ session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they 
 The check is the `require_recent_reauth` dependency (`backend/deps.py`), added at route level so
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
 `adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
-`reauth_required`, calls `POST /reauth`, and retries the action once. All other admin endpoints
-work without re-authentication.
+`reauth_required`, calls `POST /reauth`, and retries the action once. An admin without a password
+(created through Steam) gets **Confirm with Steam** instead, a Steam round trip
+(`GET /auth/steam/start?purpose=reauth&return_tab=admin`) after which the action is repeated. All
+other admin endpoints work without re-authentication.
+
+### Typed confirmation
+
+Steam OpenID cannot force a fresh password prompt, so six destructive actions also need the
+action's name typed in, for every admin (issue #150). The backend dependency
+`require_typed_confirmation(action)` (`backend/deps.py`, after the re-auth check) reads `confirm`
+from the query string or the JSON body (case and surrounding spaces ignored) and otherwise answers
+400 `{"detail": "confirmation_required"}`. The admin panel asks for the phrase in a dialog
+(`typedConfirm()` in `frontend/app-admin.js`; the season reset keeps its own dialog).
+
+| Action | Route | Phrase |
+|---|---|---|
+| Season end | `POST /admin/season/end` | `END SEASON` |
+| Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Admin toggle | `POST /users/{user_id}/toggle-admin` | `CHANGE ADMIN` |
+| Token grant | `POST /grant-tokens` | `GRANT TOKENS` |
+| Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
+| Delete Twitch viewer account | `DELETE /admin/users/{user_id}` (soft accounts only) | `DELETE USER` |
 
 **Support rule (issue #167).** Admins never grant tokens or cards, move accounts or change account
 details because someone asks in chat or a DM, however urgent or official it sounds. Lost items
@@ -55,7 +78,7 @@ only appear under the **Twitch viewers** filter. See
 ### `DELETE /admin/users/{user_id}`
 Deletes a Twitch viewer soft account and every row it owns (cards, modifiers, stored card
 points, roster entries, per-user state, presence) through `soft_accounts.delete_soft_account`.
-Requires re-authentication. Website accounts cannot be deleted here (409); unknown ids return
+Requires re-authentication and the typed confirmation `DELETE USER`. Website accounts cannot be deleted here (409); unknown ids return
 404. Returns `{ deleted: true, user_id }`. Logged as `twitch_soft_account_deleted` with
 `reason=admin`.
 
@@ -64,7 +87,9 @@ Flips the `is_tester` flag for the given user. Tester accounts are excluded from
 
 ### `POST /users/{user_id}/toggle-admin`
 Flips the `is_admin` flag for the given user. Returns `{ user_id, username, is_admin }`. Logged
-as `admin_toggle_admin`. Requires a recent re-authentication (see above). Deletes all of the
+as `admin_toggle_admin`. Requires a recent re-authentication and the typed confirmation
+`CHANGE ADMIN` (see above). A demo account (`users.is_demo`) can never be promoted (409
+`"Demo accounts can't be admins"`). Deletes all of the
 target's sessions, so their next login gets a new session ID and the limits of the new role. Two guards prevent the app from ever ending up with zero admins: an
 admin cannot toggle their own admin status (409 `"Cannot change your own admin status"`), and
 the last remaining admin cannot be demoted (409 `"Cannot demote the last remaining admin"`).
@@ -83,10 +108,17 @@ Ends every session of the given user by deleting their `user_sessions` rows (see
 Grants a configurable number of tokens to a specific user.
 
 ```json
-{ "target_user_id": 5, "amount": 3 }
+{ "target_user_id": 5, "amount": 3, "confirm": "GRANT TOKENS" }
 ```
 
-Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. All grants are recorded in the audit log. Requires a recent re-authentication (issue #167).
+Amount must be between 1 and 10,000 — the endpoint returns 422 for values outside that range. Requires a recent re-authentication and the typed confirmation (issue #150, see above). All grants are recorded in the audit log.
+
+### `GET /admin/player-id-claims`
+Lists self-reported player ids that were cleared because a Steam-verified account took the same
+id (issue #150), newest first: `timestamp`, `player_id`, `superseded_user_id`,
+`superseded_username`, `verified_user_id`, `verified_username`. Read from the
+`player_id_claim_superseded` audit rows. Shown under User Management as **Superseded player id
+claims**. See `reference/steam-login.md`.
 
 ---
 
@@ -101,7 +133,7 @@ Creates a new redeemable code.
 ```
 Codes are stored uppercased. Duplicate codes return 409. `expires_at` (Unix time) and
 `max_redemptions` (total redemptions across all users, at least 1) are optional (issue #167,
-migration `033_promo_codes_limits`); an expiry in the past returns 422. Requires a recent
+migration `036_promo_codes_limits`); an expiry in the past returns 422. Requires a recent
 re-authentication. The admin panel has optional "Max uses" and "Expires" fields.
 
 ### `GET /codes`
@@ -251,8 +283,12 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_toggle_tester` | Admin toggled tester flag on a user |
 | `admin_toggle_admin` | Admin toggled admin flag on a user |
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
-| `admin_reauth` | An admin confirmed their password via `POST /reauth` (`detail` is `ok` or `failed: …`) |
-| `player_reauth` | A non-admin user confirmed their password via `POST /reauth`, e.g. before connecting, merging or disconnecting Twitch (issue #160; `detail` is `ok` or `failed: …`) |
+| `admin_seeded_from_env` | A verified Steam sign-in, sign-up or link with an ID in `SEED_ADMIN_STEAM_IDS` made the account an admin (issue #150; written only for Steam seeding, not for `SEED_ADMIN_USERNAME` password seeding) |
+| `steam_linked` | A user linked Steam on Profile; `player_id` became the verified Steam32 id (issue #150; the Steam id is never in `detail`) |
+| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150) |
+| `player_id_claim_superseded` | A Steam-verified account took a player id another account had self-reported; that account's `player_id` was cleared (`detail` is `user_id=<cleared> verified_user_id=<verified> player_id=<id>`; issue #150) |
+| `admin_reauth` | An admin confirmed their password via `POST /reauth`, or their Steam account via the Steam re-auth round trip (`detail` is `ok` or `failed: …`; Steam adds `method=steam`) |
+| `player_reauth` | A non-admin user confirmed their password via `POST /reauth` or Steam, e.g. before connecting, merging or disconnecting Twitch (issue #160; `detail` is `ok` or `failed: …`) |
 | `admin_code_create` | Admin created a redeemable code |
 | `admin_code_delete` | Admin deleted a redeemable code |
 | `admin_ingest` | Manual league ingest triggered |

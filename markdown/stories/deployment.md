@@ -90,7 +90,7 @@ policies.
   endpoint handlers
 
 ### CORS Wildcard Documentation *(superseded by issue #136)*
-> CORS no longer uses a wildcard. It is limited to `https://<client-id>.ext-twitch.tv` plus `CORS_EXTRA_ORIGINS`. See `stories/security-review-fixes.md`, Security Audit 3.
+> CORS no longer uses a wildcard. It is limited to `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` (narrowed to our own extension in #171) plus `CORS_EXTRA_ORIGINS`. See `stories/security-review-fixes.md`, Security Audit 3.
 
 **User story**
 As a security reviewer, I want the intentional `access-control-allow-origin: *`

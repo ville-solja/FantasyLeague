@@ -12,12 +12,18 @@ On startup, `seed_admin_from_env()` reads `SEED_ADMIN_USERNAME`/`SEED_ADMIN_EMAI
 `SEED_ADMIN_PASSWORD` for admin #1, then `SEED_ADMIN_USERNAME_2`/`SEED_ADMIN_EMAIL_2`/
 `SEED_ADMIN_PASSWORD_2` for admin #2, `_3` for admin #3, and so on. For each numbered set, if
 all three values are present and non-empty, it creates an admin user unless one with that
-**username** already exists (existence is checked by username, not email — a duplicate email
+**username** already exists, ignoring letter case (`auth.username_taken`, issue #169; reserved
+words such as `admin` are allowed here) (existence is checked by username, not email — a duplicate email
 under a different username is not caught here). Seeding stops at the first numbered suffix
 whose set is incomplete or absent —
 there is no separate "how many admins" variable. The call is idempotent — re-deploying with the
 same vars is safe, and existing admins created via this mechanism or promoted in-app
 (see `core/admin.md`'s `POST /users/{user_id}/toggle-admin`) are left untouched.
+
+With `LOGIN_METHOD=steam_signup` (issue #150) these password admins are skipped with one
+start-up warning, since that mode creates accounts only through Steam. Name admins by Steam64 ID
+with `SEED_ADMIN_STEAM_IDS` instead (applied once per account on a verified Steam sign-in, sign-up or link, so an in-app demotion holds; see
+`reference/steam-login.md`).
 
 `backend/seed/users.json` is kept in the repo as an empty stub (`[]`) so the existing
 `seed_users()` code path does not crash. Local dev accounts can be added to a private copy

@@ -17,6 +17,7 @@ from card_utils import (
 from database import get_db, spend_tokens
 from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
+from logo_hosts import safe_logo_url
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import limiter, key_by_user_or_ip
 from scoring import display_points
@@ -167,6 +168,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     for c in cards:
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
         c["total_points"] = display_points(c["total_points"])
+        c["team_logo_url"] = safe_logo_url(c["team_logo_url"])
 
     user = db.get(User, user_id)
     tokens = user.tokens if user and user.tokens is not None else 0
@@ -219,6 +221,7 @@ def collection_for_user(db, user_id: int) -> list[dict]:
     for c in cards:
         c["is_active"] = bool(c["is_active"])
         c["season_points"] = display_points(c["season_points"])
+        c["team_logo_url"] = safe_logo_url(c["team_logo_url"])
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
     cards.sort(key=lambda c: (rank.get(c["card_type"], 4), (c["player_name"] or "").lower(), c["id"]))
     return cards
@@ -304,7 +307,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "player_name": player.name,
         "avatar_url": player.avatar_url,
         "team_name": team_row.name if team_row else None,
-        "team_logo_url": team_row.logo_url if team_row else None,
+        "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "is_active": is_active,
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
@@ -361,7 +364,7 @@ def booster_deck_for_user(db, user_id: int | None) -> list[dict]:
         result.append({
             "team_id": team.id,
             "team_name": team.name,
-            "logo_url": team.logo_url,
+            "logo_url": safe_logo_url(team.logo_url),
             "remaining": remaining,
         })
     result.sort(key=lambda t: (t["remaining"] == 0, t["team_name"] or ""))
@@ -428,7 +431,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "player_name": player.name,
         "avatar_url": player.avatar_url,
         "team_name": team_row.name if team_row else team.name,
-        "team_logo_url": team_row.logo_url if team_row else team.logo_url,
+        "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
         "is_active": card.is_active,
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
@@ -464,7 +467,7 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
         "player_name": player.name if player else None,
         "avatar_url": player.avatar_url if player else None,
         "team_name": team_row.name if team_row else None,
-        "team_logo_url": team_row.logo_url if team_row else None,
+        "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "modifiers": _format_modifiers(mods),
     }
 

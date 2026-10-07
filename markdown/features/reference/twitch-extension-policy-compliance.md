@@ -71,9 +71,9 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 
 ## Token drops
 
-- **Pool:** unchanged query (`_active_pool`: presence within 10 minutes joined to `users.twitch_user_id`), which now includes soft accounts. `TWITCH_DROP_MAX` and one drop per match are unchanged.
-- **Heartbeat:** the panel sends `POST /twitch/heartbeat` only while the viewer is joined.
-- **Chat:** `_mvp_chat_text(player_name, winner_count, pool_empty, drops_enabled)` names the MVP and the winner count only: "Match MVP: Savu! 3 viewers received a token.", or "No tokens were dropped: no eligible viewers were watching." with an empty pool (since #171 the pool holds only joined viewers who shared their Twitch identity).
+- **Pool:** unchanged query (`_active_pool`: presence within 10 minutes joined to `users.twitch_user_id`), which now includes soft accounts. `TWITCH_DROP_MAX` and one drop per match are unchanged. Since #171 a soft account must also be `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` old (default 24); website accounts are always eligible. This limits alt-account farming without requiring the identity share or a website account, which would break policy 4.5. See [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md).
+- **Heartbeat:** the panel sends `POST /twitch/heartbeat` only while the viewer is joined. Since #171 the EBS ignores heartbeats from logged-out (`A…`) viewers and limits the route per viewer and per IP.
+- **Chat:** `_mvp_chat_text(player_name, winner_count, pool_empty, drops_enabled)` names the MVP and the winner count only: "Match MVP: Savu! 3 viewers received a token.", or "No tokens were dropped: no joined viewers were watching." with an empty pool.
 - **PubSub:** `{"type": "mvp", "player_name", "match_id", "token_drop": {"count", "refresh"}}`, with no names or ids. Every joined panel refreshes `GET /twitch/me` and shows "+1 token from the MVP drop" when its own balance went up.
 - **Broadcaster response:** `token_drop` carries `enabled`, `winner_count`, `pool_size` and `already_dropped`, with no names: a winner on one of the website accounts (code-linked before #160, or connected with Twitch sign-in) has their website username as display name, which is never shown to the channel. Winner names are kept only in the `twitch_token_drop` audit log (admin only).
 - **Kill switch:** `TWITCH_DROPS_ENABLED=false` skips `_execute_token_drop`: confirming an MVP sets the MVP and the fantasy bonus only, and chat says "Match MVP: X!".
@@ -119,7 +119,7 @@ There is no separate public user-search endpoint; "user search" is the admin use
 `twitch-extension/panel.html`, `panel.js`, `extension.css`; styles follow `design/colors_and_type.css` (tokens copied in, Big Shoulders Text packaged under `fonts/`).
 - **Header:** brand, token count and a Settings button once joined.
 - **Tabs:** Live, Cards, Roster (2 px orange underline on the active tab). The panel opens on Live for every viewer.
-- **Live:** latest MVPs (with `(live)` markers), top performers, next match; refreshed every 60 s and at once on an MVP PubSub message. Each section shows a short neutral message when empty or when the EBS can't be reached.
+- **Live:** latest MVPs (with `(live)` markers), top performers, next match; refreshed every 60 s and at once on an MVP PubSub message. Each section shows a short neutral message when empty or when the EBS can't be reached. A joined soft account younger than the drop age shows a note line "Drops start for your account on <date>." above the sections (#171, from `drops_from` in `GET /twitch/me`).
 - **Join:** "Join Kana Cards" with the consent line "Uses your Twitch login. We store your Twitch id and game progress; leave any time in Settings." It calls `Twitch.ext.actions.requestIdShare()` and then `POST /twitch/join`. Logged-out viewers see "Log in to Twitch to join" instead. The Cards and Roster tabs show the same box until the viewer joins.
 - **Cards:** Draw · 1, Team draw · 3, the card reveal (tinted art with the rarity glow on the art, name, team, rarity, "Added to your roster/bench"), and the collection: count, rarity chips with counts (All, Leg, Epic, Rare, Com) and a five-per-row grid of 48 × 66 art, rarest first.
 - **Team draw:** Back, the explainer line, a two-column list of 44 px team rows (logo or 28 × 28 monogram, name, "N left" or a disabled "Complete"), available teams first, `aria-pressed` selection, and the pinned "Draw from {team} · 3" button, disabled with "You need 3 tokens for a team draw" under 3 tokens.
@@ -135,11 +135,14 @@ There is no separate public user-search endpoint; "user search" is the admin use
 |---|---|---|
 | `TWITCH_DROPS_ENABLED` | `true` | MVP token drops to present joined viewers; `false` turns them off (MVP and bonus still set) |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is deleted by the daily job |
-| `RATE_LIMIT_TWITCH_JOIN`, `RATE_LIMIT_TWITCH_JOIN_IP`, `RATE_LIMIT_TWITCH_ACTION` | see above | Panel game route limits |
+| `RATE_LIMIT_TWITCH_JOIN`, `RATE_LIMIT_TWITCH_JOIN_IP`, `RATE_LIMIT_TWITCH_ACTION` | see above | Panel game route limits (heartbeat too, since #171) |
+| `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns it off (#171) |
+| `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Hosts team logos may load from (#171) |
 
 ## Manual setup for 1.2.0
 
 - Twitch dev console → Version → Capabilities: enable **Request Identity Link** for the identity share.
-- Team logos in the team picker load from the logo host; add it to the image allowlist if Twitch blocks it (the panel falls back to monograms).
+- Team logos in the team picker load only from `LOGO_HOST_ALLOWLIST` hosts (Steam's CDNs by default, #171); add those hosts to the image allowlist if Twitch blocks them (the panel falls back to monograms).
+- Set `TWITCH_EXTENSION_CLIENT_ID` on the EBS: since #171 it is the only extension origin CORS allows.
 - Set `TWITCH_EXTENSION_VERSION=1.2.0` on the EBS once 1.2.0 is installed.
 

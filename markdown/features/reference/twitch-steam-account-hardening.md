@@ -1,6 +1,6 @@
 # Twitch, Steam and Account Hardening
 
-Fixes from the 2026-10 security review of the Twitch and Steam integrations and of social-engineering risks (GitHub issue #163, sub-issues #164–#171). The review found no way to reach a Steam inventory or to act as a user on Twitch through the code. These changes close fail-open defaults, make leaked secrets less useful, keep player-chosen text out of the league's trusted channels, and make impersonation and lockout abuse harder. The plan is `markdown/plans/plan-issue-163-twitch-steam-account-hardening.md`.
+Fixes from the 2026-10 security review of the Twitch and Steam integrations and of social-engineering risks (GitHub issue #163, sub-issues #164–#171; #169 and #171 shipped separately with PR 174, see below). The review found no way to reach a Steam inventory or to act as a user on Twitch through the code. These changes close fail-open defaults, make leaked secrets less useful, keep player-chosen text out of the league's trusted channels, and make impersonation and lockout abuse harder. The plan is `markdown/plans/plan-issue-163-twitch-steam-account-hardening.md`.
 
 ---
 
@@ -11,11 +11,11 @@ Fixes from the 2026-10 security review of the Twitch and Steam integrations and 
 | #164 | The panel calls the configured backend URL only if its origin was baked into the package (`package.sh --ebs-origin`); `set-ebs-url.sh` keeps the secret off the command line and the screen | `twitch-extension/ebs-origins.js`, `extension.js`, `package.sh`, `set-ebs-url.sh` |
 | #165 | Empty `TWITCH_MVP_CHANNEL_IDS` refuses every channel in production; extension JWTs must carry `exp`; `role: external` tokens are refused on viewer routes; no secret length in logs; `TWITCH_LOCAL_DEV` refused with `HTTPS_ONLY=true` | `backend/twitch.py`, `backend/main.py` |
 | #166 | MVP names in chat and PubSub are cleaned (`chat_safe_name`); the MVP picker previews the chat text; admin notifications may only link to `APP_BASE_URL` | `backend/text_safety.py`, `backend/twitch.py`, `backend/routers/admin_notifications.py`, `live_config.*` |
-| #167 | Recent password check for token grants, promo codes, token grant events, notifications and the tester toggle; promo code expiry and redemption cap; one answer for unknown, expired and used-up codes | `backend/routers/admin_users.py`, `backend/routers/admin_notifications.py`, migration `033_promo_codes_limits`, admin frontend |
+| #167 | Recent password check for token grants, promo codes, token grant events, notifications and the tester toggle; promo code expiry and redemption cap; one answer for unknown, expired and used-up codes | `backend/routers/admin_users.py`, `backend/routers/admin_notifications.py`, migration `036_promo_codes_limits`, admin frontend |
 | #168 | Reset email opens with a never-share warning; "password changed" email after a reset or change; reset tokens stored as SHA-256 hashes; login lockout per username **and** IP, with a high per-username ceiling | `backend/routers/auth.py`, `backend/routers/profile.py` |
-| #169 | Case-insensitive username uniqueness; reserved words (`RESERVED_USERNAME_WORDS`); admin badge on the leaderboard; other users' profiles hide the self-reported player id and avatar | `backend/auth.py`, `backend/routers/profile.py`, `backend/routers/leaderboard.py`, `frontend/app-leaderboard.js` |
+| #169 | Shipped in PR 174 with the Steam login: see `reference/impersonation-hardening.md` | — |
 | #170 | Operator checklist below; `.env.example` notes for the Steam key and extension secret | docs only |
-| #171 | Token drops only to viewers who shared their Twitch identity; heartbeats from logged-out viewers store nothing and use the per-viewer limit; CORS narrowed to our extension's origin when `TWITCH_EXTENSION_CLIENT_ID` is set | `backend/twitch.py`, `backend/main.py`, `panel.*` |
+| #171 | Shipped in PR 174: see `reference/twitch-panel-abuse-limits.md` | — |
 
 ---
 
@@ -56,16 +56,11 @@ See `core/admin.md` (re-authentication list, promo codes, support rule). The fro
 
 See `core/auth.md` (`POST /login`, `POST /forgot-password`, `POST /reset-password`, `PUT /profile/password`). Lockout state is in memory: `_failed_login_attempts` (per username, ceiling `LOGIN_LOCKOUT_USERNAME_THRESHOLD`) and `_failed_login_attempts_by_ip` (per username and IP, `LOGIN_LOCKOUT_THRESHOLD`); stale keys are swept once a store passes 10 000 entries. The source IP is slowapi's `get_remote_address`, the same one the rate limits use.
 
-## Impersonation (#169)
+## Impersonation (#169) and drops and panel limits (#171)
 
-See `core/auth.md` (Registration, `GET /profile/{user_id}`, `PUT /profile/username`) and `ui_description/leaderboards.md` (admin badge). Leaderboard rows (`GET /leaderboard/season`, `GET /leaderboard/weekly`) carry `is_admin`.
-
-## Drops and panel limits (#171)
-
-See `core/twitch-extension.md` (token drops, heartbeat). Decisions:
-
-- Drops need the identity share (product decision, 2026-10-07). Viewers who joined without sharing still play; they just can't win drops until they share in Settings.
-- Team logo hosts are **accepted**, not filtered: the extension's image-domain allowlist in the Twitch console already blocks unlisted hosts, and an app-side list risked breaking logos.
+Both shipped with PR 174, which implemented them differently from this plan's first draft (for
+example, token drops need a minimum soft-account age instead of the identity share). See
+`reference/impersonation-hardening.md` and `reference/twitch-panel-abuse-limits.md`.
 
 ---
 
@@ -103,11 +98,9 @@ No code; confirm each item in issue #170.
 | Variable | Default | Description |
 |---|---|---|
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Channels allowed to set MVPs. Empty: none in production, any otherwise |
-| `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Also narrows CORS to `https://{client_id}.ext-twitch.tv` when set |
 | `APP_BASE_URL` | *(empty)* | The only host admin notifications may link to |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failures per username and IP before that IP is locked out |
 | `LOGIN_LOCKOUT_USERNAME_THRESHOLD` | `100` | Failures per username from all IPs before it is locked out everywhere |
-| `RESERVED_USERNAME_WORDS` | `admin,administrator,moderator,mod,support,official,staff` | Words new or renamed usernames may not contain |
 
 ## Tests
 

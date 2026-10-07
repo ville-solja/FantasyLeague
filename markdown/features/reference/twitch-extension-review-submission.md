@@ -78,9 +78,8 @@ earlier — Twitch requires a new version for every resubmission.
 >
 > **Twitch Chat:** when the broadcaster confirms a match MVP, the extension posts one message to
 > the channel's chat, for example: "Match MVP: PlayerName! 3 viewers received a token." It names
-> the MVP and says how many viewers received a token; no viewer names are posted. If no eligible
-> viewers (joined, with their Twitch identity shared) are watching, the message says no tokens were
-> dropped. Changing the MVP for a match
+> the MVP and says how many viewers received a token; no viewer names are posted. If no joined
+> viewers are watching, the message says no tokens were dropped. Changing the MVP for a match
 > that already had a drop does not drop tokens again. The extension posts nothing else, and it
 > never reads, stores or moderates chat messages.
 

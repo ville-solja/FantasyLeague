@@ -201,8 +201,7 @@ def _seed_five_newer_series(db):
 
 def _add_viewer(db):
     from models import TwitchPresence, User
-    # twitch_account_id: the identity share drops need since issue #171.
-    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer", twitch_account_id="9050"))
+    db.add(User(id=50, username="viewer", tokens=0, twitch_user_id="Uviewer"))
     db.add(TwitchPresence(twitch_user_id="Uviewer", channel_id="test_channel", seen_at=int(time.time())))
     db.commit()
 

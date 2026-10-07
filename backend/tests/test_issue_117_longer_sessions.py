@@ -642,7 +642,8 @@ def test_toggle_admin_deletes_target_sessions(session_env):
     admin, target = _admin_pair(session_env)
     victim = session_env.login("bob")
     _reauth(admin)
-    resp = admin.post(f"/users/{target}/toggle-admin")
+    # Issue #150: the toggle also needs the typed confirmation.
+    resp = admin.post(f"/users/{target}/toggle-admin", params={"confirm": "CHANGE ADMIN"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["is_admin"] is True
     assert session_env.rows(target) == []
@@ -854,7 +855,8 @@ def test_destructive_admin_endpoint_after_reauth_succeeds(session_env, tmp_path,
     listing = admin.get("/admin/backups")
     assert listing.status_code == 200, listing.text
     assert listing.json()["backups"] == []
-    reset = admin.post("/admin/season/reset", json={"force": True})
+    # Issue #150: season reset also needs the typed confirmation.
+    reset = admin.post("/admin/season/reset", json={"force": True, "confirm": "RESET SEASON"})
     assert reset.status_code == 200, reset.text
     assert reset.json()["status"] == "ok"
 
@@ -961,8 +963,11 @@ def test_frontend_destructive_admin_calls_use_admin_fetch():
         r"`\$\{API\}/admin/season/reset`",
         r"`\$\{API\}/admin/leagues/\$\{_purgeTargetLeagueId\}/data`",
         r"`\$\{API\}/admin/backups`",
-        r"`\$\{API\}/admin/backups/\$\{encodeURIComponent\(filename\)\}`",
-        r"`\$\{API\}/users/\$\{userId\}/toggle-admin`",
+        # Issue #150: these two carry the typed confirmation as ?confirm=.
+        r"`\$\{API\}/admin/backups/\$\{encodeURIComponent\(filename\)\}\?confirm=",
+        r"`\$\{API\}/users/\$\{userId\}/toggle-admin\?confirm=",
+        r"`\$\{API\}/grant-tokens`",
+        r"`\$\{API\}/admin/users/\$\{userId\}\?confirm=",
     )
     for pat in patterns:
         calls = re.findall(r"(\w+)\(" + pat, js)

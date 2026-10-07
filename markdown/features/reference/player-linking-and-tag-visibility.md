@@ -22,19 +22,34 @@ them to link their ID so stickers appear on their cards.
 ## Endpoints
 
 ### `GET /profile/{user_id}`
-Returns profile data including a `tags` array:
+Returns profile data including a `tags` array (as seen by the owner or an admin):
 
 ```json
 {
   "id": 7,
   "username": "PlayerX",
+  "is_admin": false,
   "player_id": 123456789,
   "player_name": "PlayerX",
   "player_avatar_url": "https://...",
+  "player_verified": false,
   "twitch_linked": false,
   "tags": [{"key": "caster", "label": "Caster"}]
 }
 ```
+
+### Verified vs self-reported player ids (issue #169)
+
+A player id typed in through `PUT /profile/player-id` is **self-reported**: nothing proves the
+account belongs to that player. An id set by Steam sign-in or Link Steam (#150, `users.steam_id`)
+is **verified**, and `player_verified` is true. Because a player id is a Steam32 id:
+
+- other viewers never get `player_id` (the key is absent);
+- they get `player_name`, and `player_avatar_url` only when the id is verified;
+- the owner and admins still get the id and the avatar.
+
+Profile labels the linked name "Verified with Steam" or "Self-reported" and shows the avatar only
+for a verified id. See `impersonation-hardening.md`.
 
 ### `PUT /profile/player-id`
 Links (or unlinks) the user's Dota 2 player ID. Body: `{"player_id": 123456789}` or

@@ -215,6 +215,14 @@ def _join(db, opaque_id="Uviewer1", user_id=None, role="viewer"):
     return twitch.join(_viewer(opaque_id, user_id=user_id, role=role), db)
 
 
+def _backdate(db, opaque_id, hours=25):
+    """Age a soft account past the drop pool's minimum account age (issue #171, default 24 h)."""
+    user = _user_by_opaque(db, opaque_id)
+    user.created_at = int(time.time()) - hours * 3600
+    db.commit()
+    return user
+
+
 def _user_by_opaque(db, opaque_id):
     from models import User
     return db.query(User).filter(User.twitch_user_id == opaque_id).first()
@@ -1230,15 +1238,13 @@ class TestDrawAndRosterInPanel:
 class TestTokenDropsForTwitchPlayers:
 
     def test_active_pool_includes_present_soft_and_linked_accounts(self, db):
-        """AC Who is eligible: the drop pool is every present viewer with an account (soft or website-linked) via users.twitch_user_id. Since issue #171 the viewer must also have shared their Twitch identity (users.twitch_account_id)."""
+        """AC Who is eligible: the drop pool is every present viewer with an account (soft or website-linked) via users.twitch_user_id."""
         import twitch
-        _join(db, "Usoft", user_id="5001")
-        linked = _website_user(db, "linked", twitch_user_id="Ulinked")
-        linked.twitch_account_id = "5002"
-        db.commit()
-        _join(db, "Ustale", user_id="5003")
-        _join(db, "Unoshare")
-        for oid in ("Usoft", "Ulinked", "Unoaccount", "Unoshare"):
+        _join(db, "Usoft")
+        _backdate(db, "Usoft")
+        _website_user(db, "linked", twitch_user_id="Ulinked")
+        _join(db, "Ustale")
+        for oid in ("Usoft", "Ulinked", "Unoaccount"):
             _present(db, oid)
         _present(db, "Ustale", seen_at=int(time.time()) - 3600)
         assert sorted(twitch._active_pool(db, _CHANNEL)) == ["Ulinked", "Usoft"]
@@ -1250,8 +1256,9 @@ class TestTokenDropsForTwitchPlayers:
         _chat_recorder(monkeypatch)
         monkeypatch.setattr(twitch, "_TWITCH_DROP_MAX", 2)
         _seed_series_match(db)
-        for i, oid in enumerate(("Us1", "Us2", "Us3")):
-            _join(db, oid, user_id=str(6000 + i))  # identity shared (issue #171)
+        for oid in ("Us1", "Us2", "Us3"):
+            _join(db, oid)
+            _backdate(db, oid)
             _present(db, oid)
         start = {u.id: u.tokens for u in db.query(User).all()}
         result = _set_mvp(db)
@@ -1271,11 +1278,10 @@ class TestTokenDropsForTwitchPlayers:
         assert twitch._mvp_chat_text("Savu", 1, False) == "Match MVP: Savu! 1 viewer received a token."
         chat = _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        alice = _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
-        alice.twitch_account_id = "7001"  # identity shared (issue #171)
-        db.commit()
+        _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
         _present(db, "Ulinked")
-        _join(db, "Usoft", user_id="7002")
+        _join(db, "Usoft")
+        _backdate(db, "Usoft")
         _present(db, "Usoft")
         _set_mvp(db)
         assert chat == ["Match MVP: Player102! 2 viewers received a token."]
@@ -1291,9 +1297,7 @@ class TestTokenDropsForTwitchPlayers:
         monkeypatch.setattr(twitch, "_pubsub_broadcast", lambda channel_id, message: sent.append(message))
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        alice = _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
-        alice.twitch_account_id = "7003"  # identity shared (issue #171)
-        db.commit()
+        _website_user(db, "alice_secret_name", twitch_user_id="Ulinked")
         _present(db, "Ulinked")
         _set_mvp(db)
         assert len(sent) == 1
@@ -1350,7 +1354,8 @@ class TestTokenDropsForTwitchPlayers:
         assert twitch.drops_enabled() is True
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
-        _join(db, "Usoft", user_id="7004")  # identity shared (issue #171)
+        _join(db, "Usoft")
+        _backdate(db, "Usoft")
         _present(db, "Usoft")
         assert _set_mvp(db)["token_drop"]["winner_count"] == 1
         db.expire_all()
@@ -1365,7 +1370,7 @@ class TestTokenDropsForTwitchPlayers:
         result = _set_mvp(db)
         assert result["token_drop"]["pool_size"] == 0
         assert db.query(TwitchMVP).filter_by(match_id=1001).count() == 1
-        assert chat == ["Match MVP: Player102! No tokens were dropped: no eligible viewers were watching."]
+        assert chat == ["Match MVP: Player102! No tokens were dropped: no joined viewers were watching."]
 
 
 # ---------------------------------------------------------------------------
@@ -1397,12 +1402,10 @@ class TestNoLinkCodesInExtension:
         assert "alice" not in json.dumps(data)
 
     def test_code_linked_website_account_still_in_drop_pool(self, db, twitch_env, monkeypatch):
-        """AC Players linked before: a code-linked website account still receives drops (once its Twitch identity is shared, issue #171)."""
+        """AC Players linked before: a code-linked website account still receives drops."""
         _chat_recorder(monkeypatch)
         _seed_series_match(db)
         alice = _website_user(db, "alice", twitch_user_id="Ulinked", tokens=7)
-        alice.twitch_account_id = "7005"
-        db.commit()
         _present(db, "Ulinked")
         result = _set_mvp(db)
         assert result["token_drop"]["winner_count"] == 1

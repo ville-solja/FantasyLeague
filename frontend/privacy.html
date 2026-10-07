@@ -16,7 +16,7 @@
 <body>
 
 <h1>Privacy Policy</h1>
-<p class="updated">Last updated: 2026-10-06</p>
+<p class="updated">Last updated: 2026-10-07</p>
 
 <p>This policy describes what information Kana Cards (the Kanaliiga Fantasy League app, "the
 Service") collects, why, and how it's used — including through the Kanaliiga Kana-Cards Twitch
@@ -25,9 +25,21 @@ Extension.</p>
 <h2>Information we collect</h2>
 <ul>
   <li><strong>Account information</strong> — username, email address, and a hashed password when
-  you register directly on the Service. We never store plaintext passwords.</li>
+  you register directly on the Service. We never store plaintext passwords. An account created
+  with <em>Sign in with Steam</em> has a username and no email or password.</li>
+  <li><strong>Steam account ID</strong> — when you sign in with Steam or press <em>Link Steam</em>
+  on your Profile, you sign in on steamcommunity.com and Steam confirms your Steam account ID (a
+  17-digit number) to us. We store that ID on your account so you can sign in with Steam, and set
+  your linked Dota player id from it. Kana Cards never sees your Steam password and does not fetch
+  your Steam profile, name, friends or games. The Steam ID is personal data: it is never shown to
+  other users, and other users see no more than your player name and avatar from public match
+  data. Unlinking Steam on your Profile removes the ID
+  from your account; the verified player id stays until you or an admin change it.</li>
   <li><strong>Linked Dota account</strong> — if you link your own OpenDota/Steam account ID, so
-  the app can associate your Fantasy roster with real match statistics.</li>
+  the app can associate your Fantasy roster with real match statistics. A linked player id
+  identifies a Steam account, so Kana Cards shows the number only to you and to admins. Other
+  users see the player's name, marked "Verified with Steam" or "Self-reported", and the player's
+  avatar only when the id is verified with Steam.</li>
   <li><strong>Twitch soft account</strong> — if you press <em>Join Kana Cards</em> in the Twitch
   Extension, we create a game account (a "soft account") that holds only the opaque, per-extension
   Twitch user id Twitch's platform provides, your game progress (cards, tokens, roster, points)
@@ -103,6 +115,10 @@ Soft accounts with no activity for 365 days are deleted automatically.</p>
   data is sent to OpenDota.</li>
   <li><strong>Twitch Extensions platform</strong> — hosts the Extension's frontend and issues the
   identity/authorization tokens the Extension backend validates.</li>
+  <li><strong>Steam (Valve)</strong> — <em>Sign in with Steam</em> sends you to steamcommunity.com,
+  and the Service asks Steam to confirm each sign-in. No Service account data is sent to Steam
+  beyond the sign-in itself. When Steam is unavailable, Steam sign-in fails safely and you can sign
+  in with your password if your account has one.</li>
   <li><strong>SMTP relay</strong> — used solely to deliver password-reset email.</li>
 </ul>
 

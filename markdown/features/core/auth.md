@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the Kana Cards app. Sessions are server-side: each login creates a `user_sessions` row, and the signed cookie (Starlette's `SessionMiddleware`) carries only a random session ID. Idle and absolute limits depend on the role, and admins confirm their password before destructive actions (issue #117; see Session Validation and Revocation below and `reference/longer-sessions.md`).
+User accounts, sessions, and profile management for the Kana Cards app. Players sign in with a username and password, or with Steam when `LOGIN_METHOD` is `both` or `steam_signup` (issue #150; see **Steam Sign-in** below). Sessions are server-side: each login creates a `user_sessions` row, and the signed cookie (Starlette's `SessionMiddleware`) carries only a random session ID. Idle and absolute limits depend on the role, and admins pass a recent identity check (password or Steam re-auth) before destructive actions, plus a typed confirmation for six of them (issues #117 and #150; see Session Validation and Revocation below and `reference/longer-sessions.md`).
 
 ---
 
@@ -9,6 +9,8 @@ User accounts, sessions, and profile management for the Kana Cards app. Sessions
 ### `POST /register`
 
 Creates a new user account and immediately starts a session. No authentication required.
+Available in `LOGIN_METHOD` `password` and `both`; in `steam_signup` it answers 404 and new
+accounts come only from Steam (`POST /auth/steam/signup`, see **Steam Sign-in**).
 
 ```json
 { "username": "SomeUser", "email": "user@example.com", "password": "secret123" }
@@ -20,7 +22,7 @@ On success, returns `{ username, is_admin, tokens }` and sets the session cookie
 
 | Field | Rule | Error |
 |---|---|---|
-| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 409 if already taken, compared case-insensitively (`Ville` blocks `ville`). 422 `"That username is reserved. Please choose another."` if it contains a word from `RESERVED_USERNAME_WORDS` (issue #169, see below). |
+| `username` | Required. 1–64 characters. Only letters `A-Z` `a-z`, digits `0-9`, underscore `_` and hyphen `-` (`^[A-Za-z0-9_-]+$`, `check_username()` in `backend/auth.py`; see `reference/security-audit-3.md`). | 422 if missing, exceeds limit, or contains any other character; the message lists the allowed characters. 422 "This name is reserved" if it contains a reserved word (`auth.check_reserved`, see **Username rules** below). 409 if already taken, ignoring letter case. |
 | `email` | Required. 3–254 characters. Must fully match `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}`, so spaces, CR and LF are rejected. | 422 if missing, malformed, or exceeds limit. 409 if already registered. |
 | `password` | Required. 6–128 characters and at most 72 UTF-8 bytes (bcrypt's limit). | 422 if missing or outside length bounds. |
 
@@ -29,12 +31,20 @@ passwords, and bcrypt 4.x truncates the same way when hashing and verifying. Nor
 the username character rule, so accounts created before the rule keep logging in with their
 existing name.
 
-**Reserved words and case (issue #169).** `username_policy_error()` in `backend/auth.py` checks new
-and renamed usernames (never existing ones, which keep working): a case-insensitive clash with
-another account is 409, and a name containing a word from `RESERVED_USERNAME_WORDS` (default
-`admin,administrator,moderator,mod,support,official,staff`; a league adds its own name) is 422.
-Words of 4+ letters match anywhere (`SuperAdmin1`); shorter ones only as a whole part between `_`,
-`-` and digits (`mod_ville`, not `Commodore`). Login still matches the exact username.
+#### Username rules (issue #169)
+
+- **Unique regardless of case.** `auth.username_taken` compares `lower(username)` on register,
+  rename, Steam sign-up, env admin seeding and demo seeding; migration `034` backs it with a
+  unique index on `lower(username)`. `Ville` and `ville` can't both exist. Login still matches
+  the name exactly.
+- **Reserved words.** A new name can't contain a word from `RESERVED_USERNAME_WORDS` (default
+  `admin,kana,liiga,support,official,staff,mod`) after look-alike normalisation, so `4dmin` and
+  `Kana_Liiga` are refused with 422 "This name is reserved". Existing names keep working, and env
+  admin seeding is exempt.
+- **Rename cooldown.** One rename per `USERNAME_CHANGE_COOLDOWN_DAYS` (default 7, `0` = off); see
+  **Updating Username**.
+
+Details: `reference/impersonation-hardening.md`.
 
 The register form shows the allowed username characters under the field before submission.
 
@@ -99,6 +109,10 @@ the login lockout (per username and source IP, see `POST /login`); a locked-out 
 same message as `/login`. If the current session row is missing (a defensive check), 401
 `"Not authenticated"`. Limited by `RATE_LIMIT_LOGIN`. Writes an audit entry on success (`ok`) and
 on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for everyone else.
+An account without a password (created through Steam, issue #150) gets 409 `"use_steam_reauth"`,
+which does not count as a failed login; it confirms with a Steam round trip
+(`GET /auth/steam/start?purpose=reauth`), which sets the same `reauth_at` through
+`sessions.mark_reauth`.
 
 ### `GET /sessions`
 
@@ -123,9 +137,20 @@ section alongside the other endpoints below (which are all in `auth.py`).
   "username": "SomeUser",
   "is_admin": false,
   "tokens": 4,
-  "must_change_password": false
+  "must_change_password": false,
+  "steam_linked": false,
+  "has_password": true,
+  "is_demo": false,
+  "username_change_available_at": null
 }
 ```
+
+`username_change_available_at` (issue #169) is the Unix time the next rename becomes possible, or
+`null` when a rename is allowed now or the cooldown is off. Profile shows it as "You can rename
+again on <date>".
+
+`steam_linked`, `has_password` and `is_demo` (issue #150) are booleans only; the Steam id is never
+returned. The frontend uses them for Profile's Steam section and the re-auth prompt.
 
 `must_change_password` is `true` only for an account still holding an outstanding **pre-fix
 legacy** temporary password (see `reference/temp-password-expiry.md`). The frontend detects this
@@ -142,21 +167,15 @@ Returns basic profile information for any user by ID. Requires login — any aut
 account can view any other user's profile (this is not an ownership restriction, just a
 login requirement; see `reference/profile-requires-login.md`). Returns 401 if unauthenticated.
 
-Since issue #169 another user's profile (not your own, and not for admins) leaves out the linked
-player's numeric `player_id` (a Steam32 id that leads to a Steam profile) and `player_avatar_url`,
-because the link is self-reported and anyone could otherwise borrow a known player's picture.
-`player_name` is still shown and `player_self_reported` is `true` whenever a player is linked.
-`is_admin` marks real admins.
-
 ```json
 {
   "id": 3,
   "username": "SomeUser",
+  "is_admin": false,
   "player_id": 123456789,
   "player_name": "SomePlayer",
   "player_avatar_url": "https://...",
-  "player_self_reported": true,
-  "is_admin": false,
+  "player_verified": true,
   "twitch_linked": true,
   "tags": [{"key": "caster", "label": "Caster"}],
   "past_seasons": [{"season_label": "Season 15", "points": 1240.0, "rank": 3}]
@@ -166,6 +185,11 @@ because the link is self-reported and anyone could otherwise borrow a known play
 `twitch_linked` is `true` when the panel recognises the account (`users.twitch_user_id` is set). Profile's Twitch section reads `GET /twitch/connection` instead (see **Twitch Connection** below).
 
 `player_name` and `player_avatar_url` are `null` if the user has not linked a Dota 2 account, or if the linked `player_id` does not exist in the local database.
+
+Issue #169: `player_id` (a Steam32 id) is returned only when the viewer is the profile's owner or
+an admin (checked against the database). For anyone else the key is absent, and
+`player_avatar_url` is `null` unless `player_verified` is true (the account has a Steam-verified
+player id, #150). `is_admin` drives the ADMIN badge. See `reference/impersonation-hardening.md`.
 
 `tags` is an array of admin-granted tag objects (`key` + `label`); empty array when the user holds no tags.
 
@@ -183,9 +207,13 @@ Changes the authenticated user's display name. Requires login.
 { "username": "NewName" }
 ```
 
-- Returns 409 if the username is already taken by another account, compared case-insensitively;
-  changing only the letter case of your own name is allowed.
-- Returns 422 if the new name contains a reserved word (see **Registration**, issue #169).
+- Returns 409 if the username is already taken by another account, ignoring letter case.
+- Returns 422 "This name is reserved" if a new name contains a reserved word (issue #169). Keeping
+  the current name, or changing only its letter case, skips this check.
+- Returns 429 "You can change your username again on <date> UTC" (with `Retry-After`) when the last
+  rename was less than `USERNAME_CHANGE_COOLDOWN_DAYS` (default 7) ago. A real rename sets
+  `users.username_changed_at`; a case-only change or the unchanged name doesn't count.
+- Returns `{ "username", "username_change_available_at" }`.
 - Returns 422 unless the value matches the same rule as registration: 1–64 characters of
   letters, digits, `_` and `-` (see `reference/security-audit-3.md`). Surrounding whitespace
   is rejected rather than stripped; the profile form trims it before sending and shows the
@@ -206,6 +234,9 @@ Links the authenticated user's account to an OpenDota player ID. Requires login.
 ```
 
 Set `player_id` to `null` to unlink. The response includes `player_name` and `player_avatar_url` resolved from the local database (null if the player has not been ingested yet).
+
+Returns 409 for an account with a linked Steam id (issue #150): its `player_id` is the verified
+Steam32 id, set at link or sign-up time.
 
 ---
 
@@ -383,6 +414,30 @@ a recent `POST /reauth`. Twitch's tokens are never stored. Endpoints, checks and
 
 ---
 
+## Steam Sign-in
+
+`LOGIN_METHOD` (default `password`) selects how people get in (issue #150):
+
+| Mode | Sign in | Create an account |
+|---|---|---|
+| `password` | Password | `POST /register`; every Steam route answers 404 |
+| `both` | Password or Steam | `POST /register` or Steam |
+| `steam_signup` | Password (existing accounts) or Steam | Steam only; `POST /register` answers 404 |
+
+Steam sign-in uses Steam OpenID 2.0: `GET /auth/steam/start` sends the browser to
+steamcommunity.com and `GET /auth/steam/callback` verifies the answer (every check, plus a
+server-side `check_authentication` POST) before starting a session with a new session id. A new
+Steam ID picks a display name (`POST /auth/steam/signup`) and gets an account with no password or
+email and `player_id` = its Steam32 id. Logged-in password accounts can **Link Steam** on Profile
+(recent re-auth), which replaces the self-reported `player_id` with the verified one;
+`POST /profile/steam/unlink` removes the link for accounts that also have a password. Password
+sign-in, password reset, `PUT /profile/password` and `POST /reauth` keep working for password
+accounts in every mode. Unknown `LOGIN_METHOD` values are logged and treated as `password`; `steam`
+(#172, not built yet) is treated as `steam_signup`. Checks, redirect keys, admin seeding by Steam ID
+(`SEED_ADMIN_STEAM_IDS`) and configuration: `reference/steam-login.md`.
+
+---
+
 ## Password Manager Autofill
 
 The login, registration, password reset, profile change-password and admin re-login fields are each a `<form>` (`#loginForm`, `#registerForm`, `#resetPasswordForm`, `#changePasswordForm`, `#reauthForm`) with `name` and `autocomplete` tokens (`username`, `current-password`, `new-password`, `email`, `one-time-code`), so password managers fill the login and offer to save or update passwords (issue #158). Each form's `submit` event calls `preventDefault()` and the existing function, so the requests above are unchanged and the page never reloads. Forms with a lone password field carry a visually hidden, read-only username helper. See `reference/password-manager-autofill.md`.
@@ -406,11 +461,13 @@ The login, registration, password reset, profile change-password and admin re-lo
 | `INITIAL_TOKENS` | `5` | Tokens granted to each newly registered user |
 | `TEMP_PASSWORD_TTL_HOURS` | `24` | Legacy-only — no current code path issues new temp passwords. See `reference/temp-password-expiry.md` |
 | `PASSWORD_RESET_TOKEN_TTL_HOURS` | `1` | Hours before a `POST /forgot-password` reset token expires |
+| `APP_BASE_URL` | *(empty)* | Public base URL used to build a clickable reset link in emails (if unset, only the raw code is emailed) and the Steam OpenID return address (required for Steam sign-in) |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed logins for one username from one IP before it is locked out from that IP (issue #168) |
 | `LOGIN_LOCKOUT_USERNAME_THRESHOLD` | `100` | Failed logins for one username from all IPs before it is locked out everywhere |
 | `LOGIN_LOCKOUT_WINDOW_SECONDS` | `300` | Window the lockout counters cover |
-| `RESERVED_USERNAME_WORDS` | `admin,administrator,moderator,mod,support,official,staff` | Words new or renamed usernames may not contain (issue #169) |
-| `APP_BASE_URL` | *(empty)* | Public base URL used to build a clickable reset link in emails; if unset, only the raw code is emailed |
+| `LOGIN_METHOD` | `password` | `password`, `both` or `steam_signup` (issue #150, see `reference/steam-login.md`) |
+| `SEED_ADMIN_STEAM_IDS` | *(empty)* | Comma-separated Steam64 IDs that become admins on a verified Steam sign-in, sign-up or link |
+| `RATE_LIMIT_STEAM_CALLBACK` | `10/minute` | Per-IP limit on the Steam start, callback and sign-up routes |
 | `SMTP_HOST` | *(empty — disables email)* | SMTP server hostname |
 | `SMTP_PORT` | `587` | SMTP port |
 | `SMTP_USER` | *(empty)* | SMTP login username |

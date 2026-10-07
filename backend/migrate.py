@@ -548,7 +548,59 @@ def _m032_users_merged_soft_account_at(conn):
     logger.info("Migration: users — added merged_soft_account_at and pending_merge_user_id columns")
 
 
-def _m033_promo_codes_limits(conn):
+def _m033_users_steam_id(conn):
+    """Issue #150: Steam sign-in. users.steam_id (verified Steam64 id, unique) and
+    users.is_demo (throwaway demo accounts; existing demo1, demo2… accounts made by
+    POST /admin/demo/seed-accounts are flagged by their username@demo.local email)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "steam_id" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN steam_id VARCHAR(17)"))
+    if "is_demo" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN is_demo BOOLEAN NOT NULL DEFAULT 0"))
+        conn.execute(text(
+            "UPDATE users SET is_demo = 1 WHERE username LIKE 'demo%' "
+            "AND email = username || '@demo.local'"
+        ))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_steam_id ON users(steam_id)"))
+    conn.commit()
+    logger.info("Migration: users — added steam_id and is_demo columns")
+
+
+def _m034_username_case_and_rename_time(conn):
+    """Issue #169: users.username_changed_at (rename cooldown) and a unique index on
+    lower(username). The index is skipped with a warning naming the user ids when
+    case-insensitive duplicates already exist; the app-level check still blocks new ones."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "username_changed_at" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN username_changed_at INTEGER"))
+    duplicates = conn.execute(text(
+        "SELECT lower(username), group_concat(id) FROM users WHERE username IS NOT NULL "
+        "GROUP BY lower(username) HAVING COUNT(*) > 1"
+    )).fetchall()
+    if duplicates:
+        logger.warning(
+            "Migration 034: case-insensitive duplicate usernames (user ids %s) — unique index "
+            "on lower(username) not added; rename one account of each pair, then run "
+            "CREATE UNIQUE INDEX ix_users_username_lower ON users (lower(username))",
+            "; ".join(r[1] for r in duplicates),
+        )
+    else:
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username_lower ON users (lower(username))"
+        ))
+    conn.commit()
+    logger.info("Migration: users — added username_changed_at column")
+
+
+def _m035_users_admin_seed_applied_at(conn):
+    """users.admin_seed_applied_at: SEED_ADMIN_STEAM_IDS promotes an account at most once,
+    so an in-app demotion isn't undone at the next Steam sign-in."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if "admin_seed_applied_at" not in cols:
+        conn.execute(text("ALTER TABLE users ADD COLUMN admin_seed_applied_at INTEGER"))
+        conn.commit()
+        logger.info("Migration: users — added admin_seed_applied_at column")
+def _m036_promo_codes_limits(conn):
     """Issue #167: optional expiry and redemption cap on promo codes."""
     cols = {r[1] for r in conn.execute(text("PRAGMA table_info(promo_codes)")).fetchall()}
     if not cols:
@@ -617,7 +669,10 @@ MIGRATIONS = [
     ("030_weekly_summary_seen_last_prompted", _m030_weekly_summary_seen_last_prompted),
     ("031_users_twitch_soft_accounts", _m031_users_twitch_soft_accounts),
     ("032_users_merged_soft_account_at", _m032_users_merged_soft_account_at),
-    ("033_promo_codes_limits",       _m033_promo_codes_limits),
+    ("033_users_steam_id",           _m033_users_steam_id),
+    ("034_username_case_and_rename_time", _m034_username_case_and_rename_time),
+    ("035_users_admin_seed_applied_at", _m035_users_admin_seed_applied_at),
+    ("036_promo_codes_limits",       _m036_promo_codes_limits),
 ]
 
 

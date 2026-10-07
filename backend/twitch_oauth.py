@@ -71,15 +71,19 @@ _ENV_KEYS = ("TWITCH_OAUTH_CLIENT_ID", "TWITCH_OAUTH_CLIENT_SECRET", "TWITCH_OAU
 _jwks_client = None
 
 
+_REDACTED_PREFIXES = ("/auth/twitch/", "/auth/steam/")
+
+
 class RedactSignInQuery(logging.Filter):
-    """Drop the query string (code, state, error text) of /auth/twitch/* requests from
-    uvicorn's access log lines. main.py installs it on the "uvicorn.access" logger."""
+    """Drop the query string (code, state, error text; for Steam, issue #150, the whole
+    OpenID assertion) of /auth/twitch/* and /auth/steam/* requests from uvicorn's
+    access log lines. main.py installs it on the "uvicorn.access" logger."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
         if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str):
             path = args[2]
-            if path.startswith("/auth/twitch/") and "?" in path:
+            if path.startswith(_REDACTED_PREFIXES) and "?" in path:
                 record.args = args[:2] + (path.split("?", 1)[0] + "?[redacted]",) + args[3:]
         return True
 

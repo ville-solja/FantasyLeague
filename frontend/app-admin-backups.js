@@ -48,8 +48,10 @@ async function createBackup() {
 }
 
 async function downloadBackup(filename) {
+  const confirmText = await typedConfirm("backup_download", `Download ${filename}. It holds every account's data.`);
+  if (confirmText === null) return;
   try {
-    const res = await adminFetch(`${API}/admin/backups/${encodeURIComponent(filename)}`);
+    const res = await adminFetch(`${API}/admin/backups/${encodeURIComponent(filename)}?confirm=${encodeURIComponent(confirmText)}`);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       return setStatus("dbBackupsStatus", data.detail || "Download failed", false);

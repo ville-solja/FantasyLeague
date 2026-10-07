@@ -15,6 +15,8 @@ Assumptions:
 - Reset tokens are hashed in the existing `password_reset_tokens.token` column, so no migration is needed; outstanding plaintext tokens simply stop matching (they expire within an hour anyway).
 - The optional daily `ebs_url` check (#164) and the admin-set display name (#166) are left out.
 
+**Update after PR 174:** #169 and #171 shipped with the Steam login (PR 174) in their own designs (for #171, a minimum soft-account age instead of the identity share). This branch's versions of Steps 6 and 7 were dropped when merging `main`; the migration in Step 4 became `036_promo_codes_limits`.
+
 Resolves GitHub issue #163 (sub-issues #164, #165, #166, #167, #168, #169, #170, #171).
 
 ## User Stories
@@ -128,7 +130,7 @@ As the league operator, I want only viewers who shared their Twitch identity to 
 
 ### Step 4 — Admin reauth and promo codes (#167)
 - `require_recent_reauth` on the routes in the issue table; switch the frontend calls to `adminFetch`.
-- Migration `033_promo_codes_limits`: `expires_at INTEGER`, `max_redemptions INTEGER` (both nullable). Create form gets two optional fields; the list shows them.
+- Migration `036_promo_codes_limits`: `expires_at INTEGER`, `max_redemptions INTEGER` (both nullable). Create form gets two optional fields; the list shows them.
 - `/redeem`: one 404 message "Invalid or expired code" for unknown, expired and used-up codes; "already redeemed" stays 409 (it is the user's own state).
 
 ### Step 5 — Reset and lockout (#168)

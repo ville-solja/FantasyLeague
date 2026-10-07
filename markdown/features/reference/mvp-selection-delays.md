@@ -74,7 +74,7 @@ Each match adds `live_first_seen_at`, `ingested_at` and `mvp_confirmed_at` (Unix
 
 | Variable | Default | Description |
 |---|---|---|
-| `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for live-game detection (the Steam login, #150, will reuse it) |
+| `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for live-game detection. Steam sign-in (#150) needs no Steam Web API key |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks while a league is monitored |
 
 ## Manual follow-up
