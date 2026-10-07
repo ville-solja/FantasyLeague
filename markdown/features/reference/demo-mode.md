@@ -96,11 +96,22 @@ irreversible by design, matching production behaviour. The demo clock can only m
 `GET /config` includes `"demo_mode": true` only when the server has `DEMO_MODE=true` set
 (read live from the environment on every request, not cached at startup). The frontend
 (`frontend/app-globals.js` `loadConfig()`) stores this as `window.demoMode`, toggles the
-`#demo-mode-badge` notice (a full-width strip at the top today; issue #173 moves it to a
-small chip in the bottom-right corner, above the version badge *(planned)*), and calls `renderDemoModePanel()` (`frontend/app-admin.js`),
+`#demo-mode-badge` notice, and calls `renderDemoModePanel()` (`frontend/app-admin.js`),
 which injects the Settings-tab Demo Mode panel (clock form + seed-accounts form and results
 table) into `#demoModePanelContainer` only when true — the container is left empty otherwise,
 so the panel markup is entirely absent from the DOM, not just hidden via CSS.
+
+## Demo notice
+
+The "DEMO MODE" notice (`#demo-mode-badge`, `.demo-mode-badge` in `frontend/style.css`) is a
+small fixed notice in the bottom-right corner, above the version badge (issue #173; it used to
+be a full-width strip over the header and tab bar). It sits at `right: 10px; bottom: 28px`,
+just above `.version-badge` (`right: 10px; bottom: 6px`), with `white-space: nowrap` so it stays
+on one line at phone width, square brand corners (`border-radius: var(--r-xs)`), and
+`z-index: 10000` (above the version badge's 9999, modals and the guided tour). It has
+`pointer-events: none` and `user-select: none`, so it never blocks clicks on what is under it.
+The markup is outside the tab panels, so it shows on every tab; it is hidden (`display: none`)
+unless `GET /config` reports `demo_mode: true`.
 
 ## Startup behaviour
 
