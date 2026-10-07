@@ -21,9 +21,16 @@ jobs:
         uses: actions/checkout@v4.3.1
 
       - name: Package Twitch extension
+        env:
+          # Backend origins baked into the panel's ebs-origins.js (issue #164); the
+          # panel refuses any other EBS URL. Override with the repository variable
+          # EBS_ORIGINS (space-separated https origins, e.g. to add a test host).
+          EBS_ORIGINS: ${{ vars.EBS_ORIGINS || 'https://kana-cards.com' }}
         run: |
           VERSION="${GITHUB_SHA:0:7}"
-          bash twitch-extension/package.sh "$VERSION"
+          ORIGIN_ARGS=()
+          for origin in $EBS_ORIGINS; do ORIGIN_ARGS+=(--ebs-origin "$origin"); done
+          bash twitch-extension/package.sh "$VERSION" "${ORIGIN_ARGS[@]}"
 
       - name: Upload extension package
         uses: actions/upload-artifact@v4
