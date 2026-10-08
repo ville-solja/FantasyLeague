@@ -648,3 +648,64 @@ As a player, I want each played series to show who won at a glance and keep game
   - the "Not scored" badge where it applies.
 - The Latest result card's "Games" button jumps to that series' week (normally the current week) and unfolds its games.
 - An upcoming series shows "vs" and no games button, as today. A fixture past its date with no resolved games shows "No result". A played series with a result but no resolved games shows its score and no games button.
+
+
+## Tournament Stages on the Schedule (issue #94)
+
+### Group Stage Standings and Results Grid
+**User story**
+As a player or viewer, I want a Group stage subtab under Schedule that shows each division's table and every result so that I can see who leads and who still has to play whom.
+
+**Acceptance criteria**
+- Schedule has a subtab bar: **Weeks** (the current view, default) and one subtab per stage the admin marked shown, in the admin's order, labelled with the stage's name
+- A round-robin stage shows a group chooser (one button per group, e.g. "Div 1", "Div 2") and a **Standings** / **Results grid** toggle; Standings is the default; the choices are kept while the tab stays open
+- Standings columns: rank, team, series played, wins, draws, losses, maps won–lost, points, form (last three series as W/D/L boxes with the letter, not colour alone); sorted by points, then map difference, then head-to-head, then the admin's group order
+- The top N teams (the stage's advance count) are marked "Playoffs" and a line separates them from the rest
+- The results grid shows every team against every other, score from the row team's side; a pairing not played yet shows its week ("W6") when the fixtures feed has it, else a dash; the diagonal is empty
+- With Hide results on, scores, form and points of unrevealed series are not rendered, and the table shows teams in the admin's group order with "Hidden" in place of numbers; revealing a series or week on the Weeks subtab reveals it here too
+- The table and grid scroll sideways in their own box on a phone-width screen; the page itself does not
+
+### Playoff Bracket
+**User story**
+As a player or viewer, I want a Playoffs subtab that draws the single-elimination bracket so that I can follow who meets whom and who is through.
+
+**Acceptance criteria**
+- A single-elimination stage draws one column per round (e.g. Semifinals, Final), each series as a card with seed, team name and series score; the winner's row is bold with the score in the accent colour
+- A slot not decided yet shows where it comes from in italics ("Winner of SF 2"); a slot seeded from a group stage shows the team once that stage has finished, else "Div 1 #1"
+- An optional third-place series sits under the final with a dashed outline
+- A series' card shows its scheduled time when set, "Upcoming" before it starts, and "Hidden" with a **Reveal** button when Hide results is on and the series is not revealed
+- Each series opens its games, as on the Weeks subtab
+- With several groups (Div 1, Div 2), a group chooser switches between their brackets
+
+### Set Up Stages in the Admin Portal
+**User story**
+As an admin, I want to define the season's stages, their format, groups and teams so that the Schedule shows the tournament the way our league runs it.
+
+**Acceptance criteria**
+- Admin › Schedule has a **Tournament stages** section listing stages with order, subtab name, format, groups, best-of, a Shown checkbox and a state (Draft, In progress, Finished); **Add stage**, **Edit** and **Delete** (with a confirmation)
+- A stage has: name (1–40 characters), format (Round robin, Single elimination, Double elimination, GSL groups, Swiss), date window (start and end), best-of (and final best-of for brackets), shown on Schedule (yes/no), advance count, and for round robin the points for a series win, draw and loss
+- Groups: an admin adds groups (name 1–40 characters) and picks teams for each from the season's teams; a team can be in one group per stage
+- Single elimination: the admin chooses the bracket size (2, 4, 8 or 16) and seeds each first-round slot either by hand (a team) or from a round-robin stage's final rank ("Div 1 #1"); later slots are filled from earlier series automatically; a third-place series is optional
+- An admin can set a series' scheduled time and, when its matches are missing, its winner and score by hand; a hand-set result shows a "Set by admin" note in the admin list only
+- Formats not drawn yet (double elimination, GSL, Swiss) can be saved but can't be marked Shown; the checkbox explains "Not shown on Schedule yet"
+- Every create, edit and delete writes an audit entry (`stage_created`, `stage_updated`, `stage_deleted`, `stage_series_result_set`); non-admins get 403 on every admin endpoint
+
+### Stage Data Stays Correct
+**User story**
+As the league operator, I want stage views to follow the ingested results and season resets so that nobody has to keep them in sync by hand.
+
+**Acceptance criteria**
+- A new ingested match between two teams of a stage, inside its date window, updates that series' score, the standings and any bracket slot it feeds, on the next Schedule load (the stage response shares the Schedule's cache and is busted with it)
+- A series with games outside the stage's window is not counted for that stage
+- `POST /admin/season/reset` deletes all stages, groups, teams-in-groups and series
+- `GET /schedule/stages` returns only shown stages, no admin-only fields (hand-set markers, audit data), and works for logged-out viewers
+
+### Double Elimination, GSL Groups and Swiss *(not yet implemented)*
+**User story**
+As a league running other formats, I want the Schedule to draw double-elimination brackets, GSL groups and Swiss rounds so that the tool fits more than one tournament structure.
+
+**Acceptance criteria**
+- Double elimination: upper and lower brackets as two rows of round columns plus a grand final; upper-bracket losers drop to the named lower-bracket slot
+- GSL groups (4 teams): opening matches, winners match, elimination match and decider; two teams advance
+- Swiss: rounds paired by record, pools shown by record ("1–1"), advance and elimination thresholds set per stage (default 2 wins / 2 losses for 8 teams, 3/3 for 16)
+- Each is enabled for Shown once drawn; the data model and admin editor from the first build are reused unchanged
