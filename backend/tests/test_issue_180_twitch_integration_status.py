@@ -539,6 +539,46 @@ class TestConnectionCheckPage:
             assert "<img src=x onerror=alert(1)>" in out["detail"]  # shown as text, not markup
 
 
+    def test_config_page_names_the_likely_cause_for_each_answer(self, tmp_path):
+        """The Connection check names the cause: a 404 ping (wrong ebs_url path or older server),
+        a 429 ping (wait; no code), invalid configuration JSON, an expired token and a server error detail."""
+        out = _run_config(tmp_path, """
+            good(); pingResult = resp(404);
+            await runConnectionCheck(); out.r404 = [rows()[2].detail, els["conn-code"].textContent];
+            pingResult = resp(429);
+            await runConnectionCheck(); out.r429 = [rows()[2].state, els["conn-code"].textContent];
+            pingResult = resp(200, {ok: true}); checkResult = resp(401, {detail: "Twitch token expired"});
+            await runConnectionCheck(); out.expired = [rows()[3].detail, els["conn-code"].textContent];
+            checkResult = resp(401, {detail: "Invalid Twitch token"});
+            await runConnectionCheck(); out.invalid = rows()[3].detail;
+            checkResult = resp(500, {detail: "TWITCH_EXTENSION_SECRET not configured"});
+            await runConnectionCheck(); out.server = [rows()[3].detail, els["conn-code"].textContent];
+            ext.configuredUrl = null; ext.configInvalid = true; onConfigTimeout();
+            out.badJson = [rows()[1].detail, els["conn-code"].textContent];
+        """)
+        if out is not None:
+            assert "path is wrong" in out["r404"][0] and out["r404"][1] == "Reason code: E-REACH"
+            assert out["r429"] == ["Failed", ""]
+            assert "expired" in out["expired"][0] and out["expired"][1] == "Reason code: E-TOKEN"
+            assert "TWITCH_EXTENSION_SECRET is not this extension's secret" in out["invalid"]
+            assert "TWITCH_EXTENSION_SECRET not configured" in out["server"][0]
+            assert out["server"][1] == "Reason code: E-SERVER"
+            assert "not valid JSON" in out["badJson"][0] and out["badJson"][1] == "Reason code: E-CONFIG"
+
+    def test_extension_js_marks_invalid_configuration_json(self, tmp_path):
+        """Failure path: an unparsable global configuration sets ext.configInvalid; a valid one clears it."""
+        out = _run_extension(tmp_path, """
+            _onCfgChanged(); out.bad = ext.configInvalid;
+        """, global_cfg='{content: "{not json"}')
+        if out is not None:
+            assert out == {"bad": True}
+        out = _run_extension(tmp_path, """
+            ext.configInvalid = true; _onCfgChanged(); out.good = ext.configInvalid;
+        """, global_cfg='{content: JSON.stringify({ebs_url: "https://league.example"})}')
+        if out is not None:
+            assert out == {"good": False}
+
+
 # ---------------------------------------------------------------------------
 # Story 3 — Twitch Status in the Admin Portal
 # ---------------------------------------------------------------------------
@@ -626,6 +666,23 @@ class TestTrafficCounters:
                 == mws[CORSMiddleware]["allow_origin_regex"])
 
 
+    def test_extension_origin_request_records_last_extension_request_at(self, monkeypatch):
+        """A /twitch/* request (preflight included) from an origin CORS allows sets
+        last_extension_request_at; refused origins, no Origin and other paths do not."""
+        import twitch
+        monkeypatch.delenv("APP_BASE_URL", raising=False)
+        client = TestClient(_refused_origin_app())
+        client.get("/twitch/ping")                                                     # no Origin
+        client.get("/twitch/ping", headers={"Origin": "https://evil.example"})         # refused
+        client.get("/other", headers={"Origin": f"https://{_CLIENT_ID}.ext-twitch.tv"})  # not /twitch/*
+        assert twitch.traffic_snapshot()["last_extension_request_at"] is None
+        before = int(time.time())
+        client.options("/twitch/ping", headers={"Origin": f"https://{_CLIENT_ID}.ext-twitch.tv",
+                                                 "Access-Control-Request-Method": "GET"})
+        assert twitch.traffic_snapshot()["last_extension_request_at"] >= before
+        assert twitch.traffic_snapshot()["refused_origins"] == ["evil.example"]
+
+
 class TestAdminTwitchStatus:
     def test_admin_twitch_status_returns_checks_traffic_and_console(self, monkeypatch, status_env):
         """GET /admin/twitch/status returns checks (key/state/label/detail), traffic and console blocks."""
@@ -641,7 +698,8 @@ class TestAdminTwitchStatus:
             assert set(c) == {"key", "state", "label", "detail"}
             assert c["state"] == "ok", c
             assert c["label"] and c["detail"]
-        assert set(data["traffic"]) == {"last_ok_at", "failures", "last_failure_at", "refused_origins"}
+        assert set(data["traffic"]) == {"last_ok_at", "failures", "last_failure_at",
+                                     "last_extension_request_at", "refused_origins"}
         assert data["console"] and all(set(c) == {"label", "expected"} for c in data["console"])
         from tests.test_issue_163_twitch_steam_account_hardening import _needs_reauth, _route
         from routers import admin_twitch
@@ -779,7 +837,7 @@ class TestAdminTwitchStatus:
         client, _ = _admin_client()
         assert client.get("/admin/twitch/status").json()["traffic"] == {
             "last_ok_at": None, "failures": {"expired": 0, "invalid": 0, "not_configured": 0},
-            "last_failure_at": None, "refused_origins": []}
+            "last_failure_at": None, "last_extension_request_at": None, "refused_origins": []}
         twitch.verify_twitch_jwt(None, _signed(_viewer_claims()))
         with pytest.raises(HTTPException):
             twitch.verify_twitch_jwt(None, "Bearer junk")
@@ -818,6 +876,15 @@ class TestAdminTwitchStatus:
         js = _read(FRONTEND_DIR / "app-admin-users.js")
         assert "`${API}/admin/twitch/status`" in js
         assert "loadTwitchStatus();" in _js_function(js, "loadUsers")
+
+    def test_admin_ui_shows_last_request_from_the_extension(self):
+        """The traffic block starts with "Last request from the extension", from last_extension_request_at,
+        and says what to check when nothing has arrived."""
+        render = _js_function(_read(FRONTEND_DIR / "app-admin-users.js"), "_renderTwitchStatus")
+        first = render.index('"Last request from the extension"')
+        assert first < render.index('"Last panel request with an accepted token"')
+        assert "t.last_extension_request_at" in render
+        assert "URL Fetching Domains" in render and "ebs_url" in render
 
     def test_admin_twitch_status_renders_into_its_own_container(self):
         """Failure path: the status table renders into #adminTwitchStatus, and index.html has no duplicate ids.

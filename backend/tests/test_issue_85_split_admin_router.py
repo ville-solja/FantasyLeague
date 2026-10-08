@@ -298,14 +298,16 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-180-twitch-integration-status's 45 new tests did after that (its
         update to test_issue_161's live_config harness, a failReasonSuffix stub, changed
         no counts), and the #180 follow-up's 1 new test (Twitch status renders into its own
-        container; no duplicate ids in index.html) did after that."""
+        container; no duplicate ids in index.html) did after that, and the #180 recheck's
+        4 new tests (last request from the extension, Connection check causes, invalid
+        configuration JSON, admin row) did after that."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2495 passed" in output, output[-3000:]
+        assert "2499 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

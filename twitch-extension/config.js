@@ -68,6 +68,10 @@ function checkAddress() {
     var url = ext.configuredUrl;
     if (!url) {
         if (!_configTimedOut) return _notChecked("Waiting for the extension configuration…");
+        if (ext.configInvalid) {
+            return _step("failed", "The extension's global configuration is not valid JSON. " +
+                "Set it again with set-ebs-url.sh.", EXT_REASON.CONFIG);
+        }
         return _step("failed", "No backend URL (ebs_url) in the extension's global configuration.",
             EXT_REASON.CONFIG);
     }
@@ -82,6 +86,11 @@ function checkReachable() {
     return fetch(ext.ebsUrl + "/twitch/ping").then(function (r) {
         if (r.ok) return _step("ok", "The backend answered.");
         if (r.status >= 500) return _step("failed", "The backend answered with an error (status " + r.status + ").", EXT_REASON.SERVER);
+        if (r.status === 429) return _step("failed", "Too many checks from this network: wait a minute, then press Check again.");
+        if (r.status === 404) {
+            return _step("failed", "The backend URL answered 404 for /twitch/ping: the ebs_url path is wrong " +
+                "(it must be the server's root URL), or the server runs a version older than this extension.", EXT_REASON.REACH);
+        }
         return _step("failed", "The backend answered status " + r.status + ": it may be an older version.", EXT_REASON.REACH);
     }, function () {
         return _step("failed", "No answer from the backend: DNS, TLS, the extension's URL Fetching Domains, " +
@@ -94,11 +103,18 @@ function checkToken() {
     return ebsGet("/twitch/check").then(function (data) {
         var status = data && data._status;
         if (!status) return { token: _step("ok", "Role: " + ((data && data.role) || "unknown") + "."), data: data };
+        // The server's own detail is fixed text ("Twitch token expired", "Invalid Twitch token",
+        // "TWITCH_EXTENSION_SECRET not configured", ...): never a secret or a token.
+        var detail = (data && typeof data.detail === "string") ? data.detail : "";
         if (status === 401) {
-            return { token: _step("failed", "The backend refused the Twitch token: its extension secret does not match this extension.", EXT_REASON.TOKEN), data: null };
+            if (detail === "Twitch token expired") {
+                return { token: _step("failed", "The Twitch token had expired: reload this page and check again.", EXT_REASON.TOKEN), data: null };
+            }
+            return { token: _step("failed", "The backend refused the Twitch token: its TWITCH_EXTENSION_SECRET is not this extension's secret.", EXT_REASON.TOKEN), data: null };
         }
         if (status >= 500) {
-            return { token: _step("failed", "The backend answered with an error (status " + status + ").", EXT_REASON.SERVER), data: null };
+            return { token: _step("failed", "The backend answered with an error (status " + status + ")" +
+                (detail ? ": " + detail : "") + ".", EXT_REASON.SERVER), data: null };
         }
         return { token: _step("failed", "The backend answered status " + status + "."), data: null };
     }, function () {

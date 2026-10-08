@@ -293,10 +293,12 @@ When the panel, the MVP tool or the configuration page can't load, its message e
 | Code | Likely cause | Fix |
 |---|---|---|
 | `E-ORIGIN` | The configured backend URL's origin was not packaged into the installed version (`package.sh --ebs-origin`, #164). Shown at once | Build a version with `package.sh <version> --ebs-origin <backend origin>`, upload it and install it on the channel. The configuration page's Package row lists the packaged origins |
-| `E-CONFIG` | No `ebs_url` in the global configuration segment after 8 seconds | Run `set-ebs-url.sh <backend URL>` (Step 5) |
+| `E-CONFIG` | No `ebs_url` in the global configuration segment after 8 seconds, or the segment is not valid JSON | Run `set-ebs-url.sh <backend URL>` (Step 5) |
 | `E-REACH` | The browser could not reach the backend: DNS or TLS, the host missing from the version's URL Fetching Domains, or CORS refused the extension origin | Add the backend origin to URL Fetching Domains; set `TWITCH_EXTENSION_CLIENT_ID` to the installed extension's Client ID (Twitch status lists refused hosts); check the backend answers over HTTPS |
 | `E-TOKEN` | The backend refused the Twitch token (401): `TWITCH_EXTENSION_SECRET` is wrong or belongs to another extension, or the token expired (reloading the panel gets a fresh one) | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
 | `E-SERVER` | The backend answered 5xx, for example with `TWITCH_EXTENSION_SECRET` empty or not base64, or `TWITCH_LOCAL_DEV=true` with `ENV=production` | Check Twitch status and the server log |
+
+Versions packaged before #180 (such as 1.2.1) show no codes and have no Connection check. For them, read Admin › Users › Twitch status: **Last request from the extension** says whether the panel reaches this server at all, **Refused Twitch tokens** whether it reaches it with a token the secret rejects, and the refused hosts whether another Client ID is calling.
 
 MVP selection refused on a channel that isn't approved (`ENV=production`, #165 / #175) has no code: the MVP tool says the channel is waiting for approval, and the configuration page's MVP selection row shows `pending` or `rejected`.
 
