@@ -1,4 +1,4 @@
-<!-- version: 10 -->
+<!-- version: 11 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -116,6 +116,8 @@ After the table, write a **Recommended next steps** section listing the top 3 hi
 End with a **summary line**: `X findings: Y High, Z Medium, W Low`.
 
 If a category has zero findings, write "✓ No issues found" for that section.
+
+End with `Next: /product-planner <the top recommendation as a one-line description>`.
 
 ## Complementary agents
 Run `/security-reviewer` for auth and input validation gaps not covered here.

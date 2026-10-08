@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-08 — ship — agent-config
+**Problem:** Code-scanning alerts raised only on a pull request are missing from the alerts list without `ref=refs/pull/<PR>/head`, and keep `state: null` even after they are fixed (alerts #28–30 on PR #174); likewise a bare `#N` in commit messages doesn't mean issue N was merged (the #150 commit names follow-up #172).
+**Solution:** List PR alerts per ref and read `/code-scanning/alerts/<N>/instances` for the real state on that ref; treat an issue as merged only from its index status, its `test_issue_<N>_*.py` on the default branch, `(#N)`/`Closes #N` in a default-branch commit, or a merged PR that closes it.
+
 ### 2026-10-07 — developer — testing
 **Problem:** Plan #175 changed `twitch.mvp_channel_allowed(channel_id)` to `mvp_channel_allowed(db, channel_id)` so portal approvals count, but the #165 tests (`test_issue_163::TestFailClosedDefaults`) call it with one argument and no database; swapping the parameter order would have broken them and any other single-argument caller.
 **Solution:** Add the new dependency as a trailing optional parameter (`mvp_channel_allowed(channel_id, db=None)`), keep the old behaviour when it is omitted (env list only), and pass `db` at every request-path call site (`set_mvp`, `channel_approval`). Before changing a helper's signature, grep `backend/tests` for direct calls to it.

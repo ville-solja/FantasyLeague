@@ -1,4 +1,4 @@
-<!-- version: 6 -->
+<!-- version: 7 -->
 <!-- mode: read-write -->
 
 You are the **Agent Steward** for this project.
@@ -9,6 +9,13 @@ You validate and maintain the agent definitions in `.claude/commands/`. As the c
 ## Scope
 - Covers: all `.md` files in `.claude/commands/`, `backend/main.py`, `backend/routers/*.py`, `backend/twitch.py`, `backend/twitch_oauth.py` and `backend/steam_openid.py` (for endpoint verification), `CLAUDE.md` (for slash command entries)
 - Does not cover: running other agents, implementation work, or documentation drift (see `/documentation-steward`)
+
+## Arguments
+- `/agent-steward` — run the checks and report; change nothing.
+- `/agent-steward apply` — run the checks and write the corrections listed below.
+- `/agent-steward <guidance>` — any other text is guidance for changing the agent definitions
+  (e.g. a new rule every agent should follow): run the checks, apply the guidance and the
+  corrections, and report both.
 
 ## When to run
 - After any merge that renames files, adds backend modules, or removes endpoints
@@ -58,7 +65,7 @@ Read `.claude/commands/README.md`. Verify that:
 - No rows reference agent files that no longer exist.
 - The "Recommended session start" section still reflects the correct workflow entry points.
 
-If any agent is missing from the README or a row is stale, propose the updated table rows and ask the user to confirm before writing.
+If any agent is missing from the README or a row is stale, list the updated table rows; write them only under `apply` or guidance.
 
 ---
 
@@ -66,11 +73,21 @@ If any agent is missing from the README or a row is stale, propose the updated t
 
 When a stale reference is found:
 1. Show the agent file, the stale reference, and what the correct value should be.
-2. Ask the user: "Update `[agent-file]` to replace `[old-ref]` with `[new-ref]`? (y/n)"
-3. If the user confirms, write the corrected file. Increment the `<!-- version: N -->` counter by 1.
-4. Report the update in the final table.
+2. Under `apply` or guidance, write the corrected file and increment the `<!-- version: N -->`
+   counter by 1. Without them, change nothing; the report ends with `Next: /agent-steward apply`.
+3. Report the update in the final table.
 
-Do not rewrite agent logic — only fix stale file paths and endpoint names.
+Without guidance, do not rewrite agent logic — only fix stale file paths and endpoint names.
+
+## Agent conventions to keep
+Every agent follows these; flag and (under `apply`) fix any agent that breaks them:
+- **No mid-run questions that an invocation answers better.** Running a command is the consent
+  for what its description says it does. Options are arguments (`--dry-run`, `apply`, `--fix`).
+  When input is missing or a choice can't be made from the repo, the agent stops and prints the
+  invocations that express each choice. Questions about content only the user knows (an
+  audience, an ambiguous requirement) are still allowed.
+- **Every output ends with `Next:`** and one ready-to-run invocation that best continues the
+  work, with its arguments filled in.
 
 ---
 
@@ -97,7 +114,9 @@ After the table, list each stale or broken finding as:
 [agent-file] — [what is stale] → [suggested correction]
 ```
 
-End with a one-line summary: `X agents checked: Y valid, Z stale, W broken`.
+End with a one-line summary: `X agents checked: Y valid, Z stale, W broken`, then
+`Next: <invocation>` — `/agent-steward apply` when fixes are pending, `/ship commit` after
+writing agent files, otherwise the planning step (`/product-planner issue <N>`).
 
 ## Complementary agents
 Run `/documentation-steward` to catch documentation drift alongside agent drift.

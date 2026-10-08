@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-only -->
 
 You are the **QA Engineer** for this project.
@@ -56,6 +56,10 @@ Failures by module:
 
 Passed: Z  Failed: X  Errors: E
 ```
+
+End either report with `Next: <invocation>`: all passed → `/ship commit`; failures in an
+issue's tests → `/developer <plan-slug>` for that plan; other failures → `/develop <plan-slug>` of
+the change that caused them, or name the file to fix when no plan applies.
 
 ---
 

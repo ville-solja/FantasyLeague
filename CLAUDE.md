@@ -51,6 +51,10 @@ The README should stay reasonably sized with links to the markdown documentation
 
 The project uses role-based agents. Each is a slash command in `.claude/commands/`. Run them in Claude Code by typing the command name. All agents follow a shared design contract: they declare their scope, check preconditions before doing deep work, and define an explicit output format.
 
+Two conventions keep the process in commands rather than in mid-run questions:
+- **The invocation is the consent.** Running a command authorises what its description says it does; options are arguments (`--dry-run`, `apply`, `fix`, `--fix`). When input is missing or a choice can't be made from the repo, the agent stops and prints the invocations that express each choice.
+- **Every run ends with `Next:`** and one ready-to-run invocation that continues the work.
+
 **Recommended session start:** run `/agent-steward` before `/product-planner` to ensure agent definitions are current.
 
 ---
@@ -63,6 +67,9 @@ Validates all agent definitions in `.claude/commands/` and keeps them aligned wi
 - Confirms each agent has `<!-- version: N -->` and `<!-- mode: ... -->` headers
 - Detects `backend/` or `markdown/features/` additions not covered by any agent
 - Flags `CLAUDE.MD` entries whose command files have been deleted
+- Checks every agent follows the two conventions above
+
+**Usage:** `/agent-steward` reports only; `/agent-steward apply` writes the fixes; `/agent-steward <guidance>` applies guidance to the agent definitions.
 
 **When to run:** After any merge that renames files, adds backend modules, or removes endpoints. Also run before `/product-planner` at the start of a planning session.
 
@@ -91,6 +98,7 @@ Audits every FastAPI endpoint for authentication gaps, session leaks, input vali
 - Flags `SessionLocal()` calls without try/finally
 - Flags bare `str` fields with no `Field(min_length, max_length)` constraint
 - Flags endpoints returning raw SQLAlchemy model objects
+- `/security-reviewer fix` applies the fixes for the last review's High and Medium findings, with regression tests, then re-reviews
 
 **When to run:** Before pushing any change to `backend/main.py`. Also run after any new router is added.
 
@@ -198,18 +206,35 @@ Reads an approved plan and writes failing pytest stubs to `backend/tests/test_{s
 
 ### `/develop`
 **Role: Development Orchestrator**
-Runs the full post-approval pipeline in sequential stages using isolated subagents: test stubs → implementation → QA + docs validation → issue close. Stops and reports clearly if any stage fails.
+Runs the full post-approval pipeline in sequential stages using isolated subagents: test stubs → implementation → QA + docs validation → issue marked implemented. Stops and reports clearly if any stage fails.
 
 1. **Stage 1 — Test stubs:** spawns test-planner to write failing stubs
 2. **Stage 2 — Implementation:** spawns developer to implement the plan and make stubs pass
-3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel
-4. **Stage 4 — Close issue:** if the plan came from GitHub issue #N and every stage passed, closes the issue with a summary comment (`gh issue close N --comment …`)
+3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel, plus the security reviewer when the change touches security-sensitive code (routers, `main.py`, auth, sessions, Twitch/Steam sign-in, rate limits, secrets, dependencies) or the plan is about auth, permissions, tokens or personal data. A High finding blocks Stage 4; Medium findings go back to the developer subagent to fix.
+4. **Stage 4 — Mark issue implemented:** if the plan came from GitHub issue #N and every stage passed, labels the issue `implemented`, comments with a summary and sets its `.issue-index` status to `implemented`. The issue stays open until its code is merged (`/ship close`).
 
 Produces a consolidated report including the Stage 4 result.
 
 **When to run:** After reviewing a plan file and deciding to implement it. Replaces running `/test-planner`, `/developer`, `/qa-engineer`, and `/documentation-steward` individually.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-42-twitch-mvp-series-window`
+
+---
+
+### `/ship`
+**Role: Release Coordinator**
+Owns the GitHub side of the work after `/develop`. Never writes feature code, never merges, never force-pushes. Running a subcommand is the consent for what it does, including pushing and editing issues; add `--dry-run` to see it without doing it.
+- `/ship status` — read-only: branch state, issues by milestone with their plan status, open PRs with CI and code-scanning alerts, and what needs attention (e.g. issues closed but not merged)
+- `/ship commit [N ...] [--single]` — groups uncommitted changes by issue (plan file lists, test files) and writes one commit per issue in a fixed format (`--single`: one commit); sets `.issue-index` status to `committed`
+- `/ship pr` — pushes the branch, opens or updates the PR (one section per issue, `Closes #N`, test result, manual checks, PR checklist), watches CI and lists the PR's code-scanning alerts; `/ship pr --fix all` (or `--fix <N,...>`) fixes them by running the `/security-patcher` workflow per alert, committing each fix and pushing again (at most two rounds)
+- `/ship sync <N>` — brings the GitHub issue's text, links and milestone in line with its plan after a scope change
+- `/ship close [N ...]` — after a merge: confirms the issues closed, sets `.issue-index` status to `merged`, reports milestone progress
+
+`markdown/plans/.issue-index` lines are `<N> <plan-slug> [status]`, status `planned` (default), `implemented`, `committed` or `merged`.
+
+**When to run:** `/ship status` at the start of a session; `/ship commit` and `/ship pr` when work is ready for review; `/ship close` after you merge.
+
+**Usage:** `/ship <status | commit [N ...] [--single] | pr [--fix all|<N,...>|none] | sync <N> | close [N ...]> [--dry-run]`
 
 ---
 
@@ -242,7 +267,7 @@ Audits the Fantasy web app for usability and experience problems. Produces a pri
 Rewrites a piece of documentation so it states its core message clearly and concisely for its audience, keeping every fact exact.
 - Names the audience, what they need, and the core message; asks when the audience is unclear
 - Proposes the rewrite with word counts and a list of removed/moved facts
-- Edits nothing until you choose: apply, apply with exclusions, or discard; structural changes are separate choices
+- Edits nothing until you run `/technical-writer apply`, `apply except <numbers>` or `discard`; structural changes are separate numbered changes
 - Does not check docs against code (that is `/documentation-steward`)
 
 **When to run:** After a significant documentation change, or when a doc is hard to read.
@@ -271,19 +296,28 @@ For ad-hoc work, bug fixes, or situations where the full pipeline is overkill, t
 
 ### [HUMAN GATE 2] — Review report
 
-Read the consolidated report from `/develop`. When the plan came from a GitHub issue and every stage passed, `/develop` has already closed the issue with a summary comment. If the review finds a problem, reopen it:
+Read the consolidated report from `/develop`. When the plan came from a GitHub issue and every stage passed, `/develop` has labelled the issue `implemented` and commented with a summary; the issue stays open. If the review finds a problem, fix it and run `/develop` again (or remove the label).
+
+If Stage 4 was skipped or failed, the report says why.
+
+### [HUMAN GATE 3] — Commit, PR and merge
 
 ```
-gh issue reopen <N>
+/ship commit     # one commit per issue (--dry-run to see the grouping first)
+/ship pr         # push, open the PR with Closes #N, watch CI and code scanning
 ```
 
-If Stage 4 was skipped or failed, the report says why; close the issue yourself once the problem is fixed (`gh issue close <N>`).
+`/ship pr` lists any code-scanning alert on the PR; `/ship pr --fix all` fixes them (it runs the `/security-patcher` workflow per alert, commits each fix and pushes). Merging is your decision. After merging:
+
+```
+/ship close      # confirm the issues closed and mark their plans merged
+```
 
 ### Review gates (run after any implementation)
 
 | Agent | When required | Focus |
 |---|---|---|
-| `/security-reviewer` | Any change to `backend/main.py` | Auth gaps, session leaks, input validation, data exposure |
+| `/security-reviewer` | Any change to `backend/main.py` (run automatically by `/develop` Stage 3 for security-sensitive changes) | Auth gaps, session leaks, input validation, data exposure |
 | `/qa-engineer` | Any backend change | pytest suite pass/fail |
 | `/scoring-analyst` | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, division-by-zero, stat mapping |
 | `/documentation-steward` | Any significant backend change | Doc drift, missing env vars, terminology mismatches |
