@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kana Cards — Config</title>
 <link rel="stylesheet" href="extension.css">
+<style>
+  .conn-check { list-style: none; padding: 0; margin: 0; }
+  .conn-check li { padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 0.8rem; }
+  .conn-check .conn-state { display: inline-block; min-width: 86px; font-weight: 700; }
+  .conn-check .conn-ok { color: var(--k-ok); }
+  .conn-check .conn-failed { color: var(--k-err); }
+  .conn-check .conn-not-checked { color: var(--fg-muted); }
+  .conn-check .conn-detail { display: block; color: var(--fg-muted); margin-top: 2px; word-break: break-all; }
+  .conn-code { margin-top: 8px; font-weight: 700; }
+</style>
 <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
 <script src="ebs-origins.js"></script>
 <script src="extension.js"></script>
@@ -34,6 +44,13 @@
 <h3 style="margin-top:14px">EBS URL</h3>
 <p class="muted">Set via the Twitch Extensions Configuration Service (global segment). Contact the extension developer to change it.</p>
 <p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display">Loading…</p>
+
+<!-- Issue #180: step-by-step connection check (config.js; values set with textContent). -->
+<h3 style="margin-top:14px">Connection check</h3>
+<p class="muted" style="margin-bottom:6px">Checks each step between this extension and the backend. Send the reason code and any Failed row to the league when the panel is not available.</p>
+<ul id="conn-check" class="conn-check"></ul>
+<p id="conn-code" class="conn-code" role="status" hidden></p>
+<button type="button" id="btn-check-again">Check again</button>
 
 <script src="config.js"></script>
 </body>

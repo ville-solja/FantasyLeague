@@ -14,6 +14,7 @@ async function loadUsers() {
     _renderUsers(rows);
     setStatus("usersStatus", "");
     loadPlayerIdClaims();
+    loadTwitchStatus();
     loadTwitchChannels();
   } catch (e) {
     setStatus("usersStatus", e.message, false);
@@ -467,6 +468,65 @@ async function reverseTwitchMerge(logId) {
   } catch (e) {
     setStatus("twitchMergesStatus", e.message, false);
   }
+}
+
+// Issue #180: Twitch status. Every value goes through _escHtml; the server never
+// sends a secret, its length, a token or a viewer's Twitch id.
+async function loadTwitchStatus() {
+  try {
+    const res = await fetch(`${API}/admin/twitch/status`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchStatusStatus", data.detail, false);
+    _renderTwitchStatus(data);
+    setStatus("twitchStatusStatus", "");
+  } catch (e) {
+    setStatus("twitchStatusStatus", e.message, false);
+  }
+}
+
+const _TWITCH_STATE_TEXT = { ok: "OK", warning: "Warning", problem: "Problem" };
+
+function _twitchAgo(t) {
+  if (!t) return "never";
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - Number(t));
+  if (s < 60) return `${s} s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+}
+
+function _twitchStatusRow(state, label, detail) {
+  const cls = ["ok", "warning", "problem"].includes(state) ? state : "problem";
+  return `<tr class="twitch-status-${cls}"><td class="twitch-status-state">${_escHtml(_TWITCH_STATE_TEXT[cls])}</td>` +
+    `<td>${_escHtml(label)}</td><td>${_escHtml(detail)}</td></tr>`;
+}
+
+function _renderTwitchStatus(data) {
+  const t = data.traffic || {};
+  const f = t.failures || {};
+  const refusedTotal = (f.expired || 0) + (f.invalid || 0) + (f.not_configured || 0);
+  const origins = t.refused_origins || [];
+  const traffic = [
+    _twitchStatusRow(t.last_ok_at ? "ok" : "warning", "Last panel request with an accepted token",
+      t.last_ok_at ? _twitchAgo(t.last_ok_at) : "None since the last restart. Open the panel on a channel to test."),
+    _twitchStatusRow(refusedTotal ? "problem" : "ok", "Refused Twitch tokens",
+      `${f.expired || 0} expired, ${f.invalid || 0} invalid, ${f.not_configured || 0} server not configured` +
+      (t.last_failure_at ? `; last ${_twitchAgo(t.last_failure_at)}` : "") +
+      (f.invalid ? ". Invalid tokens usually mean TWITCH_EXTENSION_SECRET belongs to another extension." : ".")),
+    _twitchStatusRow(origins.length ? "warning" : "ok", "Cross-origin hosts refused on /twitch/*",
+      origins.length ? `${origins.join(", ")}. If one is the extension's host, check TWITCH_EXTENSION_CLIENT_ID.` : "None."),
+  ];
+  const head = `<thead><tr><th>State</th><th>Check</th><th>What to do</th></tr></thead>`;
+  const checks = (data.checks || []).map(c => _twitchStatusRow(c.state, c.label, c.detail)).join("");
+  const consoleRows = (data.console || []).map(c =>
+    `<tr><td>${_escHtml(c.label)}</td><td><code>${_escHtml(c.expected)}</code></td></tr>`).join("");
+  document.getElementById("twitchStatus").innerHTML =
+    `<table class="twitch-status-table">${head}<tbody>${checks}</tbody></table>` +
+    `<div class="twitch-merges-title">Panel traffic since the last restart</div>` +
+    `<table class="twitch-status-table">${head}<tbody>${traffic.join("")}</tbody></table>` +
+    `<div class="twitch-merges-title">Twitch console</div>` +
+    `<p class="twitch-merges-note">Checked by hand in the Twitch developer console; each must hold the value shown.</p>` +
+    `<table><thead><tr><th>Check</th><th>Expected value</th></tr></thead><tbody>${consoleRows}</tbody></table>`;
 }
 
 // Issue #175: approved streamers. Channels from TWITCH_MVP_CHANNEL_IDS are approved

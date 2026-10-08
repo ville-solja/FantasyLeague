@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-08 — developer — testing
+**Problem:** For #180, `live_config.js` started calling a new `extension.js` helper (`failReasonSuffix`), and `test_issue_161`'s Node harness, which runs `live_config.js` alone with hand-written stubs for the `extension.js` functions it uses (`ebsGet`, `_escHtml`, `showBanner`, …), failed with a ReferenceError; its static checks also look for literal message text inside `loadSeries`, so moving the text into a helper broke them.
+**Solution:** When an extension page gains a call into `extension.js`, grep `backend/tests` for harnesses that stub that page's globals (`_LIVE_CONFIG_HARNESS`, `_EXT_HARNESS`, …) and add a stub there, and keep message literals inside the functions that tests extract. In newer FastAPI, `app.routes` holds `_IncludedRouter` wrappers, so check a route's wiring with a TestClient call rather than by listing `app.routes`.
+
 ### 2026-10-08 — ship — agent-config
 **Problem:** Code-scanning alerts raised only on a pull request are missing from the alerts list without `ref=refs/pull/<PR>/head`, and keep `state: null` even after they are fixed (alerts #28–30 on PR #174); likewise a bare `#N` in commit messages doesn't mean issue N was merged (the #150 commit names follow-up #172).
 **Solution:** List PR alerts per ref and read `/code-scanning/alerts/<N>/instances` for the real state on that ref; treat an issue as merged only from its index status, its `test_issue_<N>_*.py` on the default branch, `(#N)`/`Closes #N` in a default-branch commit, or a merged PR that closes it.

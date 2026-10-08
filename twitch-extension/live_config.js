@@ -24,7 +24,16 @@ el("btn-back-0").addEventListener("click", function() { mvpGoTo(0); });
 el("btn-back-1").addEventListener("click", function() { mvpGoTo(1); });
 el("btn-back-2").addEventListener("click", function() { mvpGoTo(2); });
 
-function onReady() {}
+function onReady() {
+    el("mvp-unavailable").hidden = true;
+}
+
+// Issue #180: no usable backend URL (E-ORIGIN at once, E-CONFIG after 8 seconds).
+function onConfigTimeout() {
+    var note = el("mvp-unavailable");
+    note.textContent = "MVP selection is not available on this channel right now." + failReasonSuffix();
+    note.hidden = false;
+}
 
 // ── Step 1: load series ─────────────────────────────────────────────────────
 
@@ -65,6 +74,12 @@ function loadSeries() {
     refreshBtn.disabled = true;
     ebsGet("/twitch/matches/current").then(function(data) {
         var container = el("series-list");
+        if (data && data._status && data.mvp_allowed === undefined) {
+            renderFreshness(null);
+            _seriesData = [];
+            container.innerHTML = '<p class="muted">' + _escHtml("Failed to load matches." + failReasonSuffix()) + "</p>";
+            return;
+        }
         // Issue #175: a channel the league hasn't approved can't set MVPs yet.
         if (data && data.mvp_allowed === false) {
             renderFreshness(null);
@@ -93,7 +108,7 @@ function loadSeries() {
         });
     }).catch(function() {
         renderFreshness(null);
-        el("series-list").innerHTML = '<p class="muted">Failed to load matches.</p>';
+        el("series-list").innerHTML = '<p class="muted">' + _escHtml("Failed to load matches." + failReasonSuffix()) + "</p>";
     }).finally(function() {
         refreshBtn.disabled = false;
     });
@@ -226,7 +241,7 @@ function confirmMVP() {
         showBanner(el("banner"), "MVP: " + data.player_name + dropMsg + bonusMsg, false);
         mvpGoTo(0);
     }).catch(function() {
-        showBanner(el("banner"), "Request failed", true);
+        showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
     }).finally(function() {
         el("btn-confirm-mvp").disabled = false;
     });

@@ -20,6 +20,7 @@ from starlette.requests import Request
 from twitch import router as twitch_router
 import twitch as twitch_module
 import twitch_oauth
+import twitch_status
 import steam_openid
 import login_mode
 import card_points
@@ -585,6 +586,13 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+)
+# Issue #180: remember (never block) the hosts CORS refuses on /twitch/*, for the
+# admin Twitch status. Added after CORS so it sees preflights too; same allow list.
+app.add_middleware(
+    twitch_status.RefusedOriginMiddleware,
+    allow_origins=_cors_extra_origins,
+    allow_origin_regex=_ext_origin_regex,
 )
 
 app.state.limiter = limiter

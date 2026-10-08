@@ -102,9 +102,15 @@ function onReady() {
     loadMe();
 }
 
+// Issue #180: every "not available" note ends with the reason code (failReasonSuffix),
+// never a URL, id or setting name.
+function _unavailableNote(text) {
+    return '<p class="note">' + _escHtml(text + failReasonSuffix()) + "</p>";
+}
+
 function onConfigTimeout() {
     ["live-mvps", "live-top", "live-next"].forEach(function (id) {
-        el(id).innerHTML = '<p class="note">Kana Cards is not available on this channel right now.</p>';
+        el(id).innerHTML = _unavailableNote("Kana Cards is not available on this channel right now.");
     });
 }
 
@@ -123,12 +129,12 @@ function loadLive() {
 }
 
 function renderMvpsUnavailable() {
-    el("live-mvps").innerHTML = '<p class="note">Live results are unavailable right now.</p>';
+    el("live-mvps").innerHTML = _unavailableNote("Live results are unavailable right now.");
 }
 
 function renderPanelUnavailable() {
-    el("live-top").innerHTML = '<p class="note">Top performers are unavailable right now.</p>';
-    el("live-next").innerHTML = '<p class="note">The schedule is unavailable right now.</p>';
+    el("live-top").innerHTML = _unavailableNote("Top performers are unavailable right now.");
+    el("live-next").innerHTML = _unavailableNote("The schedule is unavailable right now.");
 }
 
 function renderMvps(series) {
@@ -201,7 +207,7 @@ function renderJoinSlots() {
         if (isJoined() || !state.meLoaded) return;
         if (state.meError) {
             if (slot.closest("#view-live")) return;  // the Live sections carry their own notes
-            slot.innerHTML = '<p class="note">Kana Cards is unavailable right now. Try again in a moment.</p>';
+            slot.innerHTML = _unavailableNote("Kana Cards is unavailable right now. Try again in a moment.");
             return;
         }
         var tpl = el(isLoggedInToTwitch() ? "tpl-join" : "tpl-login");

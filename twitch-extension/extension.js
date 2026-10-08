@@ -12,7 +12,36 @@ var ext = {
     channelId:  null,
     role:       null,
     ebsUrl:     null,
+    configuredUrl: null,  // ebs_url as configured, even when refused (configuration page only)
+    failReason: null,     // last reason code (issue #180), one of EXT_REASON
 };
+
+// ── Reason codes (issue #180) ───────────────────────────────────────────────
+// Each failure on the way to the backend gets a short code that viewers can pass
+// on; the troubleshooting table in the docs maps each code to its fix.
+var EXT_REASON = {
+    ORIGIN: "E-ORIGIN",  // configured backend origin is not in this package
+    CONFIG: "E-CONFIG",  // no backend URL in the configuration after 8 seconds
+    REACH:  "E-REACH",   // backend not reached: network, TLS or CORS
+    TOKEN:  "E-TOKEN",   // backend answered 401 to the Twitch token
+    SERVER: "E-SERVER",  // backend answered 5xx
+};
+
+function _originOf(url) {
+    try { return new URL(url).origin; } catch (e) { return "(invalid URL)"; }
+}
+
+// Logs the code with the configured backend origin only: never the token or a path.
+function setFailReason(code) {
+    ext.failReason = code;
+    var origin = ext.configuredUrl ? _originOf(ext.configuredUrl) : "(none)";
+    console.warn("[ext] " + code + " backend origin: " + origin);
+}
+
+// " (code: E-…)" for the viewer-facing "not available" messages, or "".
+function failReasonSuffix() {
+    return ext.failReason ? " (code: " + ext.failReason + ")" : "";
+}
 
 // ── Readiness gate ──────────────────────────────────────────────────────────
 // onReady() fires once both the EBS URL (from Configuration Service) and the
@@ -21,6 +50,14 @@ var ext = {
 
 var _cfgReady  = false;
 var _authReady = false;
+var _cfgTimedOut = false;
+
+// Calls the page's onConfigTimeout once: at once for E-ORIGIN, or after 8 seconds.
+function _configTimeout() {
+    if (_cfgTimedOut) return;
+    _cfgTimedOut = true;
+    if (typeof onConfigTimeout === "function") onConfigTimeout();
+}
 
 // The configured EBS URL is used only when its origin was baked into the package
 // (ebs-origins.js, written by package.sh; issue #164). Anyone holding the
@@ -39,8 +76,11 @@ function _onCfgChanged() {
     if (global && global.content) {
         try {
             var cfg = JSON.parse(global.content);
+            ext.configuredUrl = cfg.ebs_url || null;
             if (cfg.ebs_url && !_ebsUrlAllowed(cfg.ebs_url)) {
-                console.warn("[ext] configured EBS URL is not an approved origin; not calling it");
+                // The origin was not packaged into this version: say so at once.
+                setFailReason(EXT_REASON.ORIGIN);
+                _configTimeout();
                 return;
             }
             if (cfg.ebs_url) {
@@ -97,7 +137,9 @@ function init() {
     // onReady() will never fire and the panel stays blank. Surface a clear
     // message so the viewer knows setup is incomplete.
     setTimeout(function () {
-        if (!_cfgReady && typeof onConfigTimeout === "function") onConfigTimeout();
+        if (_cfgReady || _cfgTimedOut) return;
+        setFailReason(EXT_REASON.CONFIG);
+        _configTimeout();
     }, 8000);
 }
 
@@ -118,6 +160,8 @@ function _parseResponse(r) {
         }
         if (!r.ok) {
             data._status = r.status;
+            if (r.status === 401) setFailReason(EXT_REASON.TOKEN);
+            else if (r.status >= 500) setFailReason(EXT_REASON.SERVER);
             if (ext.tokenSetAt) {
                 console.warn("[ext] EBS call failed with status " + r.status +
                     " — token age " + Math.round((Date.now() - ext.tokenSetAt) / 1000) + "s");
@@ -140,11 +184,18 @@ function _notConfiguredYet() {
     });
 }
 
+// fetch rejects when the backend can't be reached: DNS, TLS, a missing URL Fetching
+// Domain or a CORS refusal. The browser does not say which, so all are E-REACH.
+function _unreachable(err) {
+    setFailReason(EXT_REASON.REACH);
+    throw err;
+}
+
 function ebsGet(path) {
     if (!ext.ebsUrl) return _notConfiguredYet();
     return fetch(ext.ebsUrl + path, {
         headers: { "Authorization": "Bearer " + ext.token },
-    }).then(_parseResponse);
+    }).then(_parseResponse, _unreachable);
 }
 
 function ebsPost(path, body) {
@@ -156,7 +207,7 @@ function ebsPost(path, body) {
             "Content-Type": "application/json",
         },
         body: body ? JSON.stringify(body) : undefined,
-    }).then(_parseResponse);
+    }).then(_parseResponse, _unreachable);
 }
 
 // ── Heartbeat ────────────────────────────────────────────────────────────────
