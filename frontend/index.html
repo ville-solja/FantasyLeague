@@ -967,6 +967,13 @@
       </table>
       <div class="status" id="twitchMergesStatus"></div>
 
+      <!-- Issue #180: Twitch status — server settings and panel traffic behind a broken extension. -->
+      <div class="twitch-merges-title">Twitch status</div>
+      <p class="twitch-merges-note">This server's Twitch settings and the panel traffic it has seen since the last restart. Fix every Problem row first; the Twitch console block lists what only the developer console can show.</p>
+      <button class="secondary" onclick="loadTwitchStatus()">Refresh</button>
+      <div id="twitchStatus" style="margin-top:8px;"></div>
+      <div class="status" id="twitchStatusStatus"></div>
+
       <!-- Issue #175: approved streamers — channels that may set match MVPs. -->
       <div class="twitch-merges-title">Approved streamers</div>
       <p class="twitch-merges-note">Twitch channels that may set match MVPs, which also moves fantasy points and drops tokens. A channel appears under Waiting for approval when its broadcaster opens the MVP tool. Approve, Reject and Remove need your password.</p>

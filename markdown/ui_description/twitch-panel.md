@@ -26,6 +26,8 @@ Three sections, each with an eyebrow heading:
 
 Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Empty or unreachable sections show a short neutral line ("No games scored yet.", "No match scheduled.", "Live results are unavailable right now.").
 
+**Reason codes (#180):** a section the backend could not fill, and the whole Live tab when no usable backend URL arrives ("… is not available on this channel right now."), end the line with a reason code, e.g. "Live results are unavailable right now. (code: E-REACH)". Codes: `E-ORIGIN` (shown at once), `E-CONFIG` (after 8 seconds), `E-REACH`, `E-TOKEN`, `E-SERVER`. Only the code is shown: no URL, id or setting name. The same applies to the not-joined "unavailable right now" note on Cards and Roster. Meanings and fixes: `markdown/features/core/twitch-extension.md#panel-reason-codes`.
+
 **Drops start line (#171):** a joined viewer whose soft account is younger than the drop age (`TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS`, default 24 h) sees a muted note above the sections: "Drops start for your account on Tue 8 Oct, 18:00." (local date and time). It disappears once that time has passed; website accounts never see it.
 
 ## Cards tab

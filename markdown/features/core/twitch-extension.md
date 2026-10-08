@@ -104,6 +104,8 @@ Leave it unset in production. See `reference/security-headers.md`.
 
 So someone holding the extension secret can change `ebs_url` but cannot point every panel at their own server. The repository copy of `ebs-origins.js` is an empty list, which only the local dev harness accepts (it sets `window.__EXT_DEV_HARNESS`).
 
+The packaged `ebs-origins.js` also carries a build stamp, `var EXT_BUILD = {version: "<version>", origins: [...]};` (issue #180), which the configuration page's Connection check shows and `package.sh` prints at the end of the build. The repository copy holds `{version: "dev", origins: []}`.
+
 Give each allowed origin with `--ebs-origin` (an `https://` origin, no path or trailing slash). A production package lists only the production host; a package for a test server may add the test host:
 
 ```bash
@@ -136,6 +138,8 @@ bash twitch-extension/set-ebs-url.sh --debug https://your-domain.example.com
 ### Step 6 — Install and test (broadcaster)
 
 The broadcaster adds the extension to their channel from the Twitch extension directory or via a developer test install link. Once installed, the Quick Actions (Live Config view) appear automatically in Twitch Stream Manager. No further configuration is needed on the broadcaster's side.
+
+**Connection check (issue #180):** the extension's configuration page (Extensions › the extension › Settings) shows a **Connection check** list: Package (version and packaged backend origins), Backend address, Backend reachable, Twitch token accepted and MVP selection, each OK, Failed or Not checked, with a **Check again** button and the reason code of the first failed step. See [Twitch Integration Status](../reference/twitch-integration-status.md#connection-check).
 
 **After uploading a new version for a Hosted Test / invite-only release:** a fresh upload does not appear in "My Extensions" and is not what testers are already running — it lands in the dev console's **Invite Only** tab and each invited broadcaster must explicitly (re)install it from there. There is no propagation delay to wait out; "uploaded but not visible" almost always means it hasn't been installed on that surface yet, not that Twitch is still processing it.
 
@@ -201,7 +205,7 @@ A 318 × 500 panel styled with the Kanaliiga design system. Full description: [T
 2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
 3. Calls `GET /twitch/me`: not joined shows the Join box (or "Log in to Twitch to join"); joined shows the token count, the Cards tab (draw, team draw picker, card reveal, collection with rarity filters) and the Roster tab (slot-first bench picker, lock countdown, week points). While a new soft account is too young for drops, the Live tab says "Drops start for your account on <date>." (`drops_from`)
 4. Settings: share the Twitch identity, Leave Kana Cards
-5. A section the EBS can't fill shows a short neutral message; a missing EBS URL after 8 seconds shows "Kana Cards is not available on this channel right now." — never a blank panel or a login prompt
+5. A section the EBS can't fill shows a short neutral message; a missing or refused EBS URL shows a "not available on this channel right now" message — never a blank panel or a login prompt. Each of these messages ends with a reason code such as `(code: E-REACH)` (issue #180); see [Panel reason codes](#panel-reason-codes)
 
 ---
 
@@ -282,6 +286,22 @@ traceback.
 
 ---
 
+## Panel reason codes
+
+When the panel, the MVP tool or the configuration page can't load, its message ends with a reason code (issue #180), and the browser console logs `[ext] <code> backend origin: <origin>`. Viewers see only the code. To narrow it down, open the extension's configuration page (Connection check) and Admin › Users › **Twitch status**. Details: [Twitch Integration Status](../reference/twitch-integration-status.md).
+
+| Code | Likely cause | Fix |
+|---|---|---|
+| `E-ORIGIN` | The configured backend URL's origin was not packaged into the installed version (`package.sh --ebs-origin`, #164). Shown at once | Build a version with `package.sh <version> --ebs-origin <backend origin>`, upload it and install it on the channel. The configuration page's Package row lists the packaged origins |
+| `E-CONFIG` | No `ebs_url` in the global configuration segment after 8 seconds | Run `set-ebs-url.sh <backend URL>` (Step 5) |
+| `E-REACH` | The browser could not reach the backend: DNS or TLS, the host missing from the version's URL Fetching Domains, or CORS refused the extension origin | Add the backend origin to URL Fetching Domains; set `TWITCH_EXTENSION_CLIENT_ID` to the installed extension's Client ID (Twitch status lists refused hosts); check the backend answers over HTTPS |
+| `E-TOKEN` | The backend refused the Twitch token (401): `TWITCH_EXTENSION_SECRET` is wrong or belongs to another extension, or the token expired (reloading the panel gets a fresh one) | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
+| `E-SERVER` | The backend answered 5xx, for example with `TWITCH_EXTENSION_SECRET` empty or not base64, or `TWITCH_LOCAL_DEV=true` with `ENV=production` | Check Twitch status and the server log |
+
+MVP selection refused on a channel that isn't approved (`ENV=production`, #165 / #175) has no code: the MVP tool says the channel is waiting for approval, and the configuration page's MVP selection row shows `pending` or `rejected`.
+
+---
+
 ## Local Development
 
 The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
@@ -311,6 +331,13 @@ and live in `backend/twitch_oauth.py`; admin `GET /admin/twitch/merges` and
 Admin `GET /admin/twitch/channels` and `POST /admin/twitch/channels/{channel_id}/approve|reject|remove`
 (the three actions need a recent password check) in `routers/admin_twitch.py`, logic in
 `backend/twitch_channels.py`. See [Approved Streamers Admin](../reference/approved-streamers-admin.md).
+
+### Connection check and status (issue #180)
+- `GET /twitch/ping`: no token, no database; `{"ok": true}`. Rate-limited per IP (`RATE_LIMIT_TWITCH_JOIN_IP`).
+- `GET /twitch/check`: Twitch JWT; `{"ok": true, "role": …}`, plus `mvp_allowed` and `approval` for broadcasters. Records no approval request.
+- Admin `GET /admin/twitch/status` (`require_admin`, no password re-check) in `routers/admin_twitch.py`, built by `backend/twitch_status.py`: server setting checks, panel traffic since the last restart (accepted and refused tokens, refused cross-origin hosts) and the Twitch console checks. Never a secret, its length, a token or a viewer's Twitch id.
+
+See [Twitch Integration Status](../reference/twitch-integration-status.md).
 
 ### Retired: `POST /twitch/link-code`, `POST /twitch/link`, `GET /twitch/status`
 Removed in #160 and answer 404. The 6-character link code (#135 drew it with `secrets` and
@@ -386,7 +413,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns the rule off. Website accounts are always eligible (#171) |
 | `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team logo URL may use (stored at ingest, returned, or fetched for card images); empty means the default list (#171) |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws, heartbeats and `/twitch/ping` per IP; draws, heartbeats, roster changes and Leave per viewer |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs always allowed to set match MVPs (and so trigger token drops), in addition to channels approved in the admin portal (issue #175); others get 403. Both empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |

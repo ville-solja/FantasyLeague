@@ -7,6 +7,9 @@ from its twitch_merge_log row. Both routes need an admin with a recent password 
 
 Approved streamers: channels that may set match MVPs (twitch_channels). Listing needs
 an admin; approve / reject / remove also need a recent password check.
+
+Twitch status (issue #180): a read-only checklist of the server's Twitch settings and
+recent panel traffic (twitch_status). Admin only; it holds no secrets, so no reauth.
 """
 import json
 import time
@@ -15,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import soft_accounts
 import twitch_channels
+import twitch_status
 from database import get_db
 from deps import require_admin, require_recent_reauth
 from models import TwitchMergeLog, User
@@ -66,6 +70,13 @@ def reverse_twitch_merge(log_id: int, admin: dict = Depends(require_admin), db=D
         db.rollback()
         raise
     return result
+
+
+@router.get("/admin/twitch/status")
+def twitch_status_route(admin: dict = Depends(require_admin), db=Depends(get_db)):
+    """Twitch integration checklist (issue #180): {checks, traffic, console}. Never
+    returns a secret, its length, a token or a viewer's Twitch id."""
+    return twitch_status.build_status(db)
 
 
 @router.get("/admin/twitch/channels")

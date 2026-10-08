@@ -301,6 +301,7 @@ function ebsGet(path) { requests++; return nextResponse(); }
 function ebsPost() { return Promise.reject(new Error("no")); }
 function showBanner() {}
 function _escHtml(s) { return String(s); }
+function failReasonSuffix() { return ""; }
 function init() {}
 %(src)s
 function tick() { return new Promise(function(r) { setTimeout(r, 5); }); }

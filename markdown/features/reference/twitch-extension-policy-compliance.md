@@ -66,7 +66,7 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 | Variable | Default | Applies to |
 |---|---|---|
 | `RATE_LIMIT_TWITCH_JOIN` | `10/minute` | Join, per viewer |
-| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Join and both draws, per IP |
+| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Join and both draws, per IP (also heartbeat since #171 and `/twitch/ping` since #180) |
 | `RATE_LIMIT_TWITCH_ACTION` | `30/minute` | Draws, roster changes and Leave, per viewer |
 
 ## Token drops

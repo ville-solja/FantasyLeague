@@ -669,3 +669,63 @@ As the league operator, I want the existing `TWITCH_MVP_CHANNEL_IDS` setting to 
 - A channel may set MVPs when it is in `TWITCH_MVP_CHANNEL_IDS` or approved in the portal
 - With both lists empty, no channel may set MVPs when `ENV=production` and any channel may otherwise (unchanged from #165); the start-up warning names both places
 - Removing a channel in the portal never affects a channel that is also in the env var
+
+
+## Integration Status (#180)
+
+### See Why the Panel Is Not Available
+**User story**
+As a viewer or broadcaster, I want the panel to say which step failed when it can't load so that the person running the stream can tell the league what is wrong.
+
+**Acceptance criteria**
+- When the panel, the MVP tool (`live_config.html`) or the configuration page can't load, the message ends with a short reason code: `E-ORIGIN` (configured backend origin not in this package), `E-CONFIG` (no backend URL in the configuration after 8 seconds), `E-REACH` (the backend could not be reached: network, TLS or CORS), `E-TOKEN` (backend answered 401 to the Twitch token), `E-SERVER` (backend answered 5xx)
+- `E-ORIGIN` is shown at once instead of after the 8-second timeout
+- The browser console logs the same code with the configured origin (never the token)
+- Viewers see only the generic message and the code; no URL, id or setting name
+
+### Connection Check for the Broadcaster
+**User story**
+As a broadcaster installing the extension, I want the extension's configuration page to check the connection step by step so that I can see which part of the setup is missing.
+
+**Acceptance criteria**
+- The configuration page has a **Connection check** list with one row per step, each marked OK, Failed or Not checked:
+  - **Package:** the extension version and the backend origins packaged into it
+  - **Backend address:** the configured `ebs_url`, and whether its origin is one of the packaged ones
+  - **Backend reachable:** `GET /twitch/ping` answers
+  - **Twitch token accepted:** `GET /twitch/check` answers 200
+  - **MVP selection:** whether this channel may set MVPs (`approved`, `pending` or `rejected`)
+- A step that can't run because an earlier one failed shows Not checked
+- A **Check again** button reruns the list
+- The page shows the same reason code as the panel for the first failed step
+
+### Twitch Status in the Admin Portal
+**User story**
+As an admin, I want one Twitch status checklist in the admin portal so that I can see which server setting or traffic signal explains a broken extension without reading server logs.
+
+**Acceptance criteria**
+- The admin panel has a **Twitch status** section above Approved streamers, with a **Refresh** button, loading `GET /admin/twitch/status` (admin only; non-admins get 403)
+- Each row has a state (OK, Warning, Problem), a label and one sentence saying what to do. The server rows are:
+  - `TWITCH_EXTENSION_CLIENT_ID` set, with the extension origin CORS allows (`https://{id}.ext-twitch.tv`)
+  - `TWITCH_EXTENSION_SECRET` set and decodes as base64 (the value and its length are never returned)
+  - `TWITCH_EXTENSION_VERSION` set (Warning when empty: chat announcements are skipped)
+  - `TWITCH_LOCAL_DEV` off
+  - MVP channels: number from `TWITCH_MVP_CHANNEL_IDS`, number approved in the portal and number waiting (Problem when all are zero and `ENV=production`)
+  - Connect Twitch: the three `TWITCH_OAUTH_*` set, and the `cryptography` package importable (Problem when OAuth is set but `cryptography` is missing)
+  - `APP_BASE_URL` set
+  - `STEAM_API_KEY` set (Warning when empty: live games are not listed before their stats arrive)
+- Traffic rows since the last restart:
+  - time of the last panel request with an accepted Twitch token
+  - number of refused tokens by kind (expired, invalid, server not configured) and time of the last one
+  - up to five most recent cross-origin hosts refused on `/twitch/*` (host and port only)
+- A **Twitch console** block lists the checks only the console can show, each with the value it must hold: the URL Fetching Domains contains the backend origin; the global configuration's `ebs_url` is the backend URL; the installed version was packaged with this backend's origin
+- Nothing in the response contains a secret, a token, or a viewer's Twitch id
+
+### Know What a Package Can Call
+**User story**
+As the operator, I want each extension package to record which backend origins and version it was built for so that I can tell whether the version installed on a channel can reach this server.
+
+**Acceptance criteria**
+- `package.sh` writes the version and the packaged origins into the staged `ebs-origins.js` (`EXT_BUILD = {version, origins}`) alongside `EBS_ALLOWED_ORIGINS`
+- `package.sh` prints the same at the end of the build
+- The repository copy of `ebs-origins.js` has `EXT_BUILD = {version: "dev", origins: []}`
+- The configuration page's **Package** row shows these values

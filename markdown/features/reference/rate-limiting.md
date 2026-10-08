@@ -78,7 +78,8 @@ host, so the port is not reachable from outside at all. Covered by
   opaque Twitch id through `key_by_twitch_viewer_or_ip`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`,
   also on both draws); draws, roster changes and Leave per viewer (`RATE_LIMIT_TWITCH_ACTION`).
   `POST /twitch/heartbeat` (issue #171) is limited per viewer (`RATE_LIMIT_TWITCH_ACTION`) and per
-  IP (`RATE_LIMIT_TWITCH_JOIN_IP`)
+  IP (`RATE_LIMIT_TWITCH_JOIN_IP`). `GET /twitch/ping` (issue #180) is limited per IP
+  (`RATE_LIMIT_TWITCH_JOIN_IP`)
 - Roster activate/deactivate/swap/reorder — per-user limit (`RATE_LIMIT_ROSTER_MUTATION`,
   issue #124)
 - Every other route — the global baseline (`RATE_LIMIT_GLOBAL`) applies automatically via
@@ -105,7 +106,7 @@ limiting.
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` (#160; `RATE_LIMIT_TWITCH_LINK` retired with `POST /twitch/link`) |
 | `RATE_LIMIT_STEAM_CALLBACK` | `10/minute` | Per-IP limit on each of `GET /auth/steam/start`, `GET /auth/steam/callback` and `POST /auth/steam/signup` (#150) |
 | `RATE_LIMIT_TWITCH_JOIN` | `10/minute` | Per-viewer limit on `POST /twitch/join` |
-| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Per-IP limit on `POST /twitch/join`, `/twitch/draw`, `/twitch/draw/booster/{team_id}` and `/twitch/heartbeat` |
+| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Per-IP limit on `POST /twitch/join`, `/twitch/draw`, `/twitch/draw/booster/{team_id}`, `/twitch/heartbeat` and `GET /twitch/ping` (#180) |
 | `RATE_LIMIT_TWITCH_ACTION` | `30/minute` | Per-viewer limit on Twitch panel draws, heartbeats, roster changes and Leave |
 | `RATE_LIMIT_ROSTER_MUTATION` | `30/minute` | Per-user limit on roster mutations |
 | `LOGIN_LOCKOUT_THRESHOLD` | `10` | Failed login attempts against one username before lockout |

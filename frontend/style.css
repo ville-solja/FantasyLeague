@@ -2317,6 +2317,15 @@ body.roster-dragging * { cursor: grabbing !important; }
   margin-bottom: 8px;
 }
 
+/* Admin › Users › Twitch status (issue #180) */
+.twitch-status-state {
+  font-weight: var(--w-bold);
+  white-space: nowrap;
+}
+.twitch-status-ok .twitch-status-state { color: var(--k-ok); }
+.twitch-status-warning .twitch-status-state { color: var(--k-warn); }
+.twitch-status-problem .twitch-status-state { color: var(--k-err); }
+
 /* Login and Profile › Steam (issue #150) */
 .steam-login-block {
   margin-top: 16px;

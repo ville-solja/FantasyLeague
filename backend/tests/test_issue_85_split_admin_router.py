@@ -294,14 +294,17 @@ class TestPreserveExistingTestCoverageThroughSplit:
         for hashed reset tokens, the per-IP lockout and package.sh --ebs-origin changed no counts), and
         plan-issue-173-demo-mode-badge-position's 9 new tests and
         plan-issue-175-approved-streamers-admin's 49 new tests did after that, and
-        the docker-publish --ebs-origin fix's 1 new test did after that."""
+        the docker-publish --ebs-origin fix's 1 new test did after that, and
+        plan-issue-180-twitch-integration-status's 45 new tests did after that (its
+        update to test_issue_161's live_config harness, a failReasonSuffix stub, changed
+        no counts)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2449 passed" in output, output[-3000:]
+        assert "2494 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

@@ -23,8 +23,11 @@ import logging
 import math
 import os
 import random
+import threading
 import time
+from collections import deque
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +110,76 @@ _chat_version_warned   = False  # TWITCH_EXTENSION_VERSION warning logged once p
 # JWT validation
 # ---------------------------------------------------------------------------
 
+# Issue #180: panel traffic seen since the last restart, for the admin Twitch status.
+# Process-local and in memory (like the login lockout stores); no token, secret or
+# viewer id is ever kept here.
+FAILURE_KINDS = ("expired", "invalid", "not_configured")
+_REFUSED_ORIGINS_MAX = 5
+_REFUSED_HOST_MAX = 100
+_traffic_lock = threading.Lock()
+_traffic: dict = {}
+
+
+def reset_traffic() -> None:
+    """Clear the traffic counters (startup state; used by tests)."""
+    with _traffic_lock:
+        _traffic.clear()
+        _traffic.update({
+            "last_ok_at": None,
+            "failures": {k: 0 for k in FAILURE_KINDS},
+            "last_failure_at": None,
+            "refused_origins": deque(maxlen=_REFUSED_ORIGINS_MAX),
+        })
+
+
+reset_traffic()
+
+
+def _record_ok() -> None:
+    with _traffic_lock:
+        _traffic["last_ok_at"] = int(time.time())
+
+
+def _record_failure(kind: str) -> None:
+    with _traffic_lock:
+        _traffic["failures"][kind] += 1
+        _traffic["last_failure_at"] = int(time.time())
+
+
+def record_refused_origin(origin: str) -> None:
+    """Remember the host of a cross-origin /twitch/* request CORS will refuse: host
+    only (no scheme or path), cleaned, newest first, last five distinct hosts."""
+    if origin == "null":
+        host = "null"
+    else:
+        try:
+            parts = urlsplit(origin)
+            host = parts.hostname or ""
+            if host and parts.port:
+                host = f"{host}:{parts.port}"
+        except ValueError:
+            return
+    host = text_safety.clean_display_text(host, _REFUSED_HOST_MAX)
+    if not host:
+        return
+    with _traffic_lock:
+        seen = _traffic["refused_origins"]
+        if host in seen:
+            seen.remove(host)
+        seen.appendleft(host)
+
+
+def traffic_snapshot() -> dict:
+    """A copy of the traffic counters for GET /admin/twitch/status."""
+    with _traffic_lock:
+        return {
+            "last_ok_at": _traffic["last_ok_at"],
+            "failures": dict(_traffic["failures"]),
+            "last_failure_at": _traffic["last_failure_at"],
+            "refused_origins": list(_traffic["refused_origins"]),
+        }
+
+
 def _remember_viewer(request: Request | None, payload: dict) -> dict:
     """Expose the opaque id to the per-viewer rate-limit key (rate_limit.key_by_twitch_viewer_or_ip)."""
     if request is not None:
@@ -140,6 +213,7 @@ def verify_twitch_jwt(request: Request = None, authorization: str = Header(...))
     token = authorization.removeprefix("Bearer ")
     secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "").strip().strip('"').strip("'")
     if not secret_b64:
+        _record_failure("not_configured")
         raise HTTPException(status_code=500, detail="TWITCH_EXTENSION_SECRET not configured")
     try:
         # Twitch extension secrets are URL-safe base64; add padding and use urlsafe decoder
@@ -153,18 +227,23 @@ def verify_twitch_jwt(request: Request = None, authorization: str = Header(...))
         )
     except pyjwt.ExpiredSignatureError:
         logger.error("Twitch JWT expired")
+        _record_failure("expired")
         raise HTTPException(status_code=401, detail="Twitch token expired")
     except pyjwt.InvalidTokenError as exc:
         # Exception class only (issue #165): nothing about the secret or the token.
         logger.error("Twitch JWT invalid: %s", type(exc).__name__)
+        _record_failure("invalid")
         raise HTTPException(status_code=401, detail="Invalid Twitch token")
     except Exception as exc:
         logger.error("Twitch JWT decode unexpected error: %s", type(exc).__name__)
+        # Almost always a TWITCH_EXTENSION_SECRET that isn't valid base64.
+        _record_failure("not_configured")
         raise HTTPException(status_code=500, detail="JWT decode error")
     # role "external" is what this server signs for Twitch's own APIs (PubSub, chat);
     # no viewer or broadcaster route ever needs one (issue #165).
     if payload.get("role") == "external":
         raise HTTPException(status_code=403, detail="Viewer token required")
+    _record_ok()
     return _remember_viewer(request, payload)
 
 
@@ -352,6 +431,42 @@ def heartbeat_route(
 ):
     """Called by the extension panel every few minutes while the viewer is joined."""
     return heartbeat(payload, db)
+
+
+# ---------------------------------------------------------------------------
+# Connection check (issue #180): the configuration page's step-by-step check
+# ---------------------------------------------------------------------------
+
+def ping() -> dict:
+    """No token, no database. CORS applies as on every /twitch/* route, so an answer
+    read from the extension iframe proves the backend is reachable from it."""
+    return {"ok": True}
+
+
+@router.get("/ping")
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def ping_route(request: Request):
+    return ping()
+
+
+def check(payload: dict, db: Session) -> dict:
+    """Whether the Twitch token was accepted, and for a broadcaster whether the channel
+    may set MVPs (the values GET /twitch/matches/current returns). Records no approval
+    request."""
+    role = payload.get("role")
+    result = {"ok": True, "role": role}
+    if role == "broadcaster":
+        mvp_allowed, approval = channel_approval(payload.get("channel_id", ""), db)
+        result.update({"mvp_allowed": mvp_allowed, "approval": approval})
+    return result
+
+
+@router.get("/check")
+def check_route(
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    return check(payload, db)
 
 
 # ---------------------------------------------------------------------------
