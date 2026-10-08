@@ -660,7 +660,7 @@ class TestAdminTwitchStatus:
         """The client id row is ok when set and names https://{id}.ext-twitch.tv; problem when empty."""
         row = _row(_status(), "extension_client_id")
         assert row["state"] == "ok"
-        assert f"https://{_CLIENT_ID}.ext-twitch.tv" in row["detail"]
+        assert any(u == f"https://{_CLIENT_ID}.ext-twitch.tv" for u in _urls(row["detail"]))
         monkeypatch.setenv("TWITCH_EXTENSION_CLIENT_ID", "")
         row = _row(_status(), "extension_client_id")
         assert row["state"] == "problem" and "ext-twitch.tv" not in row["detail"]
@@ -801,7 +801,7 @@ class TestAdminTwitchStatus:
         assert "URL Fetching Domains" in labels and "ebs_url" in labels and "packaged" in labels
         assert len(console) == 3
         for c in console:
-            assert "https://league.example:8443" in _urls(c["expected"]), c
+            assert any(u == "https://league.example:8443" for u in _urls(c["expected"])), c
         assert not any(c["expected"].endswith("/") for c in console)
         monkeypatch.delenv("APP_BASE_URL")
         console = _status()["console"]
@@ -887,7 +887,7 @@ class TestPackageStamp:
         out = _run_config(tmp_path, "await runConnectionCheck(); out.row = rows()[0];")
         if out is not None:
             assert out["row"]["state"] == "OK"
-            assert "1.3.0" in out["row"]["detail"] and "https://league.example" in _urls(out["row"]["detail"])
+            assert "1.3.0" in out["row"]["detail"] and any(u == "https://league.example" for u in _urls(out["row"]["detail"]))
 
     def test_config_page_package_row_handles_missing_ext_build(self, tmp_path):
         """Failure path: config.js does not crash when EXT_BUILD is undefined (older package) and marks Package as failed."""
