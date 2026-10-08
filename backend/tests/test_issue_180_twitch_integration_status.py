@@ -49,6 +49,12 @@ from tests.test_issue_157_twitch_extension_policy_compliance import _js_function
 from tests.test_issue_163_twitch_steam_account_hardening import (
     _SECRET_B64, _SECRET_BYTES, _engine, _session, _signed, _viewer_claims)
 
+
+def _urls(text: str) -> list[str]:
+    """Every http(s) URL in text, without trailing punctuation, for exact comparison."""
+    return [u.rstrip(".,;)") for u in re.findall(r"https?://[^\s\"']+", text)]
+
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 EXT_DIR = REPO_ROOT / "twitch-extension"
 FRONTEND_DIR = REPO_ROOT / "frontend"
@@ -332,7 +338,7 @@ class TestPanelReasonCodes:
         """)
         if out is not None:
             coded = [w for w in out["warns"] if w.startswith("[ext] E-TOKEN")]
-            assert coded and "https://league.example" in coded[0]
+            assert coded and coded[0].split("backend origin: ", 1)[1] == "https://league.example"
             assert "/api/v1" not in coded[0]
             assert not any("secret-jwt-token-value" in w for w in out["warns"])
 
@@ -795,7 +801,7 @@ class TestAdminTwitchStatus:
         assert "URL Fetching Domains" in labels and "ebs_url" in labels and "packaged" in labels
         assert len(console) == 3
         for c in console:
-            assert "https://league.example:8443" in c["expected"], c
+            assert "https://league.example:8443" in _urls(c["expected"]), c
         assert not any(c["expected"].endswith("/") for c in console)
         monkeypatch.delenv("APP_BASE_URL")
         console = _status()["console"]
@@ -881,7 +887,7 @@ class TestPackageStamp:
         out = _run_config(tmp_path, "await runConnectionCheck(); out.row = rows()[0];")
         if out is not None:
             assert out["row"]["state"] == "OK"
-            assert "1.3.0" in out["row"]["detail"] and "https://league.example" in out["row"]["detail"]
+            assert "1.3.0" in out["row"]["detail"] and "https://league.example" in _urls(out["row"]["detail"])
 
     def test_config_page_package_row_handles_missing_ext_build(self, tmp_path):
         """Failure path: config.js does not crash when EXT_BUILD is undefined (older package) and marks Package as failed."""
