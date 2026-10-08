@@ -814,10 +814,21 @@ class TestAdminTwitchStatus:
         assert status_at < html.index('<div class="twitch-merges-title">Approved streamers</div>')
         section = html[status_at:html.index("Approved streamers")]
         assert 'onclick="loadTwitchStatus()"' in section and ">Refresh</button>" in section
-        assert 'id="twitchStatus"' in section
+        assert 'id="adminTwitchStatus"' in section
         js = _read(FRONTEND_DIR / "app-admin-users.js")
         assert "`${API}/admin/twitch/status`" in js
         assert "loadTwitchStatus();" in _js_function(js, "loadUsers")
+
+    def test_admin_twitch_status_renders_into_its_own_container(self):
+        """Failure path: the status table renders into #adminTwitchStatus, and index.html has no duplicate ids.
+        A shared id (the Profile tab's #twitchStatus) made Refresh render into the hidden Profile tab."""
+        html = _read(FRONTEND_DIR / "index.html")
+        ids = re.findall(r'\sid="([^"]+)"', html)
+        dupes = sorted({i for i in ids if ids.count(i) > 1})
+        assert dupes == [], dupes
+        render = _js_function(_read(FRONTEND_DIR / "app-admin-users.js"), "_renderTwitchStatus")
+        assert 'getElementById("adminTwitchStatus")' in render
+        assert 'getElementById("twitchStatus")' not in render
 
     def test_admin_ui_escapes_twitch_status_values(self):
         """Failure path: app-admin-users.js renders every status value through _escHtml."""

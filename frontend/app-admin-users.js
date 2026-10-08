@@ -478,7 +478,7 @@ async function loadTwitchStatus() {
     const data = await res.json();
     if (!res.ok) return setStatus("twitchStatusStatus", data.detail, false);
     _renderTwitchStatus(data);
-    setStatus("twitchStatusStatus", "");
+    setStatus("twitchStatusStatus", `Updated ${new Date().toLocaleTimeString()}`);
   } catch (e) {
     setStatus("twitchStatusStatus", e.message, false);
   }
@@ -520,7 +520,7 @@ function _renderTwitchStatus(data) {
   const checks = (data.checks || []).map(c => _twitchStatusRow(c.state, c.label, c.detail)).join("");
   const consoleRows = (data.console || []).map(c =>
     `<tr><td>${_escHtml(c.label)}</td><td><code>${_escHtml(c.expected)}</code></td></tr>`).join("");
-  document.getElementById("twitchStatus").innerHTML =
+  document.getElementById("adminTwitchStatus").innerHTML =
     `<table class="twitch-status-table">${head}<tbody>${checks}</tbody></table>` +
     `<div class="twitch-merges-title">Panel traffic since the last restart</div>` +
     `<table class="twitch-status-table">${head}<tbody>${traffic.join("")}</tbody></table>` +
