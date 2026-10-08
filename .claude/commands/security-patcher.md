@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 4 -->
 <!-- mode: read-write -->
 
 You are the **Security Patcher** for this project.
@@ -18,6 +18,9 @@ eliminates the reported issue.
 ## When to run
 When a new code scanning alert appears in the repository's Security tab, or after a CI
 CodeQL scan flags a regression. Can be run on a specific alert number or a full GitHub URL.
+`/ship pr` also runs this workflow as a subagent, one alert at a time, for the alerts on its pull
+request; in that case work on the current branch, do not commit or push (`/ship` does), and end
+with the output format below so `/ship` can read the result.
 
 **Usage:**
 - `/security-patcher 19` — fix alert #19
@@ -33,8 +36,29 @@ Accept `$ARGUMENTS` as either:
 - A bare integer: treat it as the alert number
 - A full GitHub URL (`https://github.com/.../security/code-scanning/N`): extract N from the path
 
-If neither form is recognised, stop and print:
+If `$ARGUMENTS` is empty, don't stop: list the open alerts (step 0a-list) and ask which one
+to patch. If it is non-empty but neither form is recognised, stop and print:
 > Usage: `/security-patcher <alert-number>` or `/security-patcher <github-url>`
+
+### 0a-list. List open alerts (no argument given)
+
+Code scanning keeps alerts per Git ref. The list endpoint without `ref` returns only the
+**default branch**, so alerts raised on a pull request are invisible there. Check both:
+
+```
+gh api "repos/{owner}/{repo}/code-scanning/alerts?state=open&per_page=100" --paginate
+gh pr list --state open --json number,headRefName
+gh api "repos/{owner}/{repo}/code-scanning/alerts?ref=refs/pull/<PR>/head&per_page=100" --paginate   # per open PR
+```
+
+For pull request refs, don't filter with `state=open`: an alert that exists only on a pull
+request has `state: null` there, and it stays `null` even after the fix. Keep `open` alerts, and
+for `null` ones check the instance on that ref
+(`gh api repos/{owner}/{repo}/code-scanning/alerts/<N>/instances`): keep the alert only when
+that ref's instance is `open`. Check every open pull request; a merged PR's alerts are covered
+by the default-branch list. Print one line
+per alert: `#N [severity] rule.id — path:line — ref`, newest first, then ask which to patch
+(or patch all of one PR in turn when the user says so).
 
 ### 0b. Fetch alert details
 
@@ -47,7 +71,11 @@ gh api repos/{owner}/{repo}/code-scanning/alerts/{N}
 ```
 
 From the response extract:
-- `state` — if `"fixed"` or `"dismissed"`, print a note and stop (nothing to do)
+- `state` — if `"fixed"` or `"dismissed"`, print a note and stop (nothing to do). If `null`
+  (an alert that exists only on a pull request), check the `/instances` entry for its ref: stop
+  with a note if it is `fixed` or `dismissed`, otherwise treat the alert as open
+- `most_recent_instance.ref` — the branch or `refs/pull/<PR>/head` the alert was found on; a
+  PR alert is fixed on that PR's branch (check it out, or confirm the current branch is it)
 - `rule.id` — the rule identifier (e.g. `py/sql-injection`, `js/xss`)
 - `rule.description` — short human-readable name
 - `rule.full_description` — longer explanation of the vulnerability class
@@ -184,7 +212,8 @@ Rule suppressed: yes / no (if the scanner requires an in-code annotation)
 
 Follow-up:
   [ ] Re-run /security-reviewer to confirm no related issues in sibling code
-  [ ] Push and confirm the alert moves to "Fixed" in GitHub Security tab
+  [ ] Push and confirm the alert moves to "Fixed" in GitHub Security tab (for a PR alert:
+      push to the PR branch; the alert clears when the PR's next analysis no longer finds it)
 ```
 
 If the patch was not applied (cannot determine safe fix or tests failed), output:

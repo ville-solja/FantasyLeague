@@ -198,18 +198,35 @@ Reads an approved plan and writes failing pytest stubs to `backend/tests/test_{s
 
 ### `/develop`
 **Role: Development Orchestrator**
-Runs the full post-approval pipeline in sequential stages using isolated subagents: test stubs → implementation → QA + docs validation → issue close. Stops and reports clearly if any stage fails.
+Runs the full post-approval pipeline in sequential stages using isolated subagents: test stubs → implementation → QA + docs validation → issue marked implemented. Stops and reports clearly if any stage fails.
 
 1. **Stage 1 — Test stubs:** spawns test-planner to write failing stubs
 2. **Stage 2 — Implementation:** spawns developer to implement the plan and make stubs pass
-3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel
-4. **Stage 4 — Close issue:** if the plan came from GitHub issue #N and every stage passed, closes the issue with a summary comment (`gh issue close N --comment …`)
+3. **Stage 3 — Validation:** spawns QA engineer + documentation steward in parallel, plus the security reviewer when the change touches security-sensitive code (routers, `main.py`, auth, sessions, Twitch/Steam sign-in, rate limits, secrets, dependencies) or the plan is about auth, permissions, tokens or personal data. A High finding blocks Stage 4; Medium findings go back to the developer subagent to fix.
+4. **Stage 4 — Mark issue implemented:** if the plan came from GitHub issue #N and every stage passed, labels the issue `implemented`, comments with a summary and sets its `.issue-index` status to `implemented`. The issue stays open until its code is merged (`/ship close`).
 
 Produces a consolidated report including the Stage 4 result.
 
 **When to run:** After reviewing a plan file and deciding to implement it. Replaces running `/test-planner`, `/developer`, `/qa-engineer`, and `/documentation-steward` individually.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-42-twitch-mvp-series-window`
+
+---
+
+### `/ship`
+**Role: Release Coordinator**
+Owns the GitHub side of the work after `/develop`. Never writes feature code, never merges, never force-pushes, and asks before anything leaves the machine.
+- `/ship status` — read-only: branch state, issues by milestone with their plan status, open PRs with CI and code-scanning alerts, and what needs attention (e.g. issues closed but not merged)
+- `/ship commit [N ...]` — groups uncommitted changes by issue (plan file lists, test files) and writes one commit per issue in a fixed format; sets `.issue-index` status to `committed`
+- `/ship pr` — pushes the branch, opens or updates the PR (one section per issue, `Closes #N`, test result, manual checks, PR checklist), watches CI and the PR's code-scanning alerts, and — after you choose which — fixes them by running the `/security-patcher` workflow per alert, committing each fix and pushing again (at most two rounds)
+- `/ship sync <N>` — brings the GitHub issue's text, links and milestone in line with its plan after a scope change
+- `/ship close [N ...]` — after a merge: confirms the issues closed, sets `.issue-index` status to `merged`, reports milestone progress
+
+`markdown/plans/.issue-index` lines are `<N> <plan-slug> [status]`, status `planned` (default), `implemented`, `committed` or `merged`.
+
+**When to run:** `/ship status` at the start of a session; `/ship commit` and `/ship pr` when work is ready for review; `/ship close` after you merge.
+
+**Usage:** `/ship <status | commit [N ...] | pr | sync <N> | close [N ...]>`
 
 ---
 
@@ -271,19 +288,28 @@ For ad-hoc work, bug fixes, or situations where the full pipeline is overkill, t
 
 ### [HUMAN GATE 2] — Review report
 
-Read the consolidated report from `/develop`. When the plan came from a GitHub issue and every stage passed, `/develop` has already closed the issue with a summary comment. If the review finds a problem, reopen it:
+Read the consolidated report from `/develop`. When the plan came from a GitHub issue and every stage passed, `/develop` has labelled the issue `implemented` and commented with a summary; the issue stays open. If the review finds a problem, fix it and run `/develop` again (or remove the label).
+
+If Stage 4 was skipped or failed, the report says why.
+
+### [HUMAN GATE 3] — Commit, PR and merge
 
 ```
-gh issue reopen <N>
+/ship commit     # one commit per issue, after you confirm the grouping
+/ship pr         # push, open the PR with Closes #N, watch CI and code scanning
 ```
 
-If Stage 4 was skipped or failed, the report says why; close the issue yourself once the problem is fixed (`gh issue close <N>`).
+`/ship pr` offers to fix any code-scanning alert on the PR (it runs the `/security-patcher` workflow per alert and asks before pushing the fixes). Merging is your decision. After merging:
+
+```
+/ship close      # confirm the issues closed and mark their plans merged
+```
 
 ### Review gates (run after any implementation)
 
 | Agent | When required | Focus |
 |---|---|---|
-| `/security-reviewer` | Any change to `backend/main.py` | Auth gaps, session leaks, input validation, data exposure |
+| `/security-reviewer` | Any change to `backend/main.py` (run automatically by `/develop` Stage 3 for security-sensitive changes) | Auth gaps, session leaks, input validation, data exposure |
 | `/qa-engineer` | Any backend change | pytest suite pass/fail |
 | `/scoring-analyst` | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, division-by-zero, stat mapping |
 | `/documentation-steward` | Any significant backend change | Doc drift, missing env vars, terminology mismatches |
