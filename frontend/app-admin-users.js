@@ -478,7 +478,7 @@ async function loadTwitchStatus() {
     const data = await res.json();
     if (!res.ok) return setStatus("twitchStatusStatus", data.detail, false);
     _renderTwitchStatus(data);
-    setStatus("twitchStatusStatus", "");
+    setStatus("twitchStatusStatus", `Updated ${new Date().toLocaleTimeString()}`);
   } catch (e) {
     setStatus("twitchStatusStatus", e.message, false);
   }
@@ -507,6 +507,11 @@ function _renderTwitchStatus(data) {
   const refusedTotal = (f.expired || 0) + (f.invalid || 0) + (f.not_configured || 0);
   const origins = t.refused_origins || [];
   const traffic = [
+    _twitchStatusRow(t.last_extension_request_at ? "ok" : "warning", "Last request from the extension",
+      t.last_extension_request_at ? _twitchAgo(t.last_extension_request_at) :
+        "None since the last restart: the panel is not reaching this server. Open the panel on a channel; " +
+        "if this stays empty, check the extension's ebs_url, the URL Fetching Domains in the Twitch console, " +
+        "and that this server answers over HTTPS from the internet. A refused host below means a Client ID mismatch."),
     _twitchStatusRow(t.last_ok_at ? "ok" : "warning", "Last panel request with an accepted token",
       t.last_ok_at ? _twitchAgo(t.last_ok_at) : "None since the last restart. Open the panel on a channel to test."),
     _twitchStatusRow(refusedTotal ? "problem" : "ok", "Refused Twitch tokens",
@@ -520,7 +525,7 @@ function _renderTwitchStatus(data) {
   const checks = (data.checks || []).map(c => _twitchStatusRow(c.state, c.label, c.detail)).join("");
   const consoleRows = (data.console || []).map(c =>
     `<tr><td>${_escHtml(c.label)}</td><td><code>${_escHtml(c.expected)}</code></td></tr>`).join("");
-  document.getElementById("twitchStatus").innerHTML =
+  document.getElementById("adminTwitchStatus").innerHTML =
     `<table class="twitch-status-table">${head}<tbody>${checks}</tbody></table>` +
     `<div class="twitch-merges-title">Panel traffic since the last restart</div>` +
     `<table class="twitch-status-table">${head}<tbody>${traffic.join("")}</tbody></table>` +

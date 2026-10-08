@@ -128,6 +128,7 @@ def reset_traffic() -> None:
             "last_ok_at": None,
             "failures": {k: 0 for k in FAILURE_KINDS},
             "last_failure_at": None,
+            "last_extension_request_at": None,
             "refused_origins": deque(maxlen=_REFUSED_ORIGINS_MAX),
         })
 
@@ -144,6 +145,14 @@ def _record_failure(kind: str) -> None:
     with _traffic_lock:
         _traffic["failures"][kind] += 1
         _traffic["last_failure_at"] = int(time.time())
+
+
+def record_extension_request() -> None:
+    """A /twitch/* request (preflight included) arrived from an origin CORS allows, i.e.
+    the extension iframe reached this server. Tells "nothing reaches us" apart from
+    "it reaches us but is refused" (issue #180)."""
+    with _traffic_lock:
+        _traffic["last_extension_request_at"] = int(time.time())
 
 
 def record_refused_origin(origin: str) -> None:
@@ -176,6 +185,7 @@ def traffic_snapshot() -> dict:
             "last_ok_at": _traffic["last_ok_at"],
             "failures": dict(_traffic["failures"]),
             "last_failure_at": _traffic["last_failure_at"],
+            "last_extension_request_at": _traffic["last_extension_request_at"],
             "refused_origins": list(_traffic["refused_origins"]),
         }
 

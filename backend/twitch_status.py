@@ -216,9 +216,10 @@ def _origin_netloc(origin: str) -> str | None:
 
 
 class RefusedOriginMiddleware:
-    """Record (never block) the host of a cross-origin /twitch/* request whose Origin
-    is neither allowed by CORS (same `allow_origins` / `allow_origin_regex`) nor the
-    request's own host or APP_BASE_URL's (the main site's cookie routes are same-origin)."""
+    """Record, never block, /twitch/* requests by Origin. One from an origin CORS allows
+    (same `allow_origins` / `allow_origin_regex`) means the extension reached this server;
+    for any other, the host is recorded unless it is the request's own host or
+    APP_BASE_URL's (the main site's cookie routes are same-origin)."""
 
     def __init__(self, app, allow_origins=(), allow_origin_regex: str | None = None):
         self.app = app
@@ -235,7 +236,9 @@ class RefusedOriginMiddleware:
             headers = {k.decode("latin-1"): v.decode("latin-1")
                        for k, v in scope.get("headers") or [] if k in (b"origin", b"host")}
             origin = headers.get("origin")
-            if origin and not self._allowed(origin):
+            if origin and self._allowed(origin):
+                twitch.record_extension_request()
+            elif origin:
                 same_site = {headers.get("host", "").lower(), _origin_netloc(_env("APP_BASE_URL"))}
                 netloc = _origin_netloc(origin)
                 if netloc is None or netloc not in same_site:

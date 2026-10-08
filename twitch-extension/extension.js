@@ -14,6 +14,7 @@ var ext = {
     ebsUrl:     null,
     configuredUrl: null,  // ebs_url as configured, even when refused (configuration page only)
     failReason: null,     // last reason code (issue #180), one of EXT_REASON
+    configInvalid: false, // the global configuration segment is not valid JSON
 };
 
 // ── Reason codes (issue #180) ───────────────────────────────────────────────
@@ -76,6 +77,7 @@ function _onCfgChanged() {
     if (global && global.content) {
         try {
             var cfg = JSON.parse(global.content);
+            ext.configInvalid = false;
             ext.configuredUrl = cfg.ebs_url || null;
             if (cfg.ebs_url && !_ebsUrlAllowed(cfg.ebs_url)) {
                 // The origin was not packaged into this version: say so at once.
@@ -89,6 +91,7 @@ function _onCfgChanged() {
                 if (_authReady && typeof onReady === "function") onReady();
             }
         } catch (e) {
+            ext.configInvalid = true;
             console.warn("[ext] bad global config JSON", e);
         }
     }
