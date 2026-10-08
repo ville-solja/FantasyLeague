@@ -172,9 +172,10 @@ def test_technical_writer_command_file_exists():
 
 
 def test_technical_writer_command_file_has_version_and_mode_headers():
-    """First two lines are <!-- version: 1 --> and <!-- mode: read-write -->."""
+    """First two lines are <!-- version: N --> (N >= 1) and <!-- mode: read-write -->."""
     lines = _cmd().splitlines()
-    assert lines[0].strip() == "<!-- version: 1 -->"
+    m = re.fullmatch(r"<!-- version: (\d+) -->", lines[0].strip())
+    assert m and int(m.group(1)) >= 1
     assert lines[1].strip() == "<!-- mode: read-write -->"
 
 

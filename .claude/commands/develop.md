@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 6 -->
 <!-- mode: read-write -->
 
 You are the **Development Orchestrator** for this project.
@@ -186,3 +186,17 @@ Stage 4 — GitHub issue:    ✓ labelled #{N} implemented with summary comment 
 Stage 4 — GitHub issue:    – skipped (<reason: a stage failed / not open / docs gaps open>)
 Stage 4 — GitHub issue:    ✗ label/comment failed (<gh error>) — run: gh issue edit {N} --add-label implemented
 ```
+
+Always end with one line:
+
+```
+Next: <invocation>
+```
+
+- All stages passed: `/ship commit {N}` (or `/ship commit` without an issue number).
+- Stage 3 Security was not run but the change is borderline: `/security-reviewer`.
+- A stage failed: the invocation that resumes after the fix is made, usually `/develop {slug}`
+  again; for a High security finding, `/security-reviewer fix` first.
+
+Do not stop mid-run to ask about decisions the plan leaves open; take the reading that fits
+the codebase, note it under "Files changed", and carry on.

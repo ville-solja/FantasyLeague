@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 6 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -107,6 +107,9 @@ Follow-up:
   [ ] Run /qa-engineer to confirm test suite passes
   [ ] Run /documentation-steward to check for doc drift
   [ ] Update markdown/features/README.md if a new feature file was created
+
+Next: /qa-engineer   (or /security-reviewer first when auth, sessions, Twitch or Steam
+      code changed; /develop runs both itself)
 ```
 
 If any verification step failed, list it as `✗` with a short explanation and stop — do not mark the implementation as complete.

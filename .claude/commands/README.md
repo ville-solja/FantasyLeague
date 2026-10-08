@@ -7,6 +7,10 @@ All agents declare their scope, check preconditions before doing deep work, and 
 a defined output format. Each file starts with `<!-- version: N -->` and
 `<!-- mode: read-only | read-write -->` headers.
 
+Two conventions keep the process in commands rather than in mid-run questions:
+- **The invocation is the consent.** Running a command authorises what its description says it does; options are arguments (`--dry-run`, `apply`, `fix`, `--fix`). When input is missing or a choice can't be made from the repo, the agent stops and prints the invocations that express each choice.
+- **Every run ends with `Next:`** and one ready-to-run invocation that continues the work.
+
 ---
 
 ## Development pipeline
@@ -88,7 +92,7 @@ flowchart TD
 |---|---|---|
 | [`/product-planner`](product-planner.md) | read-write | Formalises a feature: writes plan file, user stories, and feature stub. Entry point for all new work. |
 | [`/develop`](develop.md) | read-write | Orchestrates the full pipeline: test stubs → implementation → QA + docs → labels the source GitHub issue `implemented` with a summary comment when every stage passes (the issue stays open until merged). Adds `/security-reviewer` to Stage 3 when the change touches security-sensitive code; a High finding blocks the issue update. Use this instead of running the stages manually. |
-| [`/ship`](ship.md) | read-write | The GitHub side after `/develop`: `status` (where every issue stands), `commit` (one commit per issue), `pr` (push, open PR with `Closes #N`, watch CI and code scanning, fix chosen alerts via the `/security-patcher` workflow), `sync <N>` (issue text follows plan scope changes), `close` (confirm issues closed after merge). Never merges or force-pushes; asks before anything leaves the machine. |
+| [`/ship`](ship.md) | read-write | The GitHub side after `/develop`: `status` (where every issue stands), `commit` (one commit per issue), `pr` (push, open PR with `Closes #N`, watch CI and code scanning, `--fix all|<N,...>` fixes alerts via the `/security-patcher` workflow), `sync <N>` (issue text follows plan scope changes), `close` (confirm issues closed after merge). Running a subcommand is the consent for what it does; `--dry-run` shows it without doing it. Never merges or force-pushes. |
 | [`/test-planner`](test-planner.md) | read-write | Writes failing pytest stubs from a plan's acceptance criteria. Called by `/develop` Stage 1; can be run standalone. |
 | [`/developer`](developer.md) | read-write | Implements a plan and makes the test stubs pass. Called by `/develop` Stage 2; can be run standalone. |
 | [`/qa-engineer`](qa-engineer.md) | read-only | Runs `pytest` and reports results grouped by module. Called by `/develop` Stage 3; also useful after any ad-hoc backend change. |
@@ -98,7 +102,7 @@ flowchart TD
 
 | Agent | Trigger | Focus |
 |---|---|---|
-| [`/security-reviewer`](security-reviewer.md) | Any change to `backend/` routers or `main.py` (run automatically by `/develop` for security-sensitive changes) | Auth gaps, session leaks, input validation, data over-exposure |
+| [`/security-reviewer`](security-reviewer.md) | Any change to `backend/` routers or `main.py` (run automatically by `/develop` for security-sensitive changes) | Auth gaps, session leaks, input validation, data over-exposure; `/security-reviewer fix` applies the fixes for the last review's High and Medium findings |
 | [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert (default branch or open PR); also run by `/ship pr` for its PR's alerts | Fetches alert, fixes flagged code, verifies tests pass; with no argument lists open alerts including those on PRs |
 | [`/scoring-analyst`](scoring-analyst.md) | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, stat-key mapping, division-by-zero |
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
@@ -111,8 +115,8 @@ flowchart TD
 | Agent | When to run | Focus |
 |---|---|---|
 | [`/product-analyst`](product-analyst.md) | After a sprint or milestone | Maps every user story to implementation; surfaces gaps |
-| [`/agent-steward`](agent-steward.md) | After file renames, endpoint changes, or before a planning session | Validates agent definitions aren't stale; updates this README |
-| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Rewrites a doc for its audience; proposes changes and edits only after approval |
+| [`/agent-steward`](agent-steward.md) | After file renames, endpoint changes, or before a planning session | Validates agent definitions aren't stale and follow the shared conventions; reports only, `apply` writes the fixes, other text is guidance to apply |
+| [`/technical-writer`](technical-writer.md) | After a significant documentation change | Rewrites a doc for its audience; proposes numbered changes, then `apply`, `apply except <numbers>` or `discard` |
 
 ---
 
@@ -123,7 +127,7 @@ flowchart TD
 /product-planner <desc> # plan the work
 /develop <plan-slug>    # implement it
 /ship commit            # commit it, grouped by issue
-/ship pr                # push, open the PR, watch checks
+/ship pr                # push, open the PR, watch checks (then /ship pr --fix all for alerts)
 /ship close             # after you merge: confirm issues closed
 ```
 

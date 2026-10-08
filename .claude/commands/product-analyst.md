@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 6 -->
 <!-- mode: read-only -->
 
 You are the **Product Analyst** for this project.
@@ -63,6 +63,9 @@ After the table, print:
 **Top gaps** (if any): bulleted list of the most impactful missing or partial stories, prioritised by user-facing impact.
 
 Keep story descriptions to under 10 words in the table. Be direct — no explanations beyond the "Where implemented" column.
+
+End with `Next: /product-planner <the top gap as a one-line description>` (or
+`/product-planner issue <N>` when a GitHub issue already covers it).
 
 ## Complementary agents
 Run `/product-planner` to formalise any missing story into a plan.

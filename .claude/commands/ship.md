@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Release Coordinator** for this project.
@@ -24,7 +24,7 @@ feature code, never merge, and never force-push.
 - `/ship sync <N>` — after a plan changed scope (split, narrowed or widened)
 - `/ship close` — after a pull request has been merged
 
-**Usage:** `/ship <status | commit [N ...] | pr | sync <N> | close [N ...]>`
+**Usage:** `/ship <status | commit [N ...] [--single] | pr [--fix all|<a,b,...>|none] | sync <N> | close [N ...]> [--dry-run]`
 
 ## Precondition check
 1. `git rev-parse --is-inside-work-tree` succeeds and `gh auth status` succeeds. If `gh` is not
@@ -46,9 +46,18 @@ feature code, never merge, and never force-push.
 
 ## Shared rules
 
-- **Ask before anything visible outside the machine:** pushing, opening or editing a pull
-  request, editing, labelling or closing an issue, creating a label. Show exactly what will be
-  sent, then wait for a yes. Local commits also need a yes, after the grouping is shown.
+- **The invocation is the consent.** The user running a subcommand authorises what that
+  subcommand is documented to do, including the outward-facing steps: `/ship commit` commits,
+  `/ship pr` pushes and opens or updates the pull request, `/ship pr --fix ...` also commits and
+  pushes the patches, `/ship sync <N>` edits or creates issues, `/ship close` comments on,
+  relabels and closes issues. Do not stop mid-run to ask for a yes; list everything that was
+  sent in the report. Do nothing beyond what the subcommand documents.
+- **`--dry-run`** works with every subcommand that writes: gather, group and draft as usual,
+  print the result, change nothing, and end with `Next:` set to the same invocation without
+  `--dry-run`.
+- **No questions mid-run.** When a choice can't be made from the repo and these rules, stop
+  before changing anything and print the invocations that express each choice (e.g.
+  `/ship commit 150` vs `/ship commit 169`), so the user answers by running one.
 - **Never:** force-push, merge, rebase published commits, delete branches, commit `.env`,
   anything under `data/`, backups, `*.zip` builds or other secrets. If such a file is staged,
   unstage it and say so.
@@ -122,13 +131,13 @@ Commit uncommitted work grouped by issue. With issue numbers, only those issues.
    - the issue's test file `backend/tests/test_issue_<N>_*.py`, its plan, its feature doc and
      its story section belong to it;
    - files in a plan's Critical Files table belong to that plan's issue;
-   - a file claimed by two issues goes to the most recent `/develop` run, or ask;
+   - a file claimed by two issues goes to the most recent `/develop` run (say so in the report);
    - shared files (`markdown/lessons-learned.md`, `markdown/plans/.issue-index`, indexes,
      `backend/tests/test_issue_85_split_admin_router.py` suite-size check, `.env.example`)
      go with the issue whose change they contain; if that can't be told apart, put the
      whole file in the last commit;
    - anything left goes into a final "Housekeeping" group.
-3. **Show the grouping** (issue → files) and the draft messages, and wait for a yes.
+3. **Print the grouping** (issue → files) and the messages. With `--dry-run`, stop here.
 4. **Message format** (one commit per issue, oldest issue first):
 
    ```
@@ -148,8 +157,7 @@ Commit uncommitted work grouped by issue. With issue numbers, only those issues.
    Co-Authored-By: ...
    ```
 
-   Several issues may share one commit only when the user asks for it; then use one section
-   per issue.
+   Several issues share one commit only with `--single`; then use one section per issue.
 5. Commit with `git add <files>` for that group only, then `git commit -F -` (heredoc).
    Never `git add -A` across groups.
 6. Set each committed issue's `.issue-index` status to `committed` (in the same or the final
@@ -167,7 +175,7 @@ Commit uncommitted work grouped by issue. With issue numbers, only those issues.
      `Closes #N` lines for every issue in the branch's commits, the latest test result, a
      combined manual-check list, the PR checklist from CLAUDE.md with each item marked done
      or not, and the attribution footer.
-3. Show the push command and the draft; after a yes:
+3. Push and publish (with `--dry-run`, print the push command and the draft instead, and stop):
    `git push -u origin <branch>` (plain push, never `--force`), then
    `gh pr create --title ... --body-file ...` or, if a PR already exists for the branch,
    `gh pr edit <P> --body-file ...`.
@@ -175,9 +183,11 @@ Commit uncommitted work grouped by issue. With issue numbers, only those issues.
    Then list the PR's open code-scanning alerts (`ref=refs/pull/<P>/head`; for `state: null`
    alerts read `/instances` and keep only those open on that ref).
 5. **Fix code-scanning findings** (at most two rounds per `/ship pr` run):
-   1. Show the open alerts (number, rule, severity, file:line) and ask which to fix: all, some,
-      or none. Never fix without a yes; note alerts the user wants dismissed instead (dismissing
-      is done by the user in GitHub, with a reason).
+   1. `--fix` picks the alerts: `all`, a comma-separated list of alert numbers, or `none`.
+      Without `--fix`, list the open alerts (number, rule, severity, file:line), fix nothing,
+      and stop with `Next: /ship pr --fix all` (or the numbers worth fixing). Alerts that should
+      be dismissed instead are dismissed by the user in GitHub, with a reason; name them under
+      "Waiting on you".
    2. For each chosen alert, in order of severity, spawn a subagent with the security-patcher
       role: read `.claude/commands/security-patcher.md` and follow it for alert `<N>`, working on
       the current branch (the PR head). It applies the minimum fix, runs the test suite and the
@@ -196,10 +206,10 @@ Commit uncommitted work grouped by issue. With issue numbers, only those issues.
 
       Co-Authored-By: ...
       ```
-   5. Show the commits and, after a yes, push (plain `git push`). Then watch checks again
-      (step 4). If new or remaining alerts appear, offer one more round; after two rounds, stop
+   5. Push (plain `git push`), then watch checks again (step 4). If alerts from the `--fix`
+      selection remain or new ones appear, run one more round for them; after two rounds, stop
       and report what is left.
-6. Report CI and alerts: fixed (with commit), not patched (with the reason), skipped by the user.
+6. Report CI and alerts: fixed (with commit), not patched (with the reason), not selected by `--fix`.
 
 ---
 
@@ -213,7 +223,7 @@ Bring issue #N on GitHub in line with its plan after a scope change.
    milestone the plan names.
 3. If the plan moved work to an issue that doesn't exist yet, draft that issue too
    (title, body, milestone).
-4. Show everything and wait for a yes; then `gh issue edit` / `gh issue create`.
+4. Apply with `gh issue edit` / `gh issue create` (with `--dry-run`, print the drafts and stop).
 
 ---
 
@@ -226,7 +236,7 @@ For each issue:
    `(#N)` / `Closes #N` in a default-branch commit, or a merged PR with `Closes #N`:
    `gh pr list --state merged --search "#N" --json number,mergedAt`).
 2. If merged and the issue is open (the closing keyword didn't fire), draft a short closing
-   comment ("Merged in #P (<sha>)") and, after a yes, `gh issue close N --comment ...`.
+   comment ("Merged in #P (<sha>)") and run `gh issue close N --comment ...`.
    If it was closed before the merge (by an older `/develop`), add the same comment without
    reopening.
 3. Remove the `implemented` label if present, and set the index status to `merged`.
@@ -244,9 +254,13 @@ Every subcommand ends with:
 
 Changed locally:   <commits, index updates, or "nothing">
 Changed on GitHub: <pushes, PRs, issue edits, closes, or "nothing">
-Waiting on you:    <confirmations declined, manual steps, merges>
-Next:              <the suggested next command>
+Waiting on you:    <manual steps, merges, alerts to dismiss>
+Next:              <one ready-to-run invocation>
 ```
+
+Pick `Next:` from the state: uncommitted work → `/ship commit`; unpushed commits or no PR →
+`/ship pr`; PR alerts open → `/ship pr --fix all`; PR green → "merge PR #P in GitHub, then
+`/ship close`"; open issues without a plan → `/product-planner issue <N>`.
 
 ## Complementary agents
 - `/develop` labels an issue `implemented` and leaves it open; `/ship close` closes it after the merge.

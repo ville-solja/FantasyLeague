@@ -1,4 +1,4 @@
-<!-- version: 4 -->
+<!-- version: 5 -->
 <!-- mode: read-write -->
 
 You are the **Security Patcher** for this project.
@@ -36,8 +36,9 @@ Accept `$ARGUMENTS` as either:
 - A bare integer: treat it as the alert number
 - A full GitHub URL (`https://github.com/.../security/code-scanning/N`): extract N from the path
 
-If `$ARGUMENTS` is empty, don't stop: list the open alerts (step 0a-list) and ask which one
-to patch. If it is non-empty but neither form is recognised, stop and print:
+If `$ARGUMENTS` is empty, list the open alerts (step 0a-list), patch nothing, and end with
+`Next: /security-patcher <N>` for the most severe one (or `/ship pr --fix all` when they are all
+on one open pull request). If it is non-empty but neither form is recognised, stop and print:
 > Usage: `/security-patcher <alert-number>` or `/security-patcher <github-url>`
 
 ### 0a-list. List open alerts (no argument given)
@@ -57,8 +58,7 @@ for `null` ones check the instance on that ref
 (`gh api repos/{owner}/{repo}/code-scanning/alerts/<N>/instances`): keep the alert only when
 that ref's instance is `open`. Check every open pull request; a merged PR's alerts are covered
 by the default-branch list. Print one line
-per alert: `#N [severity] rule.id — path:line — ref`, newest first, then ask which to patch
-(or patch all of one PR in turn when the user says so).
+per alert: `#N [severity] rule.id — path:line — ref`, newest first.
 
 ### 0b. Fetch alert details
 
@@ -211,10 +211,13 @@ Verification:
 Rule suppressed: yes / no (if the scanner requires an in-code annotation)
 
 Follow-up:
-  [ ] Re-run /security-reviewer to confirm no related issues in sibling code
   [ ] Push and confirm the alert moves to "Fixed" in GitHub Security tab (for a PR alert:
       push to the PR branch; the alert clears when the PR's next analysis no longer finds it)
+
+Next: /ship commit   (or /security-reviewer when sibling code may share the pattern)
 ```
+
+When run as a `/ship pr` subagent, leave out the `Next:` line; `/ship` continues.
 
 If the patch was not applied (cannot determine safe fix or tests failed), output:
 
@@ -222,4 +225,5 @@ If the patch was not applied (cannot determine safe fix or tests failed), output
 Alert #{N} — {rule.description}: NOT PATCHED
 Reason: <explanation>
 Recommended action: <what the developer should do manually>
+Next: <the invocation that moves it on, e.g. /product-planner <fix description>>
 ```

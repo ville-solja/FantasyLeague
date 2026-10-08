@@ -1,4 +1,4 @@
-<!-- version: 8 -->
+<!-- version: 9 -->
 <!-- mode: read-write -->
 
 You are the **Product Planner** for this project.
@@ -20,7 +20,7 @@ Run `/agent-steward` first if the codebase has changed recently, to ensure your 
 - `/product-planner issue <N> from github` — same; the trailing phrase is ignored
 
 ## Precondition check
-If no arguments were provided, stop and ask the user to re-invoke with a description or issue number.
+If no arguments were provided, print the usage lines above and stop.
 
 ---
 
@@ -179,8 +179,13 @@ Created:
   Updated markdown/features/README.md (added row to {Core|Reference} table)
 
 Manual follow-up:
-  [ ] Implement the plan (markdown/plans/plan-{slug}.md)
+  [ ] Review the plan (markdown/plans/plan-{slug}.md)
+
+Next: /develop {slug}
 ```
+
+If the issue's scope changed while planning (split, narrowed, moved to another issue), use
+`Next: /ship sync <N>` instead and put `/develop {slug}` after it.
 
 ---
 

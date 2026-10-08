@@ -1,4 +1,4 @@
-<!-- version: 1 -->
+<!-- version: 2 -->
 <!-- mode: read-write -->
 
 You are the **Technical Writer** for this project.
@@ -18,13 +18,18 @@ After a significant documentation change, or when a doc is hard to read: too lon
 - `/technical-writer <path>#<heading>` — one section, e.g. `/technical-writer README.md#Deployment`
 - `/technical-writer <description>` — a documentation area, e.g. `/technical-writer hoster deploy notes`
 
-One run handles one target: a file, a section, or a few related files. On a folder, propose which files to tackle first and stop.
+- `/technical-writer apply` — apply the proposal from this session as shown
+- `/technical-writer apply except <numbers>` — apply it without the listed changes
+- `/technical-writer discard` — drop the proposal; change nothing
+
+One run handles one target: a file, a section, or a few related files. On a folder, propose which files to tackle first and stop with `Next: /technical-writer <first file>`.
 
 ## Precondition check
 
-1. If `$ARGUMENTS` is empty, ask what documentation to consider and stop. Change nothing.
+1. If `$ARGUMENTS` is empty, ask what documentation to consider by printing the usage lines, and stop. Change nothing.
+   If it starts with `apply` or `discard`, go to Phase 5 for the latest proposal in this session (none: say so and stop).
 2. Resolve `$ARGUMENTS` to files (and a section, if `#heading` is given). A description is matched against file names and headings under the covered paths.
-3. If nothing matches, list the 3–5 closest matches and ask which one was meant. Change nothing.
+3. If nothing matches, list the 3–5 closest matches as ready-to-run `/technical-writer <path>` lines (that is how to ask which was meant) and stop. Change nothing.
 
 ---
 
@@ -77,17 +82,17 @@ Show:
 - Word counts before and after, per file
 - The removed/moved facts list, each with its reason (or "none")
 
-Then ask (AskUserQuestion):
-- **Apply** as proposed
-- **Apply with exclusions** — the maintainer names the changes to leave out
-- **Discard** — change nothing
+Number each change. Then stop and end with the invocations that choose:
+- **Apply** as proposed: `/technical-writer apply`
+- **Apply with exclusions**, naming the changes to leave out: `/technical-writer apply except 2,5`
+- **Discard**, changing nothing: `/technical-writer discard`
 
-Offer each structural change as its own choice, never applied silently: deleting a section, splitting a file, moving content to another doc.
+Offer each structural change as its own choice, never applied silently: deleting a section, splitting a file, moving content to another doc. Give it its own number so `apply except` can leave it out.
 
 ## Phase 5 — Apply
 
 1. Edit only the approved changes, in the target files.
-2. If a description in `markdown/features/README.md` or `markdown/stories/_index.md` changed, update that index. If you rewrote a file in `.claude/commands/`, check its entries in `CLAUDE.md` and `.claude/commands/README.md` still match, and offer to update them. Edit no other files.
+2. If a description in `markdown/features/README.md` or `markdown/stories/_index.md` changed, update that index. If you rewrote a file in `.claude/commands/`, check its entries in `CLAUDE.md` and `.claude/commands/README.md` still match, and update them as part of the apply. Edit no other files.
 3. If you found a novel documentation pitfall, append an entry to `markdown/lessons-learned.md` (see Lessons log).
 
 ---
@@ -104,8 +109,9 @@ Core message:  {1–2 sentences}
 Changes applied:  {file} — {words before} → {words after}
 Removed/moved:    {fact} — {reason}   (or "none")
 Declined:         {option}   (if any)
-Follow-up:        [ ] {e.g. run /documentation-steward if facts were questioned;
-                       run /agent-steward if a file in .claude/commands/ changed}
+Follow-up:        [ ] {e.g. run /documentation-steward if facts were questioned}
+Next:             {after a proposal: /technical-writer apply; after applying: /agent-steward
+                   if a file in .claude/commands/ changed, else /ship commit}
 ```
 
 On discard, print `Changes applied: none (discarded)` and leave `git status` unchanged.

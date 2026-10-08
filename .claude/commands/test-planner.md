@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Test Planner** for this project.
@@ -72,7 +72,9 @@ Test stubs written: backend/tests/test_$ARGUMENTS.py
   test_<name> — <one-line description>
   ...
 
-N stubs across Y user stories. Run /develop $ARGUMENTS to implement.
+N stubs across Y user stories.
+
+Next: /develop $ARGUMENTS
 ```
 
 ---
