@@ -13,8 +13,8 @@ This feature shows why the Twitch extension isn't working. The panel shows a rea
 | `E-ORIGIN` | The configured `ebs_url`'s origin is not in this package's `EBS_ALLOWED_ORIGINS`. Set in `_onCfgChanged`, which calls `onConfigTimeout()` at once instead of after 8 seconds | Build a version with `package.sh <version> --ebs-origin <origin>`, upload it and install it |
 | `E-CONFIG` | No `ebs_url` in the global configuration after 8 seconds | Run `set-ebs-url.sh` with the backend URL |
 | `E-REACH` | `fetch` rejected: DNS, TLS, a missing URL Fetching Domain or a CORS refusal (the browser does not say which) | Check the URL Fetching Domains in the Twitch console and `TWITCH_EXTENSION_CLIENT_ID`; check the backend is up over HTTPS |
-| `E-TOKEN` | The backend answered 401 to the Twitch token | `TWITCH_EXTENSION_SECRET` must be this extension's secret |
-| `E-SERVER` | The backend answered 5xx | Check the server log; `TWITCH_EXTENSION_SECRET` may be empty or not base64 |
+| `E-TOKEN` | The backend answered 401 to the Twitch token: wrong secret, or an expired token | `TWITCH_EXTENSION_SECRET` must be this extension's secret; an expired token clears on reload |
+| `E-SERVER` | The backend answered 5xx | Check the server log; `TWITCH_EXTENSION_SECRET` may be empty or not base64, or `TWITCH_LOCAL_DEV=true` is set with `ENV=production` |
 
 - Each code is logged once as `console.warn("[ext] E-… backend origin: <origin>")`, with the configured origin only (never the token or a path).
 - The "not available" / "unavailable right now" messages in `panel.js` and the MVP tool (`live_config.js`) end with ` (code: E-…)` (`failReasonSuffix()`). Viewers see only the generic text and the code: no URL, id or setting name.
@@ -28,9 +28,9 @@ The extension's configuration page (`config.html`, `config.js`) checks these ste
 2. **Backend address:** the configured `ebs_url`, and whether its origin is packaged. Failed with `E-CONFIG` (none) or `E-ORIGIN` (not packaged).
 3. **Backend reachable:** `GET /twitch/ping` without a token. Failed with `E-REACH` or `E-SERVER`.
 4. **Twitch token accepted:** `GET /twitch/check`. Failed with `E-TOKEN`, `E-SERVER` or `E-REACH`.
-5. **MVP selection:** `approved` (OK), `pending` or `rejected` (Failed), from the check's answer.
+5. **MVP selection:** `approved` (OK), `pending` or `rejected` (Failed), from the check's answer; Not checked for a role other than broadcaster.
 
-A step after a failed one shows Not checked. Below the list the page shows `Reason code: E-…` for the first failed step that has a code. Every value is set with `textContent`.
+A step after a failed one shows Not checked. Backend address stays Not checked ("Waiting for the extension configuration…") until the configuration arrives or the 8-second timeout. Backend reachable reports `E-REACH` for any other non-OK answer below 500 (for example a 404 from a backend older than #180, or a 429 from the ping limit). Twitch token accepted fails without a code on other statuses such as 403 or 429. Below the list the page shows `Reason code: E-…` for the first failed step that has a code. Every value is set with `textContent`.
 
 ## Package stamp
 
@@ -42,7 +42,7 @@ A step after a failed one shows Not checked. Below the list the page shows `Reas
 No token, no database. Returns `{"ok": true}`. Rate-limited per IP with `RATE_LIMIT_TWITCH_JOIN_IP` (default `60/minute`). `ping()` holds the logic and `ping_route` carries the limit. CORS applies as on every `/twitch/*` route, so an answer read from the extension iframe proves the backend is reachable from it.
 
 ### `GET /twitch/check`
-Twitch JWT (`verify_twitch_jwt`). Returns `{"ok": true, "role": …}`, plus `mvp_allowed` and `approval` for `role: broadcaster` (the values `GET /twitch/matches/current` returns, from `twitch.channel_approval`). Unlike that route it records no approval request. `check(payload, db)` holds the logic.
+Twitch JWT (`verify_twitch_jwt`). No route-specific limit (the global per-IP limit applies). Returns `{"ok": true, "role": …}`, plus `mvp_allowed` and `approval` for `role: broadcaster` (the values `GET /twitch/matches/current` returns, from `twitch.channel_approval`). Unlike that route it records no approval request. `check(payload, db)` holds the logic.
 
 ### `GET /admin/twitch/status`
 Admin only (`require_admin`; no password re-check, as it is read-only and holds no secrets). Built by `backend/twitch_status.py` (`build_status`). It never returns a secret, its length, a token or a viewer's Twitch id.
@@ -70,7 +70,9 @@ Admin only (`require_admin`; no password re-check, as it is read-only and holds 
 `traffic` since the last restart, in memory in `twitch.py` behind a lock (`traffic_snapshot()`; `reset_traffic()` for tests):
 - `last_ok_at`: the last token `verify_twitch_jwt` accepted (the `TWITCH_LOCAL_DEV` bypass does not count).
 - `failures`: refused tokens by kind: `expired`, `invalid`, and `not_configured` (empty secret, or a secret that fails to decode). `last_failure_at`: the time of the last one.
-- `refused_origins`: up to five most recent distinct hosts (host and port only, cleaned with `clean_display_text`, at most 100 characters) of cross-origin `/twitch/*` requests whose `Origin` CORS refuses. `RefusedOriginMiddleware` in `twitch_status.py` records them; `main.py` gives it CORS's own allow list (`CORS_EXTRA_ORIGINS` and the extension origin). It ignores same-origin requests (the request's host or `APP_BASE_URL`'s) and never blocks: CORS stays the gate.
+- `refused_origins`: up to five most recent distinct hosts (host and port only, cleaned with `clean_display_text`, at most 100 characters) of cross-origin `/twitch/*` requests whose `Origin` CORS refuses. `RefusedOriginMiddleware` in `twitch_status.py` records them; `main.py` gives it CORS's own allow list (`CORS_EXTRA_ORIGINS` and the extension origin). It ignores same-origin requests (the request's host or `APP_BASE_URL`'s) and never blocks: CORS stays the gate. A literal `Origin: null` is kept as `null`.
+
+Anyone can send a junk token or a made-up `Origin`, so the counters and hosts are hints to read alongside `checks`, not proof of a fault. A token with role `external` (refused with 403) counts neither as accepted nor as a failure; `not_configured` also counts any unexpected decode error. The UI shows `not_configured` as "server not configured".
 
 `console`: the checks only the Twitch developer console can show, with `expected` built from `APP_BASE_URL`:
 - URL Fetching Domains contains the backend origin;
@@ -85,6 +87,3 @@ Admin › Users › **Twitch status**, above Approved streamers. See `markdown/u
 
 The reason code table for operators is in `markdown/features/core/twitch-extension.md` (Panel reason codes).
 
----
-
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*

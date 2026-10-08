@@ -295,8 +295,8 @@ When the panel, the MVP tool or the configuration page can't load, its message e
 | `E-ORIGIN` | The configured backend URL's origin was not packaged into the installed version (`package.sh --ebs-origin`, #164). Shown at once | Build a version with `package.sh <version> --ebs-origin <backend origin>`, upload it and install it on the channel. The configuration page's Package row lists the packaged origins |
 | `E-CONFIG` | No `ebs_url` in the global configuration segment after 8 seconds | Run `set-ebs-url.sh <backend URL>` (Step 5) |
 | `E-REACH` | The browser could not reach the backend: DNS or TLS, the host missing from the version's URL Fetching Domains, or CORS refused the extension origin | Add the backend origin to URL Fetching Domains; set `TWITCH_EXTENSION_CLIENT_ID` to the installed extension's Client ID (Twitch status lists refused hosts); check the backend answers over HTTPS |
-| `E-TOKEN` | The backend refused the Twitch token (401): `TWITCH_EXTENSION_SECRET` is wrong or belongs to another extension | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
-| `E-SERVER` | The backend answered 5xx, for example with `TWITCH_EXTENSION_SECRET` empty or not base64 | Check Twitch status and the server log |
+| `E-TOKEN` | The backend refused the Twitch token (401): `TWITCH_EXTENSION_SECRET` is wrong or belongs to another extension, or the token expired (reloading the panel gets a fresh one) | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
+| `E-SERVER` | The backend answered 5xx, for example with `TWITCH_EXTENSION_SECRET` empty or not base64, or `TWITCH_LOCAL_DEV=true` with `ENV=production` | Check Twitch status and the server log |
 
 MVP selection refused on a channel that isn't approved (`ENV=production`, #165 / #175) has no code: the MVP tool says the channel is waiting for approval, and the configuration page's MVP selection row shows `pending` or `rejected`.
 
@@ -413,7 +413,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns the rule off. Website accounts are always eligible (#171) |
 | `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team logo URL may use (stored at ingest, returned, or fetched for card images); empty means the default list (#171) |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws and heartbeats per IP; draws, heartbeats, roster changes and Leave per viewer |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws, heartbeats and `/twitch/ping` per IP; draws, heartbeats, roster changes and Leave per viewer |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs always allowed to set match MVPs (and so trigger token drops), in addition to channels approved in the admin portal (issue #175); others get 403. Both empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |

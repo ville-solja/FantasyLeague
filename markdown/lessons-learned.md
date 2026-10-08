@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-08 — security-reviewer — agent-config
+**Problem:** In a cloud session, `gh api repos/{owner}/{repo}/dependabot/alerts` answers 403 "Resource not accessible by integration": the session's GitHub App token has no Dependabot alerts permission, so the dependency check can't run.
+**Solution:** Report the dependency section as "not checked (403)" rather than "no issues", and ask the user to run the command locally or read the repo's Security › Dependabot tab.
+
 ### 2026-10-08 — developer — testing
 **Problem:** For #180, `live_config.js` started calling a new `extension.js` helper (`failReasonSuffix`), and `test_issue_161`'s Node harness, which runs `live_config.js` alone with hand-written stubs for the `extension.js` functions it uses (`ebsGet`, `_escHtml`, `showBanner`, …), failed with a ReferenceError; its static checks also look for literal message text inside `loadSeries`, so moving the text into a helper broke them.
 **Solution:** When an extension page gains a call into `extension.js`, grep `backend/tests` for harnesses that stub that page's globals (`_LIVE_CONFIG_HARNESS`, `_EXT_HARNESS`, …) and add a stub there, and keep message literals inside the functions that tests extract. In newer FastAPI, `app.routes` holds `_IncludedRouter` wrappers, so check a route's wiring with a TestClient call rather than by listing `app.routes`.

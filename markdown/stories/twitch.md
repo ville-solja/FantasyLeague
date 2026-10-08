@@ -716,7 +716,7 @@ As an admin, I want one Twitch status checklist in the admin portal so that I ca
 - Traffic rows since the last restart:
   - time of the last panel request with an accepted Twitch token
   - number of refused tokens by kind (expired, invalid, server not configured) and time of the last one
-  - up to five most recent cross-origin hosts refused on `/twitch/*` (host only)
+  - up to five most recent cross-origin hosts refused on `/twitch/*` (host and port only)
 - A **Twitch console** block lists the checks only the console can show, each with the value it must hold: the URL Fetching Domains contains the backend origin; the global configuration's `ebs_url` is the backend URL; the installed version was packaged with this backend's origin
 - Nothing in the response contains a secret, a token, or a viewer's Twitch id
 
