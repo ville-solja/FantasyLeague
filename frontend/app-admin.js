@@ -74,8 +74,13 @@ async function adminFetch(url, options) {
   return fetch(url, options);
 }
 
-function _promptReauth() {
+// An action the Steam confirmation resumes on return (handleSteamReturn), e.g.
+// "connectTwitch"; without one the page asks the user to repeat the action.
+let _reauthResume = null;
+
+function _promptReauth(resume) {
   if (_reauthResolve) _finishReauth(false);
+  _reauthResume = resume || null;
   document.getElementById("reauthUsername").value = activeUsername || "";
   document.getElementById("reauthPassword").value = "";
   document.getElementById("reauthStatus").textContent = "";
@@ -97,6 +102,10 @@ function _showReauthMethod(method) {
 function startSteamReauth() {
   const active = document.querySelector(".tab-content.active");
   const tab = active && active.id === "tab-admin" ? "admin" : "profile";
+  try {
+    if (_reauthResume) sessionStorage.setItem("reauthResume", _reauthResume);
+    else sessionStorage.removeItem("reauthResume");
+  } catch (e) { /* storage blocked: the user repeats the action */ }
   window.location.href = `${API}/auth/steam/start?purpose=reauth&return_tab=${tab}`;
 }
 

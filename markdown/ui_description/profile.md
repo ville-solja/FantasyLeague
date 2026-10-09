@@ -23,7 +23,7 @@ Issue #150. Shown only when `LOGIN_METHOD` is `both` or `steam_signup` (`GET /co
 - After Steam, the page returns to Profile (`/#profile?steam=<key>`, stripped from the address bar) with a status message by key (`_STEAM_RETURN_MESSAGES` in `app-auth.js`): `linked` "Steam linked. Your Dota player id is now verified."; `in_use` "This Steam account is linked to another Kana Cards account"; `unlink_first` "Unlink your current Steam account first"; `not_allowed` "Demo accounts can't link Steam."; `login_required` "Log in to Kana Cards first."; `not_linked` "This account has no Steam link to confirm with."; `failed`, `cancelled`, `unavailable`, `no_session` as on the login page; `reauth_ok` "Confirmed with Steam. Repeat the action to continue."; `reauth_failed` "That Steam account is not the one linked to this account. Nothing was confirmed."
 - Errors appear in the status line at the bottom of the panel.
 
-An account without a password confirms destructive actions (Connect Twitch, merge, Disconnect, Unlink) with **Confirm with Steam** in the re-auth prompt instead of a password; Steam returns to Profile with `reauth_ok` and the player repeats the action.
+An account without a password confirms destructive actions (Connect Twitch, merge, Disconnect, Unlink) with **Confirm with Steam** in the re-auth prompt instead of a password; Steam returns to Profile with `reauth_ok`. Connect Twitch then continues to Twitch by itself ("Confirmed with Steam. Continuing to Twitch…"); for the other actions the player repeats the action.
 
 ## Dota 2 Player panel
 

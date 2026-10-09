@@ -67,6 +67,19 @@ const _STEAM_RETURN_MESSAGES = {
   reauth_failed: ["That Steam account is not the one linked to this account. Nothing was confirmed.", false],
 };
 
+// Actions a Steam confirmation may resume (set by _promptReauth's caller before the
+// round trip). Anything else falls back to "Repeat the action to continue".
+const _REAUTH_RESUMABLE = { connectTwitch: () => connectTwitch() };
+
+function _takeReauthResume() {
+  let action = null;
+  try {
+    action = sessionStorage.getItem("reauthResume");
+    sessionStorage.removeItem("reauthResume");
+  } catch (e) { /* storage blocked */ }
+  return _REAUTH_RESUMABLE[action] || null;
+}
+
 /** Reads /#<tab>?steam=<key> left by the Steam redirects, strips it from the address
  *  bar and shows the outcome. Returns true when handled. */
 function handleSteamReturn() {
@@ -77,6 +90,7 @@ function handleSteamReturn() {
   history.replaceState(null, "", window.location.pathname);
   const [, tab] = match;
   const msg = _STEAM_RETURN_MESSAGES[key] || _STEAM_RETURN_MESSAGES.failed;
+  const resume = _takeReauthResume();
   if (tab === "welcome") {
     showSteamSignup();
     return true;
@@ -92,6 +106,11 @@ function handleSteamReturn() {
     return true;
   }
   switchTab("profile");
+  if (key === "reauth_ok" && resume) {
+    setStatus("twitchStatus", "Confirmed with Steam. Continuing to Twitch…");
+    resume();
+    return true;
+  }
   if (key === "reauth_required") {
     _promptReauth().then(ok => {
       if (ok) linkSteam();
