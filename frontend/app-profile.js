@@ -257,7 +257,7 @@ function handleTwitchReturn() {
   if (!key) return true;
   _twitchMergeDismissed = false;
   if (key === "reauth_required") {
-    _promptReauth().then(ok => {
+    _promptReauth("connectTwitch").then(ok => {
       if (ok) connectTwitch();
       else setStatus("twitchStatus", "Confirm your password to connect Twitch.", false);
     });

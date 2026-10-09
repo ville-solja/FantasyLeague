@@ -521,7 +521,7 @@ class TestConnectTwitchOnWebsite:
         assert _key(web.client().get("/auth/twitch/start", follow_redirects=False)) == "login_required"
         assert web.rows(TwitchOAuthState) == []
         js = (FRONTEND_DIR / "app-profile.js").read_text(encoding="utf-8")
-        assert "reauth_required" in js and "_promptReauth()" in js
+        assert "reauth_required" in js and "_promptReauth(" in js
 
     def test_auth_twitch_start_pkce_parameters(self, db, oauth_env, web):
         """Step 7 PKCE: while PKCE is on, the redirect carries code_challenge = base64url(sha256(stored verifier)) without padding and code_challenge_method=S256."""
