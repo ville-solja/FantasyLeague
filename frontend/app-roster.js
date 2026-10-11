@@ -6,6 +6,8 @@ let _dragState = null;    // { cardId, zone } while a drag is in flight
 // handlers bound to nodes kept from an earlier render act on the latest data.
 let _rosterActive = [];
 let _rosterBench = [];
+// A failed reorder's message (issue #184: e.g. a 429), shown by the next loadRoster.
+let _rosterPendingError = null;
 
 // Issue #124 — in-flight guard: while one activate/deactivate/swap/reorder
 // mutation is still resolving, ignore a second click/keypress/drop of the
@@ -187,7 +189,10 @@ async function loadRoster(weekId = null) {
     }
 
     const statusEl = document.getElementById("rosterStatus");
-    if (statusEl) { statusEl.textContent = isLocked ? "" : `${active.length}/5 active`; statusEl.className = ""; }
+    if (statusEl && _rosterPendingError) {
+      statusEl.textContent = _rosterPendingError; statusEl.className = "status err";
+    } else if (statusEl) { statusEl.textContent = isLocked ? "" : `${active.length}/5 active`; statusEl.className = ""; }
+    _rosterPendingError = null;
 
     // Item 5 — settle animation whenever a grid was redrawn (not on a no-op refresh)
     const redrawn = [activeWrote && activeGrid, benchWrote && benchGrid].filter(Boolean);
@@ -524,7 +529,12 @@ function _initDragAndDrop() {
 
     await _withRosterMutationGuard(async () => {
       const res = await fetch(`${API}/roster/${safeId}/deactivate`, { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const s = document.getElementById("rosterStatus");
+        if (s) { s.textContent = d.detail || "Deactivate failed"; s.className = "status err"; }
+        return;
+      }
       const benchIds = [draggedId, ..._rosterBench.map(c => c.id)];
       await _apiReorder(benchIds);
       loadRoster(_rosterWeekId);
@@ -537,11 +547,16 @@ async function _apiReorder(cardIds, slotIndexes = null) {
   try {
     const body = { card_ids: cardIds };
     if (slotIndexes) body.slot_indexes = slotIndexes;
-    await fetch(`${API}/roster/reorder`, {
+    const res = await fetch(`${API}/roster/reorder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      // Callers reload the roster next; loadRoster shows this instead of the count.
+      const d = await res.json().catch(() => ({}));
+      _rosterPendingError = d.detail || "Reorder failed";
+    }
   } catch (_) {}
 }
 

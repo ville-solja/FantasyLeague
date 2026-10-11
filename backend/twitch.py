@@ -1377,7 +1377,6 @@ class MVPBody(BaseModel):
     player_id: int
 
 
-@router.post("/mvp")
 def set_mvp(
     body: MVPBody,
     payload: dict = Depends(verify_twitch_jwt),
@@ -1491,3 +1490,14 @@ def set_mvp(
             "already_dropped": already_dropped,
         },
     }
+
+
+@router.post("/mvp")
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def set_mvp_route(
+    request: Request,
+    body: MVPBody,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    return set_mvp(body, payload, db)

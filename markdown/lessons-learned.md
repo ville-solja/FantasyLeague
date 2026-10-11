@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-11 — developer — endpoints
+**Problem:** For #184, three slowapi/FastAPI details: separate `@limiter.limit(...)` decorators on several routes count each route on its own (the storage key includes the endpoint), so they can't give draws, boosters and rerolls one budget; slowapi's own "ratelimit ... (<key>) exceeded" WARNING names the client IP or `user:<id>`; and an exception raised from a wrapped ASGI `receive` while FastAPI reads the body is caught by FastAPI and turned into a 400, so a body-size middleware can't refuse mid-stream by raising.
+**Solution:** Use `limiter.shared_limit(value, scope="...", key_func=...)` for a budget shared across routes. Add a `logging.Filter` on the `slowapi` logger that drops records starting with "ratelimit " and log your own line without the key. In a body-size middleware, check `Content-Length` up front, and for a body without it read and buffer up to the cap before calling the app (413 past it), then replay the buffered body.
+
 ### 2026-10-11 — developer — testing
 **Problem:** Caching `GET /twitch/panel` inside `twitch.panel_live` would have leaked bodies between tests: many tests call `panel_live(payload=..., db=...)` directly on different databases, and a process-wide cache would hand one test's body to the next. Separately, `test_issue_85`'s suite-size baseline (2499) was already 4 short because the Connect Twitch Steam-resume fix added tests without bumping it.
 **Solution:** Keep the plain function uncached and put the cache in a wrapper the route calls (`cached_panel_live`, used by `panel_live_route`), with an autouse fixture that calls `bust_panel_cache()` around each test of the cache. Before bumping the baseline, read the actual count from the failing test's output ("N passed") instead of adding your own test count to the old number.

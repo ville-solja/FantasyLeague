@@ -18,7 +18,7 @@ from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
 from auth import (check_email, check_password_bytes, check_reserved, check_username, hash_password,
                   username_taken, verify_password)
 from email_utils import email_configured, send_email
-from rate_limit import limiter, key_by_user_or_ip
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from slowapi.util import get_remote_address
 
 router = APIRouter()
@@ -218,6 +218,8 @@ def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     return {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
 
 
+# POST /logout keeps only the global baseline (issue #184's ALLOWED_GLOBAL_ONLY): it
+# needs no login, does one delete at most, and a limit could keep a player signed in.
 @router.post("/logout")
 def logout(request: Request, db=Depends(get_db)):
     # Deleting the row ends the session on the server, so a copied cookie stops working.
@@ -227,6 +229,7 @@ def logout(request: Request, db=Depends(get_db)):
 
 
 @router.post("/logout-everywhere")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def logout_everywhere(request: Request, db=Depends(get_db),
                       current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
@@ -291,6 +294,7 @@ def list_sessions(request: Request, db=Depends(get_db),
 
 
 @router.delete("/sessions/{session_id}")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def delete_session(session_id: int, request: Request, db=Depends(get_db),
                    current_user: dict = Depends(get_current_user)):
     """End one of the caller's own sessions; any other id is 404."""
@@ -442,7 +446,8 @@ def send_password_changed_notice(user: User) -> None:
 
 
 @router.post("/claim-events")
-def claim_events(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def claim_events(request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     now = int(time.time())
     active_events = db.query(TokenGrantEvent).filter(
         TokenGrantEvent.start_time <= now,
@@ -477,7 +482,8 @@ def get_active_notifications(db=Depends(get_db), current_user: dict = Depends(ge
 
 
 @router.post("/notifications/{notification_id}/dismiss")
-def dismiss_notification(notification_id: int, db=Depends(get_db),
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def dismiss_notification(request: Request, notification_id: int, db=Depends(get_db),
                          current_user: dict = Depends(get_current_user)):
     n = db.get(Notification, notification_id)
     if not n:

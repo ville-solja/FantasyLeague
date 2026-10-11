@@ -11,6 +11,7 @@ from models import PasswordResetToken, Player, SeasonArchive, User, UserTag, Tag
 from scoring import display_points
 from auth import (check_password_bytes, check_reserved, check_username, hash_password,
                   username_taken, verify_password)
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from routers.auth import send_password_changed_notice
 
 router = APIRouter()
@@ -110,7 +111,6 @@ def get_profile(user_id: int, db=Depends(get_db),
     return result
 
 
-@router.put("/profile/username")
 def update_username(body: UpdateUsernameBody, db=Depends(get_db),
                     current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
@@ -145,7 +145,13 @@ def update_username(body: UpdateUsernameBody, db=Depends(get_db),
     return {"username": username, "username_change_available_at": rename_available_at(user, now)}
 
 
-@router.put("/profile/player-id")
+@router.put("/profile/username")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def update_username_route(request: Request, body: UpdateUsernameBody, db=Depends(get_db),
+                          current_user: dict = Depends(get_current_user)):
+    return update_username(body, db, current_user)
+
+
 def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -165,7 +171,13 @@ def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user:
     return result
 
 
-@router.put("/profile/password")
+@router.put("/profile/player-id")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def update_player_id_route(request: Request, body: UpdatePlayerIdBody, db=Depends(get_db),
+                           current_user: dict = Depends(get_current_user)):
+    return update_player_id(body, db, current_user)
+
+
 def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_db),
                     current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
@@ -187,3 +199,10 @@ def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_d
     db.commit()
     send_password_changed_notice(user)
     return {"status": "ok"}
+
+
+@router.put("/profile/password")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def change_password_route(request: Request, body: ChangePasswordBody, db=Depends(get_db),
+                          current_user: dict = Depends(get_current_user)):
+    return change_password(request, body, db, current_user)

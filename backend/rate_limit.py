@@ -17,6 +17,12 @@ from slowapi.util import get_remote_address
 from starlette.requests import Request
 
 RATE_LIMIT_GLOBAL = os.getenv("RATE_LIMIT_GLOBAL", "200/minute")
+# Issue #184: per-user and per-IP limits on player actions. Card draws, booster draws
+# and rerolls share one budget; the other player write routes share another.
+RATE_LIMIT_CARD_ACTION = os.getenv("RATE_LIMIT_CARD_ACTION", "20/minute")
+RATE_LIMIT_CARD_ACTION_IP = os.getenv("RATE_LIMIT_CARD_ACTION_IP", "60/minute")
+RATE_LIMIT_USER_ACTION = os.getenv("RATE_LIMIT_USER_ACTION", "60/minute")
+RATE_LIMIT_SIMULATE = os.getenv("RATE_LIMIT_SIMULATE", "20/minute")
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_GLOBAL])
 

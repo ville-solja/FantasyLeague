@@ -1,7 +1,7 @@
 import os
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import bindparam, text
 
 from card_points import _modifiers
@@ -11,6 +11,7 @@ from deps import get_current_user
 from dotabuff_league_logos import resolve_local_team_logo_path
 from image import _ASSETS_DIR
 from logo_hosts import safe_logo_url
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from match_scoring import counted_roster_entry_sql, scored_match_sql
 from routers.cards import _build_roster_response
 from scoring import STAT_LABELS, display_points, stat_dict_from_row
@@ -397,7 +398,6 @@ def get_weekly_summary(week_id: int, db=Depends(get_db),
     return _build_week_summary(db, week, revealed, current_user["user_id"])
 
 
-@router.post("/weekly-summary/{week_id}/reveal")
 def reveal_weekly_summary(week_id: int, db=Depends(get_db),
                           current_user: dict = Depends(get_current_user)):
     summary = db.get(WeeklySummary, week_id)
@@ -413,7 +413,13 @@ def reveal_weekly_summary(week_id: int, db=Depends(get_db),
     return _build_week_summary(db, week, True, current_user["user_id"])
 
 
-@router.post("/weekly-summary/reveal-all")
+@router.post("/weekly-summary/{week_id}/reveal")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def reveal_weekly_summary_route(request: Request, week_id: int, db=Depends(get_db),
+                                current_user: dict = Depends(get_current_user)):
+    return reveal_weekly_summary(week_id, db, current_user)
+
+
 def reveal_all_weekly_summaries(db=Depends(get_db),
                                 current_user: dict = Depends(get_current_user)):
     """Reveal every currently-available week for the current user in one call.
@@ -437,6 +443,13 @@ def reveal_all_weekly_summaries(db=Depends(get_db),
     return {"revealed_week_ids": week_ids}
 
 
+@router.post("/weekly-summary/reveal-all")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def reveal_all_weekly_summaries_route(request: Request, db=Depends(get_db),
+                                      current_user: dict = Depends(get_current_user)):
+    return reveal_all_weekly_summaries(db, current_user)
+
+
 def _latest_report_week(db):
     return (
         db.query(Week)
@@ -454,7 +467,6 @@ def _seen_row(db, user_id: int) -> WeeklySummarySeen:
     return seen
 
 
-@router.post("/weekly-summary/seen")
 def mark_weekly_summary_seen(db=Depends(get_db),
                              current_user: dict = Depends(get_current_user)):
     latest = _latest_report_week(db)
@@ -467,7 +479,13 @@ def mark_weekly_summary_seen(db=Depends(get_db),
     return {"ok": True}
 
 
-@router.post("/weekly-summary/prompted")
+@router.post("/weekly-summary/seen")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def mark_weekly_summary_seen_route(request: Request, db=Depends(get_db),
+                                   current_user: dict = Depends(get_current_user)):
+    return mark_weekly_summary_seen(db, current_user)
+
+
 def mark_weekly_summary_prompted(db=Depends(get_db),
                                  current_user: dict = Depends(get_current_user)):
     """The "recap is ready" popup was shown and dismissed (issue #151): mark the
@@ -479,3 +497,10 @@ def mark_weekly_summary_prompted(db=Depends(get_db),
     seen.last_prompted_week_id = latest.id
     db.commit()
     return {"ok": True}
+
+
+@router.post("/weekly-summary/prompted")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def mark_weekly_summary_prompted_route(request: Request, db=Depends(get_db),
+                                       current_user: dict = Depends(get_current_user)):
+    return mark_weekly_summary_prompted(db, current_user)

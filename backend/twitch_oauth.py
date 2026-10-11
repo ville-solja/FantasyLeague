@@ -43,7 +43,7 @@ import soft_accounts
 from database import get_db
 from deps import _audit, get_current_user, require_recent_player_reauth, session_user_or_none
 from models import Card, TwitchOAuthState, TwitchPresence, User
-from rate_limit import limiter
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +355,8 @@ def merge_confirm(db, current_user: dict) -> dict:
 
 
 @router.post("/twitch/merge/confirm")
-def merge_confirm_route(current_user: dict = Depends(require_recent_player_reauth),
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def merge_confirm_route(request: Request, current_user: dict = Depends(require_recent_player_reauth),
                         db=Depends(get_db)):
     """Add the waiting Twitch collection to this account (one merge per account, ever)."""
     return merge_confirm(db, current_user)
@@ -379,7 +380,8 @@ def disconnect(db, current_user: dict) -> dict:
 
 
 @router.post("/twitch/disconnect")
-def disconnect_route(current_user: dict = Depends(require_recent_player_reauth),
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def disconnect_route(request: Request, current_user: dict = Depends(require_recent_player_reauth),
                      db=Depends(get_db)):
     """Disconnect Twitch. The account keeps its cards and tokens; the one-merge limit stays."""
     return disconnect(db, current_user)

@@ -166,7 +166,7 @@ def test_global_baseline_exceeded_returns_429_with_detail_shape(monkeypatch):
     assert blocked.status_code == 429
     body = blocked.json()
     assert "detail" in body
-    assert body["detail"].startswith("Rate limit exceeded")
+    assert body["detail"] == "Too many requests. Wait a moment and try again."
     assert "error" not in body
 
 

@@ -304,14 +304,16 @@ class TestPreserveExistingTestCoverageThroughSplit:
         re-auth resume fix's 4 new tests (test_twitch_connect_steam_reauth_resume.py)
         did after that, and plan-twitch-extension-setup-followups's 37 new tests (30 stubs, two of them
         parametrized) did after that (its update to test_issue_180's console test for the
-        two new console entries changed no counts)."""
+        two new console entries changed no counts), and plan-issue-184-action-throttling's
+        49 new tests (34 stubs, two of them parametrized) did after that (its updates to
+        test_issue_121/124 for the new 429 text changed no counts)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2540 passed" in output, output[-3000:]
+        assert "2590 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

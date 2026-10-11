@@ -19,7 +19,8 @@ from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from logo_hosts import safe_logo_url
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
-from rate_limit import limiter, key_by_user_or_ip
+from rate_limit import (limiter, key_by_user_or_ip, RATE_LIMIT_CARD_ACTION,
+                        RATE_LIMIT_CARD_ACTION_IP)
 from scoring import display_points
 from weeks import get_next_editable_week, substitution_delay_hours
 
@@ -43,6 +44,12 @@ RATE_LIMIT_ROSTER_MUTATION = os.getenv("RATE_LIMIT_ROSTER_MUTATION", "30/minute"
 
 # Per-IP limit on the public, render-per-call card image endpoint (issue #135).
 RATE_LIMIT_CARD_IMAGE = os.getenv("RATE_LIMIT_CARD_IMAGE", "60/minute")
+
+# Issue #184: draws, booster draws and rerolls share one per-user budget and one
+# per-IP budget (shared scopes), so mixing the three actions doesn't multiply the rate.
+_card_action_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION, scope="card_action",
+                                          key_func=key_by_user_or_ip)
+_card_action_ip_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION_IP, scope="card_action_ip")
 
 
 class ReorderRequest(BaseModel):
@@ -247,7 +254,6 @@ def get_deck(request: Request, db=Depends(get_db)):
     return {r: sum(1 for _, rr in available if rr == r) for r in rarities}
 
 
-@router.post("/draw")
 def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -314,6 +320,14 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     }
 
 
+@router.post("/draw")
+@_card_action_limit
+@_card_action_ip_limit
+def draw_card_route(request: Request, db=Depends(get_db),
+                    current_user: dict = Depends(get_current_user)):
+    return draw_card(db, current_user)
+
+
 @router.get("/deck/booster")
 def get_booster_deck(request: Request, db=Depends(get_db)):
     """Return per-team drawable card counts for the requesting user."""
@@ -371,7 +385,6 @@ def booster_deck_for_user(db, user_id: int | None) -> list[dict]:
     return result
 
 
-@router.post("/draw/booster/{team_id}")
 def draw_booster(team_id: int, db=Depends(get_db),
                  current_user: dict = Depends(get_current_user)):
     """Draw a card guaranteed to be from the specified team's player roster."""
@@ -436,6 +449,14 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
     }
+
+
+@router.post("/draw/booster/{team_id}")
+@_card_action_limit
+@_card_action_ip_limit
+def draw_booster_route(request: Request, team_id: int, db=Depends(get_db),
+                       current_user: dict = Depends(get_current_user)):
+    return draw_booster(team_id, db, current_user)
 
 
 @router.get("/weeks")
@@ -530,7 +551,6 @@ def get_card_image_route(request: Request, card_id: int, db=Depends(get_db)):
     return get_card_image(card_id, db)
 
 
-@router.post("/roster/{card_id}/reroll")
 def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -565,6 +585,14 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
         "modifiers": _format_modifiers(mods),
         "tokens": tokens_remaining,
     }
+
+
+@router.post("/roster/{card_id}/reroll")
+@_card_action_limit
+@_card_action_ip_limit
+def reroll_modifiers_route(request: Request, card_id: int, db=Depends(get_db),
+                           current_user: dict = Depends(get_current_user)):
+    return reroll_modifiers(card_id, db, current_user)
 
 
 def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):

@@ -94,8 +94,8 @@ load the backend.
 - The limit is keyed by the authenticated user's session `user_id`, not source IP, so it
   follows the account regardless of network; an unauthenticated caller falls back to being
   keyed by IP
-- Exceeding the limit returns HTTP 429 with the same `{"detail": "Rate limit exceeded: ..."}`
-  shape already established by issue #121
+- Exceeding the limit returns HTTP 429 with the app's shared 429 response,
+  `{"detail": "Too many requests. Wait a moment and try again."}` (with `Retry-After`; the text changed in #184)
 - The default is generous enough that normal roster-building activity (a handful of swaps
   while setting up a 5-card active roster) is never blocked
 

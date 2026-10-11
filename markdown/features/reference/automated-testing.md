@@ -60,7 +60,7 @@ Override the target URL with `TEST_BASE_URL=http://your-host:port npm test`.
 
 Every spec registers and logs in a fresh user, all from one IP, so the production-oriented
 per-IP limits (`RATE_LIMIT_LOGIN` / `RATE_LIMIT_REGISTER`, default `5/minute`) make most of the
-suite fail with `Rate limit exceeded: 5 per 1 minute`. Raise them in the `.env` of the instance
+suite fail with 429 "Too many requests. Wait a moment and try again.". Raise them in the `.env` of the instance
 you test against, then restart it:
 
 ```
