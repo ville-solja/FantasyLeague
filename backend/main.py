@@ -720,4 +720,18 @@ if os.path.isdir(_TWITCH_EXT_DIR):
 if os.path.isdir(_ASSETS_DIR):
     app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
 
-app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
+class _FrontendStaticFiles(StaticFiles):
+    """The site's pages, scripts and styles answer `Cache-Control: no-cache`, so a
+    browser revalidates them (ETag → 304) and never runs a mix of releases after a
+    deploy. Images, fonts and the other mounts keep the default caching."""
+
+    _REVALIDATE = {"", ".html", ".js", ".css"}
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if os.path.splitext(path)[1].lower() in self._REVALIDATE:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", _FrontendStaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

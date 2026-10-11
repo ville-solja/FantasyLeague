@@ -617,7 +617,6 @@ def _me_state(db: Session, user: User) -> dict:
     }
 
 
-@router.get("/panel")
 def panel_live(
     payload: dict = Depends(verify_twitch_jwt),
     db: Session = Depends(get_db),
@@ -644,6 +643,67 @@ def panel_live(
         logger.exception("Twitch panel: next match lookup failed")
         next_match = None
     return {"top_performers": top, "next_match": next_match}
+
+
+# GET /twitch/panel is polled by every open panel and its body is public data, the
+# same for every viewer, so one body is shared for TWITCH_PANEL_CACHE_SECONDS. Per
+# process and in memory, like the rate limits. bust_panel_cache() runs when ingest
+# stores matches and when an MVP is set; the generation stops a body computed
+# before a bust from being stored after it.
+_PANEL_CACHE_DEFAULT_SECONDS = 30.0
+_panel_cache = {"at": 0.0, "body": None, "generation": 0}
+_panel_cache_lock = threading.Lock()
+
+
+def panel_cache_seconds() -> float:
+    """TWITCH_PANEL_CACHE_SECONDS read per call; 0 turns the cache off, anything
+    invalid (not a number, negative, infinite) means the 30-second default."""
+    raw = os.getenv("TWITCH_PANEL_CACHE_SECONDS", "").strip()
+    if not raw:
+        return _PANEL_CACHE_DEFAULT_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return _PANEL_CACHE_DEFAULT_SECONDS
+    if not math.isfinite(value) or value < 0:
+        return _PANEL_CACHE_DEFAULT_SECONDS
+    return value
+
+
+def bust_panel_cache() -> None:
+    with _panel_cache_lock:
+        _panel_cache["body"] = None
+        _panel_cache["at"] = 0.0
+        _panel_cache["generation"] += 1
+
+
+def cached_panel_live(payload: dict, db: Session) -> dict:
+    ttl = panel_cache_seconds()
+    if ttl <= 0:
+        return panel_live(payload=payload, db=db)
+    with _panel_cache_lock:
+        body = _panel_cache["body"]
+        if body is not None and time.monotonic() - _panel_cache["at"] < ttl:
+            return body
+        generation = _panel_cache["generation"]
+    body = panel_live(payload=payload, db=db)
+    with _panel_cache_lock:
+        if _panel_cache["generation"] == generation:
+            _panel_cache["body"] = body
+            _panel_cache["at"] = time.monotonic()
+    return body
+
+
+@router.get("/panel")
+@limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
+@limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
+def panel_live_route(
+    request: Request,
+    payload: dict = Depends(verify_twitch_jwt),
+    db: Session = Depends(get_db),
+):
+    """Live tab data (panel_live), served from the shared short cache."""
+    return cached_panel_live(payload, db)
 
 
 def join(payload: dict, db: Session) -> dict:
@@ -1400,6 +1460,7 @@ def set_mvp(
     ))
     db.commit()
     bust_cache()
+    bust_panel_cache()
     # No winner names or ids go to the channel: every joined panel re-reads its own
     # balance from GET /twitch/me and shows the drop when it went up.
     announced_name = chat_safe_name(player_name, body.player_id)

@@ -59,7 +59,6 @@ async function loadConfig() {
       window.demoMode = cfg.demo_mode === true;
       const demoBadge = document.getElementById("demo-mode-badge");
       if (demoBadge) demoBadge.style.display = window.demoMode ? "" : "none";
-      if (typeof renderDemoModePanel === "function") renderDemoModePanel();
     }
   } catch (_) { /* non-fatal */ }
 }

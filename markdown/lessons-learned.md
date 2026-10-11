@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-11 — developer — testing
+**Problem:** Caching `GET /twitch/panel` inside `twitch.panel_live` would have leaked bodies between tests: many tests call `panel_live(payload=..., db=...)` directly on different databases, and a process-wide cache would hand one test's body to the next. Separately, `test_issue_85`'s suite-size baseline (2499) was already 4 short because the Connect Twitch Steam-resume fix added tests without bumping it.
+**Solution:** Keep the plain function uncached and put the cache in a wrapper the route calls (`cached_panel_live`, used by `panel_live_route`), with an autouse fixture that calls `bust_panel_cache()` around each test of the cache. Before bumping the baseline, read the actual count from the failing test's output ("N passed") instead of adding your own test count to the old number.
+
 ### 2026-10-08 — security-reviewer — agent-config
 **Problem:** In a cloud session, `gh api repos/{owner}/{repo}/dependabot/alerts` answers 403 "Resource not accessible by integration": the session's GitHub App token has no Dependabot alerts permission, so the dependency check can't run.
 **Solution:** Report the dependency section as "not checked (403)" rather than "no issues", and ask the user to run the command locally or read the repo's Security › Dependabot tab.

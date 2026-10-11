@@ -1,13 +1,15 @@
 // ---------------------------------------------------------------------------
 // Demo Mode — clock override + disposable account seeding.
-// Entirely env-gated (window.demoMode, set from GET /config in app-globals.js):
-// the panel markup is only injected into the DOM when true.
+// Env-gated (window.demoMode, set from GET /config in app-globals.js) and
+// admin-only: the panel markup is injected, and GET /admin/demo/clock requested,
+// only when demo mode is on and activeIsAdmin. applyAuthState() calls
+// renderDemoModePanel() after every sign-in state change.
 // ---------------------------------------------------------------------------
 
 function renderDemoModePanel() {
   const container = document.getElementById("demoModePanelContainer");
   if (!container) return;
-  if (!window.demoMode) {
+  if (!window.demoMode || !activeIsAdmin) {
     container.innerHTML = "";
     return;
   }
@@ -49,7 +51,7 @@ function renderDemoModePanel() {
 }
 
 async function loadDemoClock() {
-  if (!window.demoMode) return;
+  if (!window.demoMode || !activeIsAdmin) return;
   try {
     const res = await fetch(`${API}/admin/demo/clock`);
     const data = await res.json();
