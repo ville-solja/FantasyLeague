@@ -1,4 +1,4 @@
-<!-- version: 6 -->
+<!-- version: 7 -->
 <!-- mode: read-write -->
 
 You are the **Development Orchestrator** for this project.
@@ -8,7 +8,7 @@ Given an approved plan slug, run the full implementation pipeline: test stubs, c
 validation. You spawn each stage as an isolated subagent. You stop on failure and report
 clearly. When the plan came from a GitHub issue and every stage passed, you label that issue
 `implemented` and comment with a summary; the issue stays open until its code is merged
-(`/ship close`). You do not commit, open PRs or push code — that is `/ship`.
+(the pull request's `Closes #N`). You do not commit, open PRs or push code — that is `/ship`.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-47-weekly-summary-email`
 
@@ -54,7 +54,8 @@ Spawn a subagent with the developer role and the following instructions:
 > Read `markdown/plans/plan-{slug}.md` and the test file written in Stage 1 in full.
 > Implement the plan following the developer skill instructions. Make every stub in the test
 > file pass by replacing `pytest.fail(...)` bodies with real assertions. Do not skip or
-> delete stubs — fix them.
+> delete stubs — fix them. Iterate with the plan's test file and the related tests only, then
+> run the full suite once with `-n auto`; the QA stage runs it again.
 
 If the subagent output contains `✗`, stop and display the failure. Do not proceed to Stage 3.
 
@@ -84,17 +85,19 @@ secrets, permissions, admin rights, OAuth/OpenID, CORS, CSRF, rate limits or per
 Spawn these subagents simultaneously (two, or three when the change is sensitive):
 
 **QA Engineer subagent:**
-> Run `cd backend && python3 -m pytest tests/ -v --tb=short 2>&1` and produce the qa-engineer
-> report format: pass/fail counts grouped by module, one-line failure reason per failure.
+> Run `cd backend && python3 -m pytest tests/ -n auto -q --tb=short 2>&1` and produce the
+> qa-engineer report format: the pass/fail count and duration, and one line per failure.
 
 **Documentation Steward subagent:**
-> Run the documentation-steward checks against the current codebase. Report: features in docs
-> not in code, code systems not in docs, undocumented env vars, and terminology mismatches.
+> Read `.claude/commands/documentation-steward.md` and run it in **change mode** on the
+> uncommitted change (do not read every feature doc). Report: features in docs not in code,
+> code systems not in docs, undocumented env vars, and terminology mismatches.
 
 **Security Reviewer subagent** (only when the change is security-sensitive):
-> Read `.claude/commands/security-reviewer.md` and follow it. Review the whole backend as it
-> describes, and look hardest at these changed files: <list>. Report the findings table and the
-> summary line. Do not edit code.
+> Read `.claude/commands/security-reviewer.md` and run a **change review**
+> (`/security-reviewer diff`) of the uncommitted change: these files <list>, their endpoints'
+> wrappers and dependencies, and the callers of changed helpers. Report the findings table and
+> the summary line. Do not edit code.
 
 Collect all reports. Record in the final report whether the security review ran, and why
 (the matching files or plan wording) or why not.
@@ -104,7 +107,8 @@ Collect all reports. Record in the final report whether the security review ran,
   High finding and suggest sending it back to the developer subagent (or `/developer`) before
   running `/develop` again.
 - **Medium:** send the findings to the Stage 2 developer subagent (SendMessage, same agent) to
-  fix, then re-run the QA subagent. If a Medium can't be fixed safely in this run, list it under
+  fix, then re-run the QA subagent once after all fixes (not after each one), and re-check only
+  the fixed findings (SendMessage to the same security subagent) rather than a new review. If a Medium can't be fixed safely in this run, list it under
   "Action required" and still run Stage 4, with the open finding named in the issue comment.
 - **Low:** list them in the report; no action needed in this run.
 
@@ -119,7 +123,7 @@ Run this stage only when all of these hold:
 - Stage 3 Docs reports no drift, or only gaps you fixed in this run and re-verified
 
 Otherwise skip it and say why in the report. **Never close the issue here:** it closes when the
-code reaches the default branch (`Closes #N` in the pull request, checked by `/ship close`).
+code reaches the default branch (`Closes #N` in the pull request).
 
 1. Check the issue is still open:
    ```
@@ -141,12 +145,10 @@ code reaches the default branch (`Closes #N` in the pull request, checked by `/s
    - `Branch: <current git branch>`, and that the changes are not committed yet
    - Test result: `<N> passed` (from Stage 3 QA)
    - Any manual verification still to do (from the developer report), as a short list
-   - `Next: /ship commit, then /ship pr`
+   - `Next: /ship`
 
    Never put secrets, env var values, tokens or personal data in the comment.
-4. Set the issue's line in `markdown/plans/.issue-index` to `<N> plan-{slug} implemented`
-   (add or replace the third column; keep the file's order).
-5. If `gh` fails (not authenticated, no network), do not retry. Report the failure and print
+4. If `gh` fails (not authenticated, no network), do not retry. Report the failure and print
    the commands so the user can run them.
 
 ---
@@ -193,7 +195,7 @@ Always end with one line:
 Next: <invocation>
 ```
 
-- All stages passed: `/ship commit {N}` (or `/ship commit` without an issue number).
+- All stages passed: `/ship`.
 - Stage 3 Security was not run but the change is borderline: `/security-reviewer`.
 - A stage failed: the invocation that resumes after the fix is made, usually `/develop {slug}`
   again; for a High security finding, `/security-reviewer fix` first.

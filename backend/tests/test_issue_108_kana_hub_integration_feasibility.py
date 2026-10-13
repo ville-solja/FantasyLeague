@@ -3,7 +3,7 @@ Tests for plan-issue-108-kana-hub-integration-feasibility.md (resolves GitHub is
 
 The deliverable is a decision document, not backend behaviour, so every test is a static
 file-content assertion against
-markdown/features/reference/kana-hub-integration-feasibility.md, with no `db` fixture and no
+markdown/research/kana-hub-integration-feasibility.md, with no `db` fixture and no
 API/router imports. This follows the pattern in test_frontend_framework_evaluation.py.
 
 The tests also check the product owner's clarifications (2026-10-02) recorded in the plan:
@@ -41,7 +41,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 _REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
-_DOC_PATH = os.path.join(_REPO_ROOT, "markdown", "features", "reference",
+_DOC_PATH = os.path.join(_REPO_ROOT, "markdown", "research",
                          "kana-hub-integration-feasibility.md")
 
 # Steam64 = Steam32 (OpenDota account id) + this offset. It is the only 17-digit number
@@ -107,7 +107,7 @@ def _read_usernames_readonly() -> list[str] | None:
 
 class TestFeasibilityDocument:
     def test_feasibility_doc_exists_at_expected_path(self):
-        """The document lives at markdown/features/reference/kana-hub-integration-feasibility.md."""
+        """The document lives at markdown/research/kana-hub-integration-feasibility.md."""
         assert os.path.isfile(_DOC_PATH)
         assert _read_doc().startswith("# Kana Hub Integration Feasibility")
 

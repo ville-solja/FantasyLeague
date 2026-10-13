@@ -31,10 +31,10 @@ that are testable via pytest:
       of the retired `routers.admin`
     - The `_stub_backup` monkeypatch fixture in TestSeasonReset targets
       `routers.admin_season.backup_sqlite_db`, not the old path
-    - `cd backend && python -m pytest tests/ -v` passes with the same pass/skip
-      counts as before the split (462 passed, 10 skipped as of this writing —
-      this number grows over time as new feature test files land; it is not an
-      eternal invariant, just a regression tripwire for the split itself)
+    - The full suite collects with no import errors. (A test that re-ran the
+      whole suite in a subprocess to pin an exact "N passed" count was removed:
+      it doubled every suite run and needed a baseline edit per issue. CI runs
+      the suite.)
     - `python -c "import main"` succeeds with no import errors, and the old
       `routers.admin` module is no longer importable at all
 
@@ -189,140 +189,6 @@ class TestPreserveExistingTestCoverageThroughSplit:
             source = f.read()
         assert "import routers.admin as admin_module" not in source
         assert "routers.admin.backup_sqlite_db" not in source
-
-    def test_full_suite_pass_skip_counts_match_pre_split_baseline(self):
-        """`cd backend && python -m pytest tests/ -v` reports the same 677 passed / 10 skipped as before the split.
-
-        This baseline is a regression tripwire for the admin router split, not an
-        eternal invariant — it is expected to be bumped upward whenever a later
-        feature legitimately adds new passing tests elsewhere in the suite (as
-        plan-issue-87-schedule-game-breakdown's 14 new tests did,
-        plan-schedule-independent-results's 10 new tests did after that,
-        plan-how-to-play-role-subtabs's 22 new tests did after that,
-        plan-issue-89-fix-available-draws-count's 9 new tests did after that,
-        plan-multi-admin-support's 19 new tests did after that,
-        the ingest-league-empty-response bug fix's 4 new tests did after that,
-        plan-my-team-remove-move-buttons's 10 new tests did after that,
-        plan-mvp-visibility's 13 new tests did after that,
-        the admin-mvp-reflects-in-views bug fix's 4 new tests did after that,
-        the require_admin session-freshness security fix's 4 new tests did after that,
-        the MVP/card scoring parity fix's 5 new tests did after that,
-        the cross-pipeline scoring parity guardrail's 2 new tests did after that,
-        plan-frontend-framework-evaluation's 9 new tests did after that,
-        the Alpine.js How to Play spike's net 4 new tests did after that,
-        plan-issue-51-weekly-summary's 21 new tests did after that,
-        the get_roster/enrich_players security-review fixes' 6 new tests did after that, and
-        the demo-mode generate_weekly_summaries fix's 1 new test did after that, and
-        the weekly-summary team-logo-resolution fix's 2 new tests did after that, and
-        plan-issue-96-container-health-check's 7 new tests did after that, and its
-        approved implementation's net 4 new tests did after that, and
-        plan-issue-99-admin-player-add-progress's 6 new tests did after that, and
-        the bulk-add disconnect-durability fix's 1 new test did after that, and
-        plan-issue-100-weekly-report-fixes's 11 new tests did after that, and
-        plan-issue-101-schedule-fixtures-api's 9 new tests did after that, and
-        plan-issue-107-card-team-logo-placeholder's 4 new tests did after that, and
-        plan-issue-109-opendota-query-prioritization's 6 new tests did after that,
-        plan-issue-84-week-management-editing's 8 new tests did after that, and
-        plan-issue-111-week-boundary-formula's 7 new tests did after that, and
-        plan-issue-113-mvp-schedule-cache-bust's 7 new tests did after that, and
-        plan-issue-115-username-xss-fix's 12 new tests did after that, and
-        plan-issue-126-db-backup-leak-fix's 9 new tests did after that, and
-        plan-issue-121-rate-limiting's 14 new tests did after that, and
-        plan-issue-125-roster-limit-race-fix's 13 new tests did after that, and
-        plan-issue-124-roster-mutation-rate-limiting's 8 new tests did after that, and
-        plan-issue-130-assists-scoring-fix's 11 new tests did after that, and
-        plan-issue-122-forgot-password-cooldown's 11 new tests did after that, and
-        plan-issue-123-password-reset-token-flow's 20 new tests did after that, net of 7 tests
-        removed from test_issue_77_temp_password_expiry.py whose subject matter (forgot_password()
-        directly setting temp_password_expires_at) was intentionally and completely removed by
-        that same plan, not just given a different example value — see that plan's Context
-        section — for a net change of +13, and
-        plan-issue-120-profile-requires-login's 3 new tests did after that, and
-        the death-pool-scales-with-games scoring fix's 9 new tests did after that, and
-        plan-opendota-parse-retry's 21 new tests did after that, and
-        the parse re-request cooldown's 1 new test did after that, and
-        plan-twitch-review-resubmission's 21 new tests did after that, and
-        plan-issue-132-admin-db-backup's 21 new tests did after that, and
-        the proxy-trust and Twitch uniqueness fixes' 15 new tests did after that, and
-        plan-unparseable-match-handling's 41 new tests did after that, and
-        plan-issue-103-team-draw-explanation's 18 new tests did after that, and
-        plan-issue-135-security-review-fixes' 78 new tests did after that, and
-        plan-issue-136-security-audit-3's 50 new tests did after that, and
-        plan-test-background-task-isolation's 15 new tests did after that, and
-        plan-issue-118-https-enforcement's 16 new tests did after that, and
-        plan-issue-137-technical-writer-skill's 20 new tests did after that, and
-        plan-issue-119-session-revocation's 36 new tests did after that, and
-        plan-issue-139-early-mvp-selection's 31 new tests did after that, and
-        plan-issue-140-twitch-chat-announcement-fix's 12 new tests did after that, and
-        plan-issue-141-stored-card-points' 42 new tests did after that, and
-        the issue-141 documentation-steward fixes' 1 new test did after that, and
-        plan-issue-117-longer-sessions' 85 new tests did after that, and
-        plan-issue-129-automatic-bench-substitution's 61 new tests did after that, and
-        the #129 Weekly Report substitutions-pending follow-up's 2 new tests did after that, and
-        plan-issue-149-points-rounding's 30 new tests did after that, and
-        plan-issue-144-guided-tour's 34 new tests did after that, and
-        plan-issue-108-kana-hub-integration-feasibility's 30 new tests did after that, and
-        its 2026-10-02 product-owner update's net 7 new tests did after that, and
-        its Option A deep dive's 15 new tests did after that; then 2026-10-03's
-        cleanup removed 6 tests of the dead seed_cards() and 10 always-skipped
-        frontend-only placeholders, so nothing is skipped any more; then
-        plan-issue-151-weekly-report-aesthetics's 56 new tests did after that, and
-        plan-issue-152-weekly-recap-animations's 59 new tests did after that, and
-        the Weekly Report readability pass's 12 new tests did after that, and
-        plan-issue-153-tour-weekly-report's 13 new tests did after that, and
-        plan-issue-158-password-manager-autofill's 34 new tests did after that, and
-        plan-issue-159-flicker-free-tab-switching's 44 new tests did after that, and
-        plan-issue-156-schedule-visuals's 52 new tests did after that, and
-        plan-issue-161-mvp-selection-delays's 42 new tests did after that, and
-        plan-issue-157-twitch-extension-policy-compliance's 88 new tests did after
-        that; its rewrite of test_twitch_review_resubmission.py replaced two
-        link-code panel tests with two Join-panel tests, net 0), and
-        plan-issue-160-twitch-account-connection-oidc's 81 new tests did after that
-        (its retired-route updates: test_issue_136's two link-code Origin tests became
-        four parametrized cases, +2; test_issue_135's two link-code secrets tests became
-        one, -1; test_issue_117/119 replaced like for like, net 82), and
-        plan-issue-150-steam-login's 145 new tests did after that (its updates to
-        test_issue_117/135/158 for typed confirmations and the new forms changed no counts), and
-        plan-issue-169-impersonation-hardening's 114 new tests did after that (its updates to
-        test_issue_120/141/150 for the new profile and leaderboard shapes and the newly
-        reserved sign-up names changed no counts), and
-        plan-issue-171-twitch-panel-abuse-limits's 84 new tests (83 plus the chat-copy follow-up) did after that (its updates
-        to test_issue_157 drop tests, test_issue_136 CORS tests and the test_issue_51/100
-        logo fixtures changed no counts), and
-        plan-issue-163-twitch-steam-account-hardening's 70 new tests did after that (its
-        updates to test_issue_117/119/121/123/139/150/157/160 and test_twitch_review_resubmission
-        for hashed reset tokens, the per-IP lockout and package.sh --ebs-origin changed no counts), and
-        plan-issue-173-demo-mode-badge-position's 9 new tests and
-        plan-issue-175-approved-streamers-admin's 49 new tests did after that, and
-        the docker-publish --ebs-origin fix's 1 new test did after that, and
-        plan-issue-180-twitch-integration-status's 45 new tests did after that (its
-        update to test_issue_161's live_config harness, a failReasonSuffix stub, changed
-        no counts), and the #180 follow-up's 1 new test (Twitch status renders into its own
-        container; no duplicate ids in index.html) did after that, and the #180 recheck's
-        4 new tests (last request from the extension, Connection check causes, invalid
-        configuration JSON, admin row) did after that, and the Connect Twitch Steam
-        re-auth resume fix's 4 new tests (test_twitch_connect_steam_reauth_resume.py)
-        did after that, and plan-twitch-extension-setup-followups's 37 new tests (30 stubs, two of them
-        parametrized) did after that (its update to test_issue_180's console test for the
-        two new console entries changed no counts), and plan-issue-184-action-throttling's
-        49 new tests (34 stubs, two of them parametrized) did after that (its updates to
-        test_issue_121/124 for the new 429 text changed no counts), and
-        plan-issue-185-atomic-roster-and-token-operations's 52 new tests (40 stubs plus 4,
-        plus 8 for the security review follow-ups) did after that (its seed fixes in
-        test_admin_player_pool and test_issue_141 for the one-active-card-per-player index,
-        and test_issue_163's lookup of the moved token-grant-event routes, changed no counts),
-        and plan-issue-191-panel-fits-twitch-height's 22 new tests did after that, and
-        plan-issue-187-uniform-twitch-starter-tokens's 56 new tests (28 stubs plus 28 for the
-        security review rounds) did after that (test_issue_160 turns the new connect bonus off
-        with an autouse fixture, which changed no counts)."""
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest", "tests/", "-q",
-             "--ignore=tests/test_issue_85_split_admin_router.py"],
-            cwd=_BACKEND_DIR, capture_output=True, text=True,
-        )
-        output = result.stdout + result.stderr
-        assert "2759 passed" in output, output[-3000:]
-        assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):
         """pytest collection of backend/tests/ produces zero collection errors after the split (no stale import paths left behind)."""

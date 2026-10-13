@@ -1,19 +1,24 @@
 # Agent Lessons Log
 
-A version-controlled Markdown file (`markdown/lessons-learned.md`) that agents read before
-starting work and append to when they discover novel pitfalls, so the same mistakes are not
-repeated across sessions.
+Two version-controlled Markdown files: `markdown/lessons-learned.md`, short curated rules that
+agents read before starting work, and `markdown/lessons-archive.md`, the full history they
+search by keyword. Agents add an entry when they discover a novel pitfall, so the same mistakes
+are not repeated across sessions.
 
 ---
 
 ## How it works
 
-Each participating agent reads `markdown/lessons-learned.md` in full before doing any work.
-If the run surfaces a novel issue — a stale file path, an unexpected test pattern, a model
-field that moved — the agent appends a new entry in newest-first order using the standard
-format.
+Each participating agent reads `markdown/lessons-learned.md` (about 10 KB) before doing any
+work. For a specific problem it searches `markdown/lessons-archive.md` with `grep`; the archive
+is never read in full. If the run surfaces a novel issue — a stale file path, an unexpected test
+pattern, a model field that moved — the agent adds a short entry at the top of
+`lessons-learned.md` in the standard format.
 
-Entries are never rewritten or deleted by agents. Operators may manually remove stale entries.
+Agents don't rewrite or delete other entries. `/agent-steward` curates the file: when it grows
+past about 12 KB it folds related entries into one rule and moves entries that no longer apply
+to the archive. The archive was created on 2026-10-13, when 82 entries (73 KB) were condensed
+into the curated rules.
 
 ## Entry format
 
@@ -36,7 +41,9 @@ The following agents read and write the log:
 - `/test-planner`
 - `/security-patcher`
 - `/technical-writer`
+- `/ship`
 
-## Log file
+## Log files
 
-`markdown/lessons-learned.md` — live; seeded with entries from the initial implementation session. Read and written by the participating agents on every run.
+- `markdown/lessons-learned.md` — curated rules; read by the participating agents on every run, written when a run finds a new pitfall.
+- `markdown/lessons-archive.md` — full history up to 2026-10-13; searched, not read.

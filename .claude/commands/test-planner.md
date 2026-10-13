@@ -81,7 +81,7 @@ Next: /develop $ARGUMENTS
 
 ## Lessons log
 
-Before starting work, read `markdown/lessons-learned.md` in full.
+Before starting work, read `markdown/lessons-learned.md` (short, curated rules). For a specific problem, search `markdown/lessons-archive.md` by keyword (`grep -n`); never read the archive in full.
 
 If your run surfaces a novel pitfall (a stale file path, an unexpected test pattern, a model field that moved, a behaviour that surprised you), append a new entry at the top of the entries list using this format:
 
@@ -89,4 +89,4 @@ If your run surfaces a novel pitfall (a stale file path, an unexpected test patt
 **Problem:** One sentence.
 **Solution:** What works instead.
 
-Entries are append-only. Do not rewrite or delete existing entries.
+Entries are append-only: add yours at the top and don't rewrite others. Only add a pitfall the curated rules don't already cover, in a few lines. `/agent-steward` curates the file and moves stale entries to the archive.

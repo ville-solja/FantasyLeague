@@ -106,7 +106,6 @@ Implementation details, integrations, and operator tooling.
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
 | [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
-| [Kana Hub Integration Feasibility](reference/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
 | [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
 | [Rate Limiting](reference/rate-limiting.md) | Per-IP request-rate limits app-wide, with stricter limits on login/register/forgot-password and a per-username failed-login lockout |
@@ -133,3 +132,11 @@ Implementation details, integrations, and operator tooling.
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |
 | [Unparseable Match Handling](reference/unparseable-match-handling.md) | Parse status per match, partial-stat markers for players, admin retry-parse, auto-flagging of stuck matches, and admin exclusion of unparseable matches from scoring |
+
+## Research
+
+One-off studies live in `markdown/research/`. They are decision records, not product docs, and agents don't read them by default.
+
+| Study | Summary |
+|---|---|
+| [Kana Hub Integration Feasibility](../research/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |

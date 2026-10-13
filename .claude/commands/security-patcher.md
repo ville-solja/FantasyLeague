@@ -1,4 +1,4 @@
-<!-- version: 5 -->
+<!-- version: 7 -->
 <!-- mode: read-write -->
 
 You are the **Security Patcher** for this project.
@@ -18,7 +18,7 @@ eliminates the reported issue.
 ## When to run
 When a new code scanning alert appears in the repository's Security tab, or after a CI
 CodeQL scan flags a regression. Can be run on a specific alert number or a full GitHub URL.
-`/ship pr` also runs this workflow as a subagent, one alert at a time, for the alerts on its pull
+`/ship --fix` also runs this workflow as a subagent, one alert at a time, for the alerts on its pull
 request; in that case work on the current branch, do not commit or push (`/ship` does), and end
 with the output format below so `/ship` can read the result.
 
@@ -37,7 +37,7 @@ Accept `$ARGUMENTS` as either:
 - A full GitHub URL (`https://github.com/.../security/code-scanning/N`): extract N from the path
 
 If `$ARGUMENTS` is empty, list the open alerts (step 0a-list), patch nothing, and end with
-`Next: /security-patcher <N>` for the most severe one (or `/ship pr --fix all` when they are all
+`Next: /security-patcher <N>` for the most severe one (or `/ship --fix all` when they are all
 on one open pull request). If it is non-empty but neither form is recognised, stop and print:
 > Usage: `/security-patcher <alert-number>` or `/security-patcher <github-url>`
 
@@ -110,7 +110,7 @@ Tags:    {rule.tags joined by ", "}
 ## Phase 1 — Understand the vulnerability in context
 
 1. Read the flagged file in full (or at least the 60 lines surrounding `start_line`).
-2. Read `markdown/lessons-learned.md` — check whether this rule has been seen before.
+2. Read `markdown/lessons-learned.md`, and `grep -n "<rule.id>" markdown/lessons-archive.md` — check whether this rule has been seen before.
 3. For flow-sensitive findings (SQL injection, path traversal, XSS via taint), read any
    upstream source files identified in the instances response.
 4. Determine the **minimum fix**. Common patterns for this codebase:
@@ -191,7 +191,7 @@ append a new entry at the top of the entries list:
 **Solution:** The fix applied and why it is safe.
 ```
 
-Entries are append-only. Do not rewrite or delete existing entries.
+Entries are append-only: add yours at the top and don't rewrite others. Only add a pitfall the curated rules don't already cover, in a few lines. `/agent-steward` curates the file and moves stale entries to the archive.
 
 ---
 
@@ -214,10 +214,10 @@ Follow-up:
   [ ] Push and confirm the alert moves to "Fixed" in GitHub Security tab (for a PR alert:
       push to the PR branch; the alert clears when the PR's next analysis no longer finds it)
 
-Next: /ship commit   (or /security-reviewer when sibling code may share the pattern)
+Next: /ship   (or /security-reviewer when sibling code may share the pattern)
 ```
 
-When run as a `/ship pr` subagent, leave out the `Next:` line; `/ship` continues.
+When run as a `/ship --fix` subagent, leave out the `Next:` line; `/ship` continues.
 
 If the patch was not applied (cannot determine safe fix or tests failed), output:
 

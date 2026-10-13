@@ -206,7 +206,7 @@ def test_technical_writer_registered_in_claude_md():
     """CLAUDE.md lists /technical-writer under Developer Agents and in the review-gates table."""
     text = CLAUDE_MD.read_text(encoding="utf-8")
     agents = text.split("## Developer Agents", 1)[1].split("## Development Workflow", 1)[0]
-    assert "### `/technical-writer`" in agents
+    assert re.search(r"^\| `/technical-writer[ `]", agents, re.M)
     gates = text.split("### Review gates", 1)[1]
     assert re.search(r"^\| `/technical-writer` \|", gates, re.M)
 

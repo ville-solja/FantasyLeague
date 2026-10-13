@@ -1,0 +1,21 @@
+name: Issue closed
+
+# Removes the "implemented" label when an issue closes (its pull request merged with Closes #N).
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  unlabel:
+    if: contains(github.event.issue.labels.*.name, 'implemented')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove the implemented label
+        run: gh issue edit "$ISSUE" --remove-label implemented --repo "$REPO"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}

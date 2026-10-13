@@ -1,4 +1,4 @@
-<!-- version: 6 -->
+<!-- version: 7 -->
 <!-- mode: read-write -->
 
 You are the **Developer** for this project.
@@ -36,7 +36,7 @@ After a plan file exists in `markdown/plans/` and has been reviewed. Run `/secur
 2. Note every file listed in the **Critical Files** table.
 3. Read each critical file before writing any code.
 4. Glob `backend/` and `frontend/` to understand the overall structure if the plan references files that do not yet exist.
-5. Read `backend/models.py` and `backend/main.py` if the plan touches the backend — understand existing patterns for models, endpoints, and dependencies before writing new ones.
+5. If the plan touches the backend, read the parts of `backend/models.py`, `backend/main.py` and the routers it affects (grep for the model, route or function first, then read around the hits) to follow existing patterns. Don't read large files end to end when a search finds what you need.
 6. Read `backend/migrate.py` if the plan adds a column to an existing model — per the CLAUDE.md schema-migration rule, every new column on an existing table needs a corresponding numbered migration added in the same edit session. New tables need no migration entry.
 7. `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
 
@@ -61,15 +61,19 @@ Work through the plan's numbered steps in order. For each step:
 
 After all implementation steps are complete:
 
-1. **Backend tests** — if `backend/tests/` contains tests related to changed files, run:
+1. **Backend tests** — while iterating, run only the plan's test file and the tests that cover the changed code (find them with `grep -rln "<module, function or route>" backend/tests`):
    ```
-   cd backend && python -m pytest tests/ -v
+   cd backend && python -m pytest tests/test_<slug>.py tests/<related>.py -q
    ```
-   Fix any failures before continuing.
+   When they pass, run the full suite once, in parallel:
+   ```
+   cd backend && python -m pytest tests/ -n auto -q
+   ```
+   Fix any failures before continuing. Don't rerun the full suite after every small edit; under `/develop` the QA stage runs it again.
 
 2. **Type/syntax check** — run a quick import check on the backend:
    ```
-   cd backend && python -c "import main"
+   cd backend && DEBUG=true python -c "import main"
    ```
    Fix any import errors.
 
@@ -129,7 +133,7 @@ If any verification step failed, list it as `✗` with a short explanation and s
 
 ## Lessons log
 
-Before starting work, read `markdown/lessons-learned.md` in full.
+Before starting work, read `markdown/lessons-learned.md` (short, curated rules). For a specific problem, search `markdown/lessons-archive.md` by keyword (`grep -n`); never read the archive in full.
 
 If your run surfaces a novel pitfall (a stale file path, an unexpected test pattern, a model field that moved, a behaviour that surprised you), append a new entry at the top of the entries list using this format:
 
@@ -137,4 +141,4 @@ If your run surfaces a novel pitfall (a stale file path, an unexpected test patt
 **Problem:** One sentence.
 **Solution:** What works instead.
 
-Entries are append-only. Do not rewrite or delete existing entries.
+Entries are append-only: add yours at the top and don't rewrite others. Only add a pitfall the curated rules don't already cover, in a few lines. `/agent-steward` curates the file and moves stale entries to the archive.

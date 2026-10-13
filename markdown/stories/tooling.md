@@ -312,7 +312,7 @@ As an operator, I want the test tools impossible to switch on in production so t
 As the product owner, I want a written assessment of folding Kana Cards into Kana Hub so that I can decide the direction before investing development time.
 
 **Acceptance criteria**
-- `markdown/features/reference/kana-hub-integration-feasibility.md` compares the two systems area by area: stack, data model, identity, game data, fantasy design, background jobs, Twitch, hosting and licence. Each area cites concrete files or docs from both repositories, with the hub's branch and date
+- `markdown/research/kana-hub-integration-feasibility.md` compares the two systems area by area: stack, data model, identity, game data, fantasy design, background jobs, Twitch, hosting and licence. Each area cites concrete files or docs from both repositories, with the hub's branch and date
 - It lists the **architectural blockers**, each with severity (blocker / major / minor) and what would remove it
 - It confirms or corrects the preliminary findings in this plan, including whether the hub ingests any Dota data and how its fantasy league scores
 - It explains how the hub is organised per game (game registry, per-game backend domains, per-game fantasy namespace, season routes), where Dota would fit, and which Kana Cards part maps to which hub layer

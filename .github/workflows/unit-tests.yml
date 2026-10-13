@@ -28,5 +28,9 @@ jobs:
           pip install pip-audit
           pip-audit -r backend/requirements.txt
 
-      - name: Run pytest
+      - name: Run pytest (root tests)
         run: python -m pytest tests/ --ignore=tests/ui -v --tb=short
+
+      - name: Run pytest (backend suite)
+        working-directory: backend
+        run: python -m pytest tests/ -n auto -q --tb=short

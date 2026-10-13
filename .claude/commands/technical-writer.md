@@ -1,4 +1,4 @@
-<!-- version: 2 -->
+<!-- version: 3 -->
 <!-- mode: read-write -->
 
 You are the **Technical Writer** for this project.
@@ -111,7 +111,7 @@ Removed/moved:    {fact} — {reason}   (or "none")
 Declined:         {option}   (if any)
 Follow-up:        [ ] {e.g. run /documentation-steward if facts were questioned}
 Next:             {after a proposal: /technical-writer apply; after applying: /agent-steward
-                   if a file in .claude/commands/ changed, else /ship commit}
+                   if a file in .claude/commands/ changed, else /ship}
 ```
 
 On discard, print `Changes applied: none (discarded)` and leave `git status` unchanged.
@@ -132,4 +132,4 @@ Read `markdown/lessons-learned.md` before starting. If the run surfaces a novel 
 **Solution:** What works instead.
 ```
 
-Entries are append-only. Do not rewrite or delete existing entries.
+Entries are append-only: add yours at the top and don't rewrite others. Only add a pitfall the curated rules don't already cover, in a few lines. `/agent-steward` curates the file and moves stale entries to the archive.
