@@ -821,3 +821,63 @@ As a player, I want a button to stay disabled until its action finishes so that 
 - A second click during the request sends no second request
 - A failed request re-enables the button and shows the error
 - Roster drag-and-drop ignores new drops while a swap or reorder request is running
+
+
+## My Team Save Roster (#186) *(parked, not yet implemented)*
+
+### Arrange the Roster, Then Save Once
+**User story**
+As a player, I want to drag cards between roster and bench and reorder them freely, then save the result once so that my team is stored as one decision.
+
+**Acceptance criteria**
+- On My Team for the current (unlocked) week, activate, deactivate, swap and reorder change only the page's draft; no roster request is sent until **Save**
+- **Save** sends `PUT /roster` with the whole layout: `{"active": [card ids in slot order], "bench": [card ids in bench order], "base_version": "<version>"}`
+- The server applies it in one transaction, or not at all, and checks:
+  - every card belongs to the user;
+  - each card appears exactly once;
+  - at most `ROSTER_LIMIT` cards are active;
+  - no two active cards have the same player;
+  - no inactive (removed) player is active.
+- A failed check answers 409 or 422 with a message naming the problem; nothing changes
+- On success the server answers with the saved roster and its new `version`, and the page shows "Roster saved"
+- Saving an unchanged draft is a no-op that still answers 200
+- `PUT /roster` has the per-user `RATE_LIMIT_ROSTER_MUTATION` limit
+- The existing single-card routes keep working unchanged
+
+### See Unsaved Changes at a Glance
+**User story**
+As a player, I want an obvious sign that my roster has unsaved changes so that I never think a change is stored when it isn't.
+
+**Acceptance criteria**
+- While the draft differs from the saved roster, a bar shows "Unsaved changes" with **Save** and **Discard**; it is hidden when they match
+- Changed cards are marked in the draft, by an outline or a "moved" badge
+- **Discard** restores the saved roster without a request
+- **Save** is disabled while its request runs (the #185 in-flight guard) and while the draft breaks a rule the page can check, for example more than `ROSTER_LIMIT` active cards; the reason is shown next to it
+
+### Don't Lose Changes by Leaving
+**User story**
+As a player, I want to be asked before I leave My Team with unsaved changes so that I can save them first.
+
+**Acceptance criteria**
+- With unsaved changes, switching to another tab, choosing another week, logging out or opening the Weekly Report shows a prompt: **Save and continue**, **Discard and continue**, **Stay**
+- Closing or reloading the page triggers the browser's own leave-page warning (`beforeunload`); the page can't customise its text
+- The draft is kept in `sessionStorage`. After a reload in the same tab, My Team offers "You have unsaved roster changes. Restore / Discard" when the saved roster's version still matches the draft's `base_version`; otherwise the draft is dropped and a note says the roster changed meanwhile
+- No prompt appears when there are no unsaved changes
+
+### Don't Lock a Roster You Didn't Mean
+**User story**
+As a player, I want a warning before the week locks while I have unsaved changes so that my intended roster is the one that counts.
+
+**Acceptance criteria**
+- With unsaved changes, the unsaved-changes bar shows the time to lock once the week's `start_time` is within `ROSTER_SAVE_WARNING_MINUTES` (default 30)
+- If the week locks while the draft is unsaved, the draft is not applied. The page says "The week locked before your changes were saved. Your saved roster was used." and keeps the draft for the next week if it is still valid
+- `PUT /roster` for a week whose lock has passed changes the cards for the next week, matching how the single-card routes behave today; the response says which week the roster now counts for
+
+### A Roster Changed Elsewhere Isn't Overwritten
+**User story**
+As a player using two tabs or the Twitch panel, I want saving an old draft to fail rather than silently undo changes I made elsewhere.
+
+**Acceptance criteria**
+- `GET /roster/{user_id}` for the current week returns a `version`: a hash of the user's active card ids in slot order and bench card ids in order
+- `PUT /roster` recomputes the version inside the transaction and answers 409 "Your roster changed since you started editing. Reload to see it." when `base_version` doesn't match; nothing changes
+- After a 409 the page offers **Reload roster**, which discards the draft
