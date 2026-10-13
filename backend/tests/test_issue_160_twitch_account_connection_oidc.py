@@ -103,6 +103,13 @@ import models  # noqa: F401
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 FRONTEND_DIR = REPO_ROOT / "frontend"
 
+
+@pytest.fixture(autouse=True)
+def _no_twitch_starter_bonus(monkeypatch):
+    """These tests cover #160's connection flow and its "connected" key and balances;
+    #187's one-time starter bonus is tested in test_issue_187_* and is off here."""
+    monkeypatch.setenv("TWITCH_CONNECT_BONUS_TOKENS", "0")
+
 _CLIENT_ID = "test-oauth-client-id"
 _CLIENT_SECRET = "test-oauth-client-secret-do-not-log"
 _REDIRECT_URI = "http://localhost:8000/auth/twitch/callback"
@@ -465,7 +472,7 @@ class TestConnectTwitchOnWebsite:
         web_user, soft, cards = _pending_pair(db)
         status = twitch_oauth.connection_status(db, web_user)
         assert status["connected"] is True
-        assert status["pending_merge"] == {"cards": 2, "tokens": 7}
+        assert status["pending_merge"] == {"cards": 2, "tokens": 7, "starter_deducted": 0, "balance_change": 7}
         # Decision 1: the id moved to W; S keeps its opaque id until the merge.
         db.refresh(soft)
         assert soft.twitch_account_id is None and soft.twitch_user_id == _OPAQUE
@@ -590,7 +597,7 @@ class TestConnectTwitchOnWebsite:
         assert _key(resp) == "merge_ready"
         data = client.get("/twitch/connection").json()
         assert data["connected"] is True
-        assert data["pending_merge"] == {"cards": 0, "tokens": 7}
+        assert data["pending_merge"] == {"cards": 0, "tokens": 7, "starter_deducted": 0, "balance_change": 7}
         soft = web.rows(User, twitch_user_id=_OPAQUE)[0]
         assert soft.account_type == "twitch" and soft.twitch_account_id is None
 
@@ -810,7 +817,7 @@ class TestMergeTwitchCollection:
         """AC Prompt: pending_merge reports S's card count and token count for W."""
         import twitch_oauth
         web_user, soft, _ = _pending_pair(db, cards=(101, 102, 103), tokens=4)
-        assert twitch_oauth.connection_status(db, web_user)["pending_merge"] == {"cards": 3, "tokens": 4}
+        assert twitch_oauth.connection_status(db, web_user)["pending_merge"] == {"cards": 3, "tokens": 4, "starter_deducted": 0, "balance_change": 4}
         js = (FRONTEND_DIR / "app-profile.js").read_text(encoding="utf-8")
         assert "Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. Add it to this account?" in js
 
@@ -821,7 +828,7 @@ class TestMergeTwitchCollection:
         db.add(CardMatchPoints(card_id=cards[0].id, match_id=5001, player_id=101, points=9.0))
         db.commit()
         result = _merge(db, web_user)
-        assert result == {"merged": True, "cards": 2, "tokens": 7}
+        assert result == {"merged": True, "cards": 2, "tokens": 7, "starter_deducted": 0, "from_website": 0}
         moved = db.query(Card).filter(Card.id.in_([c.id for c in cards])).all()
         assert len(moved) == 2 and {c.player_id for c in moved} == {101}
         for card in moved:
@@ -923,7 +930,7 @@ class TestMergeTwitchCollection:
         web_user, soft, cards = _pending_pair(db)
         first = twitch_oauth.connection_status(db, web_user)
         second = twitch_oauth.connection_status(db, web_user)
-        assert first["pending_merge"] == second["pending_merge"] == {"cards": 2, "tokens": 7}
+        assert first["pending_merge"] == second["pending_merge"] == {"cards": 2, "tokens": 7, "starter_deducted": 0, "balance_change": 7}
         db.refresh(soft)
         assert soft.twitch_user_id == _OPAQUE and soft.tokens == 7
         assert db.query(Card).filter_by(owner_id=soft.id).count() == 2
@@ -990,7 +997,7 @@ class TestMergeTwitchCollection:
         # After the password check the same call merges.
         assert client.post("/reauth", json={"password": _PASSWORD}).status_code == 200
         resp = client.post("/twitch/merge/confirm")
-        assert resp.status_code == 200 and resp.json() == {"merged": True, "cards": 0, "tokens": 7}
+        assert resp.status_code == 200 and resp.json() == {"merged": True, "cards": 0, "tokens": 7, "starter_deducted": 0, "from_website": 0}
 
     def test_users_merged_soft_account_at_migration_032(self):
         """Critical files: migration 032_users_merged_soft_account_at adds the nullable integer column to a legacy users table."""
@@ -1115,7 +1122,7 @@ class TestRecognisedInPanel:
         assert me["website_account"] is False  # still S
         db.refresh(web_user)
         assert web_user.pending_merge_user_id == soft.id
-        assert twitch_oauth.connection_status(db, web_user)["pending_merge"] == {"cards": 0, "tokens": 5}
+        assert twitch_oauth.connection_status(db, web_user)["pending_merge"] == {"cards": 0, "tokens": 5, "starter_deducted": 0, "balance_change": 5}
 
     def test_jwt_without_user_id_never_switches_account(self, db, twitch_env):
         """Failure path: a JWT without user_id never attaches the opaque id to W; join creates a soft account as in Part 1 and me without an account returns joined=false."""
@@ -1307,7 +1314,8 @@ class TestRecoverableAndContained:
         assert log.full_user_id == web_user.id and before <= log.merged_at <= int(time.time())
         snapshot = json.loads(log.soft_snapshot)
         assert snapshot == {"twitch_user_id": _OPAQUE, "twitch_account_id": _TWITCH_ID,
-                            "created_at": created, "last_seen_at": last_seen, "tokens": 7}
+                            "created_at": created, "last_seen_at": last_seen, "tokens": 7,
+                            "starter_from_website": 0}  # issue #187
         assert json.loads(log.card_ids) == [c.id for c in cards]
         assert log.tokens_moved == 7
         entries = json.loads(log.roster_entries)

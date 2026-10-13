@@ -38,6 +38,7 @@ Code: `backend/twitch_oauth.py` (routes, sign-in checks, `connect_account`), `ba
 | Key | Meaning |
 |---|---|
 | `connected` | Stored (or the same id was already stored) |
+| `connected_bonus` | Stored, and the one-time Twitch starter bonus was credited (issue #187, see `uniform-twitch-starter-tokens.md`): "Twitch connected. You received N Twitch starter tokens." |
 | `merge_ready` | Stored, and a soft account's collection is waiting |
 | `in_use` | "This Twitch account is connected to another Kana Cards account" |
 | `disconnect_first` | "Disconnect your current Twitch account first" |
@@ -61,6 +62,10 @@ Only the code, checked against `[a-z_]{1,64}` (otherwise `unknown`), appears in 
 
 `users.twitch_account_id` is unique (#157), so the id can't sit on both accounts. When the callback finds a **soft** account S holding the id (it shared its identity in the panel), it moves the id from S to the website account W in the same transaction and records `W.pending_merge_user_id = S.id` (migration `032`). S keeps its opaque `twitch_user_id`, so the panel keeps acting as S until the merge. Another **website** account holding the id is a conflict (`in_use`); soft accounts never are.
 
+### Twitch starter bonus (issue #187)
+
+When the callback stores the id and no soft account holds it, and this website account never received a Twitch starter (no earlier Twitch starter bonus, no merge), `connect_account` records a `connect` row in `twitch_starter_grants` and, only if that row is new, credits `TWITCH_CONNECT_BONUS_TOKENS` (default `INITIAL_TOKENS`) with `credit_tokens` and audits `twitch_starter_bonus` (user id and amount, no Twitch id), in the same commit, returning `connected_bonus`. A `merge_ready` connect grants nothing: the soft account's starter comes with the merge. The row outlives disconnect and merge reversal, so the Twitch starter bonus is paid once per Twitch account and once per website account. Only a keyed one-way hash of the Twitch user id is kept there (HMAC-SHA256 with a key derived from `SECRET_KEY`), never the id itself, so a disconnected or deleted account's Twitch id can't be read back; rotating `SECRET_KEY` resets this once-per-Twitch-account check. Details: `uniform-twitch-starter-tokens.md`.
+
 If S joined without the identity share and shares it later, the panel's identity-share step finds W holding the id and makes S W's pending merge (unless one is already pending or W has used its merge). That is what the Profile guidance "Joined on Twitch first? In the Kana Cards Twitch panel, open Settings and choose Share your Twitch identity, then reload this page." relies on.
 
 ### The merge
@@ -69,10 +74,10 @@ Profile shows **"Your Twitch collection: N cards, M tokens. Add it to this accou
 - writes the `twitch_merge_log` undo row first,
 - deletes S's locked-week `weekly_roster_entries`, so W's past weekly scores and the leaderboards don't change,
 - moves every card of S to W's bench (`is_active=false`, `slot_index=NULL`); duplicates are kept and stored card points follow the card,
-- adds S's tokens to W,
+- adds S's tokens to W, minus the Twitch starter bonus W already received on connect, if any (issue #187): taken from S's tokens first, the rest from W's own balance (never below 0) when S's starter was spent. The prompt's M is what S adds, and Profile explains a deduction ("… stay behind" or "Adding it removes N tokens from your balance …"); see `uniform-twitch-starter-tokens.md`,
 - clears S's opaque id, deletes S and every remaining row through `delete_soft_account` (after the cards moved), and deletes the presence row of that opaque id,
 - sets `W.twitch_user_id` to S's former opaque id, `W.merged_soft_account_at`, clears `W.pending_merge_user_id`,
-- audits `twitch_account_merged` (`full_user_id`, `soft_user_id`, counts, `log_id`; no Twitch ids).
+- audits `twitch_account_merged` (`full_user_id`, `soft_user_id`, counts, `starter_deducted`, `from_website`, `log_id`; no Twitch ids).
 
 Any error rolls the whole merge back. One merge per website account, ever: with `merged_soft_account_at` set, the merge answers 409 (also after a disconnect), and Profile says the collection stays in the panel. No pending merge gives 404; a stale one (S left or was purged) gives 404 and clears the pending id.
 
@@ -87,7 +92,7 @@ A JWT without `user_id` never switches accounts. While S still holds the opaque 
 
 ### Disconnect
 
-`POST /twitch/disconnect` (recent password check) clears `twitch_account_id`, `twitch_user_id` and any pending merge, deletes the presence row, and audits `twitch_disconnected`. The account keeps its cards and tokens, and `merged_soft_account_at` stays (the one-merge limit applies). In the panel the viewer is "not joined" again and can join a new soft account. Without a connection it returns 200 with `changed: false` and no audit entry.
+`POST /twitch/disconnect` (recent password check) clears `twitch_account_id`, `twitch_user_id` and any pending merge, deletes the presence row, and audits `twitch_disconnected`. The account keeps its cards and tokens, and `merged_soft_account_at` stays (the one-merge limit applies). In the panel the viewer is "not joined" again and can join a new soft account. Without a connection it returns 200 with `changed: false` and no audit entry. Both ids are removed from the account; only the one-way hashed `twitch_starter_grants` record of the Twitch account stays, so the Twitch starter bonus is not paid twice (issue #187).
 
 Panel **Leave** for a website account only clears `twitch_user_id`; the connection stays. While connected with the identity shared, the panel recognises the account again on the next call. Disconnect is on the website.
 
@@ -98,7 +103,7 @@ PKCE is on (`twitch_oauth.USE_PKCE = True`) and covered by tests against the moc
 ## Recovery and containment
 
 - **Merge undo log:** `twitch_merge_log` (`id`, `full_user_id`, `merged_at`, `soft_snapshot` JSON with the soft account's `twitch_user_id`, `twitch_account_id`, `created_at`, `last_seen_at`, `tokens`; `card_ids` JSON; `tokens_moved`; `roster_entries` JSON of the deleted rows with week, card, bench and substitution flags; `reversed_at`). Rows older than 30 days, and used or expired `twitch_oauth_states`, are deleted once a day by the week maintenance loop (`twitch_oauth.cleanup`). Deleted per-user rows (reveals, seen, dismissals, claims, redemptions) aren't snapshotted and aren't restored by a reversal.
-- **Admin reverse:** `POST /admin/twitch/merges/{log_id}/reverse` (`soft_accounts.reverse_merge`, one transaction) recreates the soft account (new id) from the snapshot, moves the logged cards still on the website account back (to the bench), gives the soft account its `tokens_moved` and subtracts them from the website account (never below 0; the shortfall is in the reply and the audit), restores the logged roster rows whose week and card still exist, clears the website account's `twitch_account_id`, `twitch_user_id`, `merged_soft_account_at` and pending merge, sets `reversed_at`, and audits `twitch_merge_reversed`. If the opaque or real id is held by another account since, the soft account is recreated without it. 409 with a message, and no change, when the row is older than 30 days, already reversed, its website account is gone, or none of its cards exist (season reset).
+- **Admin reverse:** `POST /admin/twitch/merges/{log_id}/reverse` (`soft_accounts.reverse_merge`, one transaction) recreates the soft account (new id) from the snapshot, moves the logged cards still on the website account back (to the bench), gives the soft account its `tokens_moved` and subtracts them from the website account (never below 0; the shortfall is in the reply and the audit), restores the logged roster rows whose week and card still exist, clears the website account's `twitch_account_id`, `twitch_user_id`, `merged_soft_account_at` and pending merge, sets `reversed_at`, gives back the Twitch starter bonus the merge took from the website account's own balance and the soft account its whole pre-merge balance (issue #187), and audits `twitch_merge_reversed` (with `starter_restored=` and `from_website=`). If the opaque or real id is held by another account since, the soft account is recreated without it. 409 with a message, and no change, when the row is older than 30 days, already reversed, its website account is gone, or none of its cards exist (season reset).
 - **Admin list:** `GET /admin/twitch/merges` returns merges of the last 30 days, newest first and at most 100 rows, with `reversible` and `blocked_reason`. `POST /admin/twitch/merges/{log_id}/reverse` returns 404 for an unknown `log_id`. Admin › User Management shows them under **Twitch collection merges** with **Reverse**.
 - **Kill switches:** unsetting any `TWITCH_OAUTH_*` variable turns Connect off (`available: false`, Profile shows "Connecting Twitch is not available right now.", start returns 503) without affecting existing connections or the panel. `TWITCH_DROPS_ENABLED=false` stops drops.
 - **No public Twitch ids:** no endpoint returns `twitch_user_id` or `twitch_account_id`; `GET /twitch/connection` returns only booleans and counts; the admin users list returns only `twitch_linked` and `twitch_identity_shared`; merge and connect audit entries carry user ids only. Tests check the response schemas and the route sources.
@@ -112,8 +117,8 @@ PKCE is on (`twitch_oauth.USE_PKCE = True`) and covered by tests against the moc
 |---|---|---|
 | `GET /auth/twitch/start` | Session + recent password check (redirects when missing) | Store the attempt, redirect to Twitch; 503 when unconfigured |
 | `GET /auth/twitch/callback` | Session | Verify and store `twitch_account_id`; redirect to `/#profile?twitch=<key>` |
-| `GET /twitch/connection` | Session | `{available, connected, pending_merge: {cards, tokens} or null, merge_used, last_twitch_activity_at}` |
-| `POST /twitch/merge/confirm` | Session + recent password check | Merge the pending soft account: `{merged, cards, tokens}` |
+| `GET /twitch/connection` | Session | `{available, connected, pending_merge: {cards, tokens, starter_deducted, balance_change} or null, merge_used, last_twitch_activity_at}` |
+| `POST /twitch/merge/confirm` | Session + recent password check | Merge the pending soft account: `{merged, cards, tokens, starter_deducted, from_website}` |
 | `POST /twitch/disconnect` | Session + recent password check | Clear the connection: `{connected: false, changed}` |
 | `GET /admin/twitch/merges` | Admin + recent password check | Merges of the last 30 days |
 | `POST /admin/twitch/merges/{log_id}/reverse` | Admin + recent password check | Undo a merge within 30 days |
@@ -133,6 +138,7 @@ The `twitch_link_codes` table and the `TwitchLinkCode` model remain for a later 
 | `users.merged_soft_account_at` | When this account used its one merge (migration `032`) |
 | `twitch_oauth_states` | Sign-in attempts (new table, `create_all`) |
 | `twitch_merge_log` | Merge undo log, 30 days (new table, `create_all`) |
+| `twitch_starter_grants` | One Twitch starter per Twitch account (`twitch_id_hash`, a keyed hash, never the id; `join` / `connect`), issue #187 (new table, `create_all`; backfill migration `038`) |
 
 ## Configuration
 
@@ -142,8 +148,9 @@ The `twitch_link_codes` table and the `TwitchLinkCode` model remain for a later 
 | `TWITCH_OAUTH_CLIENT_SECRET` | *(empty)* | Its **Twitch API Client Secret** (Extension Settings › Twitch API Client Configuration for the extension's client), never the Extension Secret that goes in `TWITCH_EXTENSION_SECRET` |
 | `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Exact callback URL registered in the Twitch developer console, for example `https://<host>/auth/twitch/callback` |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of start and callback |
+| `TWITCH_CONNECT_BONUS_TOKENS` | `INITIAL_TOKENS` (5) | One-time Twitch starter bonus on connect, once per Twitch account (issue #187); `0` turns it off |
 
-Read on each request. When any of the three is missing, Connect Twitch is unavailable and the start endpoint returns 503. Requires `cryptography` (in `backend/requirements.txt`) for RS256.
+Read on each request. When any of `TWITCH_OAUTH_CLIENT_ID`, `TWITCH_OAUTH_CLIENT_SECRET` and `TWITCH_OAUTH_REDIRECT_URI` is missing, Connect Twitch is unavailable and the start endpoint returns 503. Requires `cryptography` (in `backend/requirements.txt`) for RS256.
 
 **Sign-in client:** the extension's own client is the default. Its Extension Settings page takes up to 10 OAuth Redirect URLs, so test and production share one client; no separate Twitch application is needed.
 

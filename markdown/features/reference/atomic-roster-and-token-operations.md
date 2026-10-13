@@ -58,8 +58,10 @@ An unknown `user_id` changes nothing. It bypasses the ORM identity map; callers 
 | MVP token drop | `twitch.py` `_execute_token_drop` | `credit_tokens` per winner |
 | Weekly lock grant | `weeks.py` `auto_lock_weeks` | One `UPDATE users SET tokens = coalesce(tokens, 0) + 1 WHERE id IN (…)` |
 | Player-removal refund | `routers/admin_players.py` `remove_players` | `UPDATE players SET is_active = 0 WHERE id = :pid AND is_active = 1`; only when that changed the row, `credit_tokens` per owner. Two simultaneous removes refund once |
-| Soft-account merge | `soft_accounts.py` `merge_soft_into` | `UPDATE … SET tokens = COALESCE(tokens, 0) + COALESCE((SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft), 0)` on the website account, then the soft balance is read (the write lock is held) for the log, then zeroed. When the soft row is already gone (a simultaneous merge won), it raises `SoftAccountGone`; `POST /twitch/merge/confirm` rolls back and answers 404 "That Twitch collection is gone; refresh the page" |
-| Merge reverse | `soft_accounts.py` `reverse_merge` | After the new soft account's insert holds the write lock: read the balance, `taken = min(balance, tokens_moved)`, `UPDATE … SET tokens = COALESCE(tokens, 0) - :taken`. The shortfall is reported as before |
+| Soft-account merge | `soft_accounts.py` `merge_soft_into` | A no-op `UPDATE users SET tokens = COALESCE(tokens, 0) WHERE id = :full` takes the write lock; both balances are read under it, and one `UPDATE … SET tokens = COALESCE(tokens, 0) + :delta` applies the soft tokens minus the Twitch starter bonus the account already received (issue #187: from the soft tokens first, then from the website balance, never below 0; `merge_token_split`), then the soft balance is read (the write lock is held) for the log, then zeroed. When the soft row is already gone (a simultaneous merge won), it raises `SoftAccountGone`; `POST /twitch/merge/confirm` rolls back and answers 404 "That Twitch collection is gone; refresh the page" |
+| Twitch starter bonus (issue #187) | `twitch_oauth.py` `connect_account` | `INSERT … ON CONFLICT DO NOTHING` into `twitch_starter_grants` (unique `twitch_id_hash` and one `connect` row per user) (`soft_accounts.record_starter_grant`), then `credit_tokens` only when that inserted the row. Skipped when the account already received a Twitch starter. Two simultaneous callbacks credit once |
+| Twitch starter backfill | `migrate.py` `_m038_twitch_starter_grants_backfill` | Per account, the same `ON CONFLICT DO NOTHING` insert, then `UPDATE users SET tokens = COALESCE(tokens, 0) + :amt WHERE id = :uid` only when it inserted the row; one transaction |
+| Merge reverse | `soft_accounts.py` `reverse_merge` | After the new soft account's insert holds the write lock: read the balance, `taken = min(balance, tokens_moved)`, `UPDATE … SET tokens = COALESCE(tokens, 0) - :taken + :back`, where `:back` is the Twitch starter bonus the merge took from the website balance (issue #187, `starter_from_website` in the snapshot). The shortfall is reported as before |
 
 ## Promo use cap
 
@@ -104,6 +106,7 @@ Errors still show through `setStatus` / `textContent`. The Twitch panel's button
 | Duplicate active player | Partial unique index `ux_cards_owner_player_active` |
 | Token credits | `credit_tokens` / relative bulk `UPDATE` |
 | Event claim | Unique `(event_id, user_id)` + `INSERT … ON CONFLICT DO NOTHING`, credit only on insert |
+| Twitch starter bonus | Unique `twitch_id_hash`, partial unique index `ux_twitch_starter_grants_connect_user` + `INSERT … ON CONFLICT DO NOTHING`, credit only on insert (also in migration 038, with a relative `UPDATE`) |
 | Player removal refund | Conditional `UPDATE players … WHERE is_active = 1` |
 | Soft-account merge | Relative updates; abort when the soft row is gone |
 | Promo redemption | Unique `(code_id, user_id)`; cap via conditional `INSERT … SELECT … WHERE` |

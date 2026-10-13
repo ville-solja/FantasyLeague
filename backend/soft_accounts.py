@@ -13,6 +13,8 @@ that `reverse_merge` uses.
 
 Every function here leaves committing to the caller except where noted.
 """
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -61,11 +63,63 @@ def find_by_opaque_id(db, opaque_id: str) -> User | None:
     return db.query(User).filter(User.twitch_user_id == opaque_id).first()
 
 
+_STARTER_GRANT_SQL = text(
+    "INSERT INTO twitch_starter_grants (twitch_id_hash, user_id, source, amount, granted_at) "
+    "VALUES (:h, :uid, :source, :amount, :now) ON CONFLICT DO NOTHING")
+
+# Same fallback as main.py uses for the session key in local dev.
+_DEV_SECRET_KEY = "dev-secret-change-me"
+
+
+def starter_grant_hash(twitch_id) -> str:
+    """HMAC-SHA256 (hex) of a Twitch user id, keyed with a key derived from SECRET_KEY:
+    what twitch_starter_grants keeps instead of the id (issue #187). Rotating
+    SECRET_KEY changes every hash, so the once-per-Twitch-account check starts over."""
+    secret = (os.getenv("SECRET_KEY") or _DEV_SECRET_KEY).encode("utf-8")
+    key = hmac.new(secret, b"kana-cards/twitch-starter-grant/v1", hashlib.sha256).digest()
+    return hmac.new(key, str(twitch_id).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def record_starter_grant(db, twitch_id: str, user_id: int | None, source: str,
+                         amount: int | None = None) -> bool:
+    """Record that this Twitch account has had its starter tokens (issue #187). True
+    when this call added the row, False when it already had one, or (for "connect")
+    when this website account already has a "connect" row: the unique twitch_id_hash
+    and the partial unique index ux_twitch_starter_grants_connect_user decide, also
+    between simultaneous requests (ON CONFLICT DO NOTHING without a target covers both)."""
+    result = db.execute(_STARTER_GRANT_SQL, {"h": starter_grant_hash(twitch_id), "uid": user_id,
+                                             "source": source, "amount": amount,
+                                             "now": int(time.time())})
+    return result.rowcount == 1
+
+
+def starter_bonus_received(db, user_id: int) -> int:
+    """Tokens of the Twitch starter bonus this website account received through Connect
+    Twitch (its "connect" grant row; 0 when none). Only "connect" rows count: "join"
+    rows name soft-account ids, which SQLite may hand to a later account."""
+    row = db.execute(text("SELECT COALESCE(SUM(COALESCE(amount, 0)), 0), COUNT(*) "
+                          "FROM twitch_starter_grants WHERE user_id = :uid AND source = 'connect'"),
+                     {"uid": user_id}).first()
+    return int(row[0]) if row and row[1] else 0
+
+
+def has_received_twitch_starter(db, user: User) -> bool:
+    """A website account gets one Twitch starter ever (issue #187): through the Twitch
+    starter bonus of Connect Twitch, or with the soft account it merged."""
+    if user.merged_soft_account_at is not None:
+        return True
+    return db.execute(text("SELECT 1 FROM twitch_starter_grants "
+                           "WHERE user_id = :uid AND source = 'connect' LIMIT 1"),
+                      {"uid": user.id}).first() is not None
+
+
 def record_twitch_account_id(db, user: User, real_id: str | None) -> None:
     """Store the real Twitch user id from the identity share.
 
     Sets the column only when it is empty; never overwrites a different id. Refuses
-    with 409 when another account already holds that id (the column is unique)."""
+    with 409 when another account already holds that id (the column is unique).
+    A soft account records a "join" starter grant for the id (issue #187): its
+    starter came with Join."""
     if not real_id:
         return
     real_id = str(real_id)
@@ -76,6 +130,8 @@ def record_twitch_account_id(db, user: User, real_id: str | None) -> None:
     if holder:
         raise HTTPException(status_code=409, detail="twitch_identity_in_use")
     user.twitch_account_id = real_id
+    if user.account_type == SOFT and user.id is not None:
+        record_starter_grant(db, real_id, user.id, "join")
 
 
 def get_or_create_soft_account(db, opaque_id: str, real_id: str | None) -> tuple[User, bool]:
@@ -113,6 +169,8 @@ def get_or_create_soft_account(db, opaque_id: str, real_id: str | None) -> tuple
         if existing is None:
             raise
         return existing, False
+    if user.twitch_account_id:
+        record_starter_grant(db, user.twitch_account_id, user.id, "join")
     _audit(db, "twitch_soft_account_created", actor_id=user.id,
            actor_username=user.display_name, detail=f"user_id={user.id}")
     db.commit()
@@ -191,27 +249,56 @@ class SoftAccountGone(Exception):
     deletion won). Nothing was moved; the caller rolls back."""
 
 
-def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
+def merge_token_split(soft_tokens: int, website_tokens: int, deduct: int) -> tuple[int, int, int]:
+    """Issue #187: (tokens moved to the website account, starter taken from the soft
+    balance, starter taken from the website balance). The Twitch starter bonus the
+    website account already received (`deduct`) is taken from the soft account's tokens
+    first, the rest from the website account's balance, never below 0."""
+    soft_tokens, website_tokens, deduct = max(0, soft_tokens), max(0, website_tokens), max(0, deduct)
+    from_soft = min(soft_tokens, deduct)
+    from_website = min(website_tokens, deduct - from_soft)
+    return soft_tokens - from_soft, from_soft, from_website
+
+
+def merge_soft_into(db, soft: User, full: User, now: int | None = None,
+                    expect_pending: bool = False) -> dict:
     """Move a soft account's cards (to the bench) and tokens into a website account,
     log the merge for 30 days, then delete the soft account with every row it owns
     (delete_soft_account). The website account takes over the soft account's opaque
-    id so the panel recognises it. Flushes; the caller commits once (or rolls back)."""
+    id so the panel recognises it. Flushes; the caller commits once (or rolls back).
+    expect_pending=True (merge_confirm) re-checks under the write lock that the website
+    account still waits for this soft account and has not merged; SoftAccountGone if not."""
     if soft.account_type != SOFT or full.account_type == SOFT:
         raise ValueError("merge_soft_into needs a soft account and a website account")
     now = int(now if now is not None else time.time())
     soft_id = soft.id
     # Issue #185: move the balance with relative updates, never read-then-write both
-    # rows. The first UPDATE takes SQLite's write lock for this transaction, so the
-    # soft balance read next is the one it added and no spend can land in between.
-    # A soft row already gone (a simultaneous merge deleted it) adds 0 and aborts below.
-    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) + COALESCE("
-                    "(SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft), 0) WHERE id = :full"),
-               {"soft": soft_id, "full": full.id})
+    # rows. This first UPDATE takes SQLite's write lock for the transaction, so
+    # everything read next can't change before the relative UPDATE below.
+    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) WHERE id = :full"),
+               {"full": full.id})
+    if expect_pending:
+        # POST /twitch/merge/confirm checked the pending merge before the lock; check
+        # again under it, so a simultaneous merge or disconnect wins cleanly.
+        state = db.execute(text("SELECT pending_merge_user_id, merged_soft_account_at "
+                                "FROM users WHERE id = :full"), {"full": full.id}).first()
+        if state is None or state[0] != soft_id or state[1] is not None:
+            raise SoftAccountGone("The pending merge changed in another request")
+    # Issue #187: a website account that already received the Twitch starter bonus on
+    # connect doesn't keep the soft account's starter too (read under the lock).
+    deduct = starter_bonus_received(db, full.id)
     row = db.execute(text("SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft"),
                      {"soft": soft_id}).first()
     if row is None:
+        # A simultaneous merge or deletion won; nothing was changed.
         raise SoftAccountGone("The soft account was merged or deleted by another request")
-    tokens = int(row[0])
+    soft_tokens = int(row[0])
+    full_tokens = int(db.execute(text("SELECT COALESCE(tokens, 0) FROM users WHERE id = :full"),
+                                 {"full": full.id}).scalar() or 0)
+    tokens, from_soft, from_website = merge_token_split(soft_tokens, full_tokens, deduct)
+    starter_deducted = from_soft + from_website
+    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) + :delta WHERE id = :full"),
+               {"delta": tokens - from_website, "full": full.id})
     db.execute(text("UPDATE users SET tokens = 0 WHERE id = :soft"), {"soft": soft_id})
     db.expire(full, ["tokens"])
     db.expire(soft, ["tokens"])
@@ -227,7 +314,10 @@ def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
         "twitch_account_id": soft.twitch_account_id or full.twitch_account_id,
         "created_at": soft.created_at,
         "last_seen_at": soft.last_seen_at,
-        "tokens": tokens,
+        "tokens": soft_tokens,
+        # Issue #187: Twitch starter bonus taken back from the website account's own
+        # balance (the soft starter was already spent); reverse_merge returns it.
+        "starter_from_website": from_website,
     }
     log = TwitchMergeLog(full_user_id=full.id, merged_at=now, soft_snapshot=json.dumps(snapshot),
                          card_ids=json.dumps(card_ids), tokens_moved=tokens,
@@ -259,9 +349,11 @@ def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
     db.flush()
     _audit(db, "twitch_account_merged", actor_id=full.id, actor_username=full.display_name,
            detail=(f"full_user_id={full.id} soft_user_id={soft_id} cards={len(card_ids)} "
-                   f"tokens={tokens} roster_entries={len(roster_snapshot)} log_id={log.id}"))
+                   f"tokens={tokens} starter_deducted={starter_deducted} from_website={from_website} "
+                   f"roster_entries={len(roster_snapshot)} log_id={log.id}"))
     db.flush()
-    return {"cards": len(card_ids), "tokens": tokens, "log_id": log.id}
+    return {"cards": len(card_ids), "tokens": tokens, "starter_deducted": starter_deducted,
+            "from_website": from_website, "log_id": log.id}
 
 
 class MergeReversalError(Exception):
@@ -311,8 +403,11 @@ def reverse_merge(db, log: TwitchMergeLog, actor: dict | None = None,
     real_id = snapshot.get("twitch_account_id")
     if real_id and find_by_twitch_account_id(db, real_id) is not None:
         real_id = None
+    # Issue #187: the soft account gets back its whole balance, including a starter
+    # that stayed behind at the merge (snapshot tokens - tokens_moved).
+    soft_tokens = max(tokens_moved, int(snapshot.get("tokens") or 0))
     soft = User(username=None, email=None, password_hash=None, is_admin=False, is_tester=False,
-                tokens=tokens_moved, created_at=snapshot.get("created_at") or now,
+                tokens=soft_tokens, created_at=snapshot.get("created_at") or now,
                 last_seen_at=snapshot.get("last_seen_at") or now,
                 twitch_user_id=opaque_id, twitch_account_id=real_id, account_type=SOFT)
     db.add(soft)
@@ -327,12 +422,14 @@ def reverse_merge(db, log: TwitchMergeLog, actor: dict | None = None,
     returned_ids = {c.id for c in cards}
 
     # Relative update (issue #185). The soft-account INSERT above holds SQLite's write
-    # lock, so the balance read here can't change before the UPDATE.
+    # lock, so the balance read here can't change before the UPDATE. Issue #187: the
+    # starter the merge took from the website account's own balance is given back.
+    from_website = int(snapshot.get("starter_from_website") or 0)
     balance = int(db.execute(text("SELECT COALESCE(tokens, 0) FROM users WHERE id = :uid"),
                              {"uid": full.id}).scalar() or 0)
     taken = min(balance, tokens_moved)
-    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) - :taken WHERE id = :uid"),
-               {"taken": taken, "uid": full.id})
+    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) - :taken + :back WHERE id = :uid"),
+               {"taken": taken, "back": from_website, "uid": full.id})
     db.expire(full, ["tokens"])
     shortfall = tokens_moved - taken
 
@@ -361,10 +458,12 @@ def reverse_merge(db, log: TwitchMergeLog, actor: dict | None = None,
     _audit(db, "twitch_merge_reversed", actor_id=actor_id, actor_username=actor_name,
            detail=(f"log_id={log.id} full_user_id={full.id} soft_user_id={soft.id} "
                    f"cards={len(returned_ids)} tokens={tokens_moved} token_shortfall={shortfall} "
+                   f"starter_restored={soft_tokens - tokens_moved} from_website={from_website} "
                    f"roster_entries={len(restored)}"))
     db.flush()
     return {"log_id": log.id, "soft_user_id": soft.id, "cards_returned": len(returned_ids),
             "tokens_returned": tokens_moved, "token_shortfall": shortfall,
+            "starter_restored": soft_tokens - tokens_moved, "from_website_restored": from_website,
             "roster_entries_restored": len(restored)}
 
 
