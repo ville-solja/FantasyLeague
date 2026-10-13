@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-13 — ship — agent-config
+**Problem:** A pull request stacked on another feature branch (`--base Extension-followup`) gets no CI or CodeQL at all: `unit-tests.yml` and `ui-tests.yml` run only for `pull_request` into `main`, so `gh pr checks` reports "no checks".
+**Solution:** Open stacked PRs only to keep the diff readable, and say in the report that CI starts once the PR is retargeted to `main` (after the base PR merges: `gh pr edit <P> --base main`); then run `/ship pr` again to watch checks and alerts. Retarget before merging: a stacked PR merged after its base PR has already merged lands on the old base branch, not `main` (PR #196 → `Extension-followup`, 49 s after #192 merged), and `Closes #N` never fires; recover with a new PR from that branch to `main`.
+
 ### 2026-10-13 — developer — testing
 **Problem:** For #187, the threaded "two connect callbacks grant once" test also passed with a naive query-then-insert grant: `connect_account` sets `user.twitch_account_id` first, and the grant query autoflushes that UPDATE, which takes SQLite's write lock, so the callbacks were already serialised. Separately, a data migration that fills a new `create_all` table can't assume the table exists: `test_migrate`'s legacy engine runs `run_migrations` before `create_all`.
 **Solution:** Keep `INSERT … ON CONFLICT DO NOTHING` (it stays correct without that lock) but don't claim the race test proves it; say so in the report. In the migration, create the table first with `Model.__table__.create(conn, checkfirst=True)` and guard on the columns it reads.
