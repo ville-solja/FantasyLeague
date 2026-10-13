@@ -344,7 +344,9 @@ class TestSubmissionGuideMatchesBuild:
         assert "Configure method: Extension Configuration Service" in settings
         assert "Developer Writable Channel Segment Version left empty" in settings
         ebs = next(i for i in items if "set-ebs-url.sh" in i)
-        assert "ebs_url" in ebs and "https://kana-cards.com" in ebs
+        assert "ebs_url" in ebs
+        ebs_urls = re.findall(r"https?://[^\s`]+", ebs)
+        assert ebs_urls and all(u == "https://kana-cards.com" for u in ebs_urls), ebs_urls
         drop_age = next(i for i in items if "TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS=0" in i)
         after = next(i for i in items if i.startswith("After the review"))
         assert items.index(drop_age) < items.index("Submit") < items.index(after)
