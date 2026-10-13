@@ -16,6 +16,8 @@ let _tokenName        = "Tokens";
 let _tokenBalance     = null;
 let _teamBoosterCost  = 3;
 let _tourAutostart    = false;
+// Issue #187: the one-time Twitch starter bonus of Connect Twitch, from GET /config.
+let _twitchConnectBonusTokens = 0;
 let _weeks         = [];
 /** Increments on modifier reroll so every PNG URL is unique (Date.now() can collide in the same ms). */
 let _cardImageBustSeq = 0;
@@ -37,6 +39,7 @@ async function loadConfig() {
       _tokenName = cfg.token_name || "Tokens";
       if (cfg.team_booster_cost != null) _teamBoosterCost = cfg.team_booster_cost;
       _tourAutostart = cfg.tour_autostart === true;
+      if (Number.isInteger(cfg.twitch_connect_bonus_tokens)) _twitchConnectBonusTokens = cfg.twitch_connect_bonus_tokens;
       _loginMethod = cfg.login_method || "password";
       if (typeof applyLoginMode === "function") applyLoginMode();
       const htpCostEl = document.getElementById("htpTeamDrawCost");

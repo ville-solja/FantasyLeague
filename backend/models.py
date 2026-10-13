@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import text
 from database import Base
 from scoring import SCORING_STATS
 
@@ -341,6 +342,27 @@ class TwitchMergeLog(Base):
     tokens_moved   = Column(Integer, nullable=False, default=0)
     roster_entries = Column(Text, nullable=False)   # JSON list of the deleted locked-week roster rows
     reversed_at    = Column(Integer, nullable=True)
+
+
+class TwitchStarterGrant(Base):
+    """The Twitch starter tokens, once per Twitch account (issue #187): "join" when a soft
+    account got the Twitch user id (its starter came with Join), "connect" when Connect
+    Twitch paid the Twitch starter bonus. Rows outlive disconnects, merges, reversals
+    and soft-account deletion, so a Twitch account never earns the starter twice. Only a
+    keyed one-way hash of the Twitch user id is kept (soft_accounts.starter_grant_hash),
+    never the id. user_id has no foreign key (the soft account it names may be gone)."""
+    __tablename__ = "twitch_starter_grants"
+    # One Twitch starter bonus per website account, also between simultaneous connects.
+    __table_args__ = (Index("ux_twitch_starter_grants_connect_user", "user_id", unique=True,
+                            sqlite_where=text("source = 'connect'"),
+                            postgresql_where=text("source = 'connect'")),)
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    twitch_id_hash = Column(String, nullable=False, unique=True)  # HMAC-SHA256 hex
+    user_id        = Column(Integer, nullable=True)
+    source         = Column(String, nullable=False)   # "join" | "connect"
+    amount         = Column(Integer, nullable=True)   # tokens credited ("connect" rows only)
+    granted_at     = Column(Integer, nullable=False)  # Unix timestamp
 
 
 class TwitchChannelApproval(Base):

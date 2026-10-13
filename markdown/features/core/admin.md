@@ -319,8 +319,9 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `twitch_account_unlinked` | A website account — connected with Twitch sign-in or code-linked before #160 — that pressed Leave in the panel; only `twitch_user_id` was cleared |
 | `twitch_connected` | A player connected Twitch on Profile with Twitch sign-in (issue #160; `detail` has `user_id=` and, when a Twitch collection is waiting, `pending_merge_user_id=`; no Twitch ids) |
 | `twitch_disconnected` | A player disconnected Twitch on Profile (`detail` has `user_id=`) |
-| `twitch_account_merged` | A soft account's cards and tokens were merged into a website account (`detail` has `full_user_id=`, `soft_user_id=`, `cards=`, `tokens=`, `roster_entries=`, `log_id=`) |
-| `twitch_merge_reversed` | An admin reversed a merge (`detail` has `log_id=`, `full_user_id=`, the new `soft_user_id=`, `cards=`, `tokens=`, `token_shortfall=`, `roster_entries=`) |
+| `twitch_account_merged` | A soft account's cards and tokens were merged into a website account (`detail` has `full_user_id=`, `soft_user_id=`, `cards=`, `tokens=`, `starter_deducted=` (issue #187: Twitch starter bonus taken back because the account already received it) and `from_website=` (the part of it taken from the website account's own balance), `roster_entries=`, `log_id=`) |
+| `twitch_starter_bonus` | The Twitch starter bonus was credited on Connect Twitch (issue #187; `detail` has `user_id=` and `amount=`, no Twitch id) or by migration 038 (actor `system`, `detail` also has `migration=038`) |
+| `twitch_merge_reversed` | An admin reversed a merge (`detail` has `log_id=`, `full_user_id=`, the new `soft_user_id=`, `cards=`, `tokens=`, `token_shortfall=`, `starter_restored=` and `from_website=` (issue #187: the starter returned to the soft account and to the website account), `roster_entries=`) |
 | `twitch_panel_recognised` | The Twitch panel recognised a connected account by the JWT's `user_id` and attached the viewer's opaque id to it (`detail` has `user_id=`) |
 | `admin_notification_created` | Admin created a broadcast notification |
 | `admin_notification_deleted` | Admin deleted a notification |

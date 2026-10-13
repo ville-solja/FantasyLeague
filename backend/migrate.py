@@ -657,6 +657,86 @@ def _m037_cards_active_player_unique(conn):
                 sum(len(v) for v in benched.values()), len(benched))
 
 
+_GRANT_INSERT_SQL = text(
+    "INSERT INTO twitch_starter_grants (twitch_id_hash, user_id, source, amount, granted_at) "
+    "VALUES (:h, :uid, :source, :amount, :now) ON CONFLICT DO NOTHING")
+
+
+def _m038_twitch_starter_grants_backfill(conn):
+    """Issue #187: data only. One Twitch starter per Twitch account and per website
+    account. First "join" rows for the Twitch accounts whose starter came with the
+    panel's Join: soft accounts holding an id, website accounts holding one that merged
+    a soft account or have one waiting to be merged, and the ids in the merge undo log.
+    Then each other website account holding an id (not merged, nothing waiting, no
+    "connect" row yet) gets a "connect" row and TWITCH_CONNECT_BONUS_TOKENS (0 = none
+    credited, no connect rows), with one twitch_starter_bonus audit entry each. Rows
+    keep only soft_accounts.starter_grant_hash of the id. The grant rows make a rerun
+    credit nothing; the whole backfill is one transaction."""
+    import json
+    import time
+    from models import TwitchStarterGrant
+    from soft_accounts import starter_grant_hash
+    from twitch_oauth import connect_bonus_tokens
+
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    needed = {"account_type", "twitch_account_id", "merged_soft_account_at", "pending_merge_user_id"}
+    if not needed <= cols:
+        return
+    # create_all runs before the migrations at start-up; a bare database (tests) may
+    # not have the table yet.
+    TwitchStarterGrant.__table__.create(conn, checkfirst=True)
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_twitch_starter_grants_connect_user "
+                      "ON twitch_starter_grants (user_id) WHERE source = 'connect'"))
+    now = int(time.time())
+
+    def _insert(twitch_id, uid, source, amount=None) -> bool:
+        return conn.execute(_GRANT_INSERT_SQL, {"h": starter_grant_hash(twitch_id), "uid": uid,
+                                                "source": source, "amount": amount,
+                                                "now": now}).rowcount == 1
+
+    for uid, twitch_id in conn.execute(text(
+            "SELECT id, twitch_account_id FROM users WHERE twitch_account_id IS NOT NULL "
+            "AND (account_type = 'twitch' OR merged_soft_account_at IS NOT NULL "
+            "OR pending_merge_user_id IS NOT NULL) ORDER BY id")).fetchall():
+        _insert(twitch_id, uid, "join")
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+    if "twitch_merge_log" in tables:
+        for full_user_id, snapshot in conn.execute(text(
+                "SELECT full_user_id, soft_snapshot FROM twitch_merge_log ORDER BY id")).fetchall():
+            try:
+                real_id = json.loads(snapshot or "{}").get("twitch_account_id")
+            except (ValueError, AttributeError):
+                real_id = None
+            if real_id:
+                _insert(real_id, full_user_id, "join")
+
+    bonus = connect_bonus_tokens()
+    credited = []
+    if bonus > 0:
+        candidates = conn.execute(text(
+            "SELECT u.id, u.twitch_account_id FROM users u "
+            "WHERE u.twitch_account_id IS NOT NULL AND COALESCE(u.account_type, 'full') != 'twitch' "
+            "AND u.merged_soft_account_at IS NULL AND u.pending_merge_user_id IS NULL "
+            "AND NOT EXISTS (SELECT 1 FROM twitch_starter_grants g "
+            "WHERE g.user_id = u.id AND g.source = 'connect') ORDER BY u.id")).fetchall()
+        for uid, twitch_id in candidates:
+            if not _insert(twitch_id, uid, "connect", bonus):
+                continue  # this Twitch account already had its starter
+            conn.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) + :amt WHERE id = :uid"),
+                         {"amt": bonus, "uid": uid})
+            credited.append(uid)
+        if credited and "audit_logs" in tables:
+            for uid in credited:
+                conn.execute(text(
+                    "INSERT INTO audit_logs (timestamp, actor_id, actor_username, action, detail) "
+                    "VALUES (:ts, NULL, 'system', 'twitch_starter_bonus', :detail)"),
+                    {"ts": now, "detail": f"migration=038 user_id={uid} amount={bonus}"})
+    conn.commit()
+    logger.info("Migration 038: credited the Twitch starter bonus (%d tokens) to %d account(s)",
+                bonus, len(credited))
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -718,6 +798,7 @@ MIGRATIONS = [
     ("035_users_admin_seed_applied_at", _m035_users_admin_seed_applied_at),
     ("036_promo_codes_limits",       _m036_promo_codes_limits),
     ("037_cards_active_player_unique", _m037_cards_active_player_unique),
+    ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
 ]
 
 
