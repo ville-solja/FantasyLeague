@@ -37,6 +37,12 @@ window exists for two concurrent requests to both pass the same stale check.
    Two statements, but both inside one transaction before `db.commit()`, so the pair is atomic
    from any other transaction's point of view.
 
+   **Superseded by #185:** that order still let concurrent swaps onto the same roster card each
+   add a card, because the outgoing card's update was not checked. `_swap_roster_atomic` now
+   benches the outgoing card first (`WHERE is_active = 1`, stopping when no row changed) and only
+   then activates the bench card. See
+   [Atomic Roster and Token Operations](atomic-roster-and-token-operations.md#roster-swap).
+
 `reorder_roster` was not touched — it only assigns `slot_index` within a card's current zone and
 never changes `is_active`, so it cannot cause a limit violation.
 

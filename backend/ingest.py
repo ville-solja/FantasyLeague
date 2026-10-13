@@ -226,6 +226,13 @@ def ingest_league(league_id: int):
         logger.exception("Dotabuff league logo step failed")
 
 
+def _bust_panel_cache() -> None:
+    """New or refreshed stats change the Twitch panel's top performers. Imported
+    here, not at module level, because twitch imports from this module."""
+    from twitch import bust_panel_cache
+    bust_panel_cache()
+
+
 # -----------------------
 # MATCH INGESTION
 # -----------------------
@@ -300,6 +307,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     db.query(LiveMatch).filter(LiveMatch.match_id == match_id).delete()
     record_timing(db, match_id, ingested_at=int(time.time()))
     db.commit()
+    _bust_panel_cache()
 
     if _is_unparsed(data):
         request_parse(match_id)
@@ -476,6 +484,7 @@ def refresh_match_stats(db, match_id: int, weights: dict) -> str:
     db.commit()
 
     _reapply_mvp_bonus(db, match_id)
+    _bust_panel_cache()
     logger.info("Parse retry: refreshed match %d with parsed stats", match_id)
     return "refreshed"
 

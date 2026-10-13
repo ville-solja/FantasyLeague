@@ -155,7 +155,18 @@ def _activate_card_atomic(db, card_id: int, user_id: int, player_id: int, roster
 def _swap_roster_atomic(db, bench_card_id: int, active_card_id: int, user_id: int,
                          bench_player_id: int, slot_index) -> bool:
     """Atomically flip bench_card active and active_card inactive, only if bench_card's
-    player has no other active card. Returns True if the swap happened."""
+    player has no other active card. Returns True if the swap happened; on False the
+    caller must roll back (the active card may already be benched).
+
+    The active card is benched first: the partial unique index
+    ux_cards_owner_player_active (issue #185) checks each statement, so activating a
+    bench card of the same player while the outgoing card is still active would fail."""
+    result = db.execute(text("""
+        UPDATE cards SET is_active = 0, slot_index = NULL
+        WHERE id = :active_card_id AND owner_id = :user_id AND is_active = 1
+    """), {"active_card_id": active_card_id, "user_id": user_id})
+    if result.rowcount == 0:
+        return False
     result = db.execute(text("""
         UPDATE cards
         SET is_active = 1, slot_index = :slot_index
@@ -172,10 +183,4 @@ def _swap_roster_atomic(db, bench_card_id: int, active_card_id: int, user_id: in
     """), {"bench_card_id": bench_card_id, "user_id": user_id,
            "bench_player_id": bench_player_id, "active_card_id": active_card_id,
            "slot_index": slot_index})
-    if result.rowcount == 0:
-        return False
-    db.execute(text("""
-        UPDATE cards SET is_active = 0, slot_index = NULL
-        WHERE id = :active_card_id AND owner_id = :user_id AND is_active = 1
-    """), {"active_card_id": active_card_id, "user_id": user_id})
-    return True
+    return result.rowcount > 0

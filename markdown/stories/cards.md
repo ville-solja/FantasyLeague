@@ -14,7 +14,7 @@ As a user, I want to be able to draw cards using tokens.
 **Acceptance criteria**
 - User can draw a card if they have at least 1 token
 - Card is shown to the user in a reveal modal
-- Card is added to the user's active roster if empty slots exist, otherwise to their bench
+- Card is added to the user's active roster if empty slots exist and no other active card has the same player, otherwise to their bench
 - Rarity and duplicate-avoidance rules are covered by the "Dynamic Card Creation" stories below
 
 ---

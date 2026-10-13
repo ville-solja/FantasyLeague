@@ -47,7 +47,7 @@ from auth import check_reserved, check_username, username_taken
 from database import get_db
 from deps import _audit, require_recent_player_reauth, session_user_or_none
 from models import SteamLoginState, SteamOpenIdNonce, SteamPendingSignup, User
-from rate_limit import limiter
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from seed import seed_admin_steam_ids
 
 logger = logging.getLogger(__name__)
@@ -513,7 +513,8 @@ def unlink(db, current_user: dict) -> dict:
 
 
 @router.post("/profile/steam/unlink", dependencies=[Depends(login_mode.require_steam)])
-def unlink_route(current_user: dict = Depends(require_recent_player_reauth), db=Depends(get_db)):
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def unlink_route(request: Request, current_user: dict = Depends(require_recent_player_reauth), db=Depends(get_db)):
     """Unlink Steam (needs a recent check). The verified player id stays."""
     return unlink(db, current_user)
 

@@ -853,8 +853,13 @@ class TestAdminTwitchStatus:
 
     def test_admin_twitch_status_console_expected_values_use_app_base_url(self, monkeypatch, status_env):
         """console lists URL Fetching Domains, ebs_url and packaged origin checks with expected values from APP_BASE_URL."""
+        # The setup follow-ups added the OAuth redirect URL and image-domain entries,
+        # which don't come from APP_BASE_URL; these are the backend-origin entries.
+        def backend_entries():
+            return [c for c in _status()["console"]
+                    if "OAuth Redirect URL" not in c["label"] and "Image Domains" not in c["label"]]
         monkeypatch.setenv("APP_BASE_URL", "https://league.example:8443/")
-        console = _status()["console"]
+        console = backend_entries()
         labels = " ".join(c["label"] for c in console)
         assert "URL Fetching Domains" in labels and "ebs_url" in labels and "packaged" in labels
         assert len(console) == 3
@@ -862,7 +867,7 @@ class TestAdminTwitchStatus:
             assert any(u == "https://league.example:8443" for u in _urls(c["expected"])), c
         assert not any(c["expected"].endswith("/") for c in console)
         monkeypatch.delenv("APP_BASE_URL")
-        console = _status()["console"]
+        console = backend_entries()
         assert all("APP_BASE_URL" in c["expected"] or "origin" in c["expected"] for c in console)
 
     def test_admin_ui_has_twitch_status_section_above_approved_streamers(self):

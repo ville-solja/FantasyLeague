@@ -13,7 +13,8 @@ existing per-router pattern used for `players`, `auth`, `profile`, `leaderboard`
 
 | Module | Covers |
 |---|---|
-| `backend/routers/admin_users.py` | User list, tester toggle, token grants, promo codes CRUD, `/redeem`, token-grant-events |
+| `backend/routers/admin_users.py` | User list, tester toggle, token grants, promo codes CRUD, `/redeem` |
+| `backend/routers/admin_token_events.py` | Token-grant events CRUD (`/admin/token-grant-events`); moved out of `admin_users.py` in #185 to keep it under 350 lines |
 | `backend/routers/admin_ingest.py` | Manual league ingest trigger, recalculate, schedule endpoints, match-week assignment, Toornament sync, profile enrichment trigger |
 | `backend/routers/admin_weeks.py` | Week CRUD (create/edit/delete, date-only inputs) |
 | `backend/routers/admin_notifications.py` | Admin-configured broadcast notifications CRUD |

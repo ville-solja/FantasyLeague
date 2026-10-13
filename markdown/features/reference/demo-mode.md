@@ -95,11 +95,14 @@ irreversible by design, matching production behaviour. The demo clock can only m
 
 `GET /config` includes `"demo_mode": true` only when the server has `DEMO_MODE=true` set
 (read live from the environment on every request, not cached at startup). The frontend
-(`frontend/app-globals.js` `loadConfig()`) stores this as `window.demoMode`, toggles the
-`#demo-mode-badge` notice, and calls `renderDemoModePanel()` (`frontend/app-admin.js`),
-which injects the Settings-tab Demo Mode panel (clock form + seed-accounts form and results
-table) into `#demoModePanelContainer` only when true — the container is left empty otherwise,
-so the panel markup is entirely absent from the DOM, not just hidden via CSS.
+(`frontend/app-globals.js` `loadConfig()`) stores this as `window.demoMode` and toggles the
+`#demo-mode-badge` notice. `applyAuthState()` (`frontend/app-auth.js`, run after `loadMe()` and
+on every login or logout) calls `renderDemoModePanel()` (`frontend/app-admin-demo.js`), which
+injects the admin-tab Demo Mode panel (clock form + seed-accounts form and results table) into
+`#demoModePanelContainer` and loads `GET /admin/demo/clock` only when demo mode is on and the
+user is an admin (`activeIsAdmin`) — the container is left empty otherwise, so the panel markup
+is absent from the DOM and non-admins make no `/admin/demo/*` request (no 403 noise in the
+console). See `reference/twitch-extension-setup-followups.md`.
 
 ## Demo notice
 

@@ -114,7 +114,9 @@ There is no separate public user-search endpoint; "user search" is the admin use
 - **Retention:** `_week_maintenance_loop` runs `soft_accounts.purge_inactive_soft_accounts` once a day: soft accounts whose `last_seen_at` (or, when never set, `created_at`) is older than `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` are deleted with one audit entry each (`reason=retention`). A soft account with both `last_seen_at` and `created_at` NULL (never written by Join, only possible through direct database edits) is treated as idle and purged too. Website accounts are never purged.
 - **Privacy pages:** `frontend/privacy.html` and `frontend/terms.html` state the retention as "365 days" in static text. If `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` is changed from its default, update both pages to the new value; they are not templated.
 
-## Panel (318 × 500)
+## Panel
+
+318 px wide, up to 500 px tall (the version's Panel Height). The panel takes the iframe's height and each view scrolls within it, with a thin themed scrollbar (#191, [Panel Fits Twitch's Height](panel-fits-twitch-height.md)).
 
 `twitch-extension/panel.html`, `panel.js`, `extension.css`; styles follow `design/colors_and_type.css` (tokens copied in, Big Shoulders Text packaged under `fonts/`).
 - **Header:** brand, token count and a Settings button once joined.
@@ -123,7 +125,7 @@ There is no separate public user-search endpoint; "user search" is the admin use
 - **Join:** "Join Kana Cards" with the consent line "Uses your Twitch login. We store your Twitch id and game progress; leave any time in Settings." It calls `Twitch.ext.actions.requestIdShare()` and then `POST /twitch/join`. Logged-out viewers see "Log in to Twitch to join" instead. The Cards and Roster tabs show the same box until the viewer joins.
 - **Cards:** Draw · 1, Team draw · 3, the card reveal (tinted art with the rarity glow on the art, name, team, rarity, "Added to your roster/bench"), and the collection: count, rarity chips with counts (All, Leg, Epic, Rare, Com) and a five-per-row grid of 48 × 66 art, rarest first.
 - **Team draw:** Back, the explainer line, a two-column list of 44 px team rows (logo or 28 × 28 monogram, name, "N left" or a disabled "Complete"), available teams first, `aria-pressed` selection, and the pinned "Draw from {team} · 3" button, disabled with "You need 3 tokens for a team draw" under 3 tokens.
-- **Roster:** week label, lock countdown, week points, five slots ("+ Add a card" or "Change"), bench count. A slot opens its bench picker: "Pick a card for slot N" / "Replace in slot N", "In this slot: {name}" with **Bench it**, rarity chips with counts, sort by Points (season) or Rarity, one row per bench card. Placing returns to the roster with a confirmation line ("Savu in, Pikkis to the bench."). Locked: "Roster locked for this week", no buttons. No drag-and-drop.
+- **Roster:** week label, lock countdown, week points, five slots ("+ Add a card" or "Change"), bench count. A slot opens its bench picker: "Pick a card for slot N" / "Replace in slot N", rarity chips with counts, sort by Points (season) or Rarity, one row per bench card. Placing returns to the roster with a confirmation line ("Savu in, Pikkis to the bench."). Locked: "Roster locked for this week", no buttons. No drag-and-drop. For a filled slot, "In this slot: {name}" with **Bench it** is a footer pinned at the bottom of the picker (#191).
 - **Settings:** "Share your Twitch identity" (hidden once shared), **Leave Kana Cards**, and the privacy note.
 - All data is escaped with `_escHtml`; there is no emoji, no password field and no website text.
 

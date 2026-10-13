@@ -50,7 +50,7 @@ the plain function with the already-resolved `db`/`current_user` dependencies.
 - `POST /roster/reorder`
 
 Each enforces `RATE_LIMIT_ROSTER_MUTATION` per user, returning the same
-`{"detail": "Rate limit exceeded: ..."}` shape established by issue #121's rate limiting.
+shared 429 response, `{"detail": "Too many requests. Wait a moment and try again."}` (with `Retry-After`; the text changed in #184).
 
 ## Frontend guard
 

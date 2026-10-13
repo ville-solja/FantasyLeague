@@ -179,7 +179,7 @@ def _seed_bench_cards(main_module, user_id, count, start_player_id=9000):
 def test_activate_card_exceeding_rate_limit_returns_429_with_detail_shape(client):
     """POST /roster/{card_id}/activate enforces RATE_LIMIT_ROSTER_MUTATION
     (default 30/minute); exceeding it returns HTTP 429 with the established
-    {"detail": "Rate limit exceeded: ..."} shape from issue #121, not a
+    {"detail": ...} shape from issue #121 (message text from issue #184), not a
     new/different error format."""
     _register_and_login(client, "activate_burst")
     # A nonexistent card_id still passes auth and reaches the decorated route
@@ -193,14 +193,14 @@ def test_activate_card_exceeding_rate_limit_returns_429_with_detail_shape(client
     assert blocked.status_code == 429
     body = blocked.json()
     assert "detail" in body
-    assert body["detail"].startswith("Rate limit exceeded")
+    assert body["detail"] == "Too many requests. Wait a moment and try again."
     assert "error" not in body
 
 
 def test_deactivate_card_exceeding_rate_limit_returns_429_with_detail_shape(client):
     """POST /roster/{card_id}/deactivate enforces RATE_LIMIT_ROSTER_MUTATION
     (default 30/minute); exceeding it returns HTTP 429 with the established
-    {"detail": "Rate limit exceeded: ..."} shape."""
+    {"detail": "Too many requests. Wait a moment and try again."} shape (issue #184)."""
     _register_and_login(client, "deactivate_burst")
     for _ in range(30):
         resp = client.post("/roster/999999/deactivate")
@@ -210,14 +210,14 @@ def test_deactivate_card_exceeding_rate_limit_returns_429_with_detail_shape(clie
     assert blocked.status_code == 429
     body = blocked.json()
     assert "detail" in body
-    assert body["detail"].startswith("Rate limit exceeded")
+    assert body["detail"] == "Too many requests. Wait a moment and try again."
     assert "error" not in body
 
 
 def test_swap_roster_exceeding_rate_limit_returns_429_with_detail_shape(client):
     """POST /roster/swap enforces RATE_LIMIT_ROSTER_MUTATION (default
     30/minute); exceeding it returns HTTP 429 with the established
-    {"detail": "Rate limit exceeded: ..."} shape."""
+    {"detail": "Too many requests. Wait a moment and try again."} shape (issue #184)."""
     _register_and_login(client, "swap_burst")
     payload = {"bench_card_id": 999998, "active_card_id": 999999, "slot_index": 0}
     for _ in range(30):
@@ -228,14 +228,14 @@ def test_swap_roster_exceeding_rate_limit_returns_429_with_detail_shape(client):
     assert blocked.status_code == 429
     body = blocked.json()
     assert "detail" in body
-    assert body["detail"].startswith("Rate limit exceeded")
+    assert body["detail"] == "Too many requests. Wait a moment and try again."
     assert "error" not in body
 
 
 def test_reorder_roster_exceeding_rate_limit_returns_429_with_detail_shape(client):
     """POST /roster/reorder enforces RATE_LIMIT_ROSTER_MUTATION (default
     30/minute); exceeding it returns HTTP 429 with the established
-    {"detail": "Rate limit exceeded: ..."} shape."""
+    {"detail": "Too many requests. Wait a moment and try again."} shape (issue #184)."""
     _register_and_login(client, "reorder_burst")
     # reorder_roster silently skips card_ids it can't find/own and still
     # returns 200 — so use a nonexistent id and rely on the hit count alone.
@@ -248,7 +248,7 @@ def test_reorder_roster_exceeding_rate_limit_returns_429_with_detail_shape(clien
     assert blocked.status_code == 429
     body = blocked.json()
     assert "detail" in body
-    assert body["detail"].startswith("Rate limit exceeded")
+    assert body["detail"] == "Too many requests. Wait a moment and try again."
     assert "error" not in body
 
 

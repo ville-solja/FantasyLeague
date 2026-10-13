@@ -59,7 +59,6 @@ async function loadConfig() {
       window.demoMode = cfg.demo_mode === true;
       const demoBadge = document.getElementById("demo-mode-badge");
       if (demoBadge) demoBadge.style.display = window.demoMode ? "" : "none";
-      if (typeof renderDemoModePanel === "function") renderDemoModePanel();
     }
   } catch (_) { /* non-fatal */ }
 }
@@ -159,6 +158,23 @@ function switchTab(name) {
   if (name === "schedule")      loadSchedule();
   if (name === "howtoplay")     loadHowToPlay();
   if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); }
+}
+
+/**
+ * Issue #185: run an action's request with its button disabled until the answer is
+ * handled, so a double click sends one request. A click on a disabled button does
+ * nothing. Re-enables in finally (also on errors); a render that should leave the
+ * button disabled (no tokens) runs after this returns. Usability only: the server
+ * enforces every limit on its own. With no button, fn just runs.
+ */
+async function withBusy(btn, fn) {
+  if (btn && btn.disabled) return undefined;
+  if (btn) btn.disabled = true;
+  try {
+    return await fn();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function setStatus(id, msg, ok = true) {

@@ -64,6 +64,8 @@ Admin only (`require_admin`; no password re-check, as it is read-only and holds 
 | `local_dev` | `TWITCH_LOCAL_DEV` off | On | On with `ENV=production` |
 | `mvp_channels` | Counts from `TWITCH_MVP_CHANNEL_IDS`, portal-approved and waiting channels; ok when any channel may set MVPs, or outside production | Production, none approved, some waiting | Production and all three zero |
 | `connect_twitch` | The three `TWITCH_OAUTH_*` set and `cryptography` importable (`importlib.util.find_spec`) | Not all three set (Connect Twitch off) | All set, `cryptography` missing |
+
+The `connect_twitch` detail (ok and partly-set warning) also says where the client secret comes from: the **Twitch API Client Secret** of the application or extension whose Client ID is `TWITCH_OAUTH_CLIENT_ID`, never the Extension Secret.
 | `app_base_url` | `APP_BASE_URL` set | Empty | — |
 | `steam_api_key` | `STEAM_API_KEY` set | Empty: live games are not listed before their stats arrive | — |
 
@@ -75,10 +77,14 @@ Admin only (`require_admin`; no password re-check, as it is read-only and holds 
 
 Anyone can send a junk token or a made-up `Origin`, so the counters and hosts are hints to read alongside `checks`, not proof of a fault. A token with role `external` (refused with 403) counts neither as accepted nor as a failure; `not_configured` also counts any unexpected decode error. The UI shows `not_configured` as "server not configured".
 
-`console`: the checks only the Twitch developer console can show, with `expected` built from `APP_BASE_URL`:
+`console`: the checks only the Twitch developer console can show. The first three take `expected` from `APP_BASE_URL`:
 - URL Fetching Domains contains the backend origin;
 - the global configuration's `ebs_url` is the backend URL;
-- the installed version was packaged with this backend's origin (`package.sh <version> --ebs-origin <origin>`).
+- the installed version was packaged with this backend's origin (`package.sh <version> --ebs-origin <origin>`);
+- "Extension Settings › Twitch API Client Configuration › OAuth Redirect URL has this exact entry (click Add, then Save Changes)", `expected` = `TWITCH_OAUTH_REDIRECT_URI`; listed only when all three `TWITCH_OAUTH_*` are set;
+- "Version › Capabilities › Allowlist for Image Domains contains the team logo hosts", `expected` = the `https://` origins of `logo_hosts.logo_hosts()` (`LOGO_HOST_ALLOWLIST` or the default Steam CDN hosts), sorted and comma-separated.
+
+No entry holds a secret, its length or a token.
 
 ## Admin UI
 
@@ -87,4 +93,11 @@ Admin › Users › **Twitch status**, above Approved streamers. See `markdown/u
 ## Troubleshooting
 
 The reason code table for operators is in `markdown/features/core/twitch-extension.md` (Panel reason codes).
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Connect Twitch lands on the leaderboard (older builds) or Profile says "this site's Twitch redirect URL isn't registered" | Twitch answered `redirect_mismatch`: `TWITCH_OAUTH_REDIRECT_URI` is not in the client's OAuth Redirect URL list, usually because it was typed without clicking **Add** or saved without **Save Changes** | Add the value the console checklist shows, click **Add**, then **Save Changes** |
+| Team logos in the panel show initials | The version's Allowlist for Image Domains is empty or lacks the logo hosts | Add the hosts the console checklist shows (Local Test only) |
+| Panel shows `E-TOKEN` | The Twitch API Client Secret is in `TWITCH_EXTENSION_SECRET` | Use the Extension Secrets key there; the API Client Secret belongs in `TWITCH_OAUTH_CLIENT_SECRET` |
+| Panel shows `E-REACH` | `TWITCH_EXTENSION_CLIENT_ID` unset, so CORS refuses the extension origin | Set it to the extension's Client ID |
 

@@ -365,8 +365,10 @@ class TestAdminReauthAndPromoCodes:
         ("/users/{user_id}/toggle-tester", "POST"),
     ])
     def test_route_requires_recent_reauth(self, path, method):
-        from routers import admin_notifications, admin_users
-        module = admin_notifications if "notifications" in path else admin_users
+        from routers import admin_notifications, admin_token_events, admin_users
+        # Token-grant events moved to routers/admin_token_events.py in #185.
+        module = (admin_notifications if "notifications" in path
+                  else admin_token_events if "token-grant-events" in path else admin_users)
         assert _needs_reauth(_route(module.router, path, method))
 
     @pytest.mark.parametrize("fn", ["grantTokens", "createCode", "_confirmDeleteCode", "toggleTester"])

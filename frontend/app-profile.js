@@ -268,6 +268,31 @@ function handleTwitchReturn() {
   return true;
 }
 
+// When Twitch refuses the sign-in before reaching /auth/twitch/callback (most often
+// redirect_mismatch: the callback URL is not registered on the client), it sends the
+// browser to a registered redirect URL with ?error=&error_description=&state=. Only
+// the error code, checked against [a-z_], ever reaches the page; error_description
+// is never shown.
+const _TWITCH_ERROR_MESSAGES = {
+  redirect_mismatch: "Twitch sign-in failed: this site's Twitch redirect URL isn't registered with Twitch. Tell the league admins.",
+  access_denied:     _TWITCH_RETURN_MESSAGES.cancelled[0],
+};
+
+function handleTwitchErrorReturn() {
+  const q = new URLSearchParams(window.location.search);
+  if (!q.has("error") || !q.has("state")) return false;
+  const raw = q.get("error") || "";
+  const code = /^[a-z_]{1,64}$/.test(raw) ? raw : "unknown";
+  ["error", "error_description", "error_uri", "state"].forEach(k => q.delete(k));
+  const rest = q.toString();
+  history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : "") + window.location.hash);
+  if (!activeUserId) return true;
+  switchTab("profile");
+  setStatus("twitchStatus", (Object.hasOwn(_TWITCH_ERROR_MESSAGES, code) && _TWITCH_ERROR_MESSAGES[code]) ||
+    `Twitch sign-in did not complete. Nothing was changed. Try again. (${code})`, false);
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Steam link (issue #150). Link navigates to GET /auth/steam/start?purpose=link,
 // which needs a recent identity check (back here with ?steam=reauth_required

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 import card_points
@@ -19,13 +20,16 @@ from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from logo_hosts import safe_logo_url
 from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
-from rate_limit import limiter, key_by_user_or_ip
+from rate_limit import (limiter, key_by_user_or_ip, RATE_LIMIT_CARD_ACTION,
+                        RATE_LIMIT_CARD_ACTION_IP)
 from scoring import display_points
 from weeks import get_next_editable_week, substitution_delay_hours
 
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
+DUPLICATE_ACTIVE_DETAIL = "A card for this player is already active"
 
 # Per-user limit on roster activate/deactivate/swap/reorder (issue #124). Keyed by
 # session user_id (falls back to source IP if somehow unauthenticated — see
@@ -43,6 +47,12 @@ RATE_LIMIT_ROSTER_MUTATION = os.getenv("RATE_LIMIT_ROSTER_MUTATION", "30/minute"
 
 # Per-IP limit on the public, render-per-call card image endpoint (issue #135).
 RATE_LIMIT_CARD_IMAGE = os.getenv("RATE_LIMIT_CARD_IMAGE", "60/minute")
+
+# Issue #184: draws, booster draws and rerolls share one per-user budget and one
+# per-IP budget (shared scopes), so mixing the three actions doesn't multiply the rate.
+_card_action_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION, scope="card_action",
+                                          key_func=key_by_user_or_ip)
+_card_action_ip_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION_IP, scope="card_action_ip")
 
 
 class ReorderRequest(BaseModel):
@@ -247,7 +257,16 @@ def get_deck(request: Request, db=Depends(get_db)):
     return {r: sum(1 for _, rr in available if rr == r) for r in rarities}
 
 
-@router.post("/draw")
+def _activate_new_card(db, card: Card, user_id: int) -> bool:
+    """Put a freshly drawn (flushed, benched) card into the active roster when there is
+    room and no other active card has its player (issue #185). The check and the write
+    are one UPDATE (_activate_card_atomic), so concurrent draws or a draw racing an
+    activation can't overfill the roster. Returns what was stored."""
+    activated = _activate_card_atomic(db, card.id, user_id, card.player_id, ROSTER_LIMIT)
+    db.refresh(card)
+    return activated
+
+
 def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -272,12 +291,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     )
     db.add(card)
     db.flush()
-
-    active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
-    ).count()
-    is_active = active_count < ROSTER_LIMIT
-    card.is_active = is_active
+    is_active = _activate_new_card(db, card, user_id)
 
     _assign_modifiers(db, card, weights)
     card_points.refresh_card_points(db, card_ids=[card.id])
@@ -312,6 +326,14 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
     }
+
+
+@router.post("/draw")
+@_card_action_limit
+@_card_action_ip_limit
+def draw_card_route(request: Request, db=Depends(get_db),
+                    current_user: dict = Depends(get_current_user)):
+    return draw_card(db, current_user)
 
 
 @router.get("/deck/booster")
@@ -371,7 +393,6 @@ def booster_deck_for_user(db, user_id: int | None) -> list[dict]:
     return result
 
 
-@router.post("/draw/booster/{team_id}")
 def draw_booster(team_id: int, db=Depends(get_db),
                  current_user: dict = Depends(get_current_user)):
     """Draw a card guaranteed to be from the specified team's player roster."""
@@ -399,11 +420,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
                 league_id=None, is_active=False, generation=1)
     db.add(card)
     db.flush()
-
-    active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
-    ).count()
-    card.is_active = active_count < ROSTER_LIMIT
+    is_active = _activate_new_card(db, card, user_id)
 
     _assign_modifiers(db, card, weights_map)
     card_points.refresh_card_points(db, card_ids=[card.id])
@@ -432,10 +449,18 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "avatar_url": player.avatar_url,
         "team_name": team_row.name if team_row else team.name,
         "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
-        "is_active": card.is_active,
+        "is_active": is_active,
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
     }
+
+
+@router.post("/draw/booster/{team_id}")
+@_card_action_limit
+@_card_action_ip_limit
+def draw_booster_route(request: Request, team_id: int, db=Depends(get_db),
+                       current_user: dict = Depends(get_current_user)):
+    return draw_booster(team_id, db, current_user)
 
 
 @router.get("/weeks")
@@ -530,7 +555,6 @@ def get_card_image_route(request: Request, card_id: int, db=Depends(get_db)):
     return get_card_image(card_id, db)
 
 
-@router.post("/roster/{card_id}/reroll")
 def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -567,6 +591,14 @@ def reroll_modifiers(card_id: int, db=Depends(get_db), current_user: dict = Depe
     }
 
 
+@router.post("/roster/{card_id}/reroll")
+@_card_action_limit
+@_card_action_ip_limit
+def reroll_modifiers_route(request: Request, card_id: int, db=Depends(get_db),
+                           current_user: dict = Depends(get_current_user)):
+    return reroll_modifiers(card_id, db, current_user)
+
+
 def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     card = db.get(Card, card_id)
@@ -588,9 +620,14 @@ def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends
         Card.id != card_id,
     ).first()
     if duplicate:
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
 
-    if not _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT):
+    try:
+        activated = _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
+    if not activated:
         db.rollback()
         raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
     db.commit()
@@ -659,12 +696,19 @@ def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(ge
         Card.id != active_card.id,
     ).first()
     if duplicate:
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
 
-    if not _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
-                                bench_card.player_id, body.slot_index):
+    try:
+        swapped = _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
+                                      bench_card.player_id, body.slot_index)
+    except IntegrityError:
+        swapped = False  # the unique index refused a second active card for the player
+    if not swapped:
         db.rollback()
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        # Another request benched the outgoing card first: same answer as the check above.
+        if not db.query(Card).filter_by(id=body.active_card_id, owner_id=user_id, is_active=True).first():
+            raise HTTPException(status_code=404, detail="Card not found")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
     db.commit()
     return {"ok": True}
 

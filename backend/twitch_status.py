@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 
+import logo_hosts
 import steam_live
 import twitch
 import twitch_channels
@@ -131,7 +132,9 @@ def _connect_twitch_check() -> dict:
         if set_count:
             return _check("connect_twitch", WARNING, label,
                           "Only some of the three TWITCH_OAUTH_* settings are set, so Connect "
-                          "Twitch is off. Set all three or none.")
+                          "Twitch is off. Set all three or none. The client secret is the Twitch "
+                          "API Client Secret of the application or extension whose Client ID is "
+                          "TWITCH_OAUTH_CLIENT_ID, never the Extension Secret.")
         return _check("connect_twitch", WARNING, label,
                       "Off: website accounts can't connect Twitch, and channel names are not "
                       "looked up.")
@@ -139,7 +142,10 @@ def _connect_twitch_check() -> dict:
         return _check("connect_twitch", PROBLEM, label,
                       "Set, but the cryptography package is missing, so Twitch sign-in fails. "
                       "Install the backend requirements.")
-    return _check("connect_twitch", OK, label, "All three set; the cryptography package is installed.")
+    return _check("connect_twitch", OK, label,
+                  "All three set; the cryptography package is installed. TWITCH_OAUTH_CLIENT_SECRET "
+                  "must be the Twitch API Client Secret of the application or extension whose "
+                  "Client ID is TWITCH_OAUTH_CLIENT_ID, never the Extension Secret.")
 
 
 def _app_base_url_check() -> dict:
@@ -175,7 +181,7 @@ def _console() -> list[dict]:
     base = _env("APP_BASE_URL").rstrip("/")
     origin = _backend_origin()
     unknown = "This server's public origin (set APP_BASE_URL to show it here)"
-    return [
+    entries = [
         {"label": "Version › Capabilities › Allowlist for URL Fetching Domains contains the backend origin",
          "expected": origin or unknown},
         {"label": "The global configuration's ebs_url is the backend URL (set-ebs-url.sh)",
@@ -185,6 +191,18 @@ def _console() -> list[dict]:
          "expected": (f"package.sh <version> --ebs-origin {origin}" if origin
                       else "package.sh <version> --ebs-origin <this server's origin>")},
     ]
+    oauth = twitch_oauth.oauth_config()
+    if oauth is not None:
+        entries.append({
+            "label": "Extension Settings › Twitch API Client Configuration › OAuth Redirect URL has "
+                     "this exact entry (click Add, then Save Changes)",
+            "expected": oauth["redirect_uri"],
+        })
+    entries.append({
+        "label": "Version › Capabilities › Allowlist for Image Domains contains the team logo hosts",
+        "expected": ", ".join(f"https://{h}" for h in sorted(logo_hosts.logo_hosts())),
+    })
+    return entries
 
 
 def build_status(db: Session) -> dict:

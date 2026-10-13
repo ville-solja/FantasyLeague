@@ -729,3 +729,105 @@ As the operator, I want each extension package to record which backend origins a
 - `package.sh` prints the same at the end of the build
 - The repository copy of `ebs-origins.js` has `EXT_BUILD = {version: "dev", origins: []}`
 - The configuration page's **Package** row shows these values
+
+
+## Extension Setup Follow-ups
+
+### See Why Twitch Sign-in Failed
+**User story**
+As a player connecting Twitch, I want to see a message when Twitch refuses the sign-in so that I know it failed and what to tell the league, instead of landing on the leaderboard with nothing changed.
+
+**Acceptance criteria**
+- When the page loads with `?error=` and `state=` in its query (Twitch's error return, which lands on whichever redirect URL Twitch has registered), a logged-in player is taken to Profile and the Twitch section shows a message
+- `redirect_mismatch` shows "Twitch sign-in failed: this site's Twitch redirect URL isn't registered with Twitch. Tell the league admins."; `access_denied` shows the existing "cancelled" message; any other code shows "Twitch sign-in did not complete. Nothing was changed. Try again." followed by the code
+- Twitch's `error_description` is never inserted as HTML; only the error code, matched against `[a-z_]{1,64}`, appears in the text
+- The `error`, `error_description` and `state` parameters are removed from the address bar; any other query parameter (for example `reset_token`) keeps its current handling
+- Logged out, the parameters are removed and the login prompt is not opened
+
+### Demo Clock Only for Admins
+**User story**
+As a player on a demo-mode server, I want the page to load without admin-only requests so that the browser console shows no 403 noise that hides real errors.
+
+**Acceptance criteria**
+- With demo mode on, `GET /admin/demo/clock` is requested only when the logged-in user is an admin
+- The Demo Mode panel still renders in the admin tab for admins and loads the clock there
+- For non-admins and logged-out visitors no `/admin/demo/*` request is made on page load
+
+### Twitch Console Checklist Covers Sign-in and Images
+**User story**
+As the operator, I want the admin Twitch status page to list every Twitch console value that has to match this server so that I can check the redirect URL and the image allowlist without reading code.
+
+**Acceptance criteria**
+- The `console` list of `GET /admin/twitch/status` adds: "Extension Settings › Twitch API Client Configuration › OAuth Redirect URL has this exact entry (click **Add**, then **Save Changes**)" with the `TWITCH_OAUTH_REDIRECT_URI` value as expected, shown only when Connect Twitch is configured
+- It adds "Version › Capabilities › Allowlist for Image Domains contains the team logo hosts", with the `https://` origins of `logo_hosts()` as expected
+- The `connect_twitch` check's detail names where the client secret comes from: the **Twitch API Client Secret** of the application or extension whose Client ID is `TWITCH_OAUTH_CLIENT_ID`, never the Extension Secret
+- No secret, token or secret length is added to the response
+
+### Panel Live Data Under Audience Load
+**User story**
+As the operator, I want the Twitch panel's live data served from a short cache so that a stream with hundreds of open panels doesn't turn into hundreds of identical database queries a minute.
+
+**Acceptance criteria**
+- `GET /twitch/panel` returns a cached body for up to `TWITCH_PANEL_CACHE_SECONDS` (default 30; `0` turns the cache off), shared by all viewers, because the response holds public data only
+- The cache is cleared when ingest stores new matches and when an MVP is confirmed, so a new MVP or result appears on the next poll
+- The route gets the per-viewer and per-IP limits the other panel routes use (`RATE_LIMIT_TWITCH_ACTION` keyed by `key_by_twitch_viewer_or_ip`, `RATE_LIMIT_TWITCH_JOIN_IP` per IP)
+- The response body is unchanged
+
+### Fresh Scripts After a Deploy
+**User story**
+As a player, I want the site to pick up a new release on my next page load so that I never run a mix of old and new scripts.
+
+**Acceptance criteria**
+- Responses for the frontend's `.html`, `.js` and `.css` files carry `Cache-Control: no-cache`, so browsers revalidate with the existing `ETag` and get a `304` when nothing changed
+- Images, fonts and `/assets/*` keep their current caching
+- `/twitch-ext/*` (local dev harness) is unaffected
+
+
+## Panel Fits Twitch's Height (#191)
+
+### Panel Uses the Height Twitch Gives It
+**User story**
+As a viewer, I want every part of the panel reachable on the channel page so that I don't have to pop it out to see the Live tab or my roster.
+
+**Acceptance criteria**
+- `body.panel` takes the iframe's height (`height: 100vh`; `html` and `body` without a fixed pixel height) instead of 500 px; the header and tab bar stay fixed at the top
+- At panel heights of 300, 400 and 500 px and in the pop-out, the last element of every view (Live, Cards, Team draw, Roster, Card picker) can be reached by scrolling that view
+- Nothing is cut off at the right edge at 318 px width; no horizontal scrolling
+- Views with a pinned footer (Team draw, picker) keep the footer visible and scroll only the list above it; in a panel under 420 px tall the whole view scrolls instead, with the footer still visible
+
+### Live Tab Shows Everything
+**User story**
+As a viewer, I want the Live tab to show latest MVPs, top performers and the next match in the panel so that I can follow the game without popping it out.
+
+**Acceptance criteria**
+- At 500 px all three sections are visible or reachable by scrolling the Live view; at 300 px they are reachable by scrolling
+- The Live view keeps its scroll position when the 60 s refresh re-renders it (no jump back to the top)
+- Loading and empty states still show in each section
+
+### Roster Shows Every Slot
+**User story**
+As a viewer, I want to reach all my roster slots in the panel so that I can manage the whole roster from Twitch.
+
+**Acceptance criteria**
+- All `ROSTER_LIMIT` slots (and the bench, if shown) can be reached by scrolling the Roster view at 300, 400 and 500 px
+- A slot's action buttons stay inside the 318 px width
+- After activating, deactivating or swapping, the view keeps its scroll position
+
+### Viewers Can See There Is More
+**User story**
+As a viewer, I want a visible scrollbar in the panel so that I know a view continues below the edge.
+
+**Acceptance criteria**
+- Scrollable views show a thin themed scrollbar (`scrollbar-width: thin`, `scrollbar-color`, and the `::-webkit-scrollbar` equivalents), visible on dark backgrounds, in the extension's colour tokens
+- Scrolling works with mouse wheel, touch and keyboard: a view is focusable (`tabindex="0"`) or holds focusable content
+- No text sits under the scrollbar
+
+### Operators Set and Test the Panel Height
+**User story**
+As the operator, I want the Panel Height setting and a way to test several heights documented so that a new version doesn't ship clipped.
+
+**Acceptance criteria**
+- `markdown/features/core/twitch-extension.md`, Prerequisites table, gains a row for the version's **Panel Height**: 500, the largest Twitch allows, with the panel still working at smaller heights
+- `twitch-extension/dev-harness.html` offers panel-height presets (300, 400, 500 px) and keeps the 318 px width
+- "318 × 500" in the docs becomes "318 px wide, up to 500 px tall (the version's Panel Height)"
+- `package.sh` output reminds the operator of the Panel Height value alongside the Asset Hosting paths

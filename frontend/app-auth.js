@@ -14,6 +14,9 @@ function applyAuthState() {
   const tokenEl = document.getElementById("tokenBalance");
   if (tokenEl) tokenEl.style.display = loggedIn ? "flex" : "none";
 
+  // Admin-only: renders (and requests the clock) only for an admin in demo mode.
+  if (typeof renderDemoModePanel === "function") renderDemoModePanel();
+
   if (!loggedIn) switchTab("leaderboard");
 }
 

@@ -9,10 +9,10 @@ from sqlalchemy.exc import IntegrityError
 
 import sessions
 import soft_accounts
-from database import get_db
+from database import credit_tokens, get_db
 from deps import (get_current_user, require_admin, require_recent_reauth,
                   require_typed_confirmation, _audit)
-from models import AuditLog, Card, PromoCode, CodeRedemption, User, TokenGrantEvent, TokenGrantClaim, TagDefinition, UserTag
+from models import AuditLog, Card, PromoCode, CodeRedemption, User, TagDefinition, UserTag
 from rate_limit import limiter, key_by_user_or_ip
 
 router = APIRouter()
@@ -185,10 +185,11 @@ def grant_tokens(body: GrantTokensBody, db=Depends(get_db), admin: dict = Depend
         raise HTTPException(status_code=404, detail="User not found")
     if body.amount < 1:
         raise HTTPException(status_code=422, detail="Amount must be at least 1")
-    target.tokens = (target.tokens or 0) + body.amount
+    credit_tokens(db, target.id, body.amount)
     _audit(db, "admin_grant_tokens", actor_id=admin["user_id"], actor_username=admin["username"],
            detail=f"target={target.display_name} amount={body.amount}")
     db.commit()
+    db.refresh(target)
     return {"username": target.username, "tokens": target.tokens}
 
 
@@ -244,16 +245,20 @@ def delete_code(code_id: int, db=Depends(get_db), admin: dict = Depends(require_
 INVALID_CODE_DETAIL = "Invalid or expired code"
 
 
-def _code_open(db, promo: PromoCode) -> bool:
-    """A code can still be redeemed: not past its expiry and under its redemption cap."""
-    if promo.expires_at is not None and promo.expires_at <= int(time.time()):
-        return False
-    if promo.max_redemptions is not None:
-        used = db.query(func.count(CodeRedemption.id)).filter(
-            CodeRedemption.code_id == promo.id).scalar() or 0
-        if used >= promo.max_redemptions:
-            return False
-    return True
+def _code_open(promo: PromoCode) -> bool:
+    """A code is not past its expiry. The redemption cap is checked by the insert
+    in redeem_code itself (issue #185), so concurrent redeems can't overshoot it."""
+    return promo.expires_at is None or promo.expires_at > int(time.time())
+
+
+# Inserts the redemption only while the code is under its cap (NULL = unlimited): the
+# count and the insert are one statement, so concurrent redeems can't both pass.
+_REDEEM_INSERT_SQL = text("""
+    INSERT INTO code_redemptions (code_id, user_id, redeemed_at)
+    SELECT :code_id, :user_id, :now
+    WHERE :max IS NULL
+       OR (SELECT COUNT(*) FROM code_redemptions WHERE code_id = :code_id) < :max
+""")
 
 
 def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -265,7 +270,7 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
     promo = db.query(PromoCode).filter(PromoCode.code == code).first()
     # One answer for unknown, expired and used-up codes (issue #167), so codes
     # can't be probed. "Already redeemed" stays separate: it is the user's own state.
-    if not promo or not _code_open(db, promo):
+    if not promo or not _code_open(promo):
         raise HTTPException(status_code=404, detail=INVALID_CODE_DETAIL)
     already = db.query(CodeRedemption).filter(
         CodeRedemption.code_id == promo.id,
@@ -273,18 +278,23 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
     ).first()
     if already:
         raise HTTPException(status_code=409, detail="Code already redeemed")
-    user.tokens = (user.tokens or 0) + promo.token_amount
-    db.add(CodeRedemption(code_id=promo.id, user_id=user_id, redeemed_at=int(time.time())))
-    _audit(db, "token_redeem", actor_id=user_id, actor_username=user.username,
-           detail=f"code={promo.code} granted={promo.token_amount}")
     try:
-        db.commit()
+        inserted = db.execute(_REDEEM_INSERT_SQL, {
+            "code_id": promo.id, "user_id": user_id, "now": int(time.time()),
+            "max": promo.max_redemptions}).rowcount
     except IntegrityError:
-        # Two concurrent redeems of the same code by the same user both passed
-        # the `already` check above — the unique(code_id, user_id) index is
-        # the actual guard against double-granting.
+        # A concurrent redeem by the same user passed the `already` check too; the
+        # unique(code_id, user_id) index is the actual guard against double-granting.
         db.rollback()
         raise HTTPException(status_code=409, detail="Code already redeemed")
+    if inserted != 1:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=INVALID_CODE_DETAIL)
+    credit_tokens(db, user_id, promo.token_amount)
+    _audit(db, "token_redeem", actor_id=user_id, actor_username=user.username,
+           detail=f"code={promo.code} granted={promo.token_amount}")
+    db.commit()
+    db.refresh(user)
     return {"tokens": user.tokens, "granted": promo.token_amount}
 
 
@@ -293,68 +303,3 @@ def redeem_code(body: RedeemCodeBody, db=Depends(get_db), current_user: dict = D
 def redeem_code_route(request: Request, body: RedeemCodeBody, db=Depends(get_db),
                       current_user: dict = Depends(get_current_user)):
     return redeem_code(body, db, current_user)
-
-
-class TokenGrantEventBody(BaseModel):
-    amount:     int = Field(..., ge=1)
-    start_time: int
-    end_time:   int
-
-
-@router.get("/admin/token-grant-events")
-def list_token_grant_events(db=Depends(get_db), _: dict = Depends(require_admin)):
-    events = db.query(TokenGrantEvent).order_by(TokenGrantEvent.start_time.desc()).all()
-    claim_counts = {
-        row[0]: row[1]
-        for row in db.query(TokenGrantClaim.event_id, func.count(TokenGrantClaim.id))
-                     .group_by(TokenGrantClaim.event_id).all()
-    }
-    return [
-        {
-            "id": ev.id, "amount": ev.amount,
-            "start_time": ev.start_time, "end_time": ev.end_time,
-            "created_at": ev.created_at, "claim_count": claim_counts.get(ev.id, 0),
-        }
-        for ev in events
-    ]
-
-
-@router.post("/admin/token-grant-events", dependencies=[Depends(require_recent_reauth)])
-def create_token_grant_event(
-    body: TokenGrantEventBody,
-    db=Depends(get_db),
-    admin: dict = Depends(require_admin),
-):
-    if body.end_time <= body.start_time:
-        raise HTTPException(status_code=422, detail="end_time must be after start_time")
-    ev = TokenGrantEvent(
-        amount=body.amount,
-        start_time=body.start_time,
-        end_time=body.end_time,
-        created_by=admin["user_id"],
-        created_at=int(time.time()),
-    )
-    db.add(ev)
-    db.flush()
-    _audit(db, "admin_token_grant_event_created", actor_id=admin["user_id"],
-           actor_username=admin["username"],
-           detail=f"id={ev.id} amount={ev.amount} start={ev.start_time} end={ev.end_time}")
-    db.commit()
-    return {"id": ev.id, "amount": ev.amount, "start_time": ev.start_time, "end_time": ev.end_time}
-
-
-@router.delete("/admin/token-grant-events/{event_id}", dependencies=[Depends(require_recent_reauth)])
-def delete_token_grant_event(
-    event_id: int,
-    db=Depends(get_db),
-    admin: dict = Depends(require_admin),
-):
-    ev = db.get(TokenGrantEvent, event_id)
-    if not ev:
-        raise HTTPException(status_code=404, detail="Event not found")
-    _audit(db, "admin_token_grant_event_deleted", actor_id=admin["user_id"],
-           actor_username=admin["username"],
-           detail=f"id={ev.id} amount={ev.amount}")
-    db.delete(ev)
-    db.commit()
-    return {"ok": True}

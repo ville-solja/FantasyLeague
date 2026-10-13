@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 
-from database import get_db
+from database import credit_tokens, get_db
 from deps import require_admin, _audit
 from models import Card, Player, User
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
@@ -172,10 +172,14 @@ def bulk_add_players(body: BulkAddPlayersBody, db=Depends(get_db),
 def remove_players(body: RemovePlayersBody, db=Depends(get_db),
                    admin=Depends(require_admin)):
     for pid in body.player_ids:
-        player = db.get(Player, pid)
-        if not player or not player.is_active:
+        # Issue #185: the deactivation is the refund guard, as one conditional UPDATE, so
+        # two simultaneous removes of the same player refund its owners once.
+        if db.execute(text("UPDATE players SET is_active = 0 WHERE id = :pid AND is_active = 1"),
+                      {"pid": pid}).rowcount != 1:
             continue
-        player.is_active = False
+        player = db.get(Player, pid)
+        if player is not None:
+            db.expire(player, ["is_active"])
         cards = db.query(Card).filter(Card.player_id == pid).all()
         refund_totals: dict = {}
         for card in cards:
@@ -184,7 +188,7 @@ def remove_players(body: RemovePlayersBody, db=Depends(get_db),
         for user_id, token_count in refund_totals.items():
             user = db.get(User, user_id)
             if user:
-                user.tokens = (user.tokens or 0) + token_count
+                credit_tokens(db, user_id, token_count)
                 _audit(db, "admin_player_refund_issued", actor_id=admin["user_id"],
                        actor_username=admin["username"],
                        detail=f"player_id={pid} user_id={user_id} tokens={token_count}")

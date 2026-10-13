@@ -62,8 +62,14 @@ twitch-extension/
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
 | **Capabilities** | Enable **Chat** and **Request Identity Link** on the version installed on the channel | Without Chat, Twitch rejects MVP chat announcements with 403 (logged by the EBS) — PubSub/token drops still work. Without Request Identity Link, Join still works but the identity share never reaches the EBS |
 | **Asset Hosting paths** (per version: Version → Asset Hosting) | Panel Viewer Path `panel.html`, Config Path `config.html`, Live Config Path `live_config.html` | A folder prefix such as `twitch-extension/panel.html` or a leading `/` — Twitch's CDN then returns 404 for the Extension iframe |
+| **Panel Height** (per version: Version → Asset Hosting) | **500**, the largest Twitch allows (100–500 px). The panel still works at smaller heights: each view scrolls (issue #191) | Left at a smaller value: the panel still works, but the Live tab and the roster need more scrolling. `package.sh` prints this value as a reminder |
 | **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
 | **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
+| **Allowlist for Image Domains** (per version: Version → Capabilities) | The team logo hosts from `backend/logo_hosts.py` (`LOGO_HOST_ALLOWLIST`, default the Steam CDN hosts), each as `https://<host>`. Admin › Users › Twitch status lists the exact values | Left empty — team logos in the panel fall back to initials |
+| **Twitch API Client Secret** (Extension Settings, mid-page, under Twitch API Client Configuration) | Goes in `TWITCH_OAUTH_CLIENT_SECRET` (Connect Twitch), with the extension's Client ID as `TWITCH_OAUTH_CLIENT_ID` | Pasted into `TWITCH_EXTENSION_SECRET` — every panel request then fails with `E-TOKEN` |
+| **OAuth Redirect URL** (Twitch API Client Configuration) | `https://<host>/auth/twitch/callback` for each environment (up to 10 entries, so test and production share the client) | Typing the URL without clicking **Add**, or not clicking **Save Changes**. Twitch then answers `redirect_mismatch` and sends the browser to another registered URL; the site shows "this site's Twitch redirect URL isn't registered" on Profile |
+
+Capability fields (URL Fetching Domains, Image Domains, Chat, Request Identity Link) are editable only while the version is in **Local Test**; to change them on a version already in Hosted Test, move it back to Local Test or create a new version.
 
 ### Step 1 — Register the extension
 
@@ -81,6 +87,13 @@ TWITCH_EXTENSION_CLIENT_ID=<Client ID from Extension Settings top-right>
 TWITCH_EXTENSION_SECRET=<Key from Extension Secrets table at bottom of Extension Settings>
 TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.2.0>
 TWITCH_DROP_MAX=20
+```
+
+Connect Twitch on Profile (optional) uses the extension's own client; register the callback URL under **OAuth Redirect URL** first:
+```
+TWITCH_OAUTH_CLIENT_ID=<the same Client ID as TWITCH_EXTENSION_CLIENT_ID>
+TWITCH_OAUTH_CLIENT_SECRET=<Twitch API Client Secret, mid-page in Extension Settings>
+TWITCH_OAUTH_REDIRECT_URI=https://<host>/auth/twitch/callback
 ```
 
 Update `TWITCH_EXTENSION_VERSION` whenever a new extension version is installed on the channel; without it, chat announcements are skipped.
@@ -199,7 +212,7 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 
 ## Viewer Panel (panel.html)
 
-A 318 × 500 panel styled with the Kanaliiga design system. Full description: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#panel-318--500).
+A panel 318 px wide, up to 500 px tall (the version's Panel Height), styled with the Kanaliiga design system. It takes the height Twitch gives it and each view scrolls within it ([Panel Fits Twitch's Height](../reference/panel-fits-twitch-height.md)). Full description: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#panel).
 
 1. Reads the EBS URL from `Twitch.ext.configuration.global.content` at startup
 2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
@@ -294,8 +307,8 @@ When the panel, the MVP tool or the configuration page can't load, its message e
 |---|---|---|
 | `E-ORIGIN` | The configured backend URL's origin was not packaged into the installed version (`package.sh --ebs-origin`, #164). Shown at once | Build a version with `package.sh <version> --ebs-origin <backend origin>`, upload it and install it on the channel. The configuration page's Package row lists the packaged origins |
 | `E-CONFIG` | No `ebs_url` in the global configuration segment after 8 seconds, or the segment is not valid JSON | Run `set-ebs-url.sh <backend URL>` (Step 5) |
-| `E-REACH` | The browser could not reach the backend: DNS or TLS, the host missing from the version's URL Fetching Domains, or CORS refused the extension origin | Add the backend origin to URL Fetching Domains; set `TWITCH_EXTENSION_CLIENT_ID` to the installed extension's Client ID (Twitch status lists refused hosts); check the backend answers over HTTPS |
-| `E-TOKEN` | The backend refused the Twitch token (401): `TWITCH_EXTENSION_SECRET` is wrong or belongs to another extension, or the token expired (reloading the panel gets a fresh one) | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
+| `E-REACH` | The browser could not reach the backend: most often `TWITCH_EXTENSION_CLIENT_ID` unset on the server, so CORS refuses the extension origin; otherwise CORS refused another Client ID, the host is missing from the version's URL Fetching Domains, or DNS or TLS failed | Set `TWITCH_EXTENSION_CLIENT_ID` to the installed extension's Client ID (Twitch status lists refused hosts); add the backend origin to URL Fetching Domains; check the backend answers over HTTPS |
+| `E-TOKEN` | The backend refused the Twitch token (401): most often the Twitch API Client Secret pasted into `TWITCH_EXTENSION_SECRET`; otherwise the secret belongs to another extension, or the token expired (reloading the panel gets a fresh one) | Copy the key from the extension's Extension Secrets into `TWITCH_EXTENSION_SECRET` and restart |
 | `E-SERVER` | The backend answered 5xx, for example with `TWITCH_EXTENSION_SECRET` empty or not base64, or `TWITCH_LOCAL_DEV=true` with `ENV=production` | Check Twitch status and the server log |
 
 Versions packaged before #180 (such as 1.2.1) show no codes and have no Connection check. For them, read Admin › Users › Twitch status: **Last request from the extension** says whether the panel reaches this server at all, **Refused Twitch tokens** whether it reaches it with a token the secret rejects, and the refused hosts whether another Client ID is calling.
@@ -306,7 +319,7 @@ MVP selection refused on a channel that isn't approved (`ENV=production`, #165 /
 
 ## Local Development
 
-The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
+The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. Its Panel Height presets (300, 400 and 500 px, and Pop-out) show the panel at each height Twitch may give it, at Twitch's 318 px width (#191). It is not uploaded to Twitch CDN.
 
 The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/merge/confirm` and `POST /twitch/disconnect` (#160) are the exceptions: they use the session cookie (called from the main site's Profile tab), so they get the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
 
@@ -415,11 +428,12 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns the rule off. Website accounts are always eligible (#171) |
 | `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team logo URL may use (stored at ingest, returned, or fetched for card images); empty means the default list (#171) |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws, heartbeats and `/twitch/ping` per IP; draws, heartbeats, roster changes and Leave per viewer |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Join per viewer; Join, draws, heartbeats, `/twitch/panel` and `/twitch/ping` per IP; draws, heartbeats, `/twitch/panel`, roster changes and Leave per viewer |
+| `TWITCH_PANEL_CACHE_SECONDS` | `30` | Seconds `GET /twitch/panel` serves one shared cached body; cleared when ingest stores or refreshes a match and when an MVP or match scoring is set; `0` turns it off. See [Twitch Extension Setup Follow-ups](../reference/twitch-extension-setup-followups.md#panel-live-data-cache) |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key; required for listing live games in the MVP picker before their stats are ingested (see [MVP Selection Delays](../reference/mvp-selection-delays.md)) |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated Twitch channel IDs always allowed to set match MVPs (and so trigger token drops), in addition to channels approved in the admin portal (issue #175); others get 403. Both empty: no channel with `ENV=production` (a start-up warning is logged), any channel otherwise (issue #165) |
-| `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
+| `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. The extension's own Client ID and its Twitch API Client Secret are the supported client. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`; `http://localhost:8080` for Local Test |

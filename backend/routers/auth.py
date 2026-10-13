@@ -8,17 +8,18 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import text
 
 import login_mode
 import sessions
-from database import get_db
+from database import credit_tokens, get_db
 from deps import _audit, get_current_user
-from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
+from models import (User, TokenGrantEvent, Notification,
                     NotificationDismissal, PasswordResetToken, UserSession)
 from auth import (check_email, check_password_bytes, check_reserved, check_username, hash_password,
                   username_taken, verify_password)
 from email_utils import email_configured, send_email
-from rate_limit import limiter, key_by_user_or_ip
+from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from slowapi.util import get_remote_address
 
 router = APIRouter()
@@ -218,6 +219,8 @@ def register(request: Request, body: RegisterBody, db=Depends(get_db)):
     return {"username": user.username, "is_admin": user.is_admin, "tokens": user.tokens}
 
 
+# POST /logout keeps only the global baseline (issue #184's ALLOWED_GLOBAL_ONLY): it
+# needs no login, does one delete at most, and a limit could keep a player signed in.
 @router.post("/logout")
 def logout(request: Request, db=Depends(get_db)):
     # Deleting the row ends the session on the server, so a copied cookie stops working.
@@ -227,6 +230,7 @@ def logout(request: Request, db=Depends(get_db)):
 
 
 @router.post("/logout-everywhere")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def logout_everywhere(request: Request, db=Depends(get_db),
                       current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
@@ -291,6 +295,7 @@ def list_sessions(request: Request, db=Depends(get_db),
 
 
 @router.delete("/sessions/{session_id}")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def delete_session(session_id: int, request: Request, db=Depends(get_db),
                    current_user: dict = Depends(get_current_user)):
     """End one of the caller's own sessions; any other id is 404."""
@@ -441,8 +446,14 @@ def send_password_changed_notice(user: User) -> None:
             "password change notice: email send raised for user %s", user.username)
 
 
+_CLAIM_INSERT_SQL = text(
+    "INSERT INTO token_grant_claims (event_id, user_id, claimed_at) "
+    "VALUES (:event_id, :user_id, :now) ON CONFLICT (event_id, user_id) DO NOTHING")
+
+
 @router.post("/claim-events")
-def claim_events(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def claim_events(request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     now = int(time.time())
     active_events = db.query(TokenGrantEvent).filter(
         TokenGrantEvent.start_time <= now,
@@ -451,16 +462,20 @@ def claim_events(db=Depends(get_db), current_user: dict = Depends(get_current_us
     user = db.get(User, current_user["user_id"])
     granted = 0
     for event in active_events:
-        already = db.query(TokenGrantClaim).filter_by(event_id=event.id, user_id=user.id).first()
-        if already:
+        # Issue #185: the claim row is the guard. One INSERT that does nothing when this
+        # event is already claimed (also by a simultaneous request), so each event is
+        # credited exactly once and a race never raises.
+        inserted = db.execute(_CLAIM_INSERT_SQL, {"event_id": event.id, "user_id": user.id,
+                                                  "now": now}).rowcount
+        if inserted != 1:
             continue
-        user.tokens = (user.tokens or 0) + event.amount
-        db.add(TokenGrantClaim(event_id=event.id, user_id=user.id, claimed_at=now))
+        credit_tokens(db, user.id, event.amount)
         _audit(db, "token_grant_event_claim", actor_id=user.id, actor_username=user.username,
                detail=f"event={event.id} amount={event.amount}")
         granted += event.amount
     db.commit()
-    return {"granted": granted}
+    db.refresh(user)
+    return {"granted": granted, "tokens": user.tokens or 0}
 
 
 @router.get("/notifications")
@@ -477,7 +492,8 @@ def get_active_notifications(db=Depends(get_db), current_user: dict = Depends(ge
 
 
 @router.post("/notifications/{notification_id}/dismiss")
-def dismiss_notification(notification_id: int, db=Depends(get_db),
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def dismiss_notification(request: Request, notification_id: int, db=Depends(get_db),
                          current_user: dict = Depends(get_current_user)):
     n = db.get(Notification, notification_id)
     if not n:

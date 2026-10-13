@@ -47,6 +47,16 @@ Code: `backend/twitch_oauth.py` (routes, sign-in checks, `connect_account`), `ba
 | `reauth_required` | Start without a recent password check |
 | `unavailable` | Connect is switched off |
 
+**Twitch's own error return.** When Twitch refuses the request before the callback can run, most often `redirect_mismatch` because `TWITCH_OAUTH_REDIRECT_URI` is not registered on the client, it sends the browser to a URL the client does have registered (often the site root) with `?error=<code>&error_description=…&state=…`. `handleTwitchErrorReturn()` (`frontend/app-profile.js`, run by `init()` before `handleTwitchReturn()`) reads it only when both `error` and `state` are present. It strips `error`, `error_description`, `error_uri` and `state` from the address bar (other parameters stay), and for a logged-in player opens Profile with a message in the Twitch section:
+
+| Twitch `error` | Message |
+|---|---|
+| `redirect_mismatch` | "Twitch sign-in failed: this site's Twitch redirect URL isn't registered with Twitch. Tell the league admins." |
+| `access_denied` | The `cancelled` message above |
+| anything else | "Twitch sign-in did not complete. Nothing was changed. Try again. (`<code>`)" |
+
+Only the code, checked against `[a-z_]{1,64}` (otherwise `unknown`), appears in the text, written with `textContent`; `error_description` is never shown. Logged out, the parameters are stripped and nothing else happens (no login prompt).
+
 ### Where the pending link lives
 
 `users.twitch_account_id` is unique (#157), so the id can't sit on both accounts. When the callback finds a **soft** account S holding the id (it shared its identity in the panel), it moves the id from S to the website account W in the same transaction and records `W.pending_merge_user_id = S.id` (migration `032`). S keeps its opaque `twitch_user_id`, so the panel keeps acting as S until the merge. Another **website** account holding the id is a conflict (`in_use`); soft accounts never are.
@@ -128,14 +138,16 @@ The `twitch_link_codes` table and the `TwitchLinkCode` model remain for a later 
 
 | Variable | Default | Description |
 |---|---|---|
-| `TWITCH_OAUTH_CLIENT_ID` | *(empty)* | Client id of the Twitch application used for sign-in |
-| `TWITCH_OAUTH_CLIENT_SECRET` | *(empty)* | Its client secret (not the extension JWT secret) |
+| `TWITCH_OAUTH_CLIENT_ID` | *(empty)* | Client id used for sign-in. The extension's own Client ID is the supported client |
+| `TWITCH_OAUTH_CLIENT_SECRET` | *(empty)* | Its **Twitch API Client Secret** (Extension Settings › Twitch API Client Configuration for the extension's client), never the Extension Secret that goes in `TWITCH_EXTENSION_SECRET` |
 | `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Exact callback URL registered in the Twitch developer console, for example `https://<host>/auth/twitch/callback` |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of start and callback |
 
 Read on each request. When any of the three is missing, Connect Twitch is unavailable and the start endpoint returns 503. Requires `cryptography` (in `backend/requirements.txt`) for RS256.
 
-**Redirect addresses:** register one per environment in the Twitch developer console, an exact match of scheme, host and path. For example:
+**Sign-in client:** the extension's own client is the default. Its Extension Settings page takes up to 10 OAuth Redirect URLs, so test and production share one client; no separate Twitch application is needed.
+
+**Redirect addresses:** register one per environment under Extension Settings › Twitch API Client Configuration › **OAuth Redirect URL**, an exact match of scheme, host and path. Type the URL, click **Add**, then **Save Changes**; a URL typed but not added is not registered, and Twitch answers `redirect_mismatch` (shown on Profile, see above). Admin › Users › Twitch status lists the exact value to register. For example:
 - `https://kana-cards.com/auth/twitch/callback` (production),
 - `https://test.kana-cards.com/auth/twitch/callback` (test site),
 - `http://localhost:8000/auth/twitch/callback` (local; confirm the console accepts plain HTTP for localhost).

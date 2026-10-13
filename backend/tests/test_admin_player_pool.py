@@ -350,9 +350,11 @@ class TestAdminPlayerPool:
         db.add(player)
         db.flush()
 
-        # user1 holds 2 cards for this player, user2 holds 1
+        # user1 and user2 each hold an active card for this player (a roster holds at
+        # most one active card per player, #185); user1 also has one on the bench,
+        # which this helper does not refund
         db.add(Card(player_id=300, owner_id=user1.id, card_type="common", is_active=True))
-        db.add(Card(player_id=300, owner_id=user1.id, card_type="rare", is_active=True))
+        db.add(Card(player_id=300, owner_id=user1.id, card_type="rare", is_active=False))
         db.add(Card(player_id=300, owner_id=user2.id, card_type="common", is_active=True))
         db.commit()
 
@@ -360,20 +362,22 @@ class TestAdminPlayerPool:
 
         db.refresh(user1)
         db.refresh(user2)
-        assert user1.tokens == 5   # 3 + 2 cards
+        assert user1.tokens == 4   # 3 + 1 active card
         assert user2.tokens == 2   # 1 + 1 card
 
     def test_removed_players_cards_are_deactivated(self, db):
         """After POST /admin/players/remove, all Card rows referencing the
         removed player that were previously active have is_active=False."""
         user = User(username="u1", email="u1@x.com", password_hash="h", tokens=5)
-        db.add(user)
+        other = User(username="u2", email="u2@x.com", password_hash="h", tokens=5)
+        db.add_all([user, other])
         player = Player(id=400, name="Target", avatar_url="", is_active=True)
         db.add(player)
         db.flush()
 
+        # One active card per player per roster (#185): the two cards have different owners.
         c1 = Card(player_id=400, owner_id=user.id, card_type="common", is_active=True)
-        c2 = Card(player_id=400, owner_id=user.id, card_type="epic", is_active=True)
+        c2 = Card(player_id=400, owner_id=other.id, card_type="epic", is_active=True)
         db.add_all([c1, c2])
         db.commit()
 
@@ -422,15 +426,15 @@ class TestAdminPlayerPool:
         db.add(player)
         db.flush()
 
-        # 3 active cards for this player
-        for _ in range(3):
-            db.add(Card(player_id=600, owner_id=user.id, card_type="common", is_active=True))
-        # 1 inactive card — should NOT be refunded
-        db.add(Card(player_id=600, owner_id=user.id, card_type="common", is_active=False))
+        # 1 active card for this player (at most one per roster, #185)
+        db.add(Card(player_id=600, owner_id=user.id, card_type="common", is_active=True))
+        # 2 inactive cards — should NOT be refunded
+        for _ in range(2):
+            db.add(Card(player_id=600, owner_id=user.id, card_type="common", is_active=False))
         db.commit()
 
         _remove_players(db, [600])
 
         db.refresh(user)
-        # 10 original + 3 refunds (inactive card ignored)
-        assert user.tokens == 13
+        # 10 original + 1 refund (inactive cards ignored)
+        assert user.tokens == 11

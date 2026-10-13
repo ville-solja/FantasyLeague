@@ -179,3 +179,64 @@ As a player, I want my password reset and login to resist other people so that n
 - The database stores only a one-way hash (PBKDF2-SHA256, fixed salt) of a reset token; the emailed link and code still work
 - Failed logins lock out a username only from the IP they came from; a much higher per-username ceiling applies across all IPs
 - A completed password reset clears the lockout for that username
+
+
+## Action Throttling (#184)
+
+### Throttle Card Actions per Player
+**User story**
+As the operator, I want each account's card draws, booster draws and rerolls limited per minute so that a script can't hammer the database through one account.
+
+**Acceptance criteria**
+- `POST /draw`, `POST /draw/booster/{team_id}` and `POST /roster/{card_id}/reroll` share a per-user limit `RATE_LIMIT_CARD_ACTION` (default `20/minute`), keyed by `key_by_user_or_ip`
+- They also keep a per-IP limit (`RATE_LIMIT_CARD_ACTION_IP`, default `60/minute`), so many accounts behind one address can't multiply the rate
+- The 21st card action from one account within a minute gets 429; other accounts are unaffected
+- A refused request spends no tokens and creates no card
+
+### Every Player Action Has a Limit
+**User story**
+As the operator, I want every write route a player can reach to carry an explicit limit so that no action is left with only the global baseline, now or when new routes are added.
+
+**Acceptance criteria**
+- These routes get a per-user limit `RATE_LIMIT_USER_ACTION` (default `60/minute`):
+  - `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password`
+  - `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted`
+  - `POST /claim-events`, `POST /notifications/{notification_id}/dismiss`
+  - `DELETE /sessions/{session_id}`, `POST /logout-everywhere`
+  - `POST /twitch/merge/confirm`, `POST /twitch/disconnect`, `POST /profile/steam/unlink`
+- `POST /simulate/{match_id}` (public, CPU work per call) gets a per-IP limit `RATE_LIMIT_SIMULATE` (default `20/minute`)
+- `POST /twitch/mvp` gets a per-IP limit (`RATE_LIMIT_TWITCH_JOIN_IP`)
+- A test lists every non-admin `POST`/`PUT`/`PATCH`/`DELETE` route in the app and fails when one has no `@limiter.limit` decorator and is not in a short, commented allowlist (`POST /logout`, and `main.py`'s catch-alls that answer 404 for unknown `/twitch/*` and `/auth/steam/*` paths)
+- Admin routes stay on the global baseline: they need admin rights, and destructive ones need a recent re-auth
+
+### Oversized Requests Refused Early
+**User story**
+As the operator, I want request bodies above a fixed size refused before they are read so that large payloads can't tie up memory or parsing time.
+
+**Acceptance criteria**
+- A request whose `Content-Length` is above `MAX_REQUEST_BODY_BYTES` (default `65536`) gets 413 `{"detail": "Request too large"}` without the route running
+- A chunked request without `Content-Length` is cut off and refused once its body passes the same size
+- Every existing route still works: the app has no file uploads, and the largest JSON bodies (admin player and week forms) are well under 64 KiB
+- `GET`, `HEAD` and `OPTIONS` requests are unaffected
+
+### Clear Throttle Responses
+**User story**
+As a player who clicks too fast, I want a plain message telling me to wait so that I know the site isn't broken.
+
+**Acceptance criteria**
+- 429 responses carry `{"detail": "Too many requests. Wait a moment and try again."}` and a `Retry-After` header in seconds
+- Draw, booster, reroll and roster actions on the website show that text in their existing status area; the Twitch panel shows its existing neutral message
+- Each refused request logs one line at INFO with the route and the key kind (`user`, `ip`, `twitch`), never the IP or the user id, at most once per key and route per minute
+
+### Operator Guidance Against Denial of Service
+**User story**
+As the operator, I want a short, layered checklist for running Kana Cards behind a proxy so that floods are stopped before they reach the single app process.
+
+**Acceptance criteria**
+- `markdown/features/reference/rate-limiting.md` gains a **Layered protection** section covering:
+  - the edge, which is the only layer that stops volumetric floods: an optional CDN or WAF such as Cloudflare in front;
+  - the reverse proxy: per-IP request rates (`limit_req` in nginx, the `rate_limit` module in Caddy), per-IP connection limits, body size limits, and read and idle timeouts against slow-client attacks;
+  - the app: global per-IP, per-user action limits, stricter auth limits, size cap, atomic token spending and cached hot reads (`/twitch/panel`, schedule);
+  - host and deployment settings: `APP_BIND_ADDRESS=127.0.0.1`, never `FORWARDED_ALLOW_IPS=*`, a single process
+- Example nginx and Caddy snippets with values matching the app's limits
+- The section says what the app can't do: absorb bandwidth floods, or share limits across several processes without Redis

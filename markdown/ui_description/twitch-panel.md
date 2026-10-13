@@ -1,6 +1,13 @@
 # Twitch panel (viewer)
 
-The Kana Cards panel extension below the stream (`twitch-extension/panel.html`, `panel.js`), 318 × 500 px. A complete game on Twitch: it never mentions, links to or asks for a login on the website (Twitch policy 4.5, issue #157). Styled with the Kanaliiga design system: Big Shoulders uppercase display type, Inter body, orange accent on near-black, 4 px buttons, 6 px boxes, no text under 11 px, no emoji. Feature details: `markdown/features/reference/twitch-extension-policy-compliance.md`.
+The Kana Cards panel extension below the stream (`twitch-extension/panel.html`, `panel.js`), 318 px wide, up to 500 px tall (the version's Panel Height). A complete game on Twitch: it never mentions, links to or asks for a login on the website (Twitch policy 4.5, issue #157). Styled with the Kanaliiga design system: Big Shoulders uppercase display type, Inter body, orange accent on near-black, 4 px buttons, 6 px boxes, no text under 11 px, no emoji. Feature details: `markdown/features/reference/twitch-extension-policy-compliance.md`.
+
+## Size and scrolling
+
+- The panel fills the height Twitch gives it (the version's Panel Height, 100–500 px; set to 500) and the pop-out window. The header and tab bar stay at the top; the view below them scrolls when its content is taller (#191).
+- Scrollable areas show a thin scrollbar in the panel's grey ink colour; the views' right padding keeps text clear of it. Live, Cards, Roster and Settings can be focused and scrolled with the keyboard.
+- Team draw and the bench picker scroll only their list; the footer (the draw button, or "In this slot" with **Bench it**) stays visible. In a panel under 420 px tall the whole view scrolls instead, so the list isn't squeezed to a row or two, and the footer still stays visible.
+- The Live view keeps its scroll position across the 60 s refresh, and each tab keeps its position when you switch away and back, so the Roster tab returns to where you were after a change in the bench picker.
 
 ## Header
 
@@ -54,9 +61,10 @@ Refreshes every 60 seconds and at once when the broadcaster confirms an MVP. Emp
 ## Bench picker (per slot)
 
 - **Back**, and "Pick a card for slot N" or "Replace in slot N".
-- For a filled slot: "In this slot: {name}" with **Bench it**.
 - Rarity filter chips with counts, and **Sort** by **Points** (season points, default) or **Rarity**.
-- One row per bench card: art, name, team, rarity, season points. Tapping a row places it in the empty slot or swaps it with the slot's card, then returns to the Roster tab.
+- One row per bench card: art, name, team, rarity, season points. The chips, sort and rows scroll together.
+- For a filled slot, pinned at the bottom: "In this slot: {name}" with **Bench it**.
+- Tapping a row places it in the empty slot or swaps it with the slot's card, then returns to the Roster tab.
 
 ## Settings
 

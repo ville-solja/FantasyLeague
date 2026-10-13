@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import re
@@ -17,6 +18,7 @@ from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
+from starlette.routing import Match
 from twitch import router as twitch_router
 import twitch as twitch_module
 import twitch_oauth
@@ -45,6 +47,7 @@ from routers import leaderboard as leaderboard_router
 from routers import cards as cards_router
 from routers import admin_users as admin_users_router
 from routers import admin_twitch as admin_twitch_router
+from routers import admin_token_events as admin_token_events_router
 from routers import admin_ingest as admin_ingest_router
 from routers import admin_weeks as admin_weeks_router
 from routers import admin_notifications as admin_notifications_router
@@ -599,6 +602,166 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 
+_DEFAULT_MAX_REQUEST_BODY_BYTES = 65536
+
+
+def _read_max_request_body_bytes() -> int:
+    """MAX_REQUEST_BODY_BYTES, read once at import; a missing, non-numeric or
+    non-positive value means 65536."""
+    try:
+        value = int(os.getenv("MAX_REQUEST_BODY_BYTES", str(_DEFAULT_MAX_REQUEST_BODY_BYTES)))
+    except ValueError:
+        logger.warning("MAX_REQUEST_BODY_BYTES is not a number; using %d",
+                       _DEFAULT_MAX_REQUEST_BODY_BYTES)
+        return _DEFAULT_MAX_REQUEST_BODY_BYTES
+    return value if value > 0 else _DEFAULT_MAX_REQUEST_BODY_BYTES
+
+
+MAX_REQUEST_BODY_BYTES = _read_max_request_body_bytes()
+_BODYLESS_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+class BodySizeLimitMiddleware:
+    """Issue #184: refuse request bodies above MAX_REQUEST_BODY_BYTES with 413 before
+    any route runs. A declared Content-Length is checked up front; a body without one
+    (chunked) is read up to the cap and replayed to the app, so at most the cap is
+    ever held in memory. The app has no file uploads."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] in _BODYLESS_METHODS:
+            await self.app(scope, receive, send)
+            return
+        cap = MAX_REQUEST_BODY_BYTES
+        content_length = None
+        for name, value in scope.get("headers", []):
+            if name == b"content-length":
+                try:
+                    content_length = int(value)
+                except ValueError:
+                    content_length = None
+                break
+        if content_length is not None:
+            if content_length > cap:
+                await self._refuse(scope, receive, send)
+                return
+            await self.app(scope, receive, send)
+            return
+
+        chunks, size = [], 0
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":
+                break
+            body = message.get("body", b"")
+            size += len(body)
+            if size > cap:
+                await self._refuse(scope, receive, send)
+                return
+            chunks.append(body)
+            if not message.get("more_body", False):
+                break
+        replayed = False
+
+        async def replay():
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": b"".join(chunks), "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _refuse(scope, receive, send):
+        response = JSONResponse({"detail": "Request too large"}, status_code=413,
+                                headers={"Connection": "close"})
+        await response(scope, receive, send)
+
+
+app.add_middleware(BodySizeLimitMiddleware)
+
+
+THROTTLE_MESSAGE = "Too many requests. Wait a moment and try again."
+_THROTTLE_LOG_INTERVAL = 60
+_throttle_logged: dict[tuple[str, str], float] = {}
+_throttle_log_lock = threading.Lock()
+
+
+class _DropSlowapiKeyLog(logging.Filter):
+    """slowapi's own "ratelimit ... (<key>) exceeded" warning names the client IP or
+    the user id; _rate_limit_handler logs a line without them instead (issue #184)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not str(record.msg).startswith("ratelimit ")
+
+
+logging.getLogger("slowapi").addFilter(_DropSlowapiKeyLog())
+
+
+def _route_template(request: Request) -> str:
+    """The matched route's path template (/roster/{card_id}/reroll), never the raw path.
+    Route-level limits run after routing; the global baseline runs in the middleware
+    before it, so match the routes here."""
+    route = request.scope.get("route")
+    if route is not None and getattr(route, "path", None):
+        return route.path
+    for candidate in request.app.router.routes:
+        match, child_scope = candidate.matches(request.scope)
+        if match == Match.FULL:
+            found = child_scope.get("route") or candidate
+            path = getattr(found, "path", None)
+            if path:
+                return path
+    return "unmatched"
+
+
+def _throttle_key_kind(request: Request, exc: RateLimitExceeded) -> tuple[str, str]:
+    key = ""
+    key_func = getattr(exc.limit, "key_func", None)
+    if key_func is not None:
+        try:
+            key = str(key_func(request))
+        except Exception:
+            key = ""
+    if key.startswith("user:"):
+        kind = "user"
+    elif key.startswith("twitch:"):
+        kind = "twitch"
+    else:
+        kind = "ip"
+    return kind, hashlib.sha256(key.encode()).hexdigest()
+
+
+def _log_throttled(request: Request, exc: RateLimitExceeded) -> None:
+    route = _route_template(request)
+    kind, key_hash = _throttle_key_kind(request, exc)
+    now = time.monotonic()
+    with _throttle_log_lock:
+        if len(_throttle_logged) > 10000:
+            for k in [k for k, t in _throttle_logged.items() if now - t >= _THROTTLE_LOG_INTERVAL]:
+                del _throttle_logged[k]
+            # Still full (many distinct keys within one interval, e.g. rotating IPv6
+            # addresses): start over. The cost is a few repeated log lines, never
+            # unbounded memory or a full scan on every 429.
+            if len(_throttle_logged) > 10000:
+                _throttle_logged.clear()
+        last = _throttle_logged.get((key_hash, route))
+        if last is not None and now - last < _THROTTLE_LOG_INTERVAL:
+            return
+        _throttle_logged[(key_hash, route)] = now
+    logger.info("Rate limited: %s %s (%s)", request.method, route, kind)
+
+
+def _retry_after_seconds(exc: RateLimitExceeded) -> int:
+    try:
+        return max(1, int(exc.limit.limit.get_expiry()))
+    except Exception:
+        return 60
+
+
 @app.exception_handler(RateLimitExceeded)
 def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # Must be a plain (sync) function, not `async def`: SlowAPIMiddleware's
@@ -610,7 +773,9 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     # (async-aware) exception handling and would work with either, but this
     # handler must stay sync so the app-wide middleware path also gets this
     # app's {"detail": ...} shape instead.
-    return JSONResponse(status_code=429, content={"detail": f"Rate limit exceeded: {exc.detail}"})
+    _log_throttled(request, exc)
+    return JSONResponse(status_code=429, content={"detail": THROTTLE_MESSAGE},
+                        headers={"Retry-After": str(_retry_after_seconds(exc))})
 
 
 @app.exception_handler(Exception)
@@ -629,6 +794,7 @@ app.include_router(leaderboard_router.router)
 app.include_router(cards_router.router)
 app.include_router(admin_users_router.router)
 app.include_router(admin_twitch_router.router)
+app.include_router(admin_token_events_router.router)
 app.include_router(admin_ingest_router.router)
 app.include_router(admin_weeks_router.router)
 app.include_router(admin_notifications_router.router)
@@ -720,4 +886,18 @@ if os.path.isdir(_TWITCH_EXT_DIR):
 if os.path.isdir(_ASSETS_DIR):
     app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
 
-app.mount("/", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")
+class _FrontendStaticFiles(StaticFiles):
+    """The site's pages, scripts and styles answer `Cache-Control: no-cache`, so a
+    browser revalidates them (ETag → 304) and never runs a mix of releases after a
+    deploy. Images, fonts and the other mounts keep the default caching."""
+
+    _REVALIDATE = {"", ".html", ".js", ".css"}
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if os.path.splitext(path)[1].lower() in self._REVALIDATE:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", _FrontendStaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

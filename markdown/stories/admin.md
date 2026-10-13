@@ -678,7 +678,8 @@ time.
 - `GET /config` includes `demo_mode: true` only when `DEMO_MODE=true` is set on the server
 - The frontend shows a small persistent badge when `demo_mode` is true
 - The Settings tab's Demo Mode section (clock control + account seeding) is entirely absent
-  from the DOM unless `demo_mode` is true
+  from the DOM unless `demo_mode` is true and the logged-in user is an admin; nobody else
+  requests `/admin/demo/*` on page load
 
 ---
 

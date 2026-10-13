@@ -6,6 +6,8 @@ let _dragState = null;    // { cardId, zone } while a drag is in flight
 // handlers bound to nodes kept from an earlier render act on the latest data.
 let _rosterActive = [];
 let _rosterBench = [];
+// A failed reorder's message (issue #184: e.g. a 429), shown by the next loadRoster.
+let _rosterPendingError = null;
 
 // Issue #124 — in-flight guard: while one activate/deactivate/swap/reorder
 // mutation is still resolving, ignore a second click/keypress/drop of the
@@ -13,17 +15,23 @@ let _rosterBench = [];
 // immediately followed by a full loadRoster() refetch, so overlapping calls
 // would also race on the DOM update). Mirrors the existing
 // window._rosterDragging guard's role of suppressing a duplicate action
-// during another one already in progress.
-let _rosterMutationInFlight = false;
+// during another one already in progress. Issue #185: drop handlers also return
+// early while _rosterBusy is set, so a drop during a swap or reorder does nothing.
+let _rosterBusy = false;
 
 async function _withRosterMutationGuard(fn) {
-  if (_rosterMutationInFlight) return;
-  _rosterMutationInFlight = true;
+  if (_rosterBusy) return;
+  _rosterBusy = true;
   try {
     await fn();
   } finally {
-    _rosterMutationInFlight = false;
+    _rosterBusy = false;
   }
+}
+
+/** The focusable card image that triggers activate/deactivate (withBusy locks it). */
+function _rosterCardControl(cardId) {
+  return document.querySelector(`.card-slot[data-card-id="${Number(cardId)}"] .card-img`);
 }
 
 async function showRosterCard(cardId) {
@@ -187,7 +195,10 @@ async function loadRoster(weekId = null) {
     }
 
     const statusEl = document.getElementById("rosterStatus");
-    if (statusEl) { statusEl.textContent = isLocked ? "" : `${active.length}/5 active`; statusEl.className = ""; }
+    if (statusEl && _rosterPendingError) {
+      statusEl.textContent = _rosterPendingError; statusEl.className = "status err";
+    } else if (statusEl) { statusEl.textContent = isLocked ? "" : `${active.length}/5 active`; statusEl.className = ""; }
+    _rosterPendingError = null;
 
     // Item 5 — settle animation whenever a grid was redrawn (not on a no-op refresh)
     const redrawn = [activeWrote && activeGrid, benchWrote && benchGrid].filter(Boolean);
@@ -344,6 +355,7 @@ function _initDragAndDrop() {
     slot.addEventListener("drop", async e => {
       e.preventDefault();
       slot.classList.remove("drag-over", "drag-swap-target");
+      if (_rosterBusy) return;
 
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
@@ -458,6 +470,7 @@ function _initDragAndDrop() {
     slot.addEventListener("drop", async e => {
       e.preventDefault();
       slot.classList.remove("drag-over");
+      if (_rosterBusy) return;
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
       catch (_) { return; }
@@ -480,7 +493,7 @@ function _initDragAndDrop() {
     }
   });
   activeGrid.addEventListener("drop", async e => {
-    if (e.target !== activeGrid || _rosterLocked) return; // per-slot handlers cover direct hits
+    if (e.target !== activeGrid || _rosterLocked || _rosterBusy) return; // per-slot handlers cover direct hits
     e.preventDefault();
     const emptySlots = Array.from(activeGrid.querySelectorAll(".card-slot-empty"));
     if (!emptySlots.length) return;
@@ -511,7 +524,7 @@ function _initDragAndDrop() {
     benchGrid.classList.remove("drag-over");
 
     // Only handle if the drop landed on the container, not on a card-slot child
-    if (e.target !== benchGrid || _rosterLocked) return;
+    if (e.target !== benchGrid || _rosterLocked || _rosterBusy) return;
 
     let payload;
     try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
@@ -524,7 +537,12 @@ function _initDragAndDrop() {
 
     await _withRosterMutationGuard(async () => {
       const res = await fetch(`${API}/roster/${safeId}/deactivate`, { method: "POST" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        const s = document.getElementById("rosterStatus");
+        if (s) { s.textContent = d.detail || "Deactivate failed"; s.className = "status err"; }
+        return;
+      }
       const benchIds = [draggedId, ..._rosterBench.map(c => c.id)];
       await _apiReorder(benchIds);
       loadRoster(_rosterWeekId);
@@ -537,16 +555,21 @@ async function _apiReorder(cardIds, slotIndexes = null) {
   try {
     const body = { card_ids: cardIds };
     if (slotIndexes) body.slot_indexes = slotIndexes;
-    await fetch(`${API}/roster/reorder`, {
+    const res = await fetch(`${API}/roster/reorder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      // Callers reload the roster next; loadRoster shows this instead of the count.
+      const d = await res.json().catch(() => ({}));
+      _rosterPendingError = d.detail || "Reorder failed";
+    }
   } catch (_) {}
 }
 
 async function activateCard(cardId) {
-  await _withRosterMutationGuard(async () => {
+  await _withRosterMutationGuard(() => withBusy(_rosterCardControl(cardId), async () => {
     try {
       const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST" });
       const data = await res.json();
@@ -555,11 +578,11 @@ async function activateCard(cardId) {
     } catch (e) {
       const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
     }
-  });
+  }));
 }
 
 async function deactivateCard(cardId) {
-  await _withRosterMutationGuard(async () => {
+  await _withRosterMutationGuard(() => withBusy(_rosterCardControl(cardId), async () => {
     try {
       const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST" });
       const data = await res.json();
@@ -568,20 +591,22 @@ async function deactivateCard(cardId) {
     } catch (e) {
       const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
     }
-  });
+  }));
 }
 
 async function redeemCode() {
   const code = document.getElementById("redeemCodeInput").value.trim().toUpperCase();
   if (!code) return setStatus("redeemStatus", "Enter a code", false);
-  try {
-    const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code}) });
-    const data = await res.json();
-    if (!res.ok) return setStatus("redeemStatus", data.detail, false);
-    document.getElementById("redeemCodeInput").value = "";
-    updateTokenDisplay(data.tokens ?? null);
-    setStatus("redeemStatus", `+${data.granted} ${_tokenName}!`);
-  } catch (e) {
-    setStatus("redeemStatus", e.message, false);
-  }
+  await withBusy(document.getElementById("redeemBtn"), async () => {
+    try {
+      const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code}) });
+      const data = await res.json();
+      if (!res.ok) return setStatus("redeemStatus", data.detail, false);
+      document.getElementById("redeemCodeInput").value = "";
+      updateTokenDisplay(data.tokens ?? null);
+      setStatus("redeemStatus", `+${data.granted} ${_tokenName}!`);
+    } catch (e) {
+      setStatus("redeemStatus", e.message, false);
+    }
+  });
 }

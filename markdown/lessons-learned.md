@@ -9,6 +9,26 @@ Format:
 
 ---
 
+### 2026-10-13 — developer — frontend
+**Problem:** For #191, three surprises checking the Twitch panel in headless Chromium: Playwright launches it with `--hide-scrollbars`, so screenshots never show the themed scrollbar; `page.click` scrolls the target into view first, which moves `scrollTop` and makes a "scroll position kept" check look broken; and a view hidden with the `hidden` attribute (`display: none`) loses its `scrollTop`, so saving and restoring around `innerHTML` alone does not keep the Roster position across a trip to the bench picker.
+**Solution:** Launch with `chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] })` to see scrollbars, read `scrollTop` after the click rather than before it, and remember each tab view's `scrollTop` in `showView` when it is hidden and restore it when it is shown again. A static server for `twitch-extension/` plus `page.route` for the EBS and the Twitch helper script is enough to render `panel.html` without the backend.
+
+### 2026-10-12 — developer — testing
+**Problem:** Moving the token-grant-event routes out of `routers/admin_users.py` (to stay under test_issue_85's 350-line budget) broke `test_issue_163::test_route_requires_recent_reauth`, which picks the router module to search by path; and a claim loop that checked `TokenGrantClaim` with a query per event autoflushed the previous event's pending claim, so a concurrent claim raised IntegrityError mid-loop, outside the try around `commit()`.
+**Solution:** Before moving routes between router modules, grep `backend/tests` for the route paths and update tests that look routes up per module. For "insert once, then credit" loops, use `INSERT … ON CONFLICT (…) DO NOTHING` per item and act only when `rowcount == 1`, instead of query-then-add.
+
+### 2026-10-11 — developer — testing
+**Problem:** For #185, the threaded draw tests passed even with the old count-then-assign activation: `draw_card` inserts the card (`db.flush()`) before counting, and with pysqlite's legacy transactions that first write takes SQLite's write lock, so draws were already serialised. The real over-limit race was in `_swap_roster_atomic`: it activated the bench card first and didn't check the outgoing card's `rowcount`, so concurrent swaps onto one roster card all succeeded (six of six). Separately, the new partial unique index on active cards broke test seeds that put two active cards of one player in one roster (`test_admin_player_pool.py`, `test_issue_141_stored_card_points.py`).
+**Solution:** Before trusting a concurrency test, run it against the old code (a temporary revert or `git stash push <file>`) and confirm it fails; a race needs a read before the transaction's first write. Make multi-statement roster changes free the slot first and stop on `rowcount == 0`. When adding a constraint, grep test seeds for rows that violate it and fix the seeds, not the constraint.
+
+### 2026-10-11 — developer — endpoints
+**Problem:** For #184, three slowapi/FastAPI details: separate `@limiter.limit(...)` decorators on several routes count each route on its own (the storage key includes the endpoint), so they can't give draws, boosters and rerolls one budget; slowapi's own "ratelimit ... (<key>) exceeded" WARNING names the client IP or `user:<id>`; and an exception raised from a wrapped ASGI `receive` while FastAPI reads the body is caught by FastAPI and turned into a 400, so a body-size middleware can't refuse mid-stream by raising.
+**Solution:** Use `limiter.shared_limit(value, scope="...", key_func=...)` for a budget shared across routes. Add a `logging.Filter` on the `slowapi` logger that drops records starting with "ratelimit " and log your own line without the key. In a body-size middleware, check `Content-Length` up front, and for a body without it read and buffer up to the cap before calling the app (413 past it), then replay the buffered body.
+
+### 2026-10-11 — developer — testing
+**Problem:** Caching `GET /twitch/panel` inside `twitch.panel_live` would have leaked bodies between tests: many tests call `panel_live(payload=..., db=...)` directly on different databases, and a process-wide cache would hand one test's body to the next. Separately, `test_issue_85`'s suite-size baseline (2499) was already 4 short because the Connect Twitch Steam-resume fix added tests without bumping it.
+**Solution:** Keep the plain function uncached and put the cache in a wrapper the route calls (`cached_panel_live`, used by `panel_live_route`), with an autouse fixture that calls `bust_panel_cache()` around each test of the cache. Before bumping the baseline, read the actual count from the failing test's output ("N passed") instead of adding your own test count to the old number.
+
 ### 2026-10-08 — security-reviewer — agent-config
 **Problem:** In a cloud session, `gh api repos/{owner}/{repo}/dependabot/alerts` answers 403 "Resource not accessible by integration": the session's GitHub App token has no Dependabot alerts permission, so the dependency check can't run.
 **Solution:** Report the dependency section as "not checked (403)" rather than "no issues", and ask the user to run the command locally or read the repo's Security › Dependabot tab.

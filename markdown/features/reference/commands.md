@@ -156,7 +156,12 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `TWITCH_DROPS_ENABLED` | `true` | `false` turns MVP token drops off (MVP and bonus still set); see `twitch-extension-policy-compliance.md` |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Idle days before a Twitch viewer soft account is purged by the daily job |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in MVP drop pools; `0` turns it off; website accounts always eligible (#171) |
-| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join, draws, heartbeats and `/twitch/ping` per IP; draws, heartbeats, roster changes and Leave per viewer |
+| `RATE_LIMIT_TWITCH_JOIN` / `RATE_LIMIT_TWITCH_JOIN_IP` / `RATE_LIMIT_TWITCH_ACTION` | `10/minute` / `60/minute` / `30/minute` | Twitch panel: Join per viewer; Join, draws, heartbeats, `GET /twitch/panel` and `/twitch/ping` per IP; draws, heartbeats, `GET /twitch/panel`, roster changes and Leave per viewer |
+| `RATE_LIMIT_CARD_ACTION` / `RATE_LIMIT_CARD_ACTION_IP` | `20/minute` / `60/minute` | One shared budget for `POST /draw`, `POST /draw/booster/{team_id}` and `POST /roster/{card_id}/reroll`, per user and per IP (#184) |
+| `RATE_LIMIT_USER_ACTION` | `60/minute` | Per-user limit on the other player write routes: profile edits, Weekly Report actions, event claims, notification dismissals, sessions, Twitch merge/disconnect, Steam unlink (#184) |
+| `RATE_LIMIT_SIMULATE` | `20/minute` | Per-IP limit on `POST /simulate/{match_id}` (#184) |
+| `MAX_REQUEST_BODY_BYTES` | `65536` | Largest accepted request body; larger gets 413 before any route runs; an invalid value means 65536 (#184) |
+| `TWITCH_PANEL_CACHE_SECONDS` | `30` | Seconds `GET /twitch/panel` serves one shared cached body (public data only); cleared when ingest stores or refreshes a match and when an MVP or match scoring is set; `0` turns it off; an invalid value means 30 |
 | `TWITCH_MVP_CHANNEL_IDS` | *(empty)* | Comma-separated channel IDs always allowed to set MVPs, in addition to channels approved in the admin portal (Admin › Users › Approved streamers, #175). Both empty: no channel with `ENV=production`, any channel otherwise (#165) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `GET /auth/twitch/callback` (#160; replaced `RATE_LIMIT_TWITCH_LINK` with the retired `POST /twitch/link`) |
 | `TWITCH_LOCAL_DEV` | *(unset)* | Set to `true` to bypass Twitch JWT validation locally. Also bypasses the `SECRET_KEY` / `HTTPS_ONLY` startup checks, but startup refuses it together with `SECRET_KEY` — **never set in production** |

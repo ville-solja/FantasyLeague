@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from database import get_db
 from match_scoring import counted_roster_entry_sql, scored_match_sql, scored_stat_sql
+from rate_limit import limiter, RATE_LIMIT_SIMULATE
 from models import Match, SeasonArchive, User, Weight, UserTag, TagDefinition
 from scoring import display_points, fantasy_score, SCORING_STATS
 
@@ -362,7 +363,6 @@ def simulate_docs():
     return _SIMULATE_DOCS
 
 
-@router.post("/simulate/{match_id}")
 def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None):
     """Return fantasy scores for every player in a match under custom weights.
 
@@ -426,3 +426,10 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
         "weights_used": weights_used,
         "players": players,
     }
+
+
+@router.post("/simulate/{match_id}")
+@limiter.limit(RATE_LIMIT_SIMULATE)
+def simulate_match_route(request: Request, match_id: int, db=Depends(get_db),
+                         body: SimulateBody = None):
+    return simulate_match(match_id, db, body)

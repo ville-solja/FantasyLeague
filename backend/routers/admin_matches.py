@@ -9,7 +9,7 @@ from deps import require_admin, _audit
 import ingest
 from models import Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Weight
 from schedule import bust_cache
-from twitch import _apply_mvp_bonus, upsert_mvp
+from twitch import _apply_mvp_bonus, bust_panel_cache, upsert_mvp
 
 router = APIRouter()
 
@@ -124,6 +124,7 @@ def admin_set_mvp(
            detail=f"match {match_id} → player {body.player_id} ({player.name})")
     db.commit()
     bust_cache()
+    bust_panel_cache()
     return {"match_id": match_id, "player_id": body.player_id, "player_name": player.name}
 
 
@@ -225,6 +226,7 @@ def set_match_scoring(
                    f"excluded_from_scoring {old_excluded}->{bool(match.excluded_from_scoring)}"))
     db.commit()
     bust_cache()
+    bust_panel_cache()
     return {
         "match_id": match_id,
         "parse_status": match.parse_status,

@@ -17,6 +17,10 @@ Limits on the cheap ways to game or misuse the Twitch panel: alt accounts farmin
 
 `POST /twitch/heartbeat` (`twitch.heartbeat_route`, Twitch JWT) ignores logged-out viewers: an opaque id not starting with `U` gets `{"ok": true}` and nothing is written. A `U…` id upserts its `twitch_presence` row as before. The route is limited per viewer (`RATE_LIMIT_TWITCH_ACTION`, key `key_by_twitch_viewer_or_ip`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`), like the other panel routes. The plain `twitch.heartbeat(payload, db)` holds the logic.
 
+## Live tab data
+
+`GET /twitch/panel` (`twitch.panel_live_route`) has the same per-viewer and per-IP limits. Every open panel polls it and the body is public, so it is served from one in-memory body shared by all viewers for `TWITCH_PANEL_CACHE_SECONDS` (default 30, `0` off), cleared when ingest stores a match and when an MVP is set. See [Twitch Extension Setup Follow-ups](twitch-extension-setup-followups.md#panel-live-data-cache).
+
 ## Team logos
 
 `backend/logo_hosts.py`:
