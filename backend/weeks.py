@@ -1,7 +1,7 @@
 import logging
 import os
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 import clock
 from match_scoring import scored_match_sql
@@ -173,18 +173,20 @@ def auto_lock_weeks(db):
         week.is_locked = True
         logger.info("Locked %s", week.label)
     if unlocked:
-        users = db.query(User).all()
-        for u in users:
-            u.tokens = (u.tokens or 0) + 1
+        user_ids = [uid for (uid,) in db.query(User.id).all()]
+        if user_ids:
+            # One relative UPDATE (issue #185): never write back balances read earlier.
+            db.query(User).filter(User.id.in_(user_ids)).update(
+                {User.tokens: func.coalesce(User.tokens, 0) + 1}, synchronize_session=False)
         week_labels = ", ".join(w.label for w in unlocked)
         db.add(AuditLog(
             timestamp=int(now),
             actor_id=None,
             actor_username="system",
             action="weekly_token_grant",
-            detail=f"weeks={week_labels} users={len(users)}",
+            detail=f"weeks={week_labels} users={len(user_ids)}",
         ))
-        logger.info("Granted 1 token to %d users (weeks: %s)", len(users), week_labels)
+        logger.info("Granted 1 token to %d users (weeks: %s)", len(user_ids), week_labels)
         db.commit()  # single commit: snapshot + lock flag + token grants
 
 

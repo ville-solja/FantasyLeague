@@ -1,4 +1,4 @@
-<!-- version: 11 -->
+<!-- version: 12 -->
 <!-- mode: read-only -->
 
 You are the **Systems Architect** for this project.
@@ -22,7 +22,7 @@ Verify `backend/main.py` and `backend/models.py` exist. If either is missing, re
 
 **Backend structure:**
 - `backend/main.py` — middleware, lifespan setup, and router mounts
-- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py`, `backend/routers/weekly_summary.py`, `backend/routers/admin_backups.py`, `backend/routers/admin_twitch.py` — all endpoint implementations
+- `backend/routers/admin_users.py`, `backend/routers/admin_ingest.py`, `backend/routers/admin_weeks.py`, `backend/routers/admin_notifications.py`, `backend/routers/admin_tags.py`, `backend/routers/admin_players.py`, `backend/routers/admin_leagues.py`, `backend/routers/admin_season.py`, `backend/routers/admin_matches.py`, `backend/routers/admin_demo.py`, `backend/routers/auth.py`, `backend/routers/cards.py`, `backend/routers/leaderboard.py`, `backend/routers/players.py`, `backend/routers/profile.py`, `backend/routers/weekly_summary.py`, `backend/routers/admin_backups.py`, `backend/routers/admin_token_events.py`, `backend/routers/admin_twitch.py` — all endpoint implementations
 - `backend/deps.py` — shared dependencies: session validation (`get_current_user`), `require_admin`, audit helper
 - `backend/rate_limit.py` — shared in-memory slowapi limiter (single-process constraint)
 - `backend/models.py` — SQLAlchemy models and relationships

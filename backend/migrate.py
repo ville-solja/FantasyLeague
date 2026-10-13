@@ -613,6 +613,50 @@ def _m036_promo_codes_limits(conn):
     logger.info("Migration: promo_codes — added expires_at and max_redemptions columns")
 
 
+_ROSTER_REPAIR_RANK_SQL = """
+    SELECT id, owner_id, ROW_NUMBER() OVER (
+        PARTITION BY owner_id{extra} ORDER BY slot_index IS NULL, slot_index, id) AS rnk
+    FROM cards WHERE is_active = 1 AND owner_id IS NOT NULL
+"""
+
+
+def _m037_cards_active_player_unique(conn):
+    """Issue #185: the partial unique index ux_cards_owner_player_active (one active card
+    per player in a roster). Old rows are repaired first: per owner, active duplicates
+    of a player, then active cards beyond ROSTER_LIMIT, go to the bench, keeping the
+    lowest slot_index, then the lowest id. weekly_roster_entries is never touched."""
+    indexes = {r[1] for r in conn.execute(text("PRAGMA index_list(cards)")).fetchall()}
+    if "ux_cards_owner_player_active" in indexes:
+        return  # created by create_all on a new database
+    roster_limit = int(os.getenv("ROSTER_LIMIT", "5"))
+    benched: dict[int, list[int]] = {}
+    for extra, limit in ((", player_id", 1), ("", roster_limit)):
+        rows = conn.execute(text(
+            f"SELECT id, owner_id FROM ({_ROSTER_REPAIR_RANK_SQL.format(extra=extra)}) "
+            "WHERE rnk > :limit"), {"limit": limit}).fetchall()
+        for card_id, owner_id in rows:
+            conn.execute(text("UPDATE cards SET is_active = 0, slot_index = NULL WHERE id = :id"),
+                         {"id": card_id})
+            benched.setdefault(owner_id, []).append(card_id)
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+    if benched and "audit_logs" in tables:
+        now = int(__import__("time").time())
+        for owner_id, card_ids in sorted(benched.items()):
+            conn.execute(text(
+                "INSERT INTO audit_logs (timestamp, actor_id, actor_username, action, detail) "
+                "VALUES (:ts, NULL, 'system', 'roster_repair_benched', :detail)"),
+                {"ts": now, "detail": f"migration=037 user_id={owner_id} "
+                                      f"card_ids={','.join(str(c) for c in sorted(card_ids))}"})
+    conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_cards_owner_player_active "
+        "ON cards (owner_id, player_id) WHERE is_active = 1"))
+    conn.commit()
+    logger.info("Migration 037: moved %d card(s) of %d user(s) to the bench, "
+                "added ux_cards_owner_player_active",
+                sum(len(v) for v in benched.values()), len(benched))
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -673,6 +717,7 @@ MIGRATIONS = [
     ("034_username_case_and_rename_time", _m034_username_case_and_rename_time),
     ("035_users_admin_seed_applied_at", _m035_users_admin_seed_applied_at),
     ("036_promo_codes_limits",       _m036_promo_codes_limits),
+    ("037_cards_active_player_unique", _m037_cards_active_player_unique),
 ]
 
 

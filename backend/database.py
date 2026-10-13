@@ -64,6 +64,20 @@ def spend_tokens(db, user_id: int, amount: int) -> bool:
     return result.rowcount > 0
 
 
+def credit_tokens(db, user_id: int, amount: int) -> None:
+    """Atomically add `amount` tokens to a user's balance (issue #185).
+
+    A relative UPDATE, never `user.tokens = (user.tokens or 0) + n`: writing back a
+    value read earlier overwrites a spend_tokens() that ran in between. Like
+    spend_tokens, this bypasses the ORM identity map — db.refresh(user) afterwards
+    when the ORM object's balance is used. An unknown user_id changes nothing.
+    """
+    db.execute(
+        text("UPDATE users SET tokens = COALESCE(tokens, 0) + :amt WHERE id = :uid"),
+        {"amt": amount, "uid": user_id},
+    )
+
+
 DEFAULT_BACKUP_RETENTION_DAYS = 14
 
 

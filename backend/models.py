@@ -589,6 +589,10 @@ Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)
 Index('ix_cards_player_id',  Card.player_id)
+# Issue #185: at most one active card per player in a roster. Partial (active cards
+# only); migration 037 repairs old rows and adds it to existing databases.
+Index('ux_cards_owner_player_active', Card.owner_id, Card.player_id, unique=True,
+      sqlite_where=Card.is_active == True)  # noqa: E712
 Index('ix_wre_user_week',    WeeklyRosterEntry.user_id, WeeklyRosterEntry.week_id)
 Index('ix_presence_channel_seen', TwitchPresence.channel_id, TwitchPresence.seen_at)
 Index('ix_matches_week_override_id', Match.week_override_id)

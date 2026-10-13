@@ -60,7 +60,7 @@
       </section>
     </div>
     <div id="weeklySummaryRevealFooter" class="weekly-summary-reveal-footer hidden">
-      <button onclick="revealAllWeeklySummaries()">Reveal results</button>
+      <button id="weeklySummaryRevealBtn" onclick="revealAllWeeklySummaries()">Reveal results</button>
     </div>
   </div>
 </div>
@@ -203,7 +203,7 @@
     <div id="rerollConfirm" style="display:none;background:#111;border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:8px;font-size:0.85rem;color:#aaa;">
       Spend 1 token to reroll this card's modifiers?
       <div style="margin-top:10px;display:flex;gap:8px;">
-        <button onclick="confirmReroll()" style="flex:1;">Confirm</button>
+        <button id="rerollConfirmBtn" onclick="confirmReroll()" style="flex:1;">Confirm</button>
         <button class="ghost" onclick="closeRerollConfirm()" style="flex:1;">Cancel</button>
       </div>
       <div id="rerollStatus" style="margin-top:6px;font-size:0.78rem;color:#e05;"></div>
@@ -569,7 +569,7 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-top:16px;margin-bottom:8px;">Promo code</h3>
       <div style="display:flex;align-items:center;gap:8px;">
         <input id="redeemCodeInput" type="text" placeholder="Promo code" style="max-width:160px;text-transform:uppercase;" />
-        <button class="secondary" onclick="redeemCode()">Redeem</button>
+        <button id="redeemBtn" class="secondary" onclick="redeemCode()">Redeem</button>
         <div class="status" id="redeemStatus" style="margin:0;"></div>
       </div>
       <div style="margin-top:14px;font-size:0.82rem;">

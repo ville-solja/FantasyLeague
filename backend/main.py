@@ -47,6 +47,7 @@ from routers import leaderboard as leaderboard_router
 from routers import cards as cards_router
 from routers import admin_users as admin_users_router
 from routers import admin_twitch as admin_twitch_router
+from routers import admin_token_events as admin_token_events_router
 from routers import admin_ingest as admin_ingest_router
 from routers import admin_weeks as admin_weeks_router
 from routers import admin_notifications as admin_notifications_router
@@ -793,6 +794,7 @@ app.include_router(leaderboard_router.router)
 app.include_router(cards_router.router)
 app.include_router(admin_users_router.router)
 app.include_router(admin_twitch_router.router)
+app.include_router(admin_token_events_router.router)
 app.include_router(admin_ingest_router.router)
 app.include_router(admin_weeks_router.router)
 app.include_router(admin_notifications_router.router)

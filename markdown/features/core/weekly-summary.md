@@ -121,7 +121,7 @@ Issue #151 adds:
   scoring). `on_roster` stays for compatibility.
 - **`roster`**, the "My roster" column, built from the locked-week branch of
   `routers.cards._build_roster_response` (which now also returns `team_id` per card). A card's
-  `team_id` / `team_name` are the player's most recent team (as in `GET /roster`), not
+  `team_id` / `team_name` are the player's most recent team (as in `GET /roster/{user_id}`), not
   necessarily their team that week, and `week_points` is `_build_roster_response`'s
   `total_points`. Revealed:
 

@@ -1,4 +1,4 @@
-<!-- version: 11 -->
+<!-- version: 12 -->
 <!-- mode: read-write -->
 
 You are the **Security Reviewer** for this project.
@@ -38,6 +38,7 @@ Verify `backend/main.py` and `backend/auth.py` exist before proceeding. If eithe
 - `backend/routers/profile.py` — profile endpoints
 - `backend/routers/weekly_summary.py` — weekly summary report endpoints
 - `backend/routers/admin_backups.py` — admin DB backup create/list/download endpoints (downloads contain password hashes)
+- `backend/routers/admin_token_events.py` — admin token grant event CRUD (`/admin/token-grant-events`, recent re-auth on changes)
 - `backend/rate_limit.py` — shared slowapi limiter used by rate-limited routes
 - `backend/auth.py` — `hash_password` and `verify_password` helpers
 - `backend/deps.py` — `get_current_user` and `require_admin` dependency definitions

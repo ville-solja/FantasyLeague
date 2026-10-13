@@ -19,7 +19,7 @@ import os
 import time
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 
 import card_points
@@ -186,6 +186,11 @@ def find_by_twitch_account_id(db, real_id) -> User | None:
     return db.query(User).filter(User.twitch_account_id == str(real_id)).first()
 
 
+class SoftAccountGone(Exception):
+    """merge_soft_into found the soft account already deleted (a simultaneous merge or
+    deletion won). Nothing was moved; the caller rolls back."""
+
+
 def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
     """Move a soft account's cards (to the bench) and tokens into a website account,
     log the merge for 30 days, then delete the soft account with every row it owns
@@ -195,9 +200,23 @@ def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
         raise ValueError("merge_soft_into needs a soft account and a website account")
     now = int(now if now is not None else time.time())
     soft_id = soft.id
+    # Issue #185: move the balance with relative updates, never read-then-write both
+    # rows. The first UPDATE takes SQLite's write lock for this transaction, so the
+    # soft balance read next is the one it added and no spend can land in between.
+    # A soft row already gone (a simultaneous merge deleted it) adds 0 and aborts below.
+    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) + COALESCE("
+                    "(SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft), 0) WHERE id = :full"),
+               {"soft": soft_id, "full": full.id})
+    row = db.execute(text("SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft"),
+                     {"soft": soft_id}).first()
+    if row is None:
+        raise SoftAccountGone("The soft account was merged or deleted by another request")
+    tokens = int(row[0])
+    db.execute(text("UPDATE users SET tokens = 0 WHERE id = :soft"), {"soft": soft_id})
+    db.expire(full, ["tokens"])
+    db.expire(soft, ["tokens"])
     cards = db.query(Card).filter(Card.owner_id == soft_id).order_by(Card.id).all()
     card_ids = [c.id for c in cards]
-    tokens = int(soft.tokens or 0)
     entries = (db.query(WeeklyRosterEntry).filter(WeeklyRosterEntry.user_id == soft_id)
                .order_by(WeeklyRosterEntry.id).all())
     roster_snapshot = [{f: (bool(getattr(e, f)) if f in ("is_bench", "subbed_in", "subbed_out")
@@ -223,8 +242,6 @@ def merge_soft_into(db, soft: User, full: User, now: int | None = None) -> dict:
         card.owner_id = full.id
         card.is_active = False
         card.slot_index = None
-    full.tokens = int(full.tokens or 0) + tokens
-    soft.tokens = 0
     opaque_id = soft.twitch_user_id
     soft.twitch_user_id = None
     soft.twitch_account_id = None
@@ -309,8 +326,14 @@ def reverse_merge(db, log: TwitchMergeLog, actor: dict | None = None,
         card.slot_index = None
     returned_ids = {c.id for c in cards}
 
-    taken = min(int(full.tokens or 0), tokens_moved)
-    full.tokens = int(full.tokens or 0) - taken
+    # Relative update (issue #185). The soft-account INSERT above holds SQLite's write
+    # lock, so the balance read here can't change before the UPDATE.
+    balance = int(db.execute(text("SELECT COALESCE(tokens, 0) FROM users WHERE id = :uid"),
+                             {"uid": full.id}).scalar() or 0)
+    taken = min(balance, tokens_moved)
+    db.execute(text("UPDATE users SET tokens = COALESCE(tokens, 0) - :taken WHERE id = :uid"),
+               {"taken": taken, "uid": full.id})
+    db.expire(full, ["tokens"])
     shortfall = tokens_moved - taken
 
     week_ids = {w for (w,) in db.query(Week.id).all()}

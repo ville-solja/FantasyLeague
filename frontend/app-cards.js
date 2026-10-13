@@ -231,7 +231,7 @@ let _revealKeyHandler = null;
 
 function showReveal(card, boosterTeamId = null) {
   _revealBoosterTeamId = boosterTeamId ?? null;
-  showCard(card, card.is_active ? "Added to active roster" : "Added to bench (roster full)", {
+  showCard(card, card.is_active ? "Added to active roster" : "Added to bench", {
     drawAnimation: true,
     showActionBtn: true,
   });
@@ -274,88 +274,92 @@ function closeRerollConfirm() {
 async function confirmReroll() {
   if (!_openCardId) return;
   const statusEl = document.getElementById("rerollStatus");
+  const confirmBtn = document.getElementById("rerollConfirmBtn");
+  if (confirmBtn && confirmBtn.disabled) return;
   statusEl.textContent = "";
-  try {
-    const res = await fetch(`${API}/roster/${_openCardId}/reroll`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      statusEl.textContent = data.detail || "Reroll failed.";
-      return;
-    }
-    updateTokenDisplay(data.tokens);
-    closeRerollConfirm();
-    bumpCardImageCacheBust();
-    // Update cached roster card if present
-    const cached = _rosterCards.find(x => x.id === _openCardId);
-    if (cached) cached.modifiers = data.modifiers;
-    // Refresh card art (modifiers are painted on PNG) + roster thumbnails
-    const img = document.getElementById("revealCardImg");
-    const placeholder = document.getElementById("revealImgPlaceholder");
-    if (img && placeholder && _openCardId) {
-      const modal = document.getElementById("revealModal");
-      const imgWrap = document.getElementById("revealImgWrap") || (modal && modal.querySelector(".reveal-img-wrap"));
-      const reduceMotion = _prefersReducedMotion();
-      const t0 = performance.now();
-      const minWait = reduceMotion ? 0 : REROLL_IMAGE_MIN_MS;
-      const src = cardImageUrl(_openCardId);
-      img.style.display = "none";
-      placeholder.style.display = "flex";
-      placeholder.textContent = "";
-      placeholder.setAttribute("aria-busy", "true");
-      placeholder.setAttribute("aria-label", "Updating card image");
-      placeholder.classList.add("reveal-img-placeholder--drawing");
-      placeholder.classList.toggle("reveal-img-placeholder--static", reduceMotion);
-      const tmp = new window.Image();
-      tmp.onload = () => {
-        const reveal = () => {
-          img.src = src;
-          img.style.display = "";
-          img.style.opacity = "1";
-          img.style.visibility = "hidden";
-          const afterBitmapReady = () => {
-            img.style.visibility = "visible";
-            placeholder.style.display = "none";
-            placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
-            placeholder.removeAttribute("aria-label");
-            placeholder.setAttribute("aria-busy", "false");
-            if (!reduceMotion) {
-              img.classList.add("reveal-card-img--reroll-flash");
-              setTimeout(() => img.classList.remove("reveal-card-img--reroll-flash"), 400);
+  await withBusy(confirmBtn, async () => {
+    try {
+      const res = await fetch(`${API}/roster/${_openCardId}/reroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        statusEl.textContent = data.detail || "Reroll failed.";
+        return;
+      }
+      updateTokenDisplay(data.tokens);
+      closeRerollConfirm();
+      bumpCardImageCacheBust();
+      // Update cached roster card if present
+      const cached = _rosterCards.find(x => x.id === _openCardId);
+      if (cached) cached.modifiers = data.modifiers;
+      // Refresh card art (modifiers are painted on PNG) + roster thumbnails
+      const img = document.getElementById("revealCardImg");
+      const placeholder = document.getElementById("revealImgPlaceholder");
+      if (img && placeholder && _openCardId) {
+        const modal = document.getElementById("revealModal");
+        const imgWrap = document.getElementById("revealImgWrap") || (modal && modal.querySelector(".reveal-img-wrap"));
+        const reduceMotion = _prefersReducedMotion();
+        const t0 = performance.now();
+        const minWait = reduceMotion ? 0 : REROLL_IMAGE_MIN_MS;
+        const src = cardImageUrl(_openCardId);
+        img.style.display = "none";
+        placeholder.style.display = "flex";
+        placeholder.textContent = "";
+        placeholder.setAttribute("aria-busy", "true");
+        placeholder.setAttribute("aria-label", "Updating card image");
+        placeholder.classList.add("reveal-img-placeholder--drawing");
+        placeholder.classList.toggle("reveal-img-placeholder--static", reduceMotion);
+        const tmp = new window.Image();
+        tmp.onload = () => {
+          const reveal = () => {
+            img.src = src;
+            img.style.display = "";
+            img.style.opacity = "1";
+            img.style.visibility = "hidden";
+            const afterBitmapReady = () => {
+              img.style.visibility = "visible";
+              placeholder.style.display = "none";
+              placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+              placeholder.removeAttribute("aria-label");
+              placeholder.setAttribute("aria-busy", "false");
+              if (!reduceMotion) {
+                img.classList.add("reveal-card-img--reroll-flash");
+                setTimeout(() => img.classList.remove("reveal-card-img--reroll-flash"), 400);
+              }
+            };
+            if (typeof img.decode === "function") {
+              img.decode().then(afterBitmapReady).catch(afterBitmapReady);
+            } else {
+              requestAnimationFrame(afterBitmapReady);
             }
           };
-          if (typeof img.decode === "function") {
-            img.decode().then(afterBitmapReady).catch(afterBitmapReady);
-          } else {
-            requestAnimationFrame(afterBitmapReady);
-          }
+          const elapsed = performance.now() - t0;
+          const delay = Math.max(0, minWait - elapsed);
+          if (delay > 0) setTimeout(reveal, delay);
+          else reveal();
         };
-        const elapsed = performance.now() - t0;
-        const delay = Math.max(0, minWait - elapsed);
-        if (delay > 0) setTimeout(reveal, delay);
-        else reveal();
-      };
-      tmp.onerror = () => {
-        placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
-        placeholder.removeAttribute("aria-label");
-        placeholder.setAttribute("aria-busy", "false");
-        placeholder.textContent = "Could not load card";
-      };
-      tmp.src = src;
+        tmp.onerror = () => {
+          placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+          placeholder.removeAttribute("aria-label");
+          placeholder.setAttribute("aria-busy", "false");
+          placeholder.textContent = "Could not load card";
+        };
+        tmp.src = src;
+      }
+      loadRoster(_rosterWeekId);
+      // Gray out button if out of tokens
+      const rerollBtn = document.getElementById("rerollBtn");
+      if (rerollBtn && data.tokens < 1) {
+        rerollBtn.disabled = true;
+        rerollBtn.style.opacity = "0.4";
+        rerollBtn.style.cursor = "not-allowed";
+      }
+    } catch (e) {
+      statusEl.textContent = "Network error.";
     }
-    loadRoster(_rosterWeekId);
-    // Gray out button if out of tokens
-    const rerollBtn = document.getElementById("rerollBtn");
-    if (rerollBtn && data.tokens < 1) {
-      rerollBtn.disabled = true;
-      rerollBtn.style.opacity = "0.4";
-      rerollBtn.style.cursor = "not-allowed";
-    }
-  } catch (e) {
-    statusEl.textContent = "Network error.";
-  }
+  });
 }
 
 async function loadDeck() {
@@ -472,7 +476,13 @@ function closeBoosterModal() {
   if (drawBtn) drawBtn.disabled = true;
 }
 
+// Issue #185: the reveal's "Draw another card" (button or Enter) repeats a team draw
+// without the modal's button, so this flag keeps it to one request at a time.
+let _boosterDrawInFlight = false;
+
 async function _drawBoosterForTeam(teamId) {
+  if (_boosterDrawInFlight) return;
+  _boosterDrawInFlight = true;
   try {
     const res = await fetch(`${API}/draw/booster/${teamId}`, { method: "POST" });
     const data = await res.json();
@@ -485,42 +495,41 @@ async function _drawBoosterForTeam(teamId) {
     loadRoster(_rosterWeekId);
   } catch (e) {
     setStatus("deckStatus", e.message, false);
+  } finally {
+    _boosterDrawInFlight = false;
   }
 }
 
 async function drawBooster() {
   if (!_selectedBoosterTeamId) return;
   const btn = document.getElementById("boosterDrawBtn");
-  if (btn) btn.disabled = true;
+  if (!btn || btn.disabled) return;
   try {
-    await _drawBoosterForTeam(_selectedBoosterTeamId);
-    closeBoosterModal();
+    await withBusy(btn, () => _drawBoosterForTeam(_selectedBoosterTeamId));
   } catch (e) {
     setStatus("boosterStatus", e.message, false);
-  } finally {
-    if (btn) btn.disabled = false;
   }
+  // After withBusy re-enabled the button: closing disables it until a team is picked.
+  closeBoosterModal();
 }
 
 async function drawCard() {
   const btn = document.getElementById("drawBtn");
-  if (btn && btn.disabled) return;
-  if (btn) btn.disabled = true;
-  try {
-    const res = await fetch(`${API}/draw`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) return setStatus("deckStatus", data.detail, false);
-    updateTokenDisplay(data.tokens ?? null);
-    if (data.id) {
-      const warm = new window.Image();
-      warm.src = cardImageUrl(data.id);
+  await withBusy(btn, async () => {
+    try {
+      const res = await fetch(`${API}/draw`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) return setStatus("deckStatus", data.detail, false);
+      updateTokenDisplay(data.tokens ?? null);
+      if (data.id) {
+        const warm = new window.Image();
+        warm.src = cardImageUrl(data.id);
+      }
+      showReveal(data);
+      loadDeck();
+      loadRoster(_rosterWeekId);
+    } catch (e) {
+      setStatus("deckStatus", e.message, false);
     }
-    showReveal(data);
-    loadDeck();
-    loadRoster(_rosterWeekId);
-  } catch (e) {
-    setStatus("deckStatus", e.message, false);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
+  });
 }

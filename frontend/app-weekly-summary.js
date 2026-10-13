@@ -737,16 +737,20 @@ function _updateWeeklySummaryRevealFooter() {
 }
 
 async function revealAllWeeklySummaries() {
-  try {
-    const res = await fetch(`${API}/weekly-summary/reveal-all`, { method: 'POST' });
-    if (!res.ok) return;
-    // Revealed data must never come from a pre-reveal cache entry.
-    _weeklySummaryWeeks.forEach(w => { _weeklySummaryCache.delete(w.week_id); w.revealed = true; });
-    _updateWeeklySummaryRevealFooter();
-    if (_weeklySummaryActiveWeekId != null) {
-      await selectWeeklySummaryTab(_weeklySummaryActiveWeekId);
-    }
-  } catch (_) {}
+  let revealed = false;
+  await withBusy(document.getElementById('weeklySummaryRevealBtn'), async () => {
+    try {
+      const res = await fetch(`${API}/weekly-summary/reveal-all`, { method: 'POST' });
+      if (!res.ok) return;
+      // Revealed data must never come from a pre-reveal cache entry.
+      _weeklySummaryWeeks.forEach(w => { _weeklySummaryCache.delete(w.week_id); w.revealed = true; });
+      _updateWeeklySummaryRevealFooter();
+      revealed = true;
+    } catch (_) {}
+  });
+  if (revealed && _weeklySummaryActiveWeekId != null) {
+    await selectWeeklySummaryTab(_weeklySummaryActiveWeekId);
+  }
 }
 
 async function markWeeklySummarySeen() {

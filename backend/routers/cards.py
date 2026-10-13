@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 import card_points
@@ -27,6 +28,8 @@ from weeks import get_next_editable_week, substitution_delay_hours
 router = APIRouter()
 
 ROSTER_LIMIT = int(os.getenv("ROSTER_LIMIT", "5"))
+
+DUPLICATE_ACTIVE_DETAIL = "A card for this player is already active"
 
 # Per-user limit on roster activate/deactivate/swap/reorder (issue #124). Keyed by
 # session user_id (falls back to source IP if somehow unauthenticated — see
@@ -254,6 +257,16 @@ def get_deck(request: Request, db=Depends(get_db)):
     return {r: sum(1 for _, rr in available if rr == r) for r in rarities}
 
 
+def _activate_new_card(db, card: Card, user_id: int) -> bool:
+    """Put a freshly drawn (flushed, benched) card into the active roster when there is
+    room and no other active card has its player (issue #185). The check and the write
+    are one UPDATE (_activate_card_atomic), so concurrent draws or a draw racing an
+    activation can't overfill the roster. Returns what was stored."""
+    activated = _activate_card_atomic(db, card.id, user_id, card.player_id, ROSTER_LIMIT)
+    db.refresh(card)
+    return activated
+
+
 def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
@@ -278,12 +291,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     )
     db.add(card)
     db.flush()
-
-    active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
-    ).count()
-    is_active = active_count < ROSTER_LIMIT
-    card.is_active = is_active
+    is_active = _activate_new_card(db, card, user_id)
 
     _assign_modifiers(db, card, weights)
     card_points.refresh_card_points(db, card_ids=[card.id])
@@ -412,11 +420,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
                 league_id=None, is_active=False, generation=1)
     db.add(card)
     db.flush()
-
-    active_count = db.query(Card).filter(
-        Card.owner_id == user_id, Card.is_active == True
-    ).count()
-    card.is_active = active_count < ROSTER_LIMIT
+    is_active = _activate_new_card(db, card, user_id)
 
     _assign_modifiers(db, card, weights_map)
     card_points.refresh_card_points(db, card_ids=[card.id])
@@ -445,7 +449,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "avatar_url": player.avatar_url,
         "team_name": team_row.name if team_row else team.name,
         "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
-        "is_active": card.is_active,
+        "is_active": is_active,
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
     }
@@ -616,9 +620,14 @@ def activate_card(card_id: int, db=Depends(get_db), current_user: dict = Depends
         Card.id != card_id,
     ).first()
     if duplicate:
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
 
-    if not _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT):
+    try:
+        activated = _activate_card_atomic(db, card_id, user_id, card.player_id, ROSTER_LIMIT)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
+    if not activated:
         db.rollback()
         raise HTTPException(status_code=409, detail=f"Roster full ({ROSTER_LIMIT} cards max)")
     db.commit()
@@ -687,12 +696,19 @@ def swap_roster(body: SwapRequest, user=Depends(get_current_user), db=Depends(ge
         Card.id != active_card.id,
     ).first()
     if duplicate:
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
 
-    if not _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
-                                bench_card.player_id, body.slot_index):
+    try:
+        swapped = _swap_roster_atomic(db, body.bench_card_id, body.active_card_id, user_id,
+                                      bench_card.player_id, body.slot_index)
+    except IntegrityError:
+        swapped = False  # the unique index refused a second active card for the player
+    if not swapped:
         db.rollback()
-        raise HTTPException(status_code=409, detail="A card for this player is already active")
+        # Another request benched the outgoing card first: same answer as the check above.
+        if not db.query(Card).filter_by(id=body.active_card_id, owner_id=user_id, is_active=True).first():
+            raise HTTPException(status_code=404, detail="Card not found")
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
     db.commit()
     return {"ok": True}
 

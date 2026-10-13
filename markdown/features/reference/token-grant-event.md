@@ -19,6 +19,8 @@ Removing an event cancels future claims but does not claw back tokens already gr
 
 ## Endpoints
 
+The admin routes live in `backend/routers/admin_token_events.py`; `POST /claim-events` in `backend/routers/auth.py`.
+
 ### `GET /admin/token-grant-events` Returns all events ordered by start time descending. Each row includes a `claim_count`
 of players who have claimed.
 
@@ -28,7 +30,11 @@ Validates amount ≥ 1, end_time > start_time.
 ### `DELETE /admin/token-grant-events/{id}` Admin only. Deletes the event. Existing claims and granted tokens are unaffected.
 
 ### `POST /claim-events` Auth required. Checks all currently active events, grants tokens for any unclaimed,
-returns `{ granted: N }`. Called automatically on page load for logged-in users.
+returns `{ granted: N, tokens: <balance> }`. Called automatically on page load for logged-in users.
+Each event's claim row is inserted with `INSERT … ON CONFLICT (event_id, user_id) DO NOTHING`; the
+event is credited (`credit_tokens`, a relative `UPDATE`) only when that insert added the row. So a
+simultaneous request never double-credits and never fails: whichever request inserts a claim
+first credits that event, and the other skips it (issue #185).
 
 ---
 

@@ -306,14 +306,18 @@ class TestPreserveExistingTestCoverageThroughSplit:
         parametrized) did after that (its update to test_issue_180's console test for the
         two new console entries changed no counts), and plan-issue-184-action-throttling's
         49 new tests (34 stubs, two of them parametrized) did after that (its updates to
-        test_issue_121/124 for the new 429 text changed no counts)."""
+        test_issue_121/124 for the new 429 text changed no counts), and
+        plan-issue-185-atomic-roster-and-token-operations's 52 new tests (40 stubs plus 4,
+        plus 8 for the security review follow-ups) did after that (its seed fixes in
+        test_admin_player_pool and test_issue_141 for the one-active-card-per-player index,
+        and test_issue_163's lookup of the moved token-grant-event routes, changed no counts)."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2590 passed" in output, output[-3000:]
+        assert "2642 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

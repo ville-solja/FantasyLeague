@@ -151,8 +151,10 @@ Regular users redeem a code via this endpoint. Returns the number of tokens gran
 Limited to 5 requests a minute per user (`RATE_LIMIT_REDEEM`), so codes cannot be guessed by
 brute force; the next request returns 429. An unknown, expired or used-up code all return 404
 `"Invalid or expired code"`, so a code's existence can't be probed (issue #167); a code this user
-already redeemed returns 409. Two simultaneous redemptions of a code's last use can both succeed,
-so `max_redemptions` can be exceeded by one.
+already redeemed returns 409. The redemption row is inserted only while the code is under
+`max_redemptions`, in the same statement that counts the redemptions, so simultaneous redemptions
+never exceed the cap (issue #185); tokens are credited only after that insert. Because the cap is
+checked at the insert, a user who already redeemed a code that has since reached its cap gets 409, not 404.
 
 ---
 

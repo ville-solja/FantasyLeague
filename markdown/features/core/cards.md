@@ -25,7 +25,7 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 - If the user already owns at least one card of every active player, the uniqueness constraint is relaxed and any player may be selected.
 - If no players exist in the database at all, the draw returns 409.
 - Each draw **creates a new Card row** — there is no shared pre-generated pool to exhaust.
-- If the user has fewer than 5 active roster slots filled, the card is placed into the **active roster** automatically. Otherwise it goes to the **bench**.
+- The new card joins the **active roster** when fewer than `ROSTER_LIMIT` (default 5) cards are active and no active card has the same player; otherwise it goes to the **bench**. The check and the activation are one conditional `UPDATE` (`_activate_card_atomic`), so fast or concurrent draws can't overfill the roster (#185; see [Atomic Roster and Token Operations](../reference/atomic-roster-and-token-operations.md)).
 
 ## Deck Structure
 
@@ -217,7 +217,7 @@ match the caller's own ID, unless the caller is an admin (admins can view any us
 Moves a benched card into the active roster. Requires authentication; the card must be owned by the caller.
 
 - Returns 409 `"Roster full ({ROSTER_LIMIT} cards max)"` if the user already has `ROSTER_LIMIT` active cards (default: 5).
-- Returns 409 `"A card for this player is already active"` if another card for the same player is already active.
+- Returns 409 `"A card for this player is already active"` if another card for the same player is already active. The partial unique index `ux_cards_owner_player_active` (#185) refuses a second active card for one player at the database level; a write it refuses answers the same 409.
 - Returns `{ "status": "ok", "card_id": N }` on success.
 
 ---
@@ -244,8 +244,9 @@ assign explicit positions instead. Requires authentication. See
 
 Atomically activates a bench card into a given slot while deactivating an active card, applying
 the same duplicate-player guard as `activate`. Requires authentication. Returns 404 if either
-card isn't found in the expected zone; 409 on a duplicate-player conflict. See
-`reference/my-team-drag-and-drop.md`.
+card isn't found in the expected zone; 409 on a duplicate-player conflict. The outgoing card is
+benched first, in a statement that checks it is still active; when it isn't (another swap took
+it), nothing changes and the answer is 404, as when the card isn't in the expected zone (#185). See `reference/my-team-drag-and-drop.md`.
 
 ---
 
@@ -310,7 +311,7 @@ Draws one card. A new Card row is created on demand — no pre-generated pool is
 
 `is_active` is `true` if the card was placed directly into the active roster, `false` if it went to the bench. `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST` (#171).
 
-The card is automatically placed in the active roster if fewer than `ROSTER_LIMIT` slots are filled; otherwise it goes to the bench. The action is recorded in the audit log (`token_draw`).
+The card is placed in the active roster when fewer than `ROSTER_LIMIT` cards are active and no active card has the same player; otherwise it goes to the bench, and the draw still succeeds. `is_active` is what was stored. The action is recorded in the audit log (`token_draw`).
 
 ---
 

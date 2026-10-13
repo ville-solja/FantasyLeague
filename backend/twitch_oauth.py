@@ -348,6 +348,9 @@ def merge_confirm(db, current_user: dict) -> dict:
     try:
         result = soft_accounts.merge_soft_into(db, soft, user)
         db.commit()
+    except soft_accounts.SoftAccountGone:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="That Twitch collection is gone; refresh the page")
     except Exception:
         db.rollback()
         raise

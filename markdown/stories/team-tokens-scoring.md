@@ -752,3 +752,72 @@ As a player reading my weekly recap, I want its text large and clear enough to r
 - Points use tabular numerals.
 - Font sizes use `rem` tokens, so the browser's font-size setting scales the report.
 - A static test (`backend/tests/test_weekly_report_readability.py`) fails if any of these regress.
+
+
+## Atomic Roster and Token Operations (#185)
+
+### Draws Never Overfill the Roster
+**User story**
+As a player, I want a newly drawn card to join my active roster only when there is room and no other active card has the same player, so that fast draws can't push my roster past the limit or give me duplicates.
+
+**Acceptance criteria**
+- `draw_card` and `draw_booster` activate the new card only through `_activate_card_atomic` (roster count and duplicate-player check in the same `UPDATE`); if it returns `False`, the card stays on the bench and the draw still succeeds
+- Ten concurrent draws for a player with an empty roster leave exactly `ROSTER_LIMIT` active cards, never more, and no two active cards with the same `player_id`
+- A draw running concurrently with `POST /roster/{card_id}/activate` never leaves more than `ROSTER_LIMIT` active cards
+- The Twitch panel's draw and booster draw (which call the same functions) get the same guarantee
+- The draw response's `is_active` reflects what was actually stored
+
+### The Database Refuses Duplicate Active Players
+**User story**
+As the operator, I want the database itself to refuse two active cards for the same player in one roster so that no future code path can bring the duplicate back.
+
+**Acceptance criteria**
+- A numbered migration repairs existing data first. Per owner, it deactivates extra active cards beyond `ROSTER_LIMIT`, and active duplicates of the same player, keeping the lowest `slot_index`, then the lowest `id`. It logs how many cards it moved to the bench, and writes an audit entry per affected user.
+- The same migration then creates the partial unique index `ux_cards_owner_player_active ON cards(owner_id, player_id) WHERE is_active = 1`
+- Any write that would create a second active card for the same owner and player fails with an integrity error. Routes turn it into the existing 409 "A card for this player is already active", never a 500.
+- Weekly roster snapshots (`weekly_roster_entries`) of locked weeks are not changed by the repair
+
+### Token Balances Change Atomically
+**User story**
+As a player, I want every token credit and spend applied as one database operation so that a reward arriving while I draw never makes tokens disappear or reappear.
+
+**Acceptance criteria**
+- A `credit_tokens(db, user_id, amount)` helper next to `spend_tokens` runs `UPDATE users SET tokens = COALESCE(tokens, 0) + :amount WHERE id = :uid`
+- All eight ORM credits use it, or an equivalent relative update in bulk paths:
+  - event claims (`routers/auth.py`)
+  - promo redeem and admin grant (`routers/admin_users.py`)
+  - MVP token drops (`twitch.py`)
+  - weekly lock grants (`weeks.py`)
+  - player-removal refunds (`routers/admin_players.py`)
+  - the soft-account merge and reverse (`soft_accounts.py`)
+- The merge moves the soft account's balance in one transaction with relative updates. It must not read the balance, then write both rows.
+- A concurrent claim and draw on one account end with balance = start + credit − spend
+- A test fails if any file under `backend/` (outside `database.py` and tests) assigns `.tokens =`
+
+### Promo Codes Respect Their Use Cap Under Load
+**User story**
+As an admin, I want a promo code with a use cap to stop at exactly that many redemptions even when many players redeem it at once.
+
+**Acceptance criteria**
+- The redemption row is inserted with one `INSERT … SELECT … WHERE` that counts existing redemptions of the code below `max_redemptions` (unlimited when `NULL`); tokens are credited only when that insert's `rowcount` is 1
+- Twenty concurrent redemptions of a code capped at 5, by different users, give exactly 5 redemptions and 5 credits; the rest get the existing 404 "invalid code" answer
+- One user redeeming twice still gets the existing 409 "Code already redeemed"
+
+### Concurrent Swaps Never Overfill the Roster
+**User story**
+As a player, I want two swaps onto the same roster card (a double drop, two tabs) to make exactly one change so that my roster never grows past the limit.
+
+**Acceptance criteria**
+- `_swap_roster_atomic` benches the outgoing card first, only while it is still active, and stops when that changes no row; only then does it activate the bench card, with the duplicate-player check in the same `UPDATE`
+- Of several concurrent swaps onto one active card, exactly one succeeds; the others answer 404 "Card not found" and change nothing
+- The roster never holds more than `ROSTER_LIMIT` active cards after concurrent swaps (`test_concurrent_swaps_onto_one_active_card_never_overfill`, which fails on the pre-#185 order)
+
+### Website Actions Wait for Their Answer
+**User story**
+As a player, I want a button to stay disabled until its action finishes so that a double click doesn't send the same action twice.
+
+**Acceptance criteria**
+- Draw, booster draw, reroll confirm, activate, deactivate, swap (drag), reorder, redeem and Weekly Report reveal buttons are disabled from the click until the response is handled, then re-enabled. They stay disabled where the new state calls for it, e.g. no tokens.
+- A second click during the request sends no second request
+- A failed request re-enables the button and shows the error
+- Roster drag-and-drop ignores new drops while a swap or reorder request is running

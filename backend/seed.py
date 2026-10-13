@@ -191,19 +191,21 @@ def seed_weights():
         raise ValueError(f"DEFAULT_WEIGHTS missing required keys: {missing}")
 
     db = SessionLocal()
-    for w in DEFAULT_WEIGHTS:
-        existing = db.get(Weight, w["key"])
-        target_value = env_overrides.get(w["key"], w["value"])
-        if existing is None:
-            db.add(Weight(key=w["key"], label=w["label"], value=target_value))
-            logger.info("Weight %s = %s", w["key"], target_value)
-        elif w["key"] in env_overrides and existing.value != target_value:
-            logger.info("Weight %s overridden by env: %s → %s", w["key"], existing.value, target_value)
-            existing.value = target_value
-        if existing is not None and existing.label != w["label"]:
-            existing.label = w["label"]
-    db.commit()
-    db.close()
+    try:
+        for w in DEFAULT_WEIGHTS:
+            existing = db.get(Weight, w["key"])
+            target_value = env_overrides.get(w["key"], w["value"])
+            if existing is None:
+                db.add(Weight(key=w["key"], label=w["label"], value=target_value))
+                logger.info("Weight %s = %s", w["key"], target_value)
+            elif w["key"] in env_overrides and existing.value != target_value:
+                logger.info("Weight %s overridden by env: %s → %s", w["key"], existing.value, target_value)
+                existing.value = target_value
+            if existing is not None and existing.label != w["label"]:
+                existing.label = w["label"]
+        db.commit()
+    finally:
+        db.close()
 
 
 _INITIAL_TAGS = [

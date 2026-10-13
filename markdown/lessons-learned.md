@@ -9,6 +9,14 @@ Format:
 
 ---
 
+### 2026-10-12 — developer — testing
+**Problem:** Moving the token-grant-event routes out of `routers/admin_users.py` (to stay under test_issue_85's 350-line budget) broke `test_issue_163::test_route_requires_recent_reauth`, which picks the router module to search by path; and a claim loop that checked `TokenGrantClaim` with a query per event autoflushed the previous event's pending claim, so a concurrent claim raised IntegrityError mid-loop, outside the try around `commit()`.
+**Solution:** Before moving routes between router modules, grep `backend/tests` for the route paths and update tests that look routes up per module. For "insert once, then credit" loops, use `INSERT … ON CONFLICT (…) DO NOTHING` per item and act only when `rowcount == 1`, instead of query-then-add.
+
+### 2026-10-11 — developer — testing
+**Problem:** For #185, the threaded draw tests passed even with the old count-then-assign activation: `draw_card` inserts the card (`db.flush()`) before counting, and with pysqlite's legacy transactions that first write takes SQLite's write lock, so draws were already serialised. The real over-limit race was in `_swap_roster_atomic`: it activated the bench card first and didn't check the outgoing card's `rowcount`, so concurrent swaps onto one roster card all succeeded (six of six). Separately, the new partial unique index on active cards broke test seeds that put two active cards of one player in one roster (`test_admin_player_pool.py`, `test_issue_141_stored_card_points.py`).
+**Solution:** Before trusting a concurrency test, run it against the old code (a temporary revert or `git stash push <file>`) and confirm it fails; a race needs a read before the transaction's first write. Make multi-statement roster changes free the slot first and stop on `rowcount == 0`. When adding a constraint, grep test seeds for rows that violate it and fix the seeds, not the constraint.
+
 ### 2026-10-11 — developer — endpoints
 **Problem:** For #184, three slowapi/FastAPI details: separate `@limiter.limit(...)` decorators on several routes count each route on its own (the storage key includes the endpoint), so they can't give draws, boosters and rerolls one budget; slowapi's own "ratelimit ... (<key>) exceeded" WARNING names the client IP or `user:<id>`; and an exception raised from a wrapped ASGI `receive` while FastAPI reads the body is caught by FastAPI and turned into a 400, so a body-size middleware can't refuse mid-stream by raising.
 **Solution:** Use `limiter.shared_limit(value, scope="...", key_func=...)` for a budget shared across routes. Add a `logging.Filter` on the `slowapi` logger that drops records starting with "ratelimit " and log your own line without the key. In a body-size middleware, check `Content-Length` up front, and for a body without it read and buffer up to the cap before calling the app (413 past it), then replay the buffered body.

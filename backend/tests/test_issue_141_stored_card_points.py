@@ -911,7 +911,8 @@ def test_roster_response_query_count_independent_of_card_count(db):
     for i in range(9):
         cid = 51 + i
         db.add(Card(id=cid, player_id=(101, 102, 103)[i % 3], owner_id=50,
-                    card_type=("common", "rare", "epic")[i % 3], is_active=i < 4, slot_index=i + 1))
+                    card_type=("common", "rare", "epic")[i % 3], is_active=False, slot_index=i + 1))
+        # Benched: one active card per player in a roster (unique index, #185).
         db.add(CardModifier(card_id=cid, stat_key="kills", bonus_pct=10.0))
         db.add(WeeklyRosterEntry(week_id=1, user_id=50, card_id=cid))
     db.commit()

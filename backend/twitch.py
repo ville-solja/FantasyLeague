@@ -42,7 +42,7 @@ from sqlalchemy.orm import Session
 import card_points
 import clock
 import steam_live
-from database import get_db
+from database import credit_tokens, get_db
 from ingest import record_timing
 from deps import _audit
 from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
@@ -1312,7 +1312,7 @@ def _execute_token_drop(
             for twitch_id in winner_ids:
                 user = users_by_twitch_id.get(twitch_id)
                 if user:
-                    user.tokens = (user.tokens or 0) + 1
+                    credit_tokens(db, user.id, 1)
                     winner_names.append(user.display_name)
             db.query(TwitchTokenDrop).filter_by(channel_id=channel_id, series_id=drop_key).update(
                 {TwitchTokenDrop.count: len(winner_names)}, synchronize_session=False)

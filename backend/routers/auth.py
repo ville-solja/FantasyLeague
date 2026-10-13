@@ -8,12 +8,13 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import text
 
 import login_mode
 import sessions
-from database import get_db
+from database import credit_tokens, get_db
 from deps import _audit, get_current_user
-from models import (User, TokenGrantEvent, TokenGrantClaim, Notification,
+from models import (User, TokenGrantEvent, Notification,
                     NotificationDismissal, PasswordResetToken, UserSession)
 from auth import (check_email, check_password_bytes, check_reserved, check_username, hash_password,
                   username_taken, verify_password)
@@ -445,6 +446,11 @@ def send_password_changed_notice(user: User) -> None:
             "password change notice: email send raised for user %s", user.username)
 
 
+_CLAIM_INSERT_SQL = text(
+    "INSERT INTO token_grant_claims (event_id, user_id, claimed_at) "
+    "VALUES (:event_id, :user_id, :now) ON CONFLICT (event_id, user_id) DO NOTHING")
+
+
 @router.post("/claim-events")
 @limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def claim_events(request: Request, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
@@ -456,16 +462,20 @@ def claim_events(request: Request, db=Depends(get_db), current_user: dict = Depe
     user = db.get(User, current_user["user_id"])
     granted = 0
     for event in active_events:
-        already = db.query(TokenGrantClaim).filter_by(event_id=event.id, user_id=user.id).first()
-        if already:
+        # Issue #185: the claim row is the guard. One INSERT that does nothing when this
+        # event is already claimed (also by a simultaneous request), so each event is
+        # credited exactly once and a race never raises.
+        inserted = db.execute(_CLAIM_INSERT_SQL, {"event_id": event.id, "user_id": user.id,
+                                                  "now": now}).rowcount
+        if inserted != 1:
             continue
-        user.tokens = (user.tokens or 0) + event.amount
-        db.add(TokenGrantClaim(event_id=event.id, user_id=user.id, claimed_at=now))
+        credit_tokens(db, user.id, event.amount)
         _audit(db, "token_grant_event_claim", actor_id=user.id, actor_username=user.username,
                detail=f"event={event.id} amount={event.amount}")
         granted += event.amount
     db.commit()
-    return {"granted": granted}
+    db.refresh(user)
+    return {"granted": granted, "tokens": user.tokens or 0}
 
 
 @router.get("/notifications")

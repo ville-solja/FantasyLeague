@@ -15,17 +15,23 @@ let _rosterPendingError = null;
 // immediately followed by a full loadRoster() refetch, so overlapping calls
 // would also race on the DOM update). Mirrors the existing
 // window._rosterDragging guard's role of suppressing a duplicate action
-// during another one already in progress.
-let _rosterMutationInFlight = false;
+// during another one already in progress. Issue #185: drop handlers also return
+// early while _rosterBusy is set, so a drop during a swap or reorder does nothing.
+let _rosterBusy = false;
 
 async function _withRosterMutationGuard(fn) {
-  if (_rosterMutationInFlight) return;
-  _rosterMutationInFlight = true;
+  if (_rosterBusy) return;
+  _rosterBusy = true;
   try {
     await fn();
   } finally {
-    _rosterMutationInFlight = false;
+    _rosterBusy = false;
   }
+}
+
+/** The focusable card image that triggers activate/deactivate (withBusy locks it). */
+function _rosterCardControl(cardId) {
+  return document.querySelector(`.card-slot[data-card-id="${Number(cardId)}"] .card-img`);
 }
 
 async function showRosterCard(cardId) {
@@ -349,6 +355,7 @@ function _initDragAndDrop() {
     slot.addEventListener("drop", async e => {
       e.preventDefault();
       slot.classList.remove("drag-over", "drag-swap-target");
+      if (_rosterBusy) return;
 
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
@@ -463,6 +470,7 @@ function _initDragAndDrop() {
     slot.addEventListener("drop", async e => {
       e.preventDefault();
       slot.classList.remove("drag-over");
+      if (_rosterBusy) return;
       let payload;
       try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
       catch (_) { return; }
@@ -485,7 +493,7 @@ function _initDragAndDrop() {
     }
   });
   activeGrid.addEventListener("drop", async e => {
-    if (e.target !== activeGrid || _rosterLocked) return; // per-slot handlers cover direct hits
+    if (e.target !== activeGrid || _rosterLocked || _rosterBusy) return; // per-slot handlers cover direct hits
     e.preventDefault();
     const emptySlots = Array.from(activeGrid.querySelectorAll(".card-slot-empty"));
     if (!emptySlots.length) return;
@@ -516,7 +524,7 @@ function _initDragAndDrop() {
     benchGrid.classList.remove("drag-over");
 
     // Only handle if the drop landed on the container, not on a card-slot child
-    if (e.target !== benchGrid || _rosterLocked) return;
+    if (e.target !== benchGrid || _rosterLocked || _rosterBusy) return;
 
     let payload;
     try { payload = JSON.parse(e.dataTransfer.getData("application/json")); }
@@ -561,7 +569,7 @@ async function _apiReorder(cardIds, slotIndexes = null) {
 }
 
 async function activateCard(cardId) {
-  await _withRosterMutationGuard(async () => {
+  await _withRosterMutationGuard(() => withBusy(_rosterCardControl(cardId), async () => {
     try {
       const res = await fetch(`${API}/roster/${cardId}/activate`, { method: "POST" });
       const data = await res.json();
@@ -570,11 +578,11 @@ async function activateCard(cardId) {
     } catch (e) {
       const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
     }
-  });
+  }));
 }
 
 async function deactivateCard(cardId) {
-  await _withRosterMutationGuard(async () => {
+  await _withRosterMutationGuard(() => withBusy(_rosterCardControl(cardId), async () => {
     try {
       const res = await fetch(`${API}/roster/${cardId}/deactivate`, { method: "POST" });
       const data = await res.json();
@@ -583,20 +591,22 @@ async function deactivateCard(cardId) {
     } catch (e) {
       const s = document.getElementById("rosterStatus"); if(s){s.textContent=e.message;s.className="status err";}
     }
-  });
+  }));
 }
 
 async function redeemCode() {
   const code = document.getElementById("redeemCodeInput").value.trim().toUpperCase();
   if (!code) return setStatus("redeemStatus", "Enter a code", false);
-  try {
-    const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code}) });
-    const data = await res.json();
-    if (!res.ok) return setStatus("redeemStatus", data.detail, false);
-    document.getElementById("redeemCodeInput").value = "";
-    updateTokenDisplay(data.tokens ?? null);
-    setStatus("redeemStatus", `+${data.granted} ${_tokenName}!`);
-  } catch (e) {
-    setStatus("redeemStatus", e.message, false);
-  }
+  await withBusy(document.getElementById("redeemBtn"), async () => {
+    try {
+      const res = await fetch(`${API}/redeem`, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code}) });
+      const data = await res.json();
+      if (!res.ok) return setStatus("redeemStatus", data.detail, false);
+      document.getElementById("redeemCodeInput").value = "";
+      updateTokenDisplay(data.tokens ?? null);
+      setStatus("redeemStatus", `+${data.granted} ${_tokenName}!`);
+    } catch (e) {
+      setStatus("redeemStatus", e.message, false);
+    }
+  });
 }
