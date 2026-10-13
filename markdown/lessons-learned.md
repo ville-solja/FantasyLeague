@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-13 — developer — testing
+**Problem:** For #187, the threaded "two connect callbacks grant once" test also passed with a naive query-then-insert grant: `connect_account` sets `user.twitch_account_id` first, and the grant query autoflushes that UPDATE, which takes SQLite's write lock, so the callbacks were already serialised. Separately, a data migration that fills a new `create_all` table can't assume the table exists: `test_migrate`'s legacy engine runs `run_migrations` before `create_all`.
+**Solution:** Keep `INSERT … ON CONFLICT DO NOTHING` (it stays correct without that lock) but don't claim the race test proves it; say so in the report. In the migration, create the table first with `Model.__table__.create(conn, checkfirst=True)` and guard on the columns it reads.
+
 ### 2026-10-13 — developer — frontend
 **Problem:** For #191, three surprises checking the Twitch panel in headless Chromium: Playwright launches it with `--hide-scrollbars`, so screenshots never show the themed scrollbar; `page.click` scrolls the target into view first, which moves `scrollTop` and makes a "scroll position kept" check look broken; and a view hidden with the `hidden` attribute (`display: none`) loses its `scrollTop`, so saving and restoring around `innerHTML` alone does not keep the Roster position across a trip to the bench picker.
 **Solution:** Launch with `chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] })` to see scrollbars, read `scrollTop` after the click rather than before it, and remember each tab view's `scrollTop` in `showView` when it is hidden and restore it when it is shown again. A static server for `twitch-extension/` plus `page.route` for the EBS and the Twitch helper script is enough to render `panel.html` without the backend.

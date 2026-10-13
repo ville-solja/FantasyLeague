@@ -34,6 +34,7 @@ In Admin › Audit Log, look in the affected period for:
 - `twitch_connected` (detail `user_id=…`, plus `pending_merge_user_id=…` when a collection was waiting),
 - `twitch_account_merged` (`full_user_id`, `soft_user_id`, counts, `log_id`),
 - `twitch_disconnected`,
+- `twitch_starter_bonus` (`user_id`, `amount`; the one-time Twitch starter bonus of Connect Twitch, issue #187),
 - `twitch_merge_reversed`, `twitch_panel_recognised`, `twitch_soft_account_created`, `twitch_soft_account_deleted`,
 - `player_reauth` / `admin_reauth` (password checks before those actions).
 

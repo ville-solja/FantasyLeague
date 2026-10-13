@@ -40,7 +40,7 @@ from sqlalchemy import func
 
 import sessions
 import soft_accounts
-from database import get_db
+from database import credit_tokens, get_db
 from deps import _audit, get_current_user, require_recent_player_reauth, session_user_or_none
 from models import Card, TwitchOAuthState, TwitchPresence, User
 from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
@@ -266,6 +266,18 @@ def callback(request: Request, db):
     return _profile_redirect(connect_account(db, user, sub))
 
 
+def connect_bonus_tokens() -> int:
+    """TWITCH_CONNECT_BONUS_TOKENS (default INITIAL_TOKENS, 5): the Twitch starter bonus
+    Connect Twitch pays once per Twitch user id (issue #187). 0 turns it off."""
+    default = os.getenv("INITIAL_TOKENS", "5")
+    for raw in (os.getenv("TWITCH_CONNECT_BONUS_TOKENS", "").strip(), default):
+        try:
+            return max(0, int(raw))
+        except ValueError:
+            continue
+    return 5
+
+
 def connect_account(db, user: User, sub: str) -> str:
     """Store a verified Twitch user id on a website account; return the Profile
     message key. Commits when something is stored.
@@ -274,7 +286,12 @@ def connect_account(db, user: User, sub: str) -> str:
     - another website account has it: "in_use";
     - a soft account has it (identity share): the id moves to this account (the column
       is unique) and the soft account waits to be merged ("merge_ready"); it keeps its
-      opaque id, so the panel acts as it until the merge."""
+      opaque id, so the panel acts as it until the merge. Its starter tokens come with
+      the merge, so no bonus;
+    - otherwise "connected", or "connected_bonus" when this Twitch account had no
+      starter grant yet and this website account never received a Twitch starter
+      (issue #187): a "connect" row in twitch_starter_grants (the unique hash decides a
+      race) and TWITCH_CONNECT_BONUS_TOKENS credited, in the same commit."""
     if user.twitch_account_id:
         return "connected" if user.twitch_account_id == sub else "disconnect_first"
     holder = soft_accounts.find_by_twitch_account_id(db, sub)
@@ -289,8 +306,22 @@ def connect_account(db, user: User, sub: str) -> str:
     user.pending_merge_user_id = pending
     _audit(db, "twitch_connected", actor_id=user.id, actor_username=user.display_name,
            detail=f"user_id={user.id}" + (f" pending_merge_user_id={pending}" if pending else ""))
+    if pending:
+        db.commit()
+        return "merge_ready"
+    bonus = connect_bonus_tokens()
+    # Once per Twitch account (the grant row) and once per website account: no bonus,
+    # and no row for this id, when this account already had a Twitch starter.
+    granted = (bonus > 0 and not soft_accounts.has_received_twitch_starter(db, user)
+               and soft_accounts.record_starter_grant(db, sub, user.id, "connect", amount=bonus))
+    if granted:
+        credit_tokens(db, user.id, bonus)
+        _audit(db, "twitch_starter_bonus", actor_id=user.id, actor_username=user.display_name,
+               detail=f"user_id={user.id} amount={bonus}")
     db.commit()
-    return "merge_ready" if pending else "connected"
+    if granted:
+        db.refresh(user)
+    return "connected_bonus" if granted else "connected"
 
 
 @router.get("/auth/twitch/callback")
@@ -319,7 +350,15 @@ def connection_status(db, user: User) -> dict:
     pending = None
     if soft is not None:
         cards = db.query(func.count(Card.id)).filter(Card.owner_id == soft.id).scalar() or 0
-        pending = {"cards": int(cards), "tokens": int(soft.tokens or 0)}
+        # Issue #187: tokens the merge would add, the Twitch starter bonus it takes back
+        # (starter_deducted: from the collection first, then from this balance) and the
+        # net change to this account's balance, which can be negative.
+        tokens, from_soft, from_website = soft_accounts.merge_token_split(
+            int(soft.tokens or 0), int(user.tokens or 0),
+            soft_accounts.starter_bonus_received(db, user.id))
+        pending = {"cards": int(cards), "tokens": tokens,
+                   "starter_deducted": from_soft + from_website,
+                   "balance_change": tokens - from_website}
     return {
         "available": oauth_config() is not None,
         "connected": bool(user.twitch_account_id),
@@ -346,7 +385,7 @@ def merge_confirm(db, current_user: dict) -> dict:
         db.commit()
         raise HTTPException(status_code=404, detail="That Twitch collection is gone; refresh the page")
     try:
-        result = soft_accounts.merge_soft_into(db, soft, user)
+        result = soft_accounts.merge_soft_into(db, soft, user, expect_pending=True)
         db.commit()
     except soft_accounts.SoftAccountGone:
         db.rollback()
@@ -354,7 +393,8 @@ def merge_confirm(db, current_user: dict) -> dict:
     except Exception:
         db.rollback()
         raise
-    return {"merged": True, "cards": result["cards"], "tokens": result["tokens"]}
+    return {"merged": True, "cards": result["cards"], "tokens": result["tokens"],
+            "starter_deducted": result["starter_deducted"], "from_website": result["from_website"]}
 
 
 @router.post("/twitch/merge/confirm")

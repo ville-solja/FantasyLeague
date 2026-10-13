@@ -857,6 +857,8 @@ def get_config(db=Depends(get_db)):
         "tour_autostart": os.getenv("GUIDED_TOUR_AUTOSTART", "false").strip().lower() == "true",
         # Issue #150 — password | both | steam_signup; the login page and Profile follow it.
         "login_method": login_mode.current(),
+        # Issue #187 — named in Profile's "You received N Twitch starter tokens."
+        "twitch_connect_bonus_tokens": twitch_oauth.connect_bonus_tokens(),
     }
 
 

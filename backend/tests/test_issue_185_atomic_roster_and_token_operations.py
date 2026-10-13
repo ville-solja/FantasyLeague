@@ -1343,9 +1343,11 @@ class TestSecurityReviewFollowUps:
         db.rollback()
         assert db.execute(text("SELECT tokens FROM users WHERE id = :id"), {"id": full.id}).scalar() == 5
         assert db.query(TwitchMergeLog).count() == 0
+        # Issue #187 replaced the single soft-balance subquery UPDATE with a lock-taking
+        # UPDATE, reads under that lock, and one relative UPDATE of the website balance.
         src = inspect.getsource(soft_accounts.merge_soft_into)
-        assert "COALESCE((SELECT COALESCE(tokens, 0) FROM users WHERE id = :soft), 0)" in src.replace(
-            '"\n                    "', "")
+        assert "SET tokens = COALESCE(tokens, 0) + :delta" in src
+        assert src.index("raise SoftAccountGone") < src.index(":delta")
 
     def test_merge_confirm_answers_404_when_soft_account_gone(self, db, monkeypatch):
         """POST /twitch/merge/confirm turns SoftAccountGone into 404, not a 500."""

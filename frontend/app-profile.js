@@ -147,6 +147,9 @@ function _renderPastSeasons(seasons) {
 
 const _TWITCH_RETURN_MESSAGES = {
   connected:        ["Twitch connected.", true],
+  connected_bonus:  [() => Number.isInteger(_twitchConnectBonusTokens) && _twitchConnectBonusTokens > 0
+    ? `Twitch connected. You received ${_twitchConnectBonusTokens} Twitch starter tokens.`
+    : "Twitch connected. You received your Twitch starter tokens.", true],
   merge_ready:      ["Twitch connected. Your Twitch collection is waiting below.", true],
   cancelled:        ["Twitch sign-in was cancelled. Nothing was changed.", false],
   failed:           ["Twitch sign-in did not complete. Nothing was changed. Try again.", false],
@@ -192,7 +195,8 @@ function _renderTwitchConnection(data) {
       text.textContent = `Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. This account has already added a Twitch collection once, so this one stays in the Twitch panel.`;
       document.getElementById("twitchMergeActions").style.display = "none";
     } else {
-      text.textContent = `Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. Add it to this account?`;
+      text.textContent = `Your Twitch collection: ${pending.cards} cards, ${pending.tokens} tokens. Add it to this account?` +
+        _mergePromptNote(pending);
       document.getElementById("twitchMergeActions").style.display = "";
     }
     prompt.style.display = "block";
@@ -201,6 +205,31 @@ function _renderTwitchConnection(data) {
   }
   document.getElementById("twitchGuidance").style.display =
     data.connected && !pending && !data.merge_used ? "block" : "none";
+}
+
+// Issue #187: one Twitch starter per website account. When this account already got
+// the Twitch starter bonus on connect, the merge takes that bonus back: from the
+// collection's tokens first, then (if the collection's starter was spent) from this
+// account's balance.
+function _starterDeductedNote(n) {
+  return Number.isInteger(n) && n > 0
+    ? ` (${n} Twitch starter tokens stay behind: this account already received the Twitch starter bonus.)`
+    : "";
+}
+
+function _mergePromptNote(pending) {
+  const change = pending.balance_change;
+  if (Number.isInteger(change) && change < 0) {
+    return ` Adding it removes ${-change} tokens from your balance: this account already received the Twitch starter bonus, and the collection's starter tokens were spent.`;
+  }
+  return _starterDeductedNote(pending.starter_deducted);
+}
+
+function _mergeResultNote(data) {
+  if (Number.isInteger(data.from_website) && data.from_website > 0) {
+    return `. ${data.from_website} tokens were removed from your balance: this account already received the Twitch starter bonus.`;
+  }
+  return _starterDeductedNote(data.starter_deducted);
 }
 
 function connectTwitch() {
@@ -230,7 +259,8 @@ async function confirmTwitchMerge() {
       setStatus("twitchStatus", data.detail, false);
       return loadTwitchConnection();
     }
-    setStatus("twitchStatus", `${data.cards} cards and ${data.tokens} tokens added`);
+    setStatus("twitchStatus", `${data.cards} cards and ${data.tokens} tokens added` +
+      _mergeResultNote(data));
     loadTwitchConnection();
     if (typeof loadMe === "function") loadMe();
   } catch (e) {
@@ -264,7 +294,7 @@ function handleTwitchReturn() {
     return true;
   }
   const msg = _TWITCH_RETURN_MESSAGES[key];
-  if (msg) setStatus("twitchStatus", msg[0], msg[1]);
+  if (msg) setStatus("twitchStatus", typeof msg[0] === "function" ? msg[0]() : msg[0], msg[1]);
   return true;
 }
 

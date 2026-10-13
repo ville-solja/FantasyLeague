@@ -831,3 +831,53 @@ As the operator, I want the Panel Height setting and a way to test several heigh
 - `twitch-extension/dev-harness.html` offers panel-height presets (300, 400, 500 px) and keeps the 318 px width
 - "318 × 500" in the docs becomes "318 px wide, up to 500 px tall (the version's Panel Height)"
 - `package.sh` output reminds the operator of the Panel Height value alongside the Asset Hosting paths
+
+
+## Uniform Twitch Starter Tokens (#187)
+
+### Connecting Twitch Gives the Twitch Starter Once
+**User story**
+As a player who connects Twitch on my Profile without having joined in the panel, I want the same Twitch starter tokens a panel player gets so that the way I signed up doesn't cost me tokens.
+
+**Acceptance criteria**
+- When Connect Twitch stores a Twitch id and no soft account holds that id ("connected", not "merge_ready"), the website account is credited the Twitch starter bonus, `TWITCH_CONNECT_BONUS_TOKENS` (default `INITIAL_TOKENS`, 5), with `credit_tokens` (#185)
+- The grant is recorded per Twitch account in a new `twitch_starter_grants` table (`twitch_id_hash` unique: a keyed one-way hash of the Twitch user id, never the id; `user_id`, `source` = `join` or `connect`, `amount`, `granted_at`). A Twitch account that already has a row gets no Twitch starter bonus
+- Profile shows "Twitch connected. You received N Twitch starter tokens." when a bonus was granted, and the usual "Twitch connected." otherwise
+- `TWITCH_CONNECT_BONUS_TOKENS=0` turns the Twitch starter bonus off; nothing is recorded
+- An audit entry `twitch_starter_bonus` names the user and amount, never the Twitch id
+
+### The Panel Path Isn't Doubled
+**User story**
+As the operator, I want a player who already got the Twitch starter in the panel not to get it again on connect, so that every path ends at the same total.
+
+**Acceptance criteria**
+- When a soft account with an identity share is created by Join, a `twitch_starter_grants` row with `source = join` is recorded for its Twitch id. A soft account without an identity share gets one when its Twitch id becomes known
+- Connecting a Twitch id that a soft account holds ("merge_ready") grants no bonus; the soft account's tokens, including its starter, arrive with the merge as today
+- If that merge never happens (the player chooses "Not now" and later disconnects, which drops the pending merge, or the account's one merge is already used), still no bonus: the starter stays with the panel collection
+- Totals after each path:
+  - website account plus Connect Twitch: `INITIAL_TOKENS` + bonus;
+  - website account plus Join, then merge: `INITIAL_TOKENS` + soft starter.
+
+  These are equal at the defaults.
+
+### No Farming by Reconnecting
+**User story**
+As the operator, I want the bonus tied to the Twitch account, not the website account, so that disconnecting and reconnecting, or moving one Twitch account between website accounts, can't collect it repeatedly.
+
+**Acceptance criteria**
+- Disconnect, then Connect the same Twitch account to the same or another website account: no second Twitch starter bonus (the `twitch_starter_grants` row stays after disconnect)
+- One Twitch starter per website account: an account that already received the Twitch starter bonus, or merged a soft account, gets no bonus for another Twitch account, and no row is recorded for that Twitch account (it can still earn the bonus on a different website account)
+- A merge into an account that already received the Twitch starter bonus takes that bonus back: from the soft account's tokens first, the rest from the website account's balance (never below 0) when the soft starter was spent; the prompt shows the net change (also "removes N tokens from your balance"), and the merge result and the audit entry name both parts. A merge reversal gives both sides back exactly
+- Two different Twitch accounts connecting to one website account at the same time credit once (a partial unique index allows one `connect` row per website account)
+- The grant row keeps only a keyed hash of the Twitch user id, so it can outlive Disconnect, Leave and retention; the privacy page says so
+- Two simultaneous connect callbacks for one Twitch id grant once. The `twitch_id_hash` unique constraint decides; the loser credits nothing
+- A merge reversal (`reverse_merge`) leaves the grant row, so the Twitch id can't earn the starter again
+
+### Existing Players Are Treated the Same
+**User story**
+As a player who connected Twitch on the website before this change, I want the starter I missed so that early players aren't worse off.
+
+**Acceptance criteria**
+- A one-time data migration records `source = join` rows for existing soft accounts with a Twitch id, for website accounts that merged a soft account (`merged_soft_account_at` set) or have one waiting to be merged (`pending_merge_user_id` set), and for the Twitch ids in the merge undo log
+- It then credits the Twitch starter bonus once, with a `connect` row, to each website account that has a `twitch_account_id`, no grant row for that Twitch account, no `connect` row of its own, and no merge (done or waiting)
+- The migration logs the count and writes one `twitch_starter_bonus` audit entry per credited user (`detail` includes `migration=038`). A second run credits nothing
