@@ -58,6 +58,15 @@
     border: none; flex: 1;
     border-right: 1px solid #2c2c3a;
   }
+  /* Twitch panels are 318 px wide and as tall as the version's Panel Height
+     (100–500 px). The presets below set the height (issue #191). */
+  #frame-panel { flex: none; width: 318px; height: 500px; border: 1px solid #2c2c3a; }
+  .size-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #18181b; }
+  .size-row button {
+    background: #2c2c3a; color: #efeff1; border: 1px solid #3d3d50; padding: 3px 10px;
+    border-radius: 3px; cursor: pointer; font-size: 11px;
+  }
+  .size-row button[aria-pressed="true"] { border-color: #9147ff; color: #fff; }
 
   .pubsub-panel {
     width: 260px; background: #18181b; border-left: 1px solid #2c2c3a;
@@ -112,6 +121,13 @@
   <!-- Viewer tab -->
   <div class="frame-wrap active" id="tab-viewer">
     <div class="frame-label">panel.html — Viewer</div>
+    <div class="size-row" role="group" aria-label="Panel height">
+      <span class="frame-label" style="padding:0">Panel Height</span>
+      <button type="button" data-panel-height="300" aria-pressed="false" onclick="setPanelHeight(300)">300 px</button>
+      <button type="button" data-panel-height="400" aria-pressed="false" onclick="setPanelHeight(400)">400 px</button>
+      <button type="button" data-panel-height="500" aria-pressed="true" onclick="setPanelHeight(500)">500 px</button>
+      <button type="button" data-panel-height="popout" aria-pressed="false" onclick="setPanelHeight('popout')">Pop-out</button>
+    </div>
     <iframe id="frame-panel" src="about:blank"></iframe>
   </div>
 
@@ -171,6 +187,21 @@ function showTab(name) {
     document.querySelectorAll(".frame-wrap").forEach(function(f) { f.classList.remove("active"); });
     event.target.classList.add("active");
     document.getElementById("tab-" + name).classList.add("active");
+}
+
+// ── Panel size presets (issue #191) ────────────────────────────────────────
+
+var PANEL_WIDTH = 318;
+
+function setPanelHeight(h) {
+    var frame = document.getElementById("frame-panel");
+    frame.style.width  = PANEL_WIDTH + "px";
+    frame.style.flex   = h === "popout" ? "1" : "none";
+    frame.style.height = h === "popout" ? "auto" : h + "px";
+    document.querySelectorAll("[data-panel-height]").forEach(function(b) {
+        b.setAttribute("aria-pressed", b.getAttribute("data-panel-height") === String(h) ? "true" : "false");
+    });
+    log("[harness] panel " + PANEL_WIDTH + " × " + (h === "popout" ? "pop-out" : h + " px"));
 }
 
 // ── Load iframes via srcdoc so the stub runs before any extension script ───

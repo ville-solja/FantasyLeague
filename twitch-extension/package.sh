@@ -133,6 +133,8 @@ echo "Dev console → Version → Asset Hosting:"
 echo "  Panel Viewer Path:  panel.html"
 echo "  Config Path:        config.html"
 echo "  Live Config Path:   live_config.html"
+echo "Dev console → Version → Asset Hosting → Panel Height: 500"
+echo "  (the largest Twitch allows; the panel scrolls at any smaller height)"
 echo "Panel calls only these backend origins (ebs-origins.js):"
 for o in "${EBS_ORIGINS[@]}"; do echo "  $o"; done
 echo "Dev console → Version → Capabilities → Allowlist for URL Fetching Domains:"

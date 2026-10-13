@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-13 — developer — frontend
+**Problem:** For #191, three surprises checking the Twitch panel in headless Chromium: Playwright launches it with `--hide-scrollbars`, so screenshots never show the themed scrollbar; `page.click` scrolls the target into view first, which moves `scrollTop` and makes a "scroll position kept" check look broken; and a view hidden with the `hidden` attribute (`display: none`) loses its `scrollTop`, so saving and restoring around `innerHTML` alone does not keep the Roster position across a trip to the bench picker.
+**Solution:** Launch with `chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] })` to see scrollbars, read `scrollTop` after the click rather than before it, and remember each tab view's `scrollTop` in `showView` when it is hidden and restore it when it is shown again. A static server for `twitch-extension/` plus `page.route` for the EBS and the Twitch helper script is enough to render `panel.html` without the backend.
+
 ### 2026-10-12 — developer — testing
 **Problem:** Moving the token-grant-event routes out of `routers/admin_users.py` (to stay under test_issue_85's 350-line budget) broke `test_issue_163::test_route_requires_recent_reauth`, which picks the router module to search by path; and a claim loop that checked `TokenGrantClaim` with a query per event autoflushed the previous event's pending claim, so a concurrent claim raised IntegrityError mid-loop, outside the try around `commit()`.
 **Solution:** Before moving routes between router modules, grep `backend/tests` for the route paths and update tests that look routes up per module. For "insert once, then credit" loops, use `INSERT … ON CONFLICT (…) DO NOTHING` per item and act only when `rowcount == 1`, instead of query-then-add.

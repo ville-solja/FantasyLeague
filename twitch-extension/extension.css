@@ -180,11 +180,15 @@ input[type="text"], input[type="number"] {
 
 .muted { color: var(--fg-muted); font-size: 11px; }
 
-/* ── Viewer panel (318 × 500) ──────────────────────────────────────────────── */
+/* ── Viewer panel (318 px wide, up to 500 px tall: the version's Panel Height) ── */
+
+/* Issue #191: the panel takes the iframe's height, which Twitch sets from the
+   version's Panel Height (100–500 px); only the views scroll. */
+html { height: 100%; }
 
 body.panel {
     padding: 0;
-    height: 500px;
+    height: 100vh;
     min-height: 0;
     overflow: hidden;
     display: flex;
@@ -250,12 +254,29 @@ body.panel {
 .p-main { flex: 1; min-height: 0; position: relative; }
 .view {
     position: absolute; inset: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 10px 12px 12px;
 }
 .view[hidden] { display: none; }
+.view:focus-visible { outline-offset: -2px; }
 .view.with-pinned { display: flex; flex-direction: column; padding-bottom: 0; overflow: hidden; }
 .view.with-pinned[hidden] { display: none; }
+.view.with-pinned > .pin-scroll { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding-bottom: 8px; }
+
+/* Thin themed scrollbars so viewers can see a view continues (issue #191).
+   The views' 12 px right padding keeps text clear of the 8 px bar. */
+.view, .team-list, .pin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--k-ink-400) transparent;
+}
+.view::-webkit-scrollbar, .team-list::-webkit-scrollbar, .pin-scroll::-webkit-scrollbar { width: 8px; }
+.view::-webkit-scrollbar-track, .team-list::-webkit-scrollbar-track, .pin-scroll::-webkit-scrollbar-track { background: transparent; }
+.view::-webkit-scrollbar-thumb, .team-list::-webkit-scrollbar-thumb, .pin-scroll::-webkit-scrollbar-thumb {
+    background: var(--k-ink-400);
+    border-radius: var(--r-sm);
+}
+.view::-webkit-scrollbar-thumb:hover, .team-list::-webkit-scrollbar-thumb:hover, .pin-scroll::-webkit-scrollbar-thumb:hover { background: var(--k-ink-300); }
 
 .toast {
     position: absolute; left: 12px; right: 12px; top: 8px; z-index: 5;
@@ -375,7 +396,7 @@ body.panel {
 }
 .back:hover { background: transparent; color: var(--fg); border-color: transparent; }
 .team-list {
-    flex: 1; min-height: 0; overflow-y: auto;
+    flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto;
     display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
     align-content: start; padding: 2px 0 8px;
 }
@@ -407,6 +428,15 @@ body.panel {
 }
 .pinned button { margin-top: 4px; min-height: 44px; }
 .pinned .note { margin: 0; }
+
+/* Short panels (issue #191): below ~420 px the list alone would get one or two
+   rows, so the whole Team draw / picker view scrolls and the footer stays
+   visible with position: sticky. */
+@media (max-height: 420px) {
+    .view.with-pinned { display: block; overflow-y: auto; }
+    .view.with-pinned > .team-list, .view.with-pinned > .pin-scroll { overflow: visible; }
+    .view.with-pinned > .pinned { position: sticky; bottom: 0; z-index: 1; }
+}
 
 /* Roster tab: slot-first */
 .roster-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }

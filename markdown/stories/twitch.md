@@ -781,3 +781,53 @@ As a player, I want the site to pick up a new release on my next page load so th
 - Responses for the frontend's `.html`, `.js` and `.css` files carry `Cache-Control: no-cache`, so browsers revalidate with the existing `ETag` and get a `304` when nothing changed
 - Images, fonts and `/assets/*` keep their current caching
 - `/twitch-ext/*` (local dev harness) is unaffected
+
+
+## Panel Fits Twitch's Height (#191)
+
+### Panel Uses the Height Twitch Gives It
+**User story**
+As a viewer, I want every part of the panel reachable on the channel page so that I don't have to pop it out to see the Live tab or my roster.
+
+**Acceptance criteria**
+- `body.panel` takes the iframe's height (`height: 100vh`; `html` and `body` without a fixed pixel height) instead of 500 px; the header and tab bar stay fixed at the top
+- At panel heights of 300, 400 and 500 px and in the pop-out, the last element of every view (Live, Cards, Team draw, Roster, Card picker) can be reached by scrolling that view
+- Nothing is cut off at the right edge at 318 px width; no horizontal scrolling
+- Views with a pinned footer (Team draw, picker) keep the footer visible and scroll only the list above it; in a panel under 420 px tall the whole view scrolls instead, with the footer still visible
+
+### Live Tab Shows Everything
+**User story**
+As a viewer, I want the Live tab to show latest MVPs, top performers and the next match in the panel so that I can follow the game without popping it out.
+
+**Acceptance criteria**
+- At 500 px all three sections are visible or reachable by scrolling the Live view; at 300 px they are reachable by scrolling
+- The Live view keeps its scroll position when the 60 s refresh re-renders it (no jump back to the top)
+- Loading and empty states still show in each section
+
+### Roster Shows Every Slot
+**User story**
+As a viewer, I want to reach all my roster slots in the panel so that I can manage the whole roster from Twitch.
+
+**Acceptance criteria**
+- All `ROSTER_LIMIT` slots (and the bench, if shown) can be reached by scrolling the Roster view at 300, 400 and 500 px
+- A slot's action buttons stay inside the 318 px width
+- After activating, deactivating or swapping, the view keeps its scroll position
+
+### Viewers Can See There Is More
+**User story**
+As a viewer, I want a visible scrollbar in the panel so that I know a view continues below the edge.
+
+**Acceptance criteria**
+- Scrollable views show a thin themed scrollbar (`scrollbar-width: thin`, `scrollbar-color`, and the `::-webkit-scrollbar` equivalents), visible on dark backgrounds, in the extension's colour tokens
+- Scrolling works with mouse wheel, touch and keyboard: a view is focusable (`tabindex="0"`) or holds focusable content
+- No text sits under the scrollbar
+
+### Operators Set and Test the Panel Height
+**User story**
+As the operator, I want the Panel Height setting and a way to test several heights documented so that a new version doesn't ship clipped.
+
+**Acceptance criteria**
+- `markdown/features/core/twitch-extension.md`, Prerequisites table, gains a row for the version's **Panel Height**: 500, the largest Twitch allows, with the panel still working at smaller heights
+- `twitch-extension/dev-harness.html` offers panel-height presets (300, 400, 500 px) and keeps the 318 px width
+- "318 × 500" in the docs becomes "318 px wide, up to 500 px tall (the version's Panel Height)"
+- `package.sh` output reminds the operator of the Panel Height value alongside the Asset Hosting paths

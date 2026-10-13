@@ -29,7 +29,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <!-- Live: every viewer, logged in to Twitch or not -->
-  <section id="view-live" class="view" role="tabpanel" aria-labelledby="tab-live">
+  <section id="view-live" class="view" role="tabpanel" aria-labelledby="tab-live" tabindex="0">
     <div class="join-slot"></div>
     <p id="drops-start" class="note" hidden></p>
     <h3 class="eyebrow">Latest MVPs</h3>
@@ -41,7 +41,7 @@
   </section>
 
   <!-- Cards: draw, reveal, collection -->
-  <section id="view-cards" class="view" role="tabpanel" aria-labelledby="tab-cards" hidden>
+  <section id="view-cards" class="view" role="tabpanel" aria-labelledby="tab-cards" tabindex="0" hidden>
     <div class="join-slot"></div>
     <div id="cards-main" hidden>
       <div class="draw-row">
@@ -75,7 +75,7 @@
   </section>
 
   <!-- Roster: slot first -->
-  <section id="view-roster" class="view" role="tabpanel" aria-labelledby="tab-roster" hidden>
+  <section id="view-roster" class="view" role="tabpanel" aria-labelledby="tab-roster" tabindex="0" hidden>
     <div class="join-slot"></div>
     <div id="roster-main" hidden>
       <div class="roster-meta">
@@ -91,26 +91,30 @@
   </section>
 
   <!-- Bench picker for one slot -->
-  <section id="view-picker" class="view" aria-labelledby="picker-title" hidden>
+  <section id="view-picker" class="view with-pinned" aria-labelledby="picker-title" hidden>
     <div class="sub-head">
       <button type="button" id="btn-picker-back" class="back">Back</button>
       <h2 id="picker-title">Pick a card for slot 1</h2>
     </div>
-    <div id="picker-current" class="current-box box" hidden>
-      <div class="grow"><span class="note">In this slot:</span> <strong id="picker-current-name"></strong></div>
-      <button type="button" id="btn-bench-it" class="secondary" style="width:auto;margin:0">Bench it</button>
+    <div class="pin-scroll" id="picker-scroll">
+      <div id="picker-filters" class="chips" role="group" aria-label="Filter by rarity"></div>
+      <div class="sort-row" role="group" aria-label="Sort">
+        <span class="label">Sort</span>
+        <button type="button" class="chip" data-sort="points" aria-pressed="true">Points</button>
+        <button type="button" class="chip" data-sort="rarity" aria-pressed="false">Rarity</button>
+      </div>
+      <div id="picker-list" class="pick-list"></div>
     </div>
-    <div id="picker-filters" class="chips" role="group" aria-label="Filter by rarity"></div>
-    <div class="sort-row" role="group" aria-label="Sort">
-      <span class="label">Sort</span>
-      <button type="button" class="chip" data-sort="points" aria-pressed="true">Points</button>
-      <button type="button" class="chip" data-sort="rarity" aria-pressed="false">Rarity</button>
+    <div class="pinned" id="picker-pinned" hidden>
+      <div id="picker-current" class="current-box box" hidden>
+        <div class="grow"><span class="note">In this slot:</span> <strong id="picker-current-name"></strong></div>
+        <button type="button" id="btn-bench-it" class="secondary" style="width:auto;margin:0">Bench it</button>
+      </div>
     </div>
-    <div id="picker-list"></div>
   </section>
 
   <!-- Settings: identity share and Leave -->
-  <section id="view-settings" class="view" aria-labelledby="settings-title" hidden>
+  <section id="view-settings" class="view" aria-labelledby="settings-title" tabindex="0" hidden>
     <div class="sub-head">
       <button type="button" id="btn-settings-back" class="back">Back</button>
       <h2 id="settings-title">Settings</h2>

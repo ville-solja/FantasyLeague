@@ -26,6 +26,7 @@ var state = {
     pickerFilter: "all",
     pickerSort: "points",
     leaveArmed: false,
+    scrollTops: {},         // tab view -> scrollTop while it is hidden (issue #191)
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -71,10 +72,16 @@ function errorText(data, fallback) {
 
 var VIEWS = ["live", "cards", "teams", "roster", "picker", "settings"];
 var VIEW_TAB = { live: "live", cards: "cards", teams: "cards", roster: "roster", picker: "roster", settings: null };
+var TAB_VIEWS = ["live", "cards", "roster"];
 
+// Issue #191: a hidden view loses its scroll position, so the tab views remember
+// theirs; coming back from the picker after a roster change lands where you were.
 function showView(name) {
+    var prev = state.view;
+    if (TAB_VIEWS.indexOf(prev) >= 0) state.scrollTops[prev] = el("view-" + prev).scrollTop;
     state.view = name;
     VIEWS.forEach(function (v) { el("view-" + v).hidden = v !== name; });
+    if (name !== prev && TAB_VIEWS.indexOf(name) >= 0) el("view-" + name).scrollTop = state.scrollTops[name] || 0;
     var tab = VIEW_TAB[name];
     if (tab) state.tab = tab;
     ["live", "cards", "roster"].forEach(function (t) {
@@ -116,15 +123,27 @@ function onConfigTimeout() {
 
 // ── Live tab ────────────────────────────────────────────────────────────────
 
+// Re-render a view's content without moving its scroll position (issue #191).
+function keepScroll(viewId, render) {
+    var view = el(viewId);
+    var top = view.scrollTop;
+    render();
+    view.scrollTop = top;
+}
+
 function loadLive() {
     ebsGet("/twitch/matches/current").then(function (data) {
-        if (!data || data._status) { renderMvpsUnavailable(); return; }
-        renderMvps(data.series || []);
+        keepScroll("view-live", function () {
+            if (!data || data._status) { renderMvpsUnavailable(); return; }
+            renderMvps(data.series || []);
+        });
     }).catch(renderMvpsUnavailable);
     ebsGet("/twitch/panel").then(function (data) {
-        if (!data || data._status) { renderPanelUnavailable(); return; }
-        renderTopPerformers(data.top_performers || []);
-        renderNextMatch(data.next_match);
+        keepScroll("view-live", function () {
+            if (!data || data._status) { renderPanelUnavailable(); return; }
+            renderTopPerformers(data.top_performers || []);
+            renderNextMatch(data.next_match);
+        });
     }).catch(renderPanelUnavailable);
 }
 
@@ -499,6 +518,8 @@ function lockText(week) {
 }
 
 function renderRoster() {
+    var view = el("view-roster");
+    var top = view.scrollTop;
     var me = state.me;
     var roster = me.roster || { active: [], bench: [] };
     var locked = !!me.roster_locked;
@@ -525,6 +546,7 @@ function renderRoster() {
     });
     var bench = roster.bench || [];
     el("bench-count").textContent = bench.length + (bench.length === 1 ? " card" : " cards") + " on the bench";
+    view.scrollTop = top;
 }
 
 // ── Bench picker for one slot ───────────────────────────────────────────────
@@ -548,6 +570,7 @@ function renderPicker() {
     var current = rosterSlots()[slot];
     el("picker-title").textContent = current ? "Replace in slot " + (slot + 1) : "Pick a card for slot " + (slot + 1);
     el("picker-current").hidden = !current;
+    el("picker-pinned").hidden = !current;
     if (current) el("picker-current-name").textContent = current.player_name;
 
     var pts = seasonPointsById();

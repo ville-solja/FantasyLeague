@@ -62,6 +62,7 @@ twitch-extension/
 | **Extension Secret** | "Extension Secrets" table → **Key column** (long base64 string) | Using the "Twitch API Client Secret" shown mid-page instead — these are different values |
 | **Capabilities** | Enable **Chat** and **Request Identity Link** on the version installed on the channel | Without Chat, Twitch rejects MVP chat announcements with 403 (logged by the EBS) — PubSub/token drops still work. Without Request Identity Link, Join still works but the identity share never reaches the EBS |
 | **Asset Hosting paths** (per version: Version → Asset Hosting) | Panel Viewer Path `panel.html`, Config Path `config.html`, Live Config Path `live_config.html` | A folder prefix such as `twitch-extension/panel.html` or a leading `/` — Twitch's CDN then returns 404 for the Extension iframe |
+| **Panel Height** (per version: Version → Asset Hosting) | **500**, the largest Twitch allows (100–500 px). The panel still works at smaller heights: each view scrolls (issue #191) | Left at a smaller value: the panel still works, but the Live tab and the roster need more scrolling. `package.sh` prints this value as a reminder |
 | **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
 | **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
 | **Allowlist for Image Domains** (per version: Version → Capabilities) | The team logo hosts from `backend/logo_hosts.py` (`LOGO_HOST_ALLOWLIST`, default the Steam CDN hosts), each as `https://<host>`. Admin › Users › Twitch status lists the exact values | Left empty — team logos in the panel fall back to initials |
@@ -211,7 +212,7 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 
 ## Viewer Panel (panel.html)
 
-A 318 × 500 panel styled with the Kanaliiga design system. Full description: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#panel-318--500).
+A panel 318 px wide, up to 500 px tall (the version's Panel Height), styled with the Kanaliiga design system. It takes the height Twitch gives it and each view scrolls within it ([Panel Fits Twitch's Height](../reference/panel-fits-twitch-height.md)). Full description: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#panel).
 
 1. Reads the EBS URL from `Twitch.ext.configuration.global.content` at startup
 2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
@@ -318,7 +319,7 @@ MVP selection refused on a channel that isn't approved (`ENV=production`, #165 /
 
 ## Local Development
 
-The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. It is not uploaded to Twitch CDN.
+The `twitch-extension/` folder is served by the backend at `/twitch-ext` when present. The dev harness at `http://localhost:8000/twitch-ext/dev-harness.html` simulates the extension panel without a real Twitch session. Its Panel Height presets (300, 400 and 500 px, and Pop-out) show the panel at each height Twitch may give it, at Twitch's 318 px width (#191). It is not uploaded to Twitch CDN.
 
 The dev harness is same-origin with the backend, so it needs no CORS entry. `/twitch/*` routes are exempt from the cross-origin Origin check (`reference/security-audit-3.md`) because they authenticate with the Twitch JWT, not the session cookie. `POST /twitch/merge/confirm` and `POST /twitch/disconnect` (#160) are the exceptions: they use the session cookie (called from the main site's Profile tab), so they get the Origin check like other cookie routes (`_COOKIE_AUTH_TWITCH_PATHS` in `main.py`).
 

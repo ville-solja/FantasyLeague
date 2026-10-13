@@ -310,14 +310,15 @@ class TestPreserveExistingTestCoverageThroughSplit:
         plan-issue-185-atomic-roster-and-token-operations's 52 new tests (40 stubs plus 4,
         plus 8 for the security review follow-ups) did after that (its seed fixes in
         test_admin_player_pool and test_issue_141 for the one-active-card-per-player index,
-        and test_issue_163's lookup of the moved token-grant-event routes, changed no counts)."""
+        and test_issue_163's lookup of the moved token-grant-event routes, changed no counts),
+        and plan-issue-191-panel-fits-twitch-height's 22 new tests did after that."""
         result = subprocess.run(
             [sys.executable, "-m", "pytest", "tests/", "-q",
              "--ignore=tests/test_issue_85_split_admin_router.py"],
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2642 passed" in output, output[-3000:]
+        assert "2664 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):
