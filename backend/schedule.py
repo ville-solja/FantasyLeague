@@ -1,14 +1,17 @@
 import csv
 import io
+import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
 from sqlalchemy import bindparam, text
 
 from models import LiveMatch, Week
+
+logger = logging.getLogger(__name__)
 
 SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 SCHEDULE_FIXTURES_URL = os.getenv("SCHEDULE_FIXTURES_URL", "")
@@ -215,8 +218,8 @@ def _parse_iso_date(iso_date, time_str=""):
 
 
 def _fixture_to_series(f):
-    """One feed fixture -> the same series dict parse_match_row() emits (plus a
-    `scheduled` bool)."""
+    """One feed fixture -> the same series dict parse_match_row() emits, plus a
+    `scheduled` bool and the feed's `league_week`."""
     starts_at = f.get("starts_at")
     date_str = (f.get("date") or "").strip()
     time_str = (f.get("time") or "").strip()
@@ -233,18 +236,26 @@ def _fixture_to_series(f):
         dt_iso = parse_date_time(date_str, time_str)
         if dt_iso:
             scheduled = True
-    # Unscheduled: fall back to the Monday of the fixture's week so the series
-    # still lands in Upcoming instead of being filtered out by the frontend.
+    # Unscheduled: anchor at Thursday 12:00 of the fixture's league week, well inside
+    # any Monday-based fantasy week (issue #194), and keep it upcoming until that league
+    # week ends so an unplayed fixture doesn't read "No result" mid-week.
+    week_end = None
     if dt_iso is None:
-        dt_iso = _parse_iso_date(f.get("week_start"))
         scheduled = False
+        anchor = _parse_iso_date(f.get("week_start"))
+        if anchor:
+            start = datetime.fromisoformat(anchor)
+            dt_iso = (start + timedelta(days=3, hours=12)).isoformat()
+            week_end = start + timedelta(days=7)
 
     stream = (f.get("stream") or "").strip()
     stream_url = stream if stream.startswith(("http://", "https://")) else None
     stream_label = None if stream_url else (stream or None)
 
     status = "unknown"
-    if dt_iso:
+    if week_end is not None:
+        status = "past" if week_end <= _league_now() else "upcoming"
+    elif dt_iso:
         try:
             status = "past" if datetime.fromisoformat(dt_iso) < _league_now() else "upcoming"
         except ValueError:
@@ -260,6 +271,7 @@ def _fixture_to_series(f):
         "datetime_iso": dt_iso,
         "match_status": status,
         "scheduled": scheduled,
+        "league_week": f.get("week"),
     }
 
 
@@ -275,8 +287,13 @@ def parse_fixtures_json(payload):
         if wk is None or bucket is None:
             dropped += 1
             continue
+        series = _fixture_to_series(f)
+        if series["datetime_iso"] is None:
+            # No starts_at, no date and no week_start: nowhere to place it.
+            dropped += 1
+            continue
         node = by_week.setdefault(wk, {"label": f"Week {wk}", "div1": [], "div2": []})
-        node[bucket].append(_fixture_to_series(f))
+        node[bucket].append(series)
     return [by_week[k] for k in sorted(by_week)], dropped
 
 
@@ -339,21 +356,32 @@ def next_scheduled_match(db) -> dict | None:
 
 
 def norm_team_name(name):
-    """Normalise a team name for fuzzy matching."""
+    """Normalise a team name for matching: lowercase, parentheticals removed, then
+    letters and digits only, so "Innofactor/NordCloud" == "innofactor nordcloud"."""
     name = (name or "").lower().strip()
     name = re.sub(r'\(.*?\)', '', name)   # strip parentheticals: Meta(no)core → metacore
-    name = re.sub(r'\s+', ' ', name).strip()
-    return name
+    return "".join(ch for ch in name if ch.isalnum())
 
 
 def find_team_id(name, team_lookup):
-    """Exact match first, then substring containment fallback."""
+    """Exact normalised match first. Otherwise the keys that contain the name or are
+    contained in it: one such key -> its team; several -> the longest key when no other
+    is as long; else None, with a warning naming the team text (issue #194)."""
     n = norm_team_name(name)
+    if not n:
+        return None
     if n in team_lookup:
         return team_lookup[n]
-    for key, tid in team_lookup.items():
-        if n and key and (n in key or key in n):
-            return tid
+    candidates = [key for key in team_lookup if key and (n in key or key in n)]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return team_lookup[candidates[0]]
+    longest = max(len(k) for k in candidates)
+    top = [k for k in candidates if len(k) == longest]
+    if len(top) == 1:
+        return team_lookup[top[0]]
+    logger.warning("schedule: ambiguous team name %r matches %d teams", name, len(candidates))
     return None
 
 

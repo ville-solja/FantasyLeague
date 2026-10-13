@@ -203,10 +203,11 @@ class TestUnscheduledFixturesStillAppear:
         assert s["datetime_iso"] != "2026-09-14T19:00:00"  # date/time did not win
         assert s["scheduled"] is True
 
-    def test_fixture_to_series_falls_back_to_week_start_midnight_when_unscheduled(self, db):
+    def test_fixture_to_series_falls_back_to_week_thursday_noon_when_unscheduled(self, db):
         """A fixture with starts_at: null and empty date/time is given an approximate
-        datetime_iso of its week_start date at 00:00 (so it is not filtered out of the
-        Upcoming list) and is marked scheduled: false in the /schedule response."""
+        datetime_iso of the Thursday of its week_start's week at 12:00 (so it is not
+        filtered out and lands in its own fantasy week, issue #194) and is marked
+        scheduled: false in the /schedule response."""
         f = {
             "week": 1, "division": "upper", "team1": "Alpha", "team2": "Bravo",
             "starts_at": None, "date": "", "time": "",
@@ -215,7 +216,7 @@ class TestUnscheduledFixturesStillAppear:
 
         s = schedule._fixture_to_series(f)
 
-        assert s["datetime_iso"] == "2026-09-14T00:00:00"
+        assert s["datetime_iso"] == "2026-09-17T12:00:00"
         assert s["scheduled"] is False
 
     def test_render_row_shows_time_tbd_for_unscheduled_series(self):

@@ -869,6 +869,14 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
 }
 .badge-division.div1 { background: #1a1a2a; color: #8a8acc; }
 .badge-division.div2 { background: #1a2a1a; color: #7cc07c; }
+.league-week-tag {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .series-row {
   display: grid;
@@ -880,7 +888,7 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
   font-size: var(--fs-sm);
   color: var(--fg);
 }
-.series-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.series-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 /* Both teams face the score: team 1 right-aligned, team 2 ("right" team) left-aligned. */
 .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 .series-team.right { text-align: left; }

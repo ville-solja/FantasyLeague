@@ -23,7 +23,7 @@ The Schedule tab opens on what matters now: a live match, the next match and the
 ## Week assignment
 
 - A series' time (`seriesTime`) is `series_result.start_time` once played, else its planned `datetime_iso`.
-- `assignWeek` places it in the week where `start_time <= t < end_time`. Outside every week it goes to the last week starting before it, else the first week, so no series disappears. This covers feed fixtures, DB-derived `extra_results` and "Time TBD" fixtures (whose `datetime_iso` is the Monday of their week).
+- `assignWeek` places it in the week where `start_time <= t < end_time`. Outside every week it goes to the last week starting before it, else the first week, so no series disappears. This covers feed fixtures, DB-derived `extra_results` and "Time TBD" fixtures (whose `datetime_iso` is the Thursday 12:00 of their league week, issue #194).
 
 ## Hide and reveal
 

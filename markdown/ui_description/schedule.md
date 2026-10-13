@@ -39,16 +39,17 @@ The countdown is computed when the tab renders (tab switch or refresh), not on a
 
 - Header: the week's label and date range, then either "Revealed in your Weekly Report" (when the logged-in player revealed this fantasy week in the Weekly Report), or **Reveal week** (when the week has hidden results) and **Hide week again** (when hide mode is on and series in the week were revealed on this tab; it hides them again), then the division chips **All / Div 1 / Div 2**.
 - Series grouped by day (English weekday, Finnish day-month order, e.g. "Mon 5.10.2026"), earliest first, both divisions mixed. "Time TBD" fixtures close the week in their own "Time TBD" group.
+- Series are listed in the fantasy week that contains their time (a played series: its first game's actual start), because points count by fantasy week. A "Time TBD" fixture is placed at the Thursday 12:00 of its league week, so it is listed in the fantasy week covering that league week.
 - In the current week an orange **Now** line ("Now · Wed 18:00") sits between the last started series and the next one.
 - Empty states: "No matches this week." and "No matches for this division this week."
 
 ### Series rows
 
-Each row: time and division badge, team 1, centre cell, team 2, actions.
+Each row: time and division badge (plus the league-week tag when it applies), team 1, centre cell, team 2, actions.
 
 | State | Centre | Actions |
 |---|---|---|
-| Upcoming | "vs" | Stream link or label. Time shows "Time TBD" for an unscheduled fixture. |
+| Upcoming | "vs" | Stream link or label. Time shows "Time TBD" for an unscheduled fixture; it stays upcoming until its league week ends. |
 | Live | red "LIVE" tag, plus the partial score when results are visible | "Watch live" stream link |
 | Hidden (played, hide mode on, not revealed) | "Played" | **Reveal** |
 | Shown | series score in display type; winner bold, loser muted | **N games** (`aria-expanded`), VOD/stream link |
@@ -57,7 +58,8 @@ Each row: time and division badge, team 1, centre cell, team 2, actions.
 - **N games** unfolds the per-game rows: game number, both sides' hero icons, kills score, MVP with a star, duration, OpenDota link, and a "Not scored" badge for a game excluded from fantasy scoring.
 - A played series with no resolved games shows its score and no games button.
 - Team names open the team popup; MVP names open the player popup. In a hidden row (and a hidden Latest result card) team names are plain text, because the team popup lists results.
-- A fixture past its date with no resolved games shows "No result" in the centre and no games button, instead of "vs".
+- A fixture past its date with no resolved games shows "No result" in the centre and no games button, instead of "vs". A "Time TBD" fixture reads "No result" only after its league week has ended (`week_start` + 7 days); until then it shows "Time TBD" and "vs".
+- **League week tag:** when a feed fixture's league week differs from the number in the fantasy week label it is listed under, a small muted "League week N" tag follows the division badge (e.g. a league week-4 match played on the next Monday evening, listed in Week 5). No tag when the numbers match, when the week label has no number, with calendar weeks, or for the Google Sheet source and DB-derived results. On narrow rows the tag wraps under the time and badge.
 - **Caster TBD:** an upcoming fixture with no stream link yet shows "Caster TBD" in italics (or the feed's stream label, if it named one) and a greyed-out, dashed Watch button that is not a link.
 - **Streamer name:** before each watch button, in muted text: the feed's stream label, or else the channel taken from the stream URL (`twitch.tv/kanaliiga` → "kanaliiga", `youtube.com/@name` → "name", other sites → their host).
 - **Stream and watch links** are outlined buttons in the display face with an arrow icon (they open in a new tab), next to the games button. A live match's "Watch live" link is the filled orange button. A stream label without a URL stays plain muted text.
@@ -72,4 +74,4 @@ The Right now cards stack, the week strip scrolls sideways with the arrows hidde
 
 "Loading..." shows only on the tab's first load. Later visits keep the fixtures on screen while they refresh and change only what changed; if a refresh fails, the fixtures stay and the status line (`#scheduleStatus`) reads "Couldn't load the schedule. Refresh to try again." (the raw error goes to the browser console). When the source is unavailable and the database has no results, the panel shows the error text.
 
-Team name matching between the schedule source and the database is fuzzy (case-insensitive, ignores parenthetical content, substring fallback). Div 2 teams without an OpenDota team_id are matched via stored team name fields on match records.
+Team name matching between the schedule source and the database compares letters and digits only, case-insensitively, ignoring parenthetical content ("Innofactor/NordCloud" = "InnofactorNordcloud"). A partial match is used only when one team matches, or when one matching name is longer than all others; an ambiguous name matches no team and is logged. See `markdown/features/reference/schedule-fixtures-api.md`. Div 2 teams without an OpenDota team_id are matched via stored team name fields on match records.
