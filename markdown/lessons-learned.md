@@ -9,6 +9,10 @@ Format:
 
 ---
 
+### 2026-10-13 — developer — docs
+**Problem:** For #195, the plan said the listing's "weekly grant" doesn't exist, but `auto_lock_weeks` (`backend/weeks.py`) gives every account, soft accounts included, +1 token when a week locks, and the panel's draw note says "Tokens come from MVP drops and the weekly grant." Separately, the old testing steps promised a freshly joined reviewer "+1 token from the MVP drop", but `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` (default 24, #171) keeps new accounts out of drops.
+**Solution:** Before rewriting reviewer-facing copy, grep the backend and the panel for every token source and every rule that gates the flow the reviewer will walk. The guide now says "plus one token each match week" without the phrase "weekly grant", and tells the operator to set `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS=0` for the review window.
+
 ### 2026-10-13 — ship — agent-config
 **Problem:** A pull request stacked on another feature branch (`--base Extension-followup`) gets no CI or CodeQL at all: `unit-tests.yml` and `ui-tests.yml` run only for `pull_request` into `main`, so `gh pr checks` reports "no checks".
 **Solution:** Open stacked PRs only to keep the diff readable, and say in the report that CI starts once the PR is retargeted to `main` (after the base PR merges: `gh pr edit <P> --base main`); then run `/ship pr` again to watch checks and alerts. Retarget before merging: a stacked PR merged after its base PR has already merged lands on the old base branch, not `main` (PR #196 → `Extension-followup`, 49 s after #192 merged), and `Closes #N` never fires; recover with a new PR from that branch to `main`.

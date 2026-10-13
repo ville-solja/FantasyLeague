@@ -321,7 +321,7 @@ class TestPreserveExistingTestCoverageThroughSplit:
             cwd=_BACKEND_DIR, capture_output=True, text=True,
         )
         output = result.stdout + result.stderr
-        assert "2720 passed" in output, output[-3000:]
+        assert "2759 passed" in output, output[-3000:]
         assert "skipped" not in output, output[-3000:]
 
     def test_full_suite_collects_without_import_errors(self):

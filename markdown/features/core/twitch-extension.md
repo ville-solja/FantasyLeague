@@ -51,7 +51,7 @@ twitch-extension/
 
 ### Prerequisites — Developer Console Settings
 
-> **Read this before running any scripts.** These settings are easy to get wrong. All are on the Extension Settings page: `dev.twitch.tv/console/extensions` → click extension → **Extension Settings**.
+> **Read this before running any scripts.** These settings are easy to get wrong. All are on the Extension Settings page: `dev.twitch.tv/console/extensions` → click extension → **Extension Settings**. Submitting a version for review uses the same fields, in order, in [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md#submission-checklist-work-through-in-order).
 
 | Setting | Required value | Common mistake |
 |---|---|---|
@@ -65,7 +65,7 @@ twitch-extension/
 | **Panel Height** (per version: Version → Asset Hosting) | **500**, the largest Twitch allows (100–500 px). The panel still works at smaller heights: each view scrolls (issue #191) | Left at a smaller value: the panel still works, but the Live tab and the roster need more scrolling. `package.sh` prints this value as a reminder |
 | **Testing Base URI** (per version: Version → Asset Hosting) | `http://localhost:8080/`, serving the `twitch-extension/` folder with `python3 -m http.server 8080` | Pointing it at the production site (`https://kana-cards.com/`), which does not serve the extension pages, so every Local Test view returns 404. Used in Local Test only; Hosted Test and review load from the Twitch CDN |
 | **Allowlist for URL Fetching Domains** (per version: Version → Capabilities) | `https://kana-cards.com` (the EBS host; no other entry needed) | Left empty — Twitch's Content Security Policy then blocks every EBS call (`connect-src` violation) |
-| **Allowlist for Image Domains** (per version: Version → Capabilities) | The team logo hosts from `backend/logo_hosts.py` (`LOGO_HOST_ALLOWLIST`, default the Steam CDN hosts), each as `https://<host>`. Admin › Users › Twitch status lists the exact values | Left empty — team logos in the panel fall back to initials |
+| **Allowlist for Image Domains** (per version: Version → Capabilities) | The team logo hosts from `backend/logo_hosts.py` (`LOGO_HOST_ALLOWLIST`, default the Steam CDN hosts), each as `https://<host>`. Admin › Users › Twitch status lists the exact values | Left empty — the team draw shows a monogram (the first two letters of the team name) instead of each logo |
 | **Twitch API Client Secret** (Extension Settings, mid-page, under Twitch API Client Configuration) | Goes in `TWITCH_OAUTH_CLIENT_SECRET` (Connect Twitch), with the extension's Client ID as `TWITCH_OAUTH_CLIENT_ID` | Pasted into `TWITCH_EXTENSION_SECRET` — every panel request then fails with `E-TOKEN` |
 | **OAuth Redirect URL** (Twitch API Client Configuration) | `https://<host>/auth/twitch/callback` for each environment (up to 10 entries, so test and production share the client) | Typing the URL without clicking **Add**, or not clicking **Save Changes**. Twitch then answers `redirect_mismatch` and sends the browser to another registered URL; the site shows "this site's Twitch redirect URL isn't registered" on Profile |
 
@@ -85,7 +85,7 @@ Add to `.env`:
 ```
 TWITCH_EXTENSION_CLIENT_ID=<Client ID from Extension Settings top-right>
 TWITCH_EXTENSION_SECRET=<Key from Extension Secrets table at bottom of Extension Settings>
-TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.2.0>
+TWITCH_EXTENSION_VERSION=<version installed on the channel, e.g. 1.3.0>
 TWITCH_DROP_MAX=20
 ```
 
@@ -122,11 +122,11 @@ The packaged `ebs-origins.js` also carries a build stamp, `var EXT_BUILD = {vers
 Give each allowed origin with `--ebs-origin` (an `https://` origin, no path or trailing slash). A production package lists only the production host; a package for a test server may add the test host:
 
 ```bash
-bash twitch-extension/package.sh 1.2.0 --ebs-origin https://fantasy.example.org
+bash twitch-extension/package.sh 1.3.0 --ebs-origin https://fantasy.example.org
 # test build: … --ebs-origin https://fantasy.example.org --ebs-origin https://test.fantasy.example.org
 ```
 
-CI (`.github/workflows/docker-publish.yml`) packages every push to `main` with the origins in the repository variable `EBS_ORIGINS` (space-separated, Settings → Secrets and variables → Actions → Variables). Without it the extension isn't packaged (a notice in the run says so) and the Docker image is still built. The script refuses to run without a version or without an origin, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the packaged origins, the Asset Hosting paths and the URL Fetching allowlist entries (the same origins) to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
+CI (`.github/workflows/docker-publish.yml`) packages every push to `main` with the origins in the repository variable `EBS_ORIGINS` (space-separated, Settings → Secrets and variables → Actions → Variables). Without it the extension isn't packaged (a notice in the run says so) and the Docker image is still built. The script refuses to run without a version or without an origin, refuses to overwrite an existing `twitch-extension-<version>.zip` (Twitch needs a new version per upload), and fails naming the file if any local `src`/`href` in a packaged HTML file is not in its `FILES` list. It also refuses to build when a viewer file (`panel.html`, `panel.js`, `extension.js`, `extension.css`, any `video*` file) contains "kana-cards.com", "Log into", "Generate Twitch Code", "Link your account" or a password field (Twitch policy 4.5). On success it prints the packaged origins, the Asset Hosting paths, the Panel Height, an Image Domains reminder (see Admin › Users › Twitch status) and the URL Fetching allowlist entries (the same origins) to set in the dev console. `backend/tests/test_twitch_review_resubmission.py` runs the same reference check in CI.
 
 Upload the produced ZIP in the Twitch dev console. Set the version to **Local Test** to test on whitelisted channels, move it to **Hosted Test** and verify all three views before submitting for review. See [Twitch Extension Review Submission](../reference/twitch-extension-review-submission.md).
 
@@ -422,7 +422,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 |---|---|---|
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner). Also the only `ext-twitch.tv` origin CORS allows; unset, no extension origin is allowed (#171) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
-| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.2.0`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
+| `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.3.0`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_DROPS_ENABLED` | `true` | Kill switch for MVP token drops; `false` sets the MVP and bonus only |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |

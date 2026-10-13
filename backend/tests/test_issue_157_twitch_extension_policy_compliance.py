@@ -1758,13 +1758,13 @@ class TestMigrationAndPackaging:
             conn.execute(text("INSERT INTO users (id, username) VALUES (3, 'new')"))
             assert conn.execute(text("SELECT account_type FROM users WHERE id = 3")).scalar() == "full"
 
-    def test_package_sh_has_self_check_and_targets_version_1_2_0(self, tmp_path):
-        """Step 7: package.sh contains the forbidden-text self-check and `package.sh 1.2.0` builds on the clean tree."""
+    def test_package_sh_has_self_check_and_targets_current_version(self, tmp_path):
+        """Step 7: package.sh contains the forbidden-text self-check, its usage names the current release (1.3.0 since issue #195), and `package.sh 1.2.0` builds on the clean tree."""
         src = _ext("package.sh")
         assert "FORBIDDEN_TEXT=" in src and "VIEWER_FILES=" in src
         for phrase in FORBIDDEN:
             assert f'"{phrase}"' in src
-        assert "1.2.0" in src
+        assert "1.3.0" in src
         if shutil.which("zip") is None:
             return  # the static checks above still ran; the build needs zip
         ext = tmp_path / "twitch-extension"

@@ -56,6 +56,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
+| [Twitch Extension Resubmission](reference/twitch-extension-resubmission.md) | Issue #195: version 1.3.0 for review after the policy 4.5 rejection; submission guide brought in line with the build (listing, baked backend origins, endpoint and image disclosure, testing steps), tests keeping the disclosure in step with the packaged code |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |

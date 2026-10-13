@@ -146,12 +146,12 @@ def _join_template(panel_text):
 # ---------------------------------------------------------------------------
 
 def test_submission_doc_references_current_version():
-    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference the current version (1.2.0 since issue #157)."""
+    """The submitted zip version is higher than 1.1.5: the submission doc header and checklist reference the current version (1.3.0 since issue #195)."""
     doc = _submission_doc()
     header = doc.split("## Submission checklist")[0]
     checklist = doc.split("## Submission checklist")[1].split("## Listing copy")[0]
-    assert "twitch-extension-1.2.0.zip" in header
-    assert "1.2.0" in checklist
+    assert "twitch-extension-1.3.0.zip" in header
+    assert "1.3.0" in checklist
 
 
 def test_submission_doc_does_not_submit_version_1_1_5():

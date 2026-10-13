@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a Twitch CDN-ready ZIP of the extension.
 # Usage: bash twitch-extension/package.sh <version> --ebs-origin <https-origin> [--ebs-origin ...]
-#        (current release: 1.2.0)
+#        (current release: 1.3.0)
 # Output: twitch-extension/twitch-extension-<version>.zip
 #
 # The EBS URL is read at runtime from Twitch.ext.configuration.global (set in the
@@ -14,7 +14,7 @@
 
 set -e
 
-USAGE="Usage: package.sh <version> --ebs-origin <https-origin> [--ebs-origin ...]  (e.g. 1.2.0 --ebs-origin https://example.org)"
+USAGE="Usage: package.sh <version> --ebs-origin <https-origin> [--ebs-origin ...]  (e.g. 1.3.0 --ebs-origin https://example.org)"
 VERSION=${1:?"$USAGE"}
 shift
 # The version is written into ebs-origins.js as a JS string (EXT_BUILD, issue #180).
@@ -135,12 +135,12 @@ echo "  Config Path:        config.html"
 echo "  Live Config Path:   live_config.html"
 echo "Dev console → Version → Asset Hosting → Panel Height: 500"
 echo "  (the largest Twitch allows; the panel scrolls at any smaller height)"
+echo "Dev console → Version → Capabilities → Allowlist for Image Domains: see Admin › Users › Twitch status"
+echo "  (the team logo hosts; without them the team draw shows monograms instead of logos)"
 echo "Panel calls only these backend origins (ebs-origins.js):"
 for o in "${EBS_ORIGINS[@]}"; do echo "  $o"; done
 echo "Dev console → Version → Capabilities → Allowlist for URL Fetching Domains:"
 for o in "${EBS_ORIGINS[@]}"; do echo "  $o"; done
-echo "Team logos in the panel's team draw load from the logo host; without an image"
-echo "allowlist entry for it the panel shows monograms instead."
 echo "Upload the zip, move the version to Hosted Test, verify all three views, then submit."
 echo "Build stamp (ebs-origins.js; the configuration page's Connection check shows it):"
 echo "  $EXT_BUILD_JS"
