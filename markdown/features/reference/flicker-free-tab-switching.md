@@ -46,12 +46,11 @@ Frontend only: no endpoint, env var or database change.
 
 ### Roster drag-and-drop
 
-The roster DOM may now outlive a render, so `_initDragAndDrop()` (`app-roster.js`) is idempotent:
+The roster DOM outlives a render. Since #186 the grids are a keyed render (`renderRosterLayout()` in `app-roster.js`):
 
-- Card slots (`.card-slot[data-card-id]`) and empty active slots (`.card-slot-empty`) each carry `_dndBound`; a node that already has its handlers is skipped.
-- The grid-level handlers on `#rosterActiveGrid` and `#benchGrid` are bound once, both guarded by `activeGrid._dndBound` (the grids themselves are never replaced). They used to pile up, one more on each render.
-- The handlers read the current cards from `_rosterActive` / `_rosterBench`, not the arrays from the render that bound them.
-- `_cardSlotHTML(c, action, draggable)` puts `draggable="true"` in the markup on an editable week. A locked week's markup therefore differs and is rebuilt, so it never reuses draggable nodes. The grid handlers also ignore drops while `_rosterLocked`.
+- Each card keeps its `.card-slot` node (`_rosterNodes`) and each empty slot its placeholder; a render only reorders nodes and rewrites a card's inner markup when it changed. Both grids are then marked with `forgetRendered`.
+- The pointer, click and key listeners are delegated to `#rosterActiveGrid` and `#benchGrid`, bound once (`_bindRosterGrid`, guarded by `grid._rosterBound`; the grids are never replaced). The handlers read the current `_layout`, not one captured at bind time.
+- A locked week is gated in the handlers (`_rosterLocked`), not in the markup. See [My Team Drag-and-Drop](my-team-drag-and-drop.md#drag).
 
 ### `switchTab(name)`
 

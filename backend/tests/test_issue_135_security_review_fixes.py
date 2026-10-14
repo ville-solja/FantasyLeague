@@ -967,14 +967,15 @@ def test_card_image_61st_request_per_ip_returns_429(db, card_image_client):
 def test_reorder_card_ids_50_items_accepted():
     """ReorderRequest.card_ids accepts 500 items (a whole large bench)."""
     from routers.cards import ReorderRequest
-    assert len(ReorderRequest(card_ids=list(range(500))).card_ids) == 500
+    # Card ids start at 1 (#186 bounds them to 1..2**63-1).
+    assert len(ReorderRequest(card_ids=list(range(1, 501))).card_ids) == 500
 
 
 def test_reorder_card_ids_over_50_returns_422():
     """ReorderRequest.card_ids with 501 items is rejected (422)."""
     from routers.cards import ReorderRequest
     with pytest.raises(ValidationError):
-        ReorderRequest(card_ids=list(range(501)))
+        ReorderRequest(card_ids=list(range(1, 502)))
 
 
 def test_remove_players_500_ids_accepted():

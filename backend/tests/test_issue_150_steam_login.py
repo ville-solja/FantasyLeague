@@ -1010,7 +1010,8 @@ class TestLinkSteamToExistingAccount:
     def test_profile_shows_link_steam_for_unlinked_player(self):
         """AC: in both/steam_signup modes Profile shows Link Steam for a logged-in player without steam_id (frontend driven by /me steam_linked)."""
         html = _read("index.html")
-        assert 'id="steamProfilePanel"' in html and "Link Steam" in html
+        # Issue #188: Link Steam lives in the Player identity panel.
+        assert 'id="profileIdentityPanel"' in html and 'id="btnLinkSteam"' in html and "Link Steam" in html
         profile = _read("app-profile.js")
         assert "steamUiState(" in profile and "/auth/steam/start?purpose=link" in profile
         me = {"steam_linked": False, "has_password": True, "is_demo": False}

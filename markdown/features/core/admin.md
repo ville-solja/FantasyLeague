@@ -173,15 +173,25 @@ Recalculates fantasy points for every `PlayerMatchStats` row using the current w
 
 ## Match & Week Management
 
+### `GET /admin/matches` (scoring week fields)
+Besides the match, MVP, timing and parse fields, each row carries `week_override_id`, `scoring_week_id`, `scoring_week_label` and `scoring_week_source` (`override` or `time`; all null when no week contains the match; an override pointing to a deleted week gives source `override` with a null id and label), and `time_week_id` / `time_week_label` (the week containing `start_time`, shown by the picker's "By time" option). See [Weeks › Week Override](weeks.md#week-override).
+
 ### `PUT /matches/{match_id}/week`
-Manually assigns a match to a specific fantasy week, overriding the week derived from its `start_time`. Used when a match is played outside its scheduled week.
+Sets which fantasy week a series counts for, overriding the week derived from `start_time`. Used when a series is played outside its scheduled week.
 ```json
-{ "week_id": 3 }
+{ "week_id": 3, "apply_to_series": true }
 ```
-Set `week_id` to `null` to clear the override.
+- `week_id: null` clears the override. An unknown match or week returns 404 and changes nothing.
+- `apply_to_series` (default `true`) changes every game of the series: the same two teams, starting within 6 hours of the chosen match. `false` changes only this match.
+- Every affected week (each changed match's old and new scoring week) whose substitutions already ran gets them re-run in the same request ([Automatic Bench Substitution](../reference/automatic-bench-substitution.md#week-changes-after-substitutions-ran-issue-193)). The schedule and Twitch panel caches are busted.
+- Returns `{match_id, week_override_id, changed_match_ids, substitution_reruns: [{week_id, week_label, substitutions}]}`.
+- Admin only (no re-auth). One `admin_set_match_week` audit entry per changed match; one `admin_substitutions_rerun` entry (`reason=week_override`) per re-run week.
+
+### `GET /admin/matches/out-of-week`
+Feed series counted for a different fantasy week than their league week's (`schedule.out_of_week_series`). Each item: `team1`, `team2`, `team1_id`, `team2_id`, `league_week`, `played_at` (first game's start), `match_ids`, `scheduled_week_id` / `scheduled_week_label`, `counted_week_id` / `counted_week_label` (null when a game counts in no week). Admin only. The detection rule is in [Weeks › Week Override](weeks.md#week-override).
 
 ### `POST /admin/sync-match-weeks`
-Automatically bulk-assigns `week_override_id` for all matches based on the configured schedule source. Uses a ±3-day proximity window to map each scheduled series to the closest actual matches played between those two teams. Clears overrides for matches already in the correct week. Returns a summary of changes and errors.
+Applies the scheduled week to every series `GET /admin/matches/out-of-week` lists, as an explicit override on each game, and re-runs the affected weeks' substitutions as `PUT /matches/{match_id}/week` does. It no longer pairs schedule and fantasy weeks by label. `?dry_run=true` only returns the flagged series. Returns `{dry_run, series, changes: [{match_id, old_override, new_override, old_week_id, new_week_id, target_week, teams}], substitution_reruns, errors: []}`. Audited as `admin_sync_match_weeks` when anything changed, plus the per-match and per-week entries above.
 
 ---
 
@@ -288,6 +298,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_seeded_from_env` | A verified Steam sign-in, sign-up or link with an ID in `SEED_ADMIN_STEAM_IDS` made the account an admin (issue #150; written only for Steam seeding, not for `SEED_ADMIN_USERNAME` password seeding) |
 | `steam_linked` | A user linked Steam on Profile; `player_id` became the verified Steam32 id (issue #150; the Steam id is never in `detail`) |
 | `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150) |
+| `own_player_card_granted` | A Steam-verified league player got their own player card, or it was recorded as already owned (issue #188; `detail` has `user_id=`, `player_id=`, `card_id=` and `outcome=`) |
 | `player_id_claim_superseded` | A Steam-verified account took a player id another account had self-reported; that account's `player_id` was cleared (`detail` is `user_id=<cleared> verified_user_id=<verified> player_id=<id>`; issue #150) |
 | `admin_reauth` | An admin confirmed their password via `POST /reauth`, or their Steam account via the Steam re-auth round trip (`detail` is `ok` or `failed: …`; Steam adds `method=steam`) |
 | `player_reauth` | A non-admin user confirmed their password via `POST /reauth` or Steam, e.g. before connecting, merging or disconnecting Twitch (issue #160; `detail` is `ok` or `failed: …`) |
@@ -311,7 +322,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_week_created` | Admin created a week (Week Management tab) |
 | `admin_week_edited` | Admin edited an unlocked week |
 | `admin_week_deleted` | Admin deleted an unlocked, roster-free week |
-| `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`) |
+| `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`; `reason=week_override` when a week change triggered it) |
 | `admin_token_grant_event_created` | Admin created a token grant event |
 | `admin_token_grant_event_deleted` | Admin deleted a token grant event |
 | `twitch_soft_account_created` | A viewer pressed Join in the Twitch panel and a soft account was created (`detail` has `user_id=`; the opaque Twitch id is never logged) |
@@ -391,6 +402,7 @@ These features have dedicated reference documents:
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Bench Substitution Re-run | `POST /admin/weeks/{week_id}/substitutions` | `reference/automatic-bench-substitution.md` |
+| Match Scoring Week | `PUT /matches/{match_id}/week`, `GET /admin/matches/out-of-week`, `POST /admin/sync-match-weeks` | `core/weeks.md#week-override`, `reference/automatic-bench-substitution.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |

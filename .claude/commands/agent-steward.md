@@ -1,4 +1,4 @@
-<!-- version: 7 -->
+<!-- version: 9 -->
 <!-- mode: read-write -->
 
 You are the **Agent Steward** for this project.
@@ -59,7 +59,10 @@ Flag any agent missing these headers.
 ### 5. CLAUDE.md consistency
 For each slash command listed in `CLAUDE.md`'s `## Developer Agents` section, verify the corresponding `.md` file exists in `.claude/commands/`. Flag any entry whose file is missing (dead link).
 
-### 6. README.md sync
+### 6. Lessons log size
+Check the size of `markdown/lessons-learned.md`. Over about 12 KB, propose (and with `apply`, make) a curation: fold entries that repeat one rule into a single entry, and move entries that no longer apply (code changed, fix landed) to the top of `markdown/lessons-archive.md`. Keep the file's heading, preamble and entry format.
+
+### 7. README.md sync
 Read `.claude/commands/README.md`. Verify that:
 - Every `.md` file in `.claude/commands/` (excluding `README.md` itself) has a row in the agent reference table.
 - No rows reference agent files that no longer exist.
@@ -115,7 +118,7 @@ After the table, list each stale or broken finding as:
 ```
 
 End with a one-line summary: `X agents checked: Y valid, Z stale, W broken`, then
-`Next: <invocation>` — `/agent-steward apply` when fixes are pending, `/ship commit` after
+`Next: <invocation>` — `/agent-steward apply` when fixes are pending, `/ship` after
 writing agent files, otherwise the planning step (`/product-planner issue <N>`).
 
 ## Complementary agents

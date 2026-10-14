@@ -869,6 +869,14 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
 }
 .badge-division.div1 { background: #1a1a2a; color: #8a8acc; }
 .badge-division.div2 { background: #1a2a1a; color: #7cc07c; }
+.league-week-tag {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .series-row {
   display: grid;
@@ -880,7 +888,7 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
   font-size: var(--fs-sm);
   color: var(--fg);
 }
-.series-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.series-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
 /* Both teams face the score: team 1 right-aligned, team 2 ("right" team) left-aligned. */
 .series-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
 .series-team.right { text-align: left; }
@@ -1248,21 +1256,45 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 .card-slot[data-rarity="epic"]      .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-epic); }
 .card-slot[data-rarity="legendary"] .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-amber); }
 
-/* ── Drag-and-drop UX ─────────────────────────────────────────────────────── */
+/* ── Drag-and-drop UX (pointer drag, issue #186) ──────────────────────────── */
 
-/* Item 6 — grab cursor on draggable cards */
-.card-slot[draggable="true"] { cursor: grab; }
+/* Editable week: cards can be picked up with mouse, pen or touch (long-press) */
+.card-slot--editable {
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 body.roster-dragging,
 body.roster-dragging * { cursor: grabbing !important; }
+body.roster-dragging { -webkit-user-select: none; user-select: none; }
 
-/* Item 1 — lift effect: card slot needs position:relative for ::after overlay */
 .card-slot { position: relative; }
 
-/* Item 2 — placeholder: dim the source slot after the browser has snapshotted it */
-.card-slot.drag-placeholder { opacity: 0.25; filter: grayscale(0.6); pointer-events: none; }
-.card-slot.drag-placeholder .card-img { transform: none !important; }
+/* The lifted card: a copy that follows the pointer */
+@keyframes roster-lift {
+  from { transform: scale(1); }
+  to   { transform: scale(1.04); }
+}
+.roster-drag-clone {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  pointer-events: none;
+  transform: scale(1.04);
+  animation: roster-lift 120ms var(--ease-out);
+}
+.roster-drag-clone .card-img,
+.roster-drag-clone .card-img:hover {
+  transform: none;
+  box-shadow: var(--sh-lg), 0 0 0 2px var(--accent);
+}
 
-/* Item 3 — illuminate empty slots and bench zone the moment any drag starts */
+/* Live gap: the picked-up card's own place, which moves as the roster makes room */
+.card-slot.drag-placeholder { opacity: 0.25; filter: grayscale(0.6); }
+.card-slot.drag-placeholder .card-img { transform: none !important; box-shadow: none; }
+
+/* #93 — illuminate empty slots and bench zone the moment any drag starts */
 @keyframes slot-pulse {
   0%, 100% { box-shadow: 0 0 0 1px var(--accent), inset 0 0 10px rgba(232,93,28,0.08); }
   50%       { box-shadow: 0 0 0 1px var(--accent), inset 0 0 22px rgba(232,93,28,0.20); }
@@ -1272,7 +1304,7 @@ body.roster-dragging * { cursor: grabbing !important; }
   color: var(--accent);
   animation: slot-pulse 1.4s ease-in-out infinite;
 }
-.drop-targets-active .card-slot[draggable="true"]:not(.drag-placeholder) .card-img {
+.drop-targets-active .card-slot--editable:not(.drag-placeholder) .card-img {
   box-shadow: 0 0 0 1px rgba(232,93,28,0.22);
 }
 
@@ -1288,14 +1320,14 @@ body.roster-dragging * { cursor: grabbing !important; }
   animation-delay: 0.7s; /* offset glow from slot-pulse so they don't sync */
 }
 
-/* Generic drag-over highlight for card slots */
-.card-slot.drag-over .card-img {
+/* Drag-over highlight for the card slot under the pointer */
+.card-slot.drag-over:not(.drag-placeholder) .card-img {
   transform: scale(1.03);
   box-shadow: 0 0 0 2px var(--accent), var(--sh-glow-orange);
   transition: transform 80ms var(--ease-out), box-shadow 80ms var(--ease-out);
 }
 
-/* Generic drag-over highlight for empty slots */
+/* Drag-over highlight for empty slots */
 .card-slot-empty.drag-over {
   border-color: var(--accent);
   background: rgba(232,93,28,0.07);
@@ -1303,13 +1335,15 @@ body.roster-dragging * { cursor: grabbing !important; }
   color: var(--accent);
 }
 
-/* Item 4 — swap indicator: bench card hovering a populated active slot */
-.card-slot.drag-swap-target .card-img {
+/* Swap preview: a bench card over a roster card dims the card it would replace,
+   with an arrow to the bench */
+.card-slot.swap-preview .card-img {
   opacity: 0.4;
   transform: scale(0.97);
+  transition: opacity 120ms var(--ease-out), transform 120ms var(--ease-out);
 }
-.card-slot.drag-swap-target::after {
-  content: "⇄";
+.card-slot.swap-preview::after {
+  content: "↓";
   position: absolute;
   top: 38%;
   left: 50%;
@@ -1321,13 +1355,20 @@ body.roster-dragging * { cursor: grabbing !important; }
   z-index: 10;
 }
 
-/* Item 5 — settle animation after re-render */
-@keyframes card-settle {
-  from { transform: scale(0.93); opacity: 0.55; }
-  to   { transform: scale(1);    opacity: 1; }
+.bench-empty-note { color: #444; font-size: 0.85rem; }
+.roster-retry-btn { padding: 2px 10px; font-size: var(--fs-xs); }
+
+@media (prefers-reduced-motion: reduce) {
+  .roster-drag-clone,
+  .card-slot.drag-placeholder,
+  .card-slot.drag-over .card-img,
+  .card-slot.swap-preview .card-img,
+  #rosterActiveGrid .card-slot,
+  #benchGrid .card-slot {
+    transition: none !important;
+    animation: none !important;
+  }
 }
-.card-slot.reorder-animate      { animation: card-settle 0.18s var(--ease-out) both; }
-.card-slot-empty.reorder-animate { animation: card-settle 0.18s var(--ease-out) both; }
 
 /* ── End drag-and-drop UX ─────────────────────────────────────────────────── */
 
@@ -2192,6 +2233,89 @@ body.roster-dragging * { cursor: grabbing !important; }
   .weekly-summary-reveal-footer { bottom: calc(-1 * var(--s-4)); }
 }
 
+/* Profile › Player identity (issue #188): full-width panel, tags in a side column */
+.profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.profile-grid .profile-identity { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .profile-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.profile-identity-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.profile-identity-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+.profile-identity-tags {
+  border-left: var(--bw-hair) solid var(--border-soft);
+  padding-left: 28px;
+}
+@media (max-width: 720px) {
+  .profile-identity-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .profile-identity-tags { border-left: none; padding-left: 0; border-top: var(--bw-hair) solid var(--border-soft); padding-top: 16px; }
+}
+.profile-identity-subtitle {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--k-ink-200);
+  margin-bottom: 10px;
+}
+.profile-identity-player {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.profile-identity-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.profile-identity-player-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profile-identity-player-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.profile-identity-player-name { font-weight: var(--w-medium); font-size: var(--fs-md); color: var(--fg); }
+.profile-identity-player-team { font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--fg-muted); }
+.profile-identity-player-team:empty { display: none; }
+.profile-identity-label {
+  display: block;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+.profile-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-tags-empty { font-size: var(--fs-sm); color: var(--fg-muted); }
+.tag-chip {
+  border: var(--bw-hair) solid var(--k-orange-700);
+  background: var(--accent-ghost);
+  color: var(--k-orange-100);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+}
+
+/* Own player card popup (issue #188): the card viewer's footer carries the reason */
+.reveal-own-card-note {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: var(--fg);
+}
+
 /* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team
    ============================================================ */
@@ -2355,3 +2479,4 @@ body.roster-dragging * { cursor: grabbing !important; }
   color: var(--fg);
   margin-bottom: 12px;
 }
+

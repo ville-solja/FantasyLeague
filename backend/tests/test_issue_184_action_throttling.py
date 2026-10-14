@@ -719,14 +719,14 @@ class TestClearThrottleResponses:
         assert 'setStatus("deckStatus", data.detail, false)' in body(cards, "drawCard")
         assert 'setStatus("deckStatus", data.detail, false)' in body(cards, "_drawBoosterForTeam")
         assert "statusEl.textContent = data.detail" in body(cards, "confirmReroll")
-        for name in ("activateCard", "deactivateCard"):
-            assert "s.textContent=data.detail" in body(roster, name)
-        reorder = body(roster, "_apiReorder")
-        assert "if (!res.ok)" in reorder and "d.detail" in reorder
-        # Drag-and-drop paths: every roster mutation failure shows the server's detail.
-        for label in ("Swap failed", "Deactivate failed", "Activate failed"):
-            assert f'd.detail || "{label}"' in roster
-        assert "_rosterPendingError" in body(roster, "loadRoster")
+        # Issue #186: roster changes are saved by PUT /roster. A refused save shows
+        # the server's detail; a 429 (or other unexpected answer) shows it with Retry.
+        start = roster.index("function _runRosterSave(")
+        save = roster[start:roster.index("\n}\n", start)]
+        assert "_reloadRosterAfterRefusal(_detailText(data.detail) || \"Couldn't save.\")" in save
+        assert "_rosterSaveFailed(_detailText(data.detail));" in save
+        start = roster.index("function _setRosterStatus(")
+        assert "el.textContent = msg;" in roster[start:roster.index("\n}\n", start)]
         for src in (cards, roster):
             assert not re.search(r"innerHTML\s*=\s*[^;]*\.detail", src)
 

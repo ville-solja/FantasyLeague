@@ -53,11 +53,11 @@ flowchart TD
 
     UI["/ui-design\nProduction edits\nor prototypes"]
 
-    SHIP["/ship commit → /ship pr\nCommit by issue, push,\nopen PR, watch checks"]
+    SHIP["/ship\nCommit, push,\nopen or update PR"]
 
     MERGE([Merge — human])
 
-    SHIPCLOSE["/ship close\nConfirm issues closed,\nindex status merged"]
+    SHIPCLOSE["GitHub closes the issue\n(Closes #N); a workflow\nremoves the label"]
 
     IDEA --> PLAN
     PLAN --> REVIEW_PLAN
@@ -92,18 +92,18 @@ flowchart TD
 |---|---|---|
 | [`/product-planner`](product-planner.md) | read-write | Formalises a feature: writes plan file, user stories, and feature stub. Entry point for all new work. |
 | [`/develop`](develop.md) | read-write | Orchestrates the full pipeline: test stubs → implementation → QA + docs → labels the source GitHub issue `implemented` with a summary comment when every stage passes (the issue stays open until merged). Adds `/security-reviewer` to Stage 3 when the change touches security-sensitive code; a High finding blocks the issue update. Use this instead of running the stages manually. |
-| [`/ship`](ship.md) | read-write | The GitHub side after `/develop`: `status` (where every issue stands), `commit` (one commit per issue), `pr` (push, open PR with `Closes #N`, watch CI and code scanning, `--fix all|<N,...>` fixes alerts via the `/security-patcher` workflow), `sync <N>` (issue text follows plan scope changes), `close` (confirm issues closed after merge). Running a subcommand is the consent for what it does; `--dry-run` shows it without doing it. Never merges or force-pushes. |
+| [`/ship`](ship.md) | read-write | One step after `/develop`: commits the work, pushes, opens or updates the PR against `main` with `Closes #N`. `--watch` waits for CI and lists code-scanning alerts; `--fix all|<N,...>` fixes them via the `/security-patcher` workflow; `status` and `sync <N>` are read-only overview and issue sync. Running it is the consent; `--dry-run` shows it without doing it. Never merges or force-pushes. |
 | [`/test-planner`](test-planner.md) | read-write | Writes failing pytest stubs from a plan's acceptance criteria. Called by `/develop` Stage 1; can be run standalone. |
 | [`/developer`](developer.md) | read-write | Implements a plan and makes the test stubs pass. Called by `/develop` Stage 2; can be run standalone. |
-| [`/qa-engineer`](qa-engineer.md) | read-only | Runs `pytest` and reports results grouped by module. Called by `/develop` Stage 3; also useful after any ad-hoc backend change. |
-| [`/documentation-steward`](documentation-steward.md) | read-only | Detects drift between `markdown/features/` and the backend. Called by `/develop` Stage 3; run before writing a new plan. |
+| [`/qa-engineer`](qa-engineer.md) | read-only | Runs the backend suite in parallel (`-n auto`) and reports the result with one line per failure. Called by `/develop` Stage 3; also useful after any ad-hoc backend change. |
+| [`/documentation-steward`](documentation-steward.md) | read-only | Detects drift between the docs and the code. Change mode (default, used by `/develop`) checks only what the change touches; `full` sweeps every feature doc. |
 
 ### Review gates (run before merging)
 
 | Agent | Trigger | Focus |
 |---|---|---|
 | [`/security-reviewer`](security-reviewer.md) | Any change to `backend/` routers or `main.py` (run automatically by `/develop` for security-sensitive changes) | Auth gaps, session leaks, input validation, data over-exposure; `/security-reviewer fix` applies the fixes for the last review's High and Medium findings |
-| [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert (default branch or open PR); also run by `/ship pr` for its PR's alerts | Fetches alert, fixes flagged code, verifies tests pass; with no argument lists open alerts including those on PRs |
+| [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert (default branch or open PR); also run by `/ship --fix` for its PR's alerts | Fetches alert, fixes flagged code, verifies tests pass; with no argument lists open alerts including those on PRs |
 | [`/scoring-analyst`](scoring-analyst.md) | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, stat-key mapping, division-by-zero |
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | [`/ui-design`](ui-design.md) | New UI surface or brand/design change | Brand-compliant production edits or throwaway prototypes |
@@ -126,9 +126,7 @@ flowchart TD
 /agent-steward          # ensure agent definitions and this README are current
 /product-planner <desc> # plan the work
 /develop <plan-slug>    # implement it
-/ship commit            # commit it, grouped by issue
-/ship pr                # push, open the PR, watch checks (then /ship pr --fix all for alerts)
-/ship close             # after you merge: confirm issues closed
+/ship                   # commit, push, open the PR (then merge it in GitHub)
 ```
 
-Start a session with `/ship status` to see where every issue stands.
+`/ship status` shows open PRs and the issues waiting for a merge.

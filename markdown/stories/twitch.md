@@ -881,3 +881,83 @@ As a player who connected Twitch on the website before this change, I want the s
 - A one-time data migration records `source = join` rows for existing soft accounts with a Twitch id, for website accounts that merged a soft account (`merged_soft_account_at` set) or have one waiting to be merged (`pending_merge_user_id` set), and for the Twitch ids in the merge undo log
 - It then credits the Twitch starter bonus once, with a `connect` row, to each website account that has a `twitch_account_id`, no grant row for that Twitch account, no `connect` row of its own, and no merge (done or waiting)
 - The migration logs the count and writes one `twitch_starter_bonus` audit entry per credited user (`detail` includes `migration=038`). A second run credits nothing
+
+## Twitch Extension Resubmission 1.3.0 (#195)
+
+### Submission Guide Matches the 1.3.0 Build
+**User story**
+As the operator submitting the extension, I want the submission guide to describe exactly the build I upload so that I can fill in Twitch's form without guessing and nothing I paste contradicts the extension.
+
+**Acceptance criteria**
+- The guide's header and checklist name version `1.3.0` and the build command `bash twitch-extension/package.sh 1.3.0 --ebs-origin https://kana-cards.com`; it says 1.2.0 and 1.2.1 were test-only and are not submitted
+- The checklist includes, in order:
+  - the production deploy of the current `main`, with migration 038 done after `scripts/backup-db.sh`;
+  - the production env vars (`TWITCH_EXTENSION_CLIENT_ID`, `TWITCH_EXTENSION_SECRET`, `TWITCH_EXTENSION_VERSION=1.3.0`);
+  - **Asset Hosting** paths and **Panel Height 500**;
+  - **Allowlist for URL Fetching Domains**;
+  - **Allowlist for Image Domains** (the `https://` Steam CDN hosts from `backend/logo_hosts.py` `DEFAULT_LOGO_HOSTS`, or the values Admin › Users › Twitch status lists);
+  - the capabilities **Chat** and **Request Identity Link**, with Configuration Service;
+  - approving the review channel as a streamer;
+  - the configuration page's **Connection check** passing;
+  - Hosted Test on the review channel;
+  - Submit.
+- The guide notes that capability fields can be edited only in Local Test
+- Admin › Users › Twitch status shows every check green on production before Submit; the guide says so as a go/no-go line
+- `package.sh` prints a reminder after the Panel Height line: "Allowlist for Image Domains: see Admin › Users › Twitch status"
+
+### Listing Copy Says Only What the Extension Does
+**User story**
+As a Twitch reviewer, I want the listing to describe the extension accurately so that what I read matches what I test.
+
+**Acceptance criteria**
+- The description no longer uses the phrase "weekly grant". It says: joining gives starter tokens, more come from MVP drops when the broadcaster confirms a match MVP, plus one token each match week (the +1 every account gets when a week locks, `auto_lock_weeks`)
+- The description still has the **Twitch Chat** paragraph, the no-purchase statement and the Leave statement (existing tests keep passing)
+- The token wording matches the panel's join view ("win tokens when the broadcaster picks a match MVP") and `config.html`
+- A test fails if the listing mentions "weekly grant"
+
+### Reviewer Disclosure Matches the Packaged Code
+**User story**
+As a Twitch reviewer, I want every backend address and path the extension contacts disclosed so that I can verify the extension against its submission notes.
+
+**Acceptance criteria**
+- The "Notes for reviewer" EBS block says the allowed backend origins are fixed in the package at build time (`ebs-origins.js`, written by `package.sh`). The `ebs_url` from the Configuration Service is used only when its origin is one of them, and the submitted package allows only `https://kana-cards.com`
+- The endpoint table lists every `/twitch/...` path called from the packaged files (`panel.js`, `extension.js`, `live_config.js`, `config.js`), including `/twitch/check` and `/twitch/ping` (configuration page, Connection check)
+- The disclosure names the image hosts the panel may load team logos from (the Steam CDN hosts), and says logos are shown only from `https://` URLs
+- A test extracts the `/twitch/...` paths from the packaged JS files and fails if any is missing from the guide's endpoint table, or if a table row names a path no packaged file calls. Path parameters are normalised: `{card_id}`, `{team_id}`
+- A test fails if any table path has no matching route in the backend (`backend/twitch.py` or the routers)
+
+### Testing Instructions Follow the Current Panel
+**User story**
+As a Twitch reviewer, I want step-by-step testing instructions that match the current panel so that I can exercise every feature in one session.
+
+**Acceptance criteria**
+- Flows cover:
+  - logged out (the Live tab);
+  - Join (the identity share may be declined), starter tokens shown, draw, team draw, roster change;
+  - the broadcaster's MVP selection, chat message and token drop;
+  - Leave;
+  - the broadcaster configuration page with its Connection check showing "ok".
+- Each flow states its expected result in the panel's current wording, taken from `panel.html` and `panel.js`
+- A note explains that the panel scrolls within its height, and that an error shows a short code (`E-…`) the operator can look up
+- The "Reviewer test setup" section names:
+  - the live channel and an active match week;
+  - the approved review channel;
+  - `TWITCH_EXTENSION_VERSION` and Chat enabled for 1.3.0.
+
+### Reviewer Sees What Changed Since the Rejection
+**User story**
+As a Twitch reviewer re-reviewing the extension, I want a short note on what changed since the 1.1.7 rejection so that I can confirm the policy 4.5 finding is resolved.
+
+**Acceptance criteria**
+- The guide has a paste-ready "Changes since the last review" block for Notes for reviewer. It must say that:
+  - the extension no longer requires or mentions any external login;
+  - everything is played in the panel with the Twitch login;
+  - the identity share is optional.
+  It lists the main visible changes in plain words, without internal issue numbers.
+- "Review history" gains a "2026-10 — Version 1.3.0 change log" table: file and change, one row per packaged file changed since 1.1.7
+- The screenshot guidance names the views to retake for 1.3.0:
+  - the panel's Live tab, not joined;
+  - Cards with a reveal;
+  - Roster;
+  - Settings with Leave;
+  - the broadcaster's MVP selection.

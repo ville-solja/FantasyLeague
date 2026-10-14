@@ -839,8 +839,9 @@ def roster_deactivate_route(request: Request, card_id: int, payload: dict = Depe
 
 
 def roster_swap(body, payload: dict, db: Session) -> dict:
-    """Bench card into a roster slot, the slot's card to the bench: the website's
-    drag-and-drop swap (swap_roster)."""
+    """Bench card into a roster slot, the slot's card to the bench, through the
+    POST /roster/swap function (swap_roster). The website saves whole layouts with
+    PUT /roster since #186."""
     from routers.cards import swap_roster
     user = _joined_user(db, payload)
     _require_editable_roster(db)

@@ -27,6 +27,10 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 - Each draw **creates a new Card row** — there is no shared pre-generated pool to exhaust.
 - The new card joins the **active roster** when fewer than `ROSTER_LIMIT` (default 5) cards are active and no active card has the same player; otherwise it goes to the **bench**. The check and the activation are one conditional `UPDATE` (`_activate_card_atomic`), so fast or concurrent draws can't overfill the roster (#185; see [Atomic Roster and Token Operations](../reference/atomic-roster-and-token-operations.md)).
 
+## Own Player Card
+
+A league player who links Steam (or signs up through Steam) gets one free **common** card of themselves when their verified player id is an active player in this season's pool (issue #188). It is created like a draw card (modifiers, stored points, roster or bench by the same rule as above) but costs no token. It is given once per account and once per league player (`own_player_card_grants`), and not at all when the account already owns a card of that player. Draws then treat the granted card as owned like any other card (they prefer unowned players until the user owns every active player, or every player of the team for a team draw). A popup on the next page load shows the card in the card viewer and explains why. A season reset clears the grants with the cards. Details: [Steam Login › Own player card](../reference/steam-login.md#own-player-card-issue-188).
+
 ## Deck Structure
 
 Cards are generated dynamically at draw time rather than from a pre-seeded shared pool. `GET /deck` returns the number of distinct `(player, rarity)` combinations the requesting user has not yet drawn. This count decreases by one each time the user draws a new unique combination.
@@ -205,14 +209,35 @@ Every card also carries `team_id`, `team_name` and `team_logo_url` (the player's
 }
 ```
 
-`week` is null when there is no requested or upcoming week.
+`week` is null when there is no requested or upcoming week. `version` (#186) is the version of the stored, editable layout (whatever `week_id` asks for), which `PUT /roster` checks: the first 16 hex characters of SHA-256 over `active:<ids>|bench:<ids>`, with the roster ids in slot order (`-` for an empty slot between cards) and the bench ids in order.
 
 Requires authentication. Returns 403 `"Cannot view another user's roster"` if `user_id` doesn't
 match the caller's own ID, unless the caller is an admin (admins can view any user's roster).
 
 ---
 
+### `PUT /roster`
+
+Stores the caller's whole roster layout in one transaction (#186); My Team saves with it automatically. Body:
+
+```json
+{ "active": [42, null, 17], "bench": [8, 3], "base_version": "4cae17486dcce52c" }
+```
+
+`active` has one entry per roster slot (at most `ROSTER_LIMIT`; `null` is an empty slot), `bench` the bench card ids in order (at most 5000, `ROSTER_BENCH_MAX`); card ids are 1 to 2^63−1 (422 otherwise, also in `/roster/swap` and `/roster/reorder`), `base_version` the `version` the layout is based on (1-64 characters). Every card not listed as active is benched first, then the roster cards get their slots and the bench cards their order. Nothing changes when a check fails:
+
+- 409 with header `X-Roster-Conflict: version` when `base_version` no longer matches (the roster changed elsewhere).
+- 409 `"A card is listed more than once"`, `"Roster full ({ROSTER_LIMIT} cards max)"`, `"A card for this player is already active"` or `"A removed player can't be on the roster"`; a write the unique index refuses also answers the duplicate-player 409.
+- 404 `"Card not found"` for a card the caller doesn't own, as the single-card routes answer.
+- 422 for a malformed body; 401 without a session; 429 over `RATE_LIMIT_ROSTER_MUTATION`.
+
+A layout identical to the stored one writes nothing. The answer is the `GET /roster/{user_id}` response for the next editable week, with the new `version`; after a week's lock a save counts from the next week, and `week` names it. Details: [My Team Fluid Roster](../reference/my-team-save-roster.md).
+
+---
+
 ### `POST /roster/{card_id}/activate`
+
+My Team uses `PUT /roster` (#186); the single-card HTTP routes below stay for older clients. The Twitch panel has its own `/twitch/roster/...` routes, which reuse these routes' functions (`activate_card`, `deactivate_card`, `swap_roster`).
 
 Moves a benched card into the active roster. Requires authentication; the card must be owned by the caller.
 

@@ -1,6 +1,7 @@
+import hashlib
 import random
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 from models import Card, CardModifier, Weight
 from scoring import (
@@ -184,3 +185,134 @@ def _swap_roster_atomic(db, bench_card_id: int, active_card_id: int, user_id: in
            "bench_player_id": bench_player_id, "active_card_id": active_card_id,
            "slot_index": slot_index})
     return result.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Issue #186: the whole roster layout, versioned and saved in one transaction
+# ---------------------------------------------------------------------------
+
+ROSTER_VERSION_CONFLICT = "version"
+ROSTER_VERSION_DETAIL = "Your roster changed elsewhere"
+ROSTER_DUPLICATE_ID_DETAIL = "A card is listed more than once"
+ROSTER_REMOVED_PLAYER_DETAIL = "A removed player can't be on the roster"
+
+
+class RosterLayoutError(Exception):
+    """A refused layout save. conflict is ROSTER_VERSION_CONFLICT for a stale base_version."""
+
+    def __init__(self, status_code: int, detail: str, conflict: str | None = None):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+        self.conflict = conflict
+
+
+def _slot_order_key(row) -> tuple:
+    return (row[2] is None, row[2] or 0, row[0])
+
+
+def roster_layout(db, user_id: int, roster_limit: int) -> tuple[list, list[int]]:
+    """(active, bench) as the My Team page shows the editable week: active is one entry
+    per roster slot (card id or None), bench the card ids in order. Cards of removed
+    players are left out, as GET /roster leaves them out. An active card without a
+    usable slot_index takes the first free slot, as the page places it."""
+    rows = db.execute(text("""
+        SELECT c.id, c.is_active, c.slot_index FROM cards c
+        JOIN players p ON p.id = c.player_id
+        WHERE c.owner_id = :user_id AND p.is_active = 1
+    """), {"user_id": user_id}).fetchall()
+    active_rows = sorted((r for r in rows if r[1]), key=_slot_order_key)
+    bench = [r[0] for r in sorted((r for r in rows if not r[1]), key=_slot_order_key)]
+    slots: list = [None] * roster_limit
+    unplaced = []
+    for r in active_rows:
+        si = r[2]
+        if si is not None and 0 <= si < roster_limit and slots[si] is None:
+            slots[si] = r[0]
+        else:
+            unplaced.append(r[0])
+    for cid in unplaced:
+        if None not in slots:
+            slots.append(cid)
+        else:
+            slots[slots.index(None)] = cid
+    return slots, bench
+
+
+def layout_version(active: list, bench: list[int]) -> str:
+    """SHA-256 of "active:<ids>|bench:<ids>", first 16 hex characters. Active ids are in
+    slot order with "-" for an empty slot; trailing empty slots are left out."""
+    slots = list(active)
+    while slots and slots[-1] is None:
+        slots.pop()
+    a = ",".join("-" if cid is None else str(int(cid)) for cid in slots)
+    b = ",".join(str(int(cid)) for cid in bench)
+    return hashlib.sha256(f"active:{a}|bench:{b}".encode()).hexdigest()[:16]
+
+
+def roster_version(db, user_id: int, roster_limit: int = 5) -> str:
+    """Version of the user's stored roster layout (see layout_version)."""
+    return layout_version(*roster_layout(db, user_id, roster_limit))
+
+
+def apply_roster_layout(db, user_id: int, active: list, bench: list[int], base_version: str,
+                        roster_limit: int) -> bool:
+    """Check and write a whole roster layout in the caller's transaction. Returns True
+    when rows were written, False for a layout identical to the stored one. Raises
+    RosterLayoutError (nothing written; the caller rolls back) when a check fails.
+
+    The first statement is a no-op UPDATE that takes SQLite's write lock, so the version
+    read next can't change before the writes below: of two saves from the same base,
+    the second waits here and then sees the first one's version. Every card not listed
+    as active is benched (slot_index NULL) before any card is activated, so the
+    one-active-card-per-player index (ux_cards_owner_player_active, #185) holds after
+    every statement; the listed bench cards then get their order."""
+    db.execute(text("UPDATE users SET tokens = tokens WHERE id = :user_id"), {"user_id": user_id})
+    if roster_version(db, user_id, roster_limit) != base_version:
+        raise RosterLayoutError(409, ROSTER_VERSION_DETAIL, ROSTER_VERSION_CONFLICT)
+
+    active_ids = [cid for cid in active if cid is not None]
+    all_ids = active_ids + list(bench)
+    if len(set(all_ids)) != len(all_ids):
+        raise RosterLayoutError(409, ROSTER_DUPLICATE_ID_DETAIL)
+    if len(active) > roster_limit:
+        raise RosterLayoutError(409, f"Roster full ({roster_limit} cards max)")
+
+    owned = {}
+    if all_ids:
+        rows = db.execute(text("""
+            SELECT c.id, c.player_id, p.is_active FROM cards c
+            JOIN players p ON p.id = c.player_id
+            WHERE c.owner_id = :user_id AND c.id IN :ids
+        """).bindparams(bindparam("ids", expanding=True)),
+            {"user_id": user_id, "ids": all_ids}).fetchall()
+        owned = {r[0]: (r[1], bool(r[2])) for r in rows}
+    if any(cid not in owned for cid in all_ids):
+        raise RosterLayoutError(404, "Card not found")
+    active_players = [owned[cid][0] for cid in active_ids]
+    if len(set(active_players)) != len(active_players):
+        raise RosterLayoutError(409, "A card for this player is already active")
+    if any(not owned[cid][1] for cid in active_ids):
+        raise RosterLayoutError(409, ROSTER_REMOVED_PLAYER_DETAIL)
+
+    if layout_version(active, bench) == base_version:
+        return False
+
+    if active_ids:
+        db.execute(text("""
+            UPDATE cards SET is_active = 0, slot_index = NULL
+            WHERE owner_id = :user_id AND id NOT IN :ids
+        """).bindparams(bindparam("ids", expanding=True)), {"user_id": user_id, "ids": active_ids})
+    else:
+        db.execute(text("UPDATE cards SET is_active = 0, slot_index = NULL "
+                        "WHERE owner_id = :user_id"), {"user_id": user_id})
+    for slot, cid in enumerate(active):
+        if cid is not None:
+            db.execute(text("UPDATE cards SET is_active = 1, slot_index = :slot "
+                            "WHERE id = :cid AND owner_id = :user_id"),
+                       {"slot": slot, "cid": cid, "user_id": user_id})
+    for pos, cid in enumerate(bench):
+        db.execute(text("UPDATE cards SET is_active = 0, slot_index = :pos "
+                        "WHERE id = :cid AND owner_id = :user_id"),
+                   {"pos": pos, "cid": cid, "user_id": user_id})
+    return True

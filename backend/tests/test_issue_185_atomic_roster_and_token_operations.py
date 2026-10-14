@@ -1164,31 +1164,30 @@ class TestWebsiteActionsWaitForTheirAnswer:
         assert "_boosterDrawInFlight = false;" in booster.split("finally")[-1]
 
     def test_roster_actions_use_in_flight_guard(self):
-        """Activate and deactivate handlers (frontend/app-roster.js) run their request through withBusy."""
+        """Issue #186 replaced the per-action requests: a roster change (drop or
+        Enter/Space toggle) edits the local layout, and the only roster request in
+        frontend/app-roster.js is the autosave's PUT /roster, which runs one at a
+        time (single flight)."""
         js = _read("frontend/app-roster.js")
-        for name in ("activateCard", "deactivateCard"):
-            body = _js_body(js, name)
-            assert "_withRosterMutationGuard(() => withBusy(_rosterCardControl(cardId), async () =>" in body
-        assert ".card-img`" in _js_body(js, "_rosterCardControl")
+        for route in ("/activate`", "/deactivate`", "/roster/swap`", "/roster/reorder`"):
+            assert route not in js
+        assert js.count("method: \"PUT\"") == 1
+        run = _js_body(js, "_runRosterSave")
+        assert run.index('if (_saveState === "saving" || !_saveDirty) return _saveFlight;') < run.index("fetch(")
 
     def test_roster_drag_and_drop_ignores_drops_while_busy(self):
-        """frontend/app-roster.js sets a _rosterBusy flag around swap/reorder requests and the drop handler returns early while it is set."""
+        """Issue #186: drops are no longer ignored while a request runs (no
+        _rosterBusy); a double request still can't happen, because saves never
+        overlap: a move during a save marks the layout dirty and one follow-up save
+        sends the newest layout after the running one resolves."""
         js = _read("frontend/app-roster.js")
-        assert re.search(r"^let _rosterBusy = false;$", js, re.M)
-        guard = _js_body(js, "_withRosterMutationGuard")
-        assert "if (_rosterBusy) return;" in guard
-        assert guard.index("_rosterBusy = true;") < guard.index("await fn();") < guard.index("_rosterBusy = false;")
-        # Every drop handler returns early while busy, before reading the payload.
-        handlers = js.split('addEventListener("drop"')[1:]
-        assert len(handlers) == 4
-        for h in handlers:
-            head = h[:h.index("getData(")]
-            assert "_rosterBusy" in head, head[:200]
-        # Swap, deactivate and reorder requests all run inside the guard.
-        dnd = _js_body(js, "_initDragAndDrop")
-        for call in ("`${API}/roster/swap`", "/deactivate`", "_apiReorder("):
-            for m in re.finditer(re.escape(call), dnd):
-                assert "_withRosterMutationGuard(" in dnd[:m.start()]
+        assert "_rosterBusy" not in js
+        run = _js_body(js, "_runRosterSave")
+        assert '_saveState = "saving";' in run
+        assert "_saveFlight = null;" in run
+        assert 'if (_saveState !== "error" && _saveDirty && !_saveTimer) _runRosterSave();' in run
+        schedule = _js_body(js, "_scheduleRosterSave")
+        assert "_saveDirty = true;" in schedule and "clearTimeout(_saveTimer);" in schedule
 
     def test_redeem_and_weekly_reveal_use_in_flight_guard(self):
         """The promo redeem button and the Weekly Report reveal button (frontend/app-weekly-summary.js) run their request through withBusy."""

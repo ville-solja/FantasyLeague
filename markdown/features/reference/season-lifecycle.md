@@ -37,12 +37,13 @@ because the database is not a local SQLite file or the SQLite file is missing (i
 500 and **no deletes are performed** — there's no code path that wipes season data without a
 fresh backup existing first. Deletes all rows from `player_match_stats`, `match_bans`,
 `matches`, `weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`,
-`teams`, `card_modifiers`, and `cards`. Resets every user's `tokens` to `INITIAL_TOKENS` and
+`teams`, `card_modifiers`, `cards` and `own_player_card_grants` (issue #188, so next season's
+league players get their own player card again). Resets every user's `tokens` to `INITIAL_TOKENS` and
 unmonitors all leagues. Retains users, tags, audit logs, and `season_archive` rows. Returns 409
 if any locked week exists with no `season_archive` row archived at or after that week's start
 time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
 includes `{"status", "initial_tokens", "counts": {...}, "backup_path"}` with a per-table
-deleted-row count and the path of the pre-reset backup file. Logged as `admin_season_reset`,
+deleted-row count (including `own_player_card_grants`) and the path of the pre-reset backup file. Logged as `admin_season_reset`,
 with the backup path prefixed to the counts in the detail string.
 
 **Players, Teams, and Cards are wiped entirely — not just deactivated.** The `players` table

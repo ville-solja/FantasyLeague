@@ -86,8 +86,8 @@ host, so the port is not reachable from outside at all. Covered by
   (`RATE_LIMIT_TWITCH_ACTION`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`), and its body is cached
   in memory for `TWITCH_PANEL_CACHE_SECONDS` (default 30); see
   `reference/twitch-extension-setup-followups.md`
-- Roster activate/deactivate/swap/reorder — per-user limit (`RATE_LIMIT_ROSTER_MUTATION`,
-  issue #124)
+- Roster activate/deactivate/swap/reorder and `PUT /roster` (#186) — per-user limit
+  (`RATE_LIMIT_ROSTER_MUTATION`, issue #124)
 - `POST /draw`, `POST /draw/booster/{team_id}` and `POST /roster/{card_id}/reroll` (issue #184) —
   one shared per-user budget (`RATE_LIMIT_CARD_ACTION`, keyed by `key_by_user_or_ip`) and one
   shared per-IP budget (`RATE_LIMIT_CARD_ACTION_IP`), through slowapi's `shared_limit` with the

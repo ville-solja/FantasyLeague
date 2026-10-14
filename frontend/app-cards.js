@@ -211,6 +211,7 @@ function _updateRevealActionBtn() {
 }
 
 function revealAction() {
+  if (_revealOnClose) return closeReveal();
   const cost = _revealBoosterTeamId ? (_teamBoosterCost ?? 3) : 1;
   const canAfford = _tokenBalance !== null && _tokenBalance >= cost;
   if (canAfford) {
@@ -228,6 +229,9 @@ function revealAction() {
 }
 
 let _revealKeyHandler = null;
+// Run once when the card viewer closes (issue #188: the own player card popup is
+// dismissed by Nice, the X or a backdrop click).
+let _revealOnClose = null;
 
 function showReveal(card, boosterTeamId = null) {
   _revealBoosterTeamId = boosterTeamId ?? null;
@@ -255,6 +259,12 @@ function closeReveal() {
   modal.classList.add("hidden");
   _revealBoosterTeamId = null;
   closeRerollConfirm();
+  document.getElementById("revealDestination").classList.remove("reveal-own-card-note");
+  if (_revealOnClose) {
+    const onClose = _revealOnClose;
+    _revealOnClose = null;
+    onClose();
+  }
   if (_revealKeyHandler) {
     document.removeEventListener("keydown", _revealKeyHandler);
     _revealKeyHandler = null;

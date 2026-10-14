@@ -1,14 +1,17 @@
 import csv
 import io
+import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import requests
 from sqlalchemy import bindparam, text
 
 from models import LiveMatch, Week
+
+logger = logging.getLogger(__name__)
 
 SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 SCHEDULE_FIXTURES_URL = os.getenv("SCHEDULE_FIXTURES_URL", "")
@@ -214,9 +217,19 @@ def _parse_iso_date(iso_date, time_str=""):
         return None
 
 
+def league_week_anchor(week_start):
+    """Thursday 12:00 (league wall-clock, naive) of the league week starting on
+    `week_start` ('YYYY-MM-DD'), or None. Well inside any Monday-based fantasy week, so
+    it decides which fantasy week a league week belongs to (issues #194, #193)."""
+    start = _parse_iso_date(week_start)
+    if not start:
+        return None
+    return datetime.fromisoformat(start) + timedelta(days=3, hours=12)
+
+
 def _fixture_to_series(f):
-    """One feed fixture -> the same series dict parse_match_row() emits (plus a
-    `scheduled` bool)."""
+    """One feed fixture -> the same series dict parse_match_row() emits, plus a
+    `scheduled` bool and the feed's `league_week`."""
     starts_at = f.get("starts_at")
     date_str = (f.get("date") or "").strip()
     time_str = (f.get("time") or "").strip()
@@ -233,18 +246,25 @@ def _fixture_to_series(f):
         dt_iso = parse_date_time(date_str, time_str)
         if dt_iso:
             scheduled = True
-    # Unscheduled: fall back to the Monday of the fixture's week so the series
-    # still lands in Upcoming instead of being filtered out by the frontend.
+    # Unscheduled: anchor at Thursday 12:00 of the fixture's league week, well inside
+    # any Monday-based fantasy week (issue #194), and keep it upcoming until that league
+    # week ends so an unplayed fixture doesn't read "No result" mid-week.
+    week_end = None
     if dt_iso is None:
-        dt_iso = _parse_iso_date(f.get("week_start"))
         scheduled = False
+        anchor = league_week_anchor(f.get("week_start"))
+        if anchor:
+            dt_iso = anchor.isoformat()
+            week_end = anchor - timedelta(days=3, hours=12) + timedelta(days=7)
 
     stream = (f.get("stream") or "").strip()
     stream_url = stream if stream.startswith(("http://", "https://")) else None
     stream_label = None if stream_url else (stream or None)
 
     status = "unknown"
-    if dt_iso:
+    if week_end is not None:
+        status = "past" if week_end <= _league_now() else "upcoming"
+    elif dt_iso:
         try:
             status = "past" if datetime.fromisoformat(dt_iso) < _league_now() else "upcoming"
         except ValueError:
@@ -260,6 +280,8 @@ def _fixture_to_series(f):
         "datetime_iso": dt_iso,
         "match_status": status,
         "scheduled": scheduled,
+        "league_week": f.get("week"),
+        "league_week_start": f.get("week_start") or None,
     }
 
 
@@ -275,8 +297,13 @@ def parse_fixtures_json(payload):
         if wk is None or bucket is None:
             dropped += 1
             continue
+        series = _fixture_to_series(f)
+        if series["datetime_iso"] is None:
+            # No starts_at, no date and no week_start: nowhere to place it.
+            dropped += 1
+            continue
         node = by_week.setdefault(wk, {"label": f"Week {wk}", "div1": [], "div2": []})
-        node[bucket].append(_fixture_to_series(f))
+        node[bucket].append(series)
     return [by_week[k] for k in sorted(by_week)], dropped
 
 
@@ -339,21 +366,32 @@ def next_scheduled_match(db) -> dict | None:
 
 
 def norm_team_name(name):
-    """Normalise a team name for fuzzy matching."""
+    """Normalise a team name for matching: lowercase, parentheticals removed, then
+    letters and digits only, so "Innofactor/NordCloud" == "innofactor nordcloud"."""
     name = (name or "").lower().strip()
     name = re.sub(r'\(.*?\)', '', name)   # strip parentheticals: Meta(no)core → metacore
-    name = re.sub(r'\s+', ' ', name).strip()
-    return name
+    return "".join(ch for ch in name if ch.isalnum())
 
 
 def find_team_id(name, team_lookup):
-    """Exact match first, then substring containment fallback."""
+    """Exact normalised match first. Otherwise the keys that contain the name or are
+    contained in it: one such key -> its team; several -> the longest key when no other
+    is as long; else None, with a warning naming the team text (issue #194)."""
     n = norm_team_name(name)
+    if not n:
+        return None
     if n in team_lookup:
         return team_lookup[n]
-    for key, tid in team_lookup.items():
-        if n and key and (n in key or key in n):
-            return tid
+    candidates = [key for key in team_lookup if key and (n in key or key in n)]
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return team_lookup[candidates[0]]
+    longest = max(len(k) for k in candidates)
+    top = [k for k in candidates if len(k) == longest]
+    if len(top) == 1:
+        return team_lookup[top[0]]
+    logger.warning("schedule: ambiguous team name %r matches %d teams", name, len(candidates))
     return None
 
 
@@ -676,3 +714,71 @@ def get_schedule(db):
     _cache["fetched_at"] = now
 
     return data
+
+
+# -----------------------
+# OUT-OF-WEEK SERIES (issue #193)
+# -----------------------
+
+def out_of_week_series(db) -> list[dict]:
+    """Feed series that count for a different fantasy week than their league week's.
+
+    For each series with a `league_week` and a result (`series_result.match_ids`), the
+    scheduled fantasy week is the one containing its league week's anchor
+    (league_week_anchor). The series is flagged when any of its matches counts for
+    another week (by override or time), unless every match carries an explicit override:
+    that is an admin decision (for example "Keep in Week M"). Series whose anchor falls
+    in no fantasy week are not flagged."""
+    from models import Match
+    from weeks import scoring_week_for, week_containing
+
+    fantasy_weeks = db.query(Week).order_by(Week.start_time).all()
+    if not fantasy_weeks:
+        return []
+    candidates = []
+    for week in get_schedule(db).get("weeks") or []:
+        for series in (week.get("div1") or []) + (week.get("div2") or []):
+            result = series.get("series_result") or {}
+            match_ids = result.get("match_ids") or []
+            if not match_ids or series.get("league_week") is None:
+                continue
+            anchor = league_week_anchor(series.get("league_week_start"))
+            if anchor is None:
+                continue
+            anchor_ts = int(anchor.replace(tzinfo=LEAGUE_TZ).timestamp())
+            scheduled = week_containing(db, anchor_ts, fantasy_weeks)
+            if scheduled is not None:
+                candidates.append((series, match_ids, scheduled))
+    if not candidates:
+        return []
+
+    all_ids = {mid for _, match_ids, _ in candidates for mid in match_ids}
+    matches_by_id = {m.match_id: m for m in db.query(Match).filter(Match.match_id.in_(all_ids)).all()}
+
+    flagged = []
+    for series, match_ids, scheduled in candidates:
+        matches = sorted((matches_by_id[mid] for mid in set(match_ids) if mid in matches_by_id),
+                         key=lambda m: (m.start_time is None, m.start_time or 0))
+        if not matches:
+            continue
+        counted = [(m, *scoring_week_for(db, m, fantasy_weeks)) for m in matches]
+        off = [(m, w, src) for m, w, src in counted if w is None or w.id != scheduled.id]
+        if not off:
+            continue
+        if all(m.week_override_id is not None for m in matches):
+            continue
+        _, counted_week, _ = off[0]
+        flagged.append({
+            "team1": series.get("team1"),
+            "team2": series.get("team2"),
+            "team1_id": series.get("team1_id"),
+            "team2_id": series.get("team2_id"),
+            "league_week": series.get("league_week"),
+            "played_at": min((m.start_time for m in matches if m.start_time), default=None),
+            "match_ids": [m.match_id for m in matches],
+            "scheduled_week_id": scheduled.id,
+            "scheduled_week_label": scheduled.label,
+            "counted_week_id": counted_week.id if counted_week else None,
+            "counted_week_label": counted_week.label if counted_week else None,
+        })
+    return flagged

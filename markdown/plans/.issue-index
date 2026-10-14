@@ -29,10 +29,15 @@
 150 plan-issue-150-steam-login
 169 plan-issue-169-impersonation-hardening
 171 plan-issue-171-twitch-panel-abuse-limits
-180 plan-issue-180-twitch-integration-status merged
+180 plan-issue-180-twitch-integration-status
 94 plan-issue-94-schedule-tournament-visualization
-184 plan-issue-184-action-throttling merged
-185 plan-issue-185-atomic-roster-and-token-operations merged
-191 plan-issue-191-panel-fits-twitch-height merged
+184 plan-issue-184-action-throttling
+185 plan-issue-185-atomic-roster-and-token-operations
+191 plan-issue-191-panel-fits-twitch-height
 186 plan-issue-186-my-team-save-roster
-187 plan-issue-187-uniform-twitch-starter-tokens committed
+187 plan-issue-187-uniform-twitch-starter-tokens
+195 plan-issue-195-twitch-extension-resubmission
+194 plan-issue-194-schedule-fixture-week-alignment
+193 plan-issue-193-match-scoring-week-override
+188 plan-issue-188-profile-identity-and-own-player-card
+155 plan-issue-155-my-team-motion

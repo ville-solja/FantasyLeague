@@ -807,10 +807,17 @@ async function loadSchedule() {
       </div>`;
     };
 
+    // Issue #194: a feed fixture's league week, when it differs from the number in the
+    // fantasy week label it is listed under (e.g. a league week-4 match played in Week 5).
+    const leagueWeekTag = (s, ctx) => {
+      if (s.league_week == null || ctx.weekNum == null || String(s.league_week) === String(ctx.weekNum)) return "";
+      return `<span class="league-week-tag">League week ${_escHtml(s.league_week)}</span>`;
+    };
+
     const seriesRow = (s, state, ctx) => {
       const key = seriesKey(s);
       const r = s.series_result;
-      const meta = `<span class="series-meta">${timeCell(s, state)}${divBadge(s)}</span>`;
+      const meta = `<span class="series-meta">${timeCell(s, state)}${divBadge(s)}${leagueWeekTag(s, ctx)}</span>`;
       if (state === "hidden") return hiddenRow(s, key, meta);
       const t1 = teamHtml(s.team1_id, s.team1);
       const t2 = teamHtml(s.team2_id, s.team2);
@@ -1053,7 +1060,12 @@ async function loadSchedule() {
       _schedKeyById = new Map();
       const hide = _schedHideOn();
       const revealed = _schedRevealedKeys();
-      const ctxOf = i => ({live, hide, revealed, reportWeeks, weekId: weeks[i] ? weeks[i].week_id : null});
+      const weekNum = w => {
+        const m = w && w.week_id != null ? /\d+/.exec(String(w.label || "")) : null;
+        return m ? Number(m[0]) : null;
+      };
+      const ctxOf = i => ({live, hide, revealed, reportWeeks, weekId: weeks[i] ? weeks[i].week_id : null,
+                           weekNum: weekNum(weeks[i])});
       const stateOf = new Map();
       _schedRevealedKeysByWeek = byWeek.map(() => []);
       _schedHiddenKeysByWeek = byWeek.map((list, i) => {

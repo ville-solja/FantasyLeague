@@ -149,8 +149,8 @@ right week in the Schedule tab, so I can see the full season plan before matches
 
 **Acceptance criteria**
 - A fixture with `starts_at: null` and empty `date`/`time` is given an approximate
-  `datetime_iso` of its `week_start` date at 00:00, so it is not filtered out of the Upcoming
-  list
+  `datetime_iso` of its `week_start` week's Thursday at 12:00 (originally `week_start` at 00:00;
+  changed by issue #194), so it is not filtered out of the Upcoming list
 - Such a series is marked `scheduled: false` in the `/schedule` response
 - The Schedule tab shows "Time TBD" instead of a specific time for a `scheduled: false`
   series, and still shows team names, division badge, and week grouping
@@ -388,8 +388,10 @@ entirely.
 **Acceptance criteria**
 - Focusing a card slot's image and pressing Enter or Space toggles the card between active and
   bench: an active card is benched, a benched card is activated
-- Activation failure cases reuse the existing `activateCard()` error handling (e.g. roster full,
-  a card for this player is already active) — no new error copy is introduced
+- Activation failure cases show the same messages as a drag (e.g. roster full, a card for this
+  player is already active) — no new error copy is introduced. Since #186 the toggle edits the
+  local layout like a drop (a benched card goes to the front of the bench, an activated card to
+  the first free slot) and the layout autosaves
 - The toggle does nothing when the current week is locked, matching drag-and-drop's existing
   lock gating (`_rosterLocked`)
 - Mouse click on the card image continues to open the card detail modal, unchanged; this is a
@@ -709,3 +711,98 @@ As a league running other formats, I want the Schedule to draw double-eliminatio
 - GSL groups (4 teams): opening matches, winners match, elimination match and decider; two teams advance
 - Swiss: rounds paired by record, pools shown by record ("1–1"), advance and elimination thresholds set per stage (default 2 wins / 2 losses for 8 teams, 3/3 for 16)
 - Each is enabled for Shown once drawn; the data model and admin editor from the first build are reused unchanged
+
+## Schedule Fixture Week Alignment (issue #194)
+
+### Unscheduled Fixtures Stay in Their Own Week
+**User story**
+As a player looking at the Schedule, I want a fixture without a time to appear in the week it belongs to, so that past weeks don't fill up with matches that haven't been played.
+
+**Acceptance criteria**
+- A feed fixture with no `starts_at` and no `date` keeps `scheduled: false` and gets `datetime_iso` = its `week_start` + 3 days at 12:00, league time (the Thursday of its league week)
+- On the Schedule, it appears in the fantasy week that contains that Thursday, under "Time TBD"; for the season-16 feed, the four TBD week-5 fixtures appear in Week 5, not Week 4
+- A fixture with a `starts_at`, or a `date` and `time`, keeps today's behaviour
+- A fixture with neither a date nor a `week_start` is dropped, and counted in `dropped` (before #194 it was kept without a time and the frontend skipped it)
+
+### TBD Fixtures Don't Say "No Result" Before Their Week Ends
+**User story**
+As a player, I want an unscheduled match that hasn't been played to read "Time TBD", not "No result", so that I don't think it was cancelled.
+
+**Acceptance criteria**
+- An unscheduled fixture's `match_status` is `upcoming` until its league week ends (`week_start` + 7 days, league time), then `past`
+- While it is `upcoming`, the Schedule row shows "Time TBD" and "vs"
+- After its week, with no games found, it shows "No result" as other past series do
+- A TBD fixture whose games are found (a series result) shows its score and moves out of the "Time TBD" group to its played day, as today
+
+### Team Names Match Despite Punctuation and Old Teams
+**User story**
+As a player, I want each scheduled series to show its result, so that a played match is never listed both as "No result" and as a separate result row.
+
+**Acceptance criteria**
+- `norm_team_name` compares names case-insensitively, ignores parentheticals as today, and ignores every character that isn't a letter or digit: "Innofactor/NordCloud", "InnofactorNordcloud" and "innofactor nordcloud" are the same name
+- `find_team_id` returns the exact normalised match when there is one
+- The substring fallback is used only when exactly one team matches. When several match (for example "Innofactor" and "InnofactorNordcloud"), it returns the longest matching name if that one is unambiguous; otherwise it returns no team and logs a warning that names the fixture's team text
+- With the season-16 data, Reaktor–Innofactor/NordCloud (Wed 7.10.) resolves to the current team, shows Reaktor 2–0, and the separate "InnofactorNordcloud" result row is gone
+
+### League Week Shown When It Differs
+**User story**
+As a player comparing the Schedule with the league's own schedule, I want to see when a match belongs to a different league week than the fantasy week it is listed under, so that the two schedules don't look contradictory.
+
+**Acceptance criteria**
+- Each series from the fixtures feed carries its league week (`league_week`, the feed's `week`)
+- When a row's league week differs from the number in the fantasy week label it is shown under, the row shows a small "League week N" tag after the division badge. Example: Hoxhunt Fortum–Elisa Oyj, league week 4, played Mon 12.10. 21:00, shown in Week 5
+- No tag when they match, when the fantasy week has no number in its label, or when the source is the Google Sheet (no league week)
+- The tag text is set with `textContent` or `_escHtml`
+
+## My Team Motion (issue #155)
+
+### New Points Count Up Since Your Last Visit
+**User story**
+As a player, I want to see which of my cards scored since I last looked, so that new results feel like an event and not a silently changed number.
+
+**Acceptance criteria**
+- My Team remembers, per user and week, the points it last showed for each roster card and the week total (`localStorage` key `rosterSeenPoints:<user id>:<week id>`)
+- When a card's points are higher than last time:
+  - its number counts up from the old value to the new one (ease-out, `clamp(600 + delta × 20, 600, 2000)` ms);
+  - a floating "+delta" in the accent colour rises above it;
+  - its slot glows briefly.
+- The week total counts up in step, and ends at the server's value
+- No animation on the first visit to a week (nothing stored yet), for locked weeks shown for the first time, or for decreases (a corrected score): the value just updates
+- With reduced motion, the values update instantly. Clicking anywhere on the roster finishes the count-ups
+- The final numbers are always the server's values; screen readers get the final value only (`aria-hidden` on the counting text)
+
+### Cards Slide Between Bench and Roster *(moved to #186)*
+Planned with the fluid roster in `markdown/stories/team-tokens-scoring.md` (issue #186).
+
+### The Week Lock Has a Moment
+**User story**
+As a player, I want to notice that my roster for the week is now locked, so that I know my lineup counts from here.
+
+**Acceptance criteria**
+- The first time a user opens a week on My Team after it has locked, the "Roster locked" banner stamps in: it scales from 1.15 to 1 and fades in over 300 ms, with a lock icon that closes. The roster cards dim to their locked style over 400 ms.
+- This plays once per user and week (`localStorage` `rosterLockSeen:<user id>`, keeping the last 50 week ids)
+- Later visits, and reduced motion, show the locked state directly
+
+### Substitutions Play Out Once
+**User story**
+As a player, I want to see the bench substitutions happen, so that I understand why a bench card scored for me.
+
+**Acceptance criteria**
+- The first time a user views a locked week after its substitutions ran (`substitutions_at` set and at least one substitution), each substitution plays in roster order:
+  - the subbed-out card slides down and fades to the bench area;
+  - the substitute rises into its slot;
+  - the "Subbed in for {player}" label fades in.
+  - About 700 ms per substitution, 300 ms apart.
+- It plays once per user and week (`localStorage` `rosterSubsSeen:<user id>`). A re-run that changes the substitutions (for example after an admin week change, #193) plays the new result once again.
+- Clicking finishes it at once; with reduced motion the final state shows directly
+
+### Token Gains Are Noticed
+**User story**
+As a player, I want to notice when I receive tokens, so that MVP drops and grants don't pass by unseen.
+
+**Acceptance criteria**
+- **When it plays:** when `updateTokenDisplay` sets a balance higher than the one shown before (any source), the header token number counts up over 600 ms and the chip pulses once with a floating "+N".
+- **What doesn't animate:**
+  - spending tokens (a draw) updates instantly;
+  - the first display after page load animates only if the balance rose since the value last stored for this user (`localStorage` `tokensSeen:<user id>`).
+- **Reduced motion:** instant.

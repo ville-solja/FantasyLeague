@@ -20,7 +20,7 @@ The integration is one-directional: Kana Cards pushes results to toornament; it 
 
 1. **Match ingestion** — The background ingest loop polls OpenDota every `INGEST_POLL_INTERVAL` seconds (default: 15 min) for new match IDs in the configured leagues — or every `INGEST_LIVE_POLL_INTERVAL` seconds (default: 2 min) while any week is currently active, so live-series results reach toornament faster. This is the same loop that runs the toornament sync described below, so the speedup applies to both. New matches are stored in the `matches` table.
 
-2. **Series resolution** — For each match entry in toornament, the app looks up both participant names (e.g. `"Team A"` and `"Team B"`) and resolves them to team IDs in the local DB using fuzzy name normalisation (lowercase, parentheticals stripped, substring fallback). It then counts wins across all stored matches between those two teams.
+2. **Series resolution** — For each match entry in toornament, the app looks up both participant names (e.g. `"Team A"` and `"Team B"`) and resolves them to team IDs in the local DB using fuzzy name normalisation (lowercase, parentheticals stripped, letters and digits only, unambiguous substring fallback). It then counts wins across all stored matches between those two teams.
 
 3. **Idempotency check** — Before issuing a PATCH, the app compares the computed score against what toornament already shows. If they are identical, the match is skipped with no network call.
 
@@ -34,9 +34,9 @@ Toornament stores participant names as free-text strings entered by tournament o
 
 - Converts to lowercase
 - Strips parenthetical suffixes (e.g. `"Meta(no)core"` → `"metacore"`)
-- Collapses whitespace
+- Keeps only letters and digits (spaces, `/`, `-` and other punctuation are dropped)
 
-Exact match is tried first; if that fails, bidirectional substring containment is used as a fallback. If neither side can be matched to a DB team, the toornament match is skipped and a warning is logged.
+Exact match is tried first; if that fails, bidirectional substring containment is used as a fallback, but only when one team matches or one matching name is longer than all others (issue #194). An ambiguous name matches no team and `find_team_id` logs a warning. If neither side can be matched to a DB team, the toornament match is skipped and a warning is logged.
 
 ## Trigger Points
 

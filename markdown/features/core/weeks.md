@@ -86,13 +86,21 @@ Returns the 10 highest individual fantasy point scores from a single match acros
 
 ## Week Override
 
-An admin can manually assign a match to a different week than the one its `start_time` falls in:
+A match's **scoring week** is decided in this order (`weeks.scoring_week_for`):
+
+1. its `week_override_id`, when set;
+2. otherwise the week whose window contains its `start_time` (inclusive, as the scoring queries' `BETWEEN`);
+3. otherwise none: the match scores in no week.
+
+An admin sets the override for a whole series from Admin › Matches:
 
 ```
-PUT /matches/{match_id}/week   body: {"week_id": N}
+PUT /matches/{match_id}/week   body: {"week_id": N, "apply_to_series": true}
 ```
 
-Setting `week_id` to `null` clears the override. The automated `POST /admin/sync-match-weeks` endpoint handles bulk assignment based on the schedule sheet.
+`week_id: null` clears the override. With `apply_to_series` (the default) every game of the series changes: the same two teams, starting within 6 hours of the chosen match. A change re-runs the bench substitutions of the affected weeks that already ran them ([Automatic Bench Substitution](../reference/automatic-bench-substitution.md#week-changes-after-substitutions-ran-issue-193)).
+
+**Why the league week decides.** Teams sometimes play a series after their league week's fantasy week has ended, for example on the Monday evening that already belongs to the next week (issue #193). Other series of the next league week are played that same evening, so no time boundary can separate them. The fixtures feed's `week` field (the series' `league_week`) is the reliable signal. A series' **scheduled fantasy week** is the week containing its league week's anchor: `week_start` + 3 days, 12:00 league time (`schedule.league_week_anchor`, the rule unscheduled fixtures use since issue #194). `schedule.out_of_week_series` flags a feed series with a result when any of its games counts for another week, unless every game has an explicit override (an admin decision, such as "Keep in Week M"). Admin › Matches shows the flagged series; `POST /admin/sync-match-weeks` applies the scheduled week to all of them. A series whose anchor falls in no fantasy week is not flagged, and the CSV sheet source has no league week, so nothing is flagged with it.
 
 ## `GET /weeks`
 

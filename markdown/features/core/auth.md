@@ -141,13 +141,20 @@ section alongside the other endpoints below (which are all in `auth.py`).
   "steam_linked": false,
   "has_password": true,
   "is_demo": false,
-  "username_change_available_at": null
+  "username_change_available_at": null,
+  "own_card_grant": null
 }
 ```
 
 `username_change_available_at` (issue #169) is the Unix time the next rename becomes possible, or
 `null` when a rename is allowed now or the cooldown is off. Profile shows it as "You can rename
 again on <date>".
+
+`own_card_grant` (issue #188) is `{ "player_name", "card_id", "outcome" }` while the account has an
+own player card grant it hasn't dismissed (`outcome` `granted`, or `already_owned` with `card_id`
+null), else `null`. The page shows the own-card popup from it; `POST /profile/own-card-grant/seen`
+dismisses it. For a Steam-linked league player with no grant yet, this call first tries the grant
+(see `markdown/features/reference/steam-login.md`).
 
 `steam_linked`, `has_password` and `is_demo` (issue #150) are booleans only; the Steam id is never
 returned. The frontend uses them for Profile's Steam section and the re-auth prompt.
@@ -223,11 +230,17 @@ Changes the authenticated user's display name. Requires login.
 
 ---
 
-## Linking a Dota 2 Player
+## Player Identity (linking a league player)
+
+Profile's **Player identity** panel links the account to its league player: through Link Steam
+in `both` and `steam_signup` modes, or by typing an OpenDota account id in `password` mode
+(issue #188).
 
 ### `PUT /profile/player-id`
 
-Links the authenticated user's account to an OpenDota player ID. Requires login.
+Links the authenticated user's account to an OpenDota player ID, self-reported. Requires login.
+Only for `LOGIN_METHOD=password`: in `both` and `steam_signup` modes it answers **410** "Link
+Steam to verify your player id" and changes nothing.
 
 ```json
 { "player_id": 123456789 }
@@ -235,8 +248,8 @@ Links the authenticated user's account to an OpenDota player ID. Requires login.
 
 Set `player_id` to `null` to unlink. The response includes `player_name` and `player_avatar_url` resolved from the local database (null if the player has not been ingested yet).
 
-Returns 409 for an account with a linked Steam id (issue #150): its `player_id` is the verified
-Steam32 id, set at link or sign-up time.
+In `password` mode it returns 409 for an account that still has a linked Steam id (issue #150):
+its `player_id` is the verified Steam32 id, set at link or sign-up time.
 
 ---
 

@@ -7,8 +7,9 @@ import card_points
 from database import get_db
 from deps import require_admin, _audit
 import ingest
-from models import Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Weight
-from schedule import bust_cache
+from models import Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Week, Weight
+from schedule import bust_cache, out_of_week_series
+from weeks import scoring_week_for, week_containing
 from twitch import _apply_mvp_bonus, bust_panel_cache, upsert_mvp
 
 router = APIRouter()
@@ -56,6 +57,8 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         t.id: t for t in db.query(Team).filter(Team.id.in_(team_ids)).all()
     } if team_ids else {}
 
+    all_weeks = db.query(Week).all()
+
     result = []
     for m in matches:
         mvp = mvps_by_match.get(m.match_id)
@@ -63,6 +66,8 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         radiant = teams_by_id.get(m.radiant_team_id) if m.radiant_team_id else None
         dire = teams_by_id.get(m.dire_team_id) if m.dire_team_id else None
         timing = timings_by_match.get(m.match_id)
+        scoring_week, scoring_source = scoring_week_for(db, m, all_weeks)
+        time_week = week_containing(db, m.start_time, all_weeks)
         result.append({
             "match_id": m.match_id,
             "league_id": m.league_id,
@@ -79,8 +84,21 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
             "live_first_seen_at": timing.live_first_seen_at if timing else None,
             "ingested_at": timing.ingested_at if timing else None,
             "mvp_confirmed_at": timing.mvp_confirmed_at if timing else None,
+            "week_override_id": m.week_override_id,
+            "scoring_week_id": scoring_week.id if scoring_week else None,
+            "scoring_week_label": scoring_week.label if scoring_week else None,
+            "scoring_week_source": scoring_source,
+            "time_week_id": time_week.id if time_week else None,
+            "time_week_label": time_week.label if time_week else None,
         })
     return result
+
+
+@router.get("/admin/matches/out-of-week")
+def list_out_of_week_series(db=Depends(get_db), _: dict = Depends(require_admin)):
+    """Feed series counted for a different fantasy week than their league week's
+    (issue #193); see schedule.out_of_week_series."""
+    return out_of_week_series(db)
 
 
 @router.get("/admin/matches/{match_id}/players")

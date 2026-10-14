@@ -365,6 +365,25 @@ class TwitchStarterGrant(Base):
     granted_at     = Column(Integer, nullable=False)  # Unix timestamp
 
 
+class OwnPlayerCardGrant(Base):
+    """A league player's own card, once (issue #188): when a Steam-verified account's
+    player is active in the pool, it gets one common card of that player. The unique
+    user_id and the unique player_id make it once per account and once per player, so
+    unlinking and relinking, or the same Steam account on another account, grants
+    nothing more. Written with INSERT … ON CONFLICT DO NOTHING (own_card.py). A season
+    reset clears the table along with the cards. seen_at: the player dismissed the
+    popup that explains the gift."""
+    __tablename__ = "own_player_card_grants"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    user_id    = Column(Integer, nullable=False, unique=True)
+    player_id  = Column(Integer, nullable=False, unique=True)
+    card_id    = Column(Integer, nullable=True)    # NULL for "already_owned"
+    outcome    = Column(String, nullable=False)    # "granted" | "already_owned"
+    granted_at = Column(Integer, nullable=False)   # Unix timestamp
+    seen_at    = Column(Integer, nullable=True)    # popup dismissed
+
+
 class TwitchChannelApproval(Base):
     """A Twitch channel's request to set match MVPs (issue #175). Rows appear when a
     broadcaster opens the MVP tool on a channel that isn't approved; admins approve or

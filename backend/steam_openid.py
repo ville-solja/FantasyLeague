@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 
 import login_mode
+import own_card
 import sessions
 from auth import check_reserved, check_username, username_taken
 from database import get_db
@@ -318,6 +319,7 @@ def link_account(db, user: User, steam64: str) -> str:
     user.steam_id = steam64
     user.player_id = steam32(steam64)
     _supersede_player_id_claims(db, user, user.player_id)
+    own_card.grant_in_savepoint(db, user)  # issue #188
     _audit(db, "steam_linked", actor_id=user.id, actor_username=user.display_name,
            detail=f"user_id={user.id}")
     _apply_admin_seed(db, user, steam64)
@@ -476,6 +478,7 @@ def signup(request: Request, db, body: SteamSignupBody):
         raise HTTPException(status_code=409, detail="Username already taken") from None
     pending.used_at = now
     _supersede_player_id_claims(db, user, user.player_id)
+    own_card.grant_in_savepoint(db, user)  # issue #188
     _audit(db, "user_register", actor_id=user.id, actor_username=user.username,
            detail="method=steam")
     _apply_admin_seed(db, user, steam64)

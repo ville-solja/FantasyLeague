@@ -11,7 +11,7 @@ These describe the primary user-visible surfaces of the app.
 | Feature | Description |
 |---|---|
 | [Authentication & Accounts](core/auth.md) | Registration, login, sessions, profile management, forgot-password |
-| [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll |
+| [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll, the own player card for Steam-verified league players (#188) |
 | [Weeks & Leaderboards](core/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
 | [Weekly Summary Report](core/weekly-summary.md) | Post-week recap popup: series-grouped matches, VOD links, and a per-user Reveal-results gate for MVP highlights and points earned |
 | [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, match date display, and (#151) a side-by-side roster panel with per-game card points, a themed scrollbar and a once-per-week new-recap popup for the Weekly Summary Report |
@@ -56,6 +56,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Chat Announcement Fix](reference/twitch-chat-announcement-fix.md) | Adds the required `extension_id`/`extension_version` fields to MVP chat announcements, fits them to 280 characters, and logs Twitch errors |
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
+| [Twitch Extension Resubmission](reference/twitch-extension-resubmission.md) | Issue #195: version 1.3.0 for review after the policy 4.5 rejection; submission guide brought in line with the build (listing, baked backend origins, endpoint and image disclosure, testing steps), tests keeping the disclosure in step with the packaged code |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
@@ -72,7 +73,7 @@ Implementation details, integrations, and operator tooling.
 | [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
-| [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |
+| [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile's Player identity panel shows the linked league player and the user's own tags, with a hint to link the player when tags exist but no player is linked; manual id entry only in `password` mode (#188) |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |
 | [Team Booster Draws](reference/team-booster-draws.md) | Team draw (internal name "booster"): one card for 3 Tokens, restricted to a chosen team's player roster; configurable cost |
 | [Team Draw Explanation](reference/team-draw-explanation.md) | User-facing "team draw" naming for the booster draw, its How to Play explanation, and the admin cost label |
@@ -82,7 +83,7 @@ Implementation details, integrations, and operator tooling.
 | [Security Audit 3](reference/security-audit-3.md) | Issue #136: Origin check against cross-site state changes, username allowlist, CORS limited to the Twitch extension, production guards on dev shortcuts, pip-audit in CI |
 | [Action Throttling](reference/action-throttling.md) | Issue #184: per-user limits on draws, rerolls and every player action, request body size cap, plain 429s with Retry-After, a test keeping new write routes limited, and a layered proxy checklist against denial of service |
 | [Atomic Roster and Token Operations](reference/atomic-roster-and-token-operations.md) | Issue #185: draws activate cards atomically, a partial unique index allows one active card per player, token credits are relative SQL updates, promo caps hold under load, buttons lock while their request runs; the rules and an inventory of player state changes |
-| [My Team Save Roster](reference/my-team-save-roster.md) | Issue #186: My Team edits a draft and stores it with one validated `PUT /roster`; unsaved-changes bar, leave prompt, lock warning, and a version check against changes made elsewhere |
+| [My Team Fluid Roster](reference/my-team-save-roster.md) | Issue #186: My Team edits a local layout, animates moves (FLIP, pointer and touch drag with live preview) and autosaves it with one validated, versioned `PUT /roster`; changes made elsewhere are never overwritten |
 | [Twitch, Steam and Account Hardening](reference/twitch-steam-account-hardening.md) | Issue #163: extension backend pinned at packaging, fail-closed Twitch defaults, safe MVP chat names, reauth for admin token actions, reset and lockout abuse fixes, operator checklist (#169 and #171 shipped with PR 174) |
 | [Username XSS Fix](reference/username-xss-fix.md) | Fixes a stored-XSS privilege-escalation vulnerability where an unescaped username could execute script (e.g. calling `toggleAdmin`) in an admin's session |
 | [DB Volume Persistence](reference/db-volume-persistence.md) | Bind-mount persistence strategy for SQLite; explains why bind mount over named volume, `--volumes` safety, and reset procedure |
@@ -99,13 +100,12 @@ Implementation details, integrations, and operator tooling.
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
 | [Shoutrrr Support](reference/shoutrrr-support.md) | **PLANNED** — not built yet. Outbound push notifications via a separately-hosted Shoutrrr instance; first notification type is a match-starting-soon reminder |
-| [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | HTML5 drag-and-drop to reorder the active roster; card viewer backdrop-click dismiss |
+| [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | Pointer drag (mouse, pen, touch long-press) to reorder and move roster and bench cards (#186); card viewer backdrop-click dismiss |
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
 | [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
 | [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
-| [Kana Hub Integration Feasibility](reference/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |
 | [DB Backup Leak Fix](reference/db-backup-leak-fix.md) | Closes a `.gitignore` gap that let two SQLite DB backup snapshots (with an admin's email + password hash) get committed to git |
 | [Rate Limiting](reference/rate-limiting.md) | Per-IP request-rate limits app-wide, with stricter limits on login/register/forgot-password and a per-username failed-login lockout |
@@ -120,7 +120,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Extension Policy Compliance](reference/twitch-extension-policy-compliance.md) | For Twitch policy 4.5: live info for every viewer, one-button Join creating a Twitch soft account, card draws, collection and roster in the panel, MVP drops to soft accounts; link codes leave the extension (Part 1, #157) |
 | [Twitch Account Connection](reference/twitch-account-connection.md) | Website "Connect Twitch" through Twitch's sign-in (OpenID Connect), merging a Twitch soft account into the website account after confirmation, and retiring the old link codes (Part 2, #160) |
 | [Uniform Twitch Starter Tokens](reference/uniform-twitch-starter-tokens.md) | Issue #187: every Twitch account brings its starter tokens exactly once, whether the player joined in the panel or connected Twitch on the website; grant record per Twitch id, backfill for existing players |
-| [Steam Login](reference/steam-login.md) | Steam OpenID 2.0 sign-in alongside passwords, with a `LOGIN_METHOD` switch (password / both / steam_signup: Steam-only account creation from S17), Link Steam for existing accounts, and admins from `SEED_ADMIN_STEAM_IDS` (#150) |
+| [Steam Login](reference/steam-login.md) | Steam OpenID 2.0 sign-in alongside passwords, with a `LOGIN_METHOD` switch (password / both / steam_signup: Steam-only account creation from S17), Link Steam for existing accounts, admins from `SEED_ADMIN_STEAM_IDS` (#150), and a one-time own player card for Steam-verified league players (#188) |
 | [Impersonation Hardening](reference/impersonation-hardening.md) | Case-insensitive unique usernames, reserved words with look-alike matching, an admin badge, profiles that hide self-reported player ids and avatars, and a rename cooldown (#169) |
 | [Twitch Incident Runbook](reference/twitch-incident-runbook.md) | (#160) What to do if the Twitch sign-in, the developer account or a merge goes wrong: kill switches, secret rotation, audit review, merge reversal, player communication |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
@@ -132,3 +132,11 @@ Implementation details, integrations, and operator tooling.
 | [Profile Requires Login](reference/profile-requires-login.md) | Gates `GET /profile/{user_id}` behind an authenticated session, closing an anonymous user-enumeration vector |
 | [OpenDota Parse Retry](reference/opendota-parse-retry.md) | Re-fetches matches ingested before OpenDota parsed them, replaces their stat rows once parsed, and requests a parse from OpenDota |
 | [Unparseable Match Handling](reference/unparseable-match-handling.md) | Parse status per match, partial-stat markers for players, admin retry-parse, auto-flagging of stuck matches, and admin exclusion of unparseable matches from scoring |
+
+## Research
+
+One-off studies live in `markdown/research/`. They are decision records, not product docs, and agents don't read them by default.
+
+| Study | Summary |
+|---|---|
+| [Kana Hub Integration Feasibility](../research/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |

@@ -5,17 +5,19 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import and_, or_
 
 import card_points
+from weeks import rerun_substitutions_for, scoring_week_for
 from database import get_db, SessionLocal
 from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league, retry_unparsed_matches, INGEST_LOCK
 from models import Match, PlayerMatchStats, Week, Weight
-from schedule import get_schedule, get_schedule_for_request, bust_cache, SCHEDULE_SHEET_URL
+from schedule import get_schedule_for_request, bust_cache, out_of_week_series, SCHEDULE_SHEET_URL
 from scoring import fantasy_score, stat_dict_from_row
 from toornament import sync_toornament_results
+from twitch import bust_panel_cache
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 class MatchWeekBody(BaseModel):
     week_id: int | None = None
+    apply_to_series: bool = True
 
 
 def _run_manual_ingest(league_id: int, actor_id: int, actor_username: str):
@@ -209,10 +212,66 @@ def schedule_debug(_: dict = Depends(require_admin)):
     return result
 
 
+SERIES_GAP_SECONDS = 6 * 3600
+
+
+def _series_matches(db, match: Match) -> list[Match]:
+    """The match's series: games between the same two teams starting within 6 hours of
+    it (issue #193). A match without both team ids is its own series."""
+    if not match.radiant_team_id or not match.dire_team_id or match.start_time is None:
+        return [match]
+    a, b = match.radiant_team_id, match.dire_team_id
+    return (
+        db.query(Match)
+        .filter(or_(and_(Match.radiant_team_id == a, Match.dire_team_id == b),
+                    and_(Match.radiant_team_id == b, Match.dire_team_id == a)),
+                Match.start_time.between(match.start_time - SERIES_GAP_SECONDS,
+                                         match.start_time + SERIES_GAP_SECONDS))
+        .order_by(Match.start_time)
+        .all()
+    )
+
+
+def _apply_week_override(db, matches, week_id, admin, all_weeks) -> tuple[list[dict], set]:
+    """Set week_override_id on each match that doesn't already have it, auditing each
+    change. Returns (changes, affected week ids: old and new scoring weeks that differ).
+    Caller re-runs substitutions and commits."""
+    changes, affected = [], set()
+    for m in matches:
+        if m.week_override_id == week_id:
+            continue
+        old_week, _ = scoring_week_for(db, m, all_weeks)
+        old_override = m.week_override_id
+        m.week_override_id = week_id
+        new_week, _ = scoring_week_for(db, m, all_weeks)
+        old_id = old_week.id if old_week else None
+        new_id = new_week.id if new_week else None
+        if old_id != new_id:
+            affected |= {old_id, new_id}
+        _audit(db, "admin_set_match_week", actor_id=admin["user_id"], actor_username=admin["username"],
+               detail=f"match_id={m.match_id} old_override={old_override} new_override={week_id}")
+        changes.append({"match_id": m.match_id, "old_override": old_override, "new_override": week_id,
+                        "old_week_id": old_id, "new_week_id": new_id})
+    return changes, affected - {None}
+
+
+def _rerun_affected(db, affected, admin) -> list[dict]:
+    db.flush()
+    reruns = rerun_substitutions_for(db, affected, "week_override",
+                                     actor_id=admin["user_id"], actor_username=admin["username"])
+    return [{"week_id": w.id, "week_label": w.label, "substitutions": n} for w, n in reruns]
+
+
+def _bust_caches():
+    bust_cache()
+    bust_panel_cache()
+
+
 @router.put("/matches/{match_id}/week")
 def set_match_week(match_id: int, body: MatchWeekBody, db=Depends(get_db), admin: dict = Depends(require_admin)):
-    """Manually override which fantasy week a match counts for.
-    Set week_id to null to clear the override and revert to time-based assignment."""
+    """Override which fantasy week a match counts for (null clears it, back to the week
+    containing start_time). With apply_to_series (default) every game of the series
+    changes. Weeks whose substitutions already ran are re-run (issue #193)."""
     match = db.get(Match, match_id)
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -220,85 +279,50 @@ def set_match_week(match_id: int, body: MatchWeekBody, db=Depends(get_db), admin
         week = db.get(Week, body.week_id)
         if not week:
             raise HTTPException(status_code=404, detail="Week not found")
-    old_override = match.week_override_id
-    match.week_override_id = body.week_id
-    _audit(db, "admin_set_match_week", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"match_id={match_id} old_override={old_override} new_override={body.week_id}")
+    targets = _series_matches(db, match) if body.apply_to_series else [match]
+    all_weeks = db.query(Week).all()
+    changes, affected = _apply_week_override(db, targets, body.week_id, admin, all_weeks)
+    reruns = _rerun_affected(db, affected, admin)
     db.commit()
-    return {"match_id": match_id, "week_override_id": body.week_id}
+    if changes:
+        _bust_caches()
+    return {
+        "match_id": match_id,
+        "week_override_id": body.week_id,
+        "changed_match_ids": [c["match_id"] for c in changes],
+        "substitution_reruns": reruns,
+    }
 
 
 @router.post("/admin/sync-match-weeks")
-def sync_match_weeks(db=Depends(get_db), admin: dict = Depends(require_admin)):
-    """Auto-assign week_override_id on matches whose actual play date differs from their
-    scheduled week in the Google Sheet."""
-    db_weeks = db.query(Week).all()
-    week_by_label = {w.label.lower().strip(): w for w in db_weeks}
+def sync_match_weeks(dry_run: bool = Query(False), db=Depends(get_db), admin: dict = Depends(require_admin)):
+    """Count every out-of-week series (schedule.out_of_week_series: the league week's
+    anchor decides the scheduled fantasy week) for its scheduled week, re-running
+    affected substitutions. dry_run=true only lists the flagged series."""
+    flagged = out_of_week_series(db)
+    if dry_run:
+        return {"dry_run": True, "series": flagged, "changes": [], "substitution_reruns": [], "errors": []}
 
-    schedule_data = get_schedule(db)
-
-    changes = []
-    errors = []
-
-    for sheet_week in schedule_data.get("weeks", []):
-        week_label = (sheet_week.get("label") or "").lower().strip()
-        target_week = week_by_label.get(week_label)
-        if not target_week:
-            errors.append(f"No DB week found for sheet label '{sheet_week.get('label')}'")
-            continue
-
-        for series in sheet_week["div1"] + sheet_week["div2"]:
-            team1_id = series.get("team1_id")
-            team2_id = series.get("team2_id")
-            if not team1_id or not team2_id:
-                continue
-
-            series_ts = None
-            dt_iso = series.get("datetime_iso")
-            if dt_iso:
-                try:
-                    from datetime import datetime
-                    series_ts = int(datetime.fromisoformat(dt_iso).timestamp())
-                except (ValueError, OSError):
-                    pass
-
-            rows = db.execute(text("""
-                SELECT match_id, start_time, week_override_id FROM matches
-                WHERE (radiant_team_id = :a AND dire_team_id = :b)
-                   OR (radiant_team_id = :b AND dire_team_id = :a)
-            """), {"a": team1_id, "b": team2_id}).fetchall()
-
-            for row in rows:
-                if series_ts and row.start_time:
-                    if abs(row.start_time - series_ts) > 3 * 86400:
-                        continue
-
-                in_target_by_time = (
-                    row.start_time is not None
-                    and target_week.start_time <= row.start_time <= target_week.end_time
-                )
-                new_override = None if in_target_by_time else target_week.id
-
-                if new_override == row.week_override_id:
-                    continue
-
-                match_obj = db.get(Match, row.match_id)
-                old = match_obj.week_override_id
-                match_obj.week_override_id = new_override
-                changes.append({
-                    "match_id": row.match_id,
-                    "old_override": old,
-                    "new_override": new_override,
-                    "target_week": target_week.label,
-                    "teams": f"{series.get('team1')} vs {series.get('team2')}",
-                })
-
+    all_weeks = db.query(Week).all()
+    changes, affected = [], set()
+    for series in flagged:
+        matches = db.query(Match).filter(Match.match_id.in_(series["match_ids"])).all()
+        series_changes, series_affected = _apply_week_override(
+            db, matches, series["scheduled_week_id"], admin, all_weeks)
+        teams = f"{series.get('team1')} vs {series.get('team2')}"
+        for c in series_changes:
+            c.update({"target_week": series["scheduled_week_label"], "teams": teams})
+        changes.extend(series_changes)
+        affected |= series_affected
+    reruns = _rerun_affected(db, affected, admin)
     if changes:
         _audit(db, "admin_sync_match_weeks", actor_id=admin["user_id"], actor_username=admin["username"],
-               detail=f"changes={len(changes)}")
-        db.commit()
-
-    return {"changes": changes, "errors": errors}
+               detail=f"series={len(flagged)} changes={len(changes)} reruns={len(reruns)}")
+    db.commit()
+    if changes:
+        _bust_caches()
+    return {"dry_run": False, "series": flagged, "changes": changes,
+            "substitution_reruns": reruns, "errors": []}
 
 
 @router.post("/admin/sync-toornament")

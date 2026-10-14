@@ -614,3 +614,53 @@ As an admin, I want players to be able to rename at most once a week, so that a 
 - `USERNAME_CHANGE_COOLDOWN_DAYS=0` turns the limit off.
 - `GET /me` and `PUT /profile/username` return `username_change_available_at` (Unix time, or null when a rename is allowed now or the cooldown is off). Profile shows "You can rename again on <date>" when it is set.
 - **Failure path:** a second rename two days after the first answers 429 and keeps the current name.
+
+## Profile Identity Panel and Own Player Card (issue #188)
+
+### One Clear Identity Panel on Profile
+**User story**
+As a player, I want my Steam link and my league player identity in one place, so that I understand what is linked and why without reading two panels that say the same thing.
+
+**Acceptance criteria**
+- Profile shows four panels: **Account** (username, password or Steam-only sign-in, sessions), **Player identity** (replaces the Steam and Dota 2 Player panels, and holds Your Tags), **Twitch** (unchanged) and **Past seasons** (unchanged, when present)
+- Player identity, not linked: one sentence on what linking does (verifies your league player, shows your tags on your cards and the leaderboard, and gives you your own player card once if you play in this season), plus **Link Steam**
+- Player identity, linked:
+  - **Steam linked** and the matched league player's avatar, name and team, or "No league player matches this Steam account" when none exists;
+  - the account's tags as chips, or "No tags";
+  - **Unlink Steam** for accounts with a password, as today.
+- No OpenDota account id field when `LOGIN_METHOD` is `both` or `steam_signup`; `PUT /profile/player-id` answers 410 "Link Steam to verify your player id"
+- With `LOGIN_METHOD=password`, the panel keeps the id field, labelled "Self-reported"
+- An existing self-reported id is shown read-only with "Self-reported, link Steam to verify"; tags still show
+- The Steam id itself is never shown, as today
+
+### Own Player Card When Steam Matches a League Player
+**User story**
+As a player in this season's league, I want to receive my own player card when I link my Steam account, so that the game recognises me as one of the players.
+
+**Acceptance criteria**
+- When an account's verified player id (from Steam) is an active player in the pool (`Player.is_active`), the account gets one common card of that player with the usual modifiers. It goes to the roster if there is room and no active card of that player, otherwise to the bench
+- The grant runs after Link Steam, after Steam sign-up, and on `GET /me` for accounts that qualify but have no grant yet (existing linked players, or a player added to the pool later)
+- A new table `own_player_card_grants` holds `user_id` (unique), `player_id` (unique), `card_id` (nullable), `outcome` (`granted` or `already_owned`), `granted_at` and `seen_at` (when the popup was dismissed). It is written with `INSERT … ON CONFLICT DO NOTHING`, and a card is created only when the insert added the row. Unlinking and relinking, or linking the same Steam account to another account, grants nothing more
+- If the account already owns any card of that player, no card is created and the grant is recorded as `already_owned`
+- An audit entry `own_player_card_granted` names the user, the player and the card id
+- Self-reported ids never qualify; neither do demo accounts or soft (Twitch-only) accounts
+- A season reset deletes the grants along with the cards, so next season's league players get their own card again
+
+### Popup Explains the Gift
+**User story**
+As a player who just received my own card, I want a popup that shows it and says why, so that I know it isn't a random draw.
+
+**Acceptance criteria**
+- After a grant, the next page load shows a popup with the card in the existing card viewer and the text "Your own player card. You linked Steam, and you play in this season's league, so this card of {player name} is yours." with **Nice**
+- For `already_owned`: "You already have a card of {player name}, so no new card was added." with **OK**
+- The popup shows once: `GET /me` returns `own_card_grant: {player_name, card_id | null, outcome}` until the player dismisses it (`POST /profile/own-card-grant/seen`), then null
+- Text is set with `textContent` or `_escHtml`
+
+### Draws Stay Duplicate-Free
+**User story**
+As a player, I want the granted card to count like any other card I own, so that draws don't give me the same player again.
+
+**Acceptance criteria**
+- After a grant, a standard draw and a team draw treat the granted player as owned, under the existing `_pick_player` and `_pick_player_from_team` rules
+- No grant is made when the account already owns that player, so the grant itself never creates a second card of a player
+- The one-active-card-per-player rule holds: if an active card of that player exists, the granted card goes to the bench

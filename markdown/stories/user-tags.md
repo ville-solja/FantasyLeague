@@ -65,14 +65,14 @@ know what badges will appear on my cards and leaderboard entry.
 - Tags are loaded from `GET /profile/{user_id}` alongside the existing profile data
 - The tag display updates immediately when the profile is loaded; no extra button press required
 
-### Understand the Link Between Dota ID and Tag Stickers
+### Understand the Link Between Your Player and Tag Stickers
 **User story**
-As a user, I want to understand that linking my Dota ID is what connects my tags to my card
+As a user, I want to understand that linking my player is what connects my tags to my card
 images so that I know what action to take to make my stickers appear.
 
 **Acceptance criteria**
-- The Dota ID linking section on the Profile tab includes a short note explaining that tags
-  granted by an admin will appear as stickers on cards belonging to the linked player
-- The note is only visible when the user has at least one tag but no Dota ID linked (the
+- The tags column of the Profile tab's **Player identity** panel includes a short note: "Link
+  your player so your tags appear as stickers on your cards and on the leaderboard." (issue #188)
+- The note is only visible when the user has at least one tag but no player linked (the
   actionable gap state); it is hidden otherwise
 - No changes to any other page or workflow

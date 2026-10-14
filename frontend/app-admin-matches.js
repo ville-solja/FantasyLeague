@@ -1,15 +1,24 @@
 let _adminMatchesRows = [];
+let _adminMatchesWeeks = [];
+let _adminOutOfWeek = [];
 
 const _PARSE_STATUS_LABELS = { parsed: 'Parsed', unparsed: 'Unparsed', unparseable: 'Unparseable' };
 
 async function loadAdminMatches() {
   if (!activeIsAdmin) return;
   try {
-    const res = await fetch(`${API}/admin/matches`);
+    const [res, weeksRes, oowRes] = await Promise.all([
+      fetch(`${API}/admin/matches`),
+      fetch(`${API}/admin/weeks`),
+      fetch(`${API}/admin/matches/out-of-week`),
+    ]);
     const rows = await res.json();
     if (!res.ok) return setStatus('adminMatchesStatus', rows.detail, false);
     _adminMatchesRows = rows;
+    _adminMatchesWeeks = weeksRes.ok ? await weeksRes.json() : [];
+    _adminOutOfWeek = oowRes.ok ? await oowRes.json() : [];
     renderAdminMatches();
+    renderOutOfWeekBanner();
     setStatus('adminMatchesStatus', '');
   } catch (e) {
     setStatus('adminMatchesStatus', e.message, false);
@@ -24,7 +33,7 @@ function renderAdminMatches() {
     ? _adminMatchesRows.filter(m => m.parse_status === 'unparseable')
     : _adminMatchesRows;
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan='13' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='14' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
@@ -42,6 +51,7 @@ function renderAdminMatches() {
       ${_timingCell(m.mvp_confirmed_at, m.start_time)}
       <td></td>
       <td></td>
+      <td></td>
       <td class="mvp-cell">${_escHtml(m.mvp_player_name) || '—'}</td>
       <td></td>
       <td></td>`;
@@ -52,8 +62,9 @@ function renderAdminMatches() {
     setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
     tr.cells[8].appendChild(_buildParseCell(m));
     tr.cells[9].appendChild(_buildScoringCell(m));
-    tr.cells[11].appendChild(_buildVodCell(m.match_id, m.vod_url));
-    tr.cells[12].appendChild(setMvpBtn);
+    tr.cells[10].appendChild(_buildWeekCell(m));
+    tr.cells[12].appendChild(_buildVodCell(m.match_id, m.vod_url));
+    tr.cells[13].appendChild(setMvpBtn);
     tbody.appendChild(tr);
   });
 }
@@ -156,6 +167,143 @@ async function saveMatchScoring(matchId, body, checkbox) {
     checkbox.disabled = false;
     setStatus('adminMatchesStatus', e.message, false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Scoring week (issue #193): which fantasy week a series counts for
+// ---------------------------------------------------------------------------
+
+const _SERIES_GAP_SECONDS = 6 * 3600;
+
+// "Week 4", "Week 4 (set)" for an override, "—" when no week contains the match.
+function _scoringWeekText(m) {
+  if (!m.scoring_week_label) return '—';
+  return m.scoring_week_source === 'override' ? `${m.scoring_week_label} (set)` : m.scoring_week_label;
+}
+
+// Games of m's series as the backend groups them: same two teams, start within 6 hours.
+function _seriesGameCount(m) {
+  if (!m.radiant_team_id || !m.dire_team_id || !m.start_time) return 1;
+  const pair = [m.radiant_team_id, m.dire_team_id].sort().join('-');
+  return _adminMatchesRows.filter(r =>
+    r.radiant_team_id && r.dire_team_id && r.start_time &&
+    [r.radiant_team_id, r.dire_team_id].sort().join('-') === pair &&
+    Math.abs(r.start_time - m.start_time) <= _SERIES_GAP_SECONDS).length || 1;
+}
+
+function _buildWeekCell(m) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;font-size:0.8rem;';
+  const label = document.createElement('span');
+  label.textContent = _scoringWeekText(m);
+  wrap.appendChild(label);
+
+  const select = document.createElement('select');
+  select.style.cssText = 'font-size:0.8rem;padding:1px 2px;';
+  const byTime = document.createElement('option');
+  byTime.value = '';
+  byTime.textContent = `By time (${m.time_week_label || '—'})`;
+  select.appendChild(byTime);
+  _adminMatchesWeeks.forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = String(w.id);
+    opt.textContent = w.label;
+    select.appendChild(opt);
+  });
+  select.value = m.scoring_week_source === 'override' && m.week_override_id != null
+    ? String(m.week_override_id) : '';
+  select.addEventListener('change', () => {
+    const weekId = select.value ? parseInt(select.value, 10) : null;
+    const target = weekId === null
+      ? `by time (${m.time_week_label || 'no week'})`
+      : (_adminMatchesWeeks.find(w => w.id === weekId) || {}).label;
+    const n = _seriesGameCount(m);
+    if (!confirm(`Count ${n} ${n === 1 ? 'game' : 'games'} ${weekId === null ? '' : 'for '}${target}?`)) {
+      select.value = m.scoring_week_source === 'override' && m.week_override_id != null
+        ? String(m.week_override_id) : '';
+      return;
+    }
+    setMatchWeek(m.match_id, weekId, select);
+  });
+  wrap.appendChild(select);
+  return wrap;
+}
+
+// "2 games updated; Week 4: substitutions re-run (3)"
+function _weekChangeSummary(data) {
+  const n = (data.changed_match_ids || []).length;
+  const parts = [`${n} ${n === 1 ? 'game' : 'games'} updated`];
+  (data.substitution_reruns || []).forEach(r => {
+    parts.push(`${r.week_label}: substitutions re-run (${r.substitutions})`);
+  });
+  return parts.join('; ');
+}
+
+async function setMatchWeek(matchId, weekId, control) {
+  if (control) control.disabled = true;
+  try {
+    const res = await fetch(`${API}/matches/${matchId}/week`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ week_id: weekId, apply_to_series: true }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (control) control.disabled = false;
+      setStatus('adminMatchesStatus', data.detail, false);
+      return;
+    }
+    await loadAdminMatches();
+    setStatus('adminMatchesStatus', _weekChangeSummary(data));
+  } catch (e) {
+    if (control) control.disabled = false;
+    setStatus('adminMatchesStatus', e.message, false);
+  }
+}
+
+// Banner of series counted outside their league week's fantasy week, each with
+// "Count for Week N" (scheduled week) and "Keep in Week M" (explicit override).
+function renderOutOfWeekBanner() {
+  const box = document.getElementById('adminMatchesOutOfWeek');
+  if (!box) return;
+  box.replaceChildren();
+  if (!_adminOutOfWeek.length) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
+  const n = _adminOutOfWeek.length;
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;margin-bottom:6px;';
+  title.textContent = `${n} series played outside their scheduled week`;
+  box.appendChild(title);
+  _adminOutOfWeek.forEach(s => {
+    const line = document.createElement('div');
+    line.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:0.85rem;margin:4px 0;';
+    const text = document.createElement('span');
+    const played = s.played_at ? new Date(s.played_at * 1000).toLocaleString() : '—';
+    text.textContent = `${s.team1 || '?'} – ${s.team2 || '?'}, played ${played}: ` +
+      `scheduled ${s.scheduled_week_label}, counted ${s.counted_week_label || 'in no week'}`;
+    line.appendChild(text);
+    const firstMatch = (s.match_ids || [])[0];
+    if (firstMatch) {
+      const countBtn = document.createElement('button');
+      countBtn.className = 'secondary';
+      countBtn.style.cssText = 'padding:2px 7px;';
+      countBtn.textContent = `Count for ${s.scheduled_week_label}`;
+      countBtn.addEventListener('click', () => setMatchWeek(firstMatch, s.scheduled_week_id, countBtn));
+      line.appendChild(countBtn);
+      if (s.counted_week_id) {
+        const keepBtn = document.createElement('button');
+        keepBtn.className = 'secondary';
+        keepBtn.style.cssText = 'padding:2px 7px;';
+        keepBtn.textContent = `Keep in ${s.counted_week_label}`;
+        keepBtn.addEventListener('click', () => setMatchWeek(firstMatch, s.counted_week_id, keepBtn));
+        line.appendChild(keepBtn);
+      }
+    }
+    box.appendChild(line);
+  });
 }
 
 // ---------------------------------------------------------------------------

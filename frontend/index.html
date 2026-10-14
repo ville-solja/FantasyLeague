@@ -212,6 +212,18 @@
   </div>
 </div>
 
+<!-- OWN PLAYER CARD NOTICE (issue #188): the account already owned a card of its player -->
+<div class="modal-overlay hidden" id="ownCardNoticeModal" role="dialog" aria-modal="true" aria-labelledby="ownCardNoticeTitle" aria-describedby="ownCardNoticeText" data-close="dismissOwnCardGrant" onclick="if(event.target===this)dismissOwnCardGrant()">
+  <div class="modal weekly-recap-prompt">
+    <div class="weekly-recap-prompt-eyebrow">Player identity</div>
+    <h2 class="weekly-recap-prompt-title" id="ownCardNoticeTitle">Your own player card</h2>
+    <p class="weekly-recap-prompt-text" id="ownCardNoticeText"></p>
+    <div class="weekly-recap-prompt-actions">
+      <button id="ownCardNoticeOk" onclick="dismissOwnCardGrant()">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- PLAYER DETAIL MODAL -->
 <div class="modal-overlay hidden" id="playerModal" role="dialog" aria-modal="true" data-close="closePlayerModal" onclick="if(event.target===this)closePlayerModal()">
   <div class="modal modal-wide">
@@ -397,7 +409,62 @@
   <div id="tempPasswordBanner" style="display:none;background:#2a1a00;border:1px solid #f0b429;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#f0b429;">
     You are using a temporary password. Please set a new password below before continuing.
   </div>
-  <div class="grid">
+  <div class="grid profile-grid">
+
+    <!-- Issue #188: one Player identity panel for the Steam link, the league player and the tags.
+         States come from GET /me and GET /profile/{id}; the Steam id is never shown. -->
+    <div class="panel profile-identity" id="profileIdentityPanel">
+      <div class="profile-identity-head">
+        <h2>Player identity</h2>
+        <p class="profile-twitch-status" id="identitySteamLinked" style="display:none"><i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;"></i> Steam linked</p>
+      </div>
+      <div class="profile-identity-body">
+        <div class="profile-identity-main">
+          <p id="steamLinkReminder" class="steam-reminder" style="display:none;">Link Steam now. Password sign-in will end in a later update.</p>
+          <div id="identityNotLinkedState" style="display:none">
+            <p class="profile-twitch-copy" id="identityLinkCopy">Link your Steam account to verify which league player you are: your tags then show on your cards and next to your name on the leaderboard, and if you play in this season's league you get your own player card, once.</p>
+          </div>
+          <div id="profilePlayerPreview" class="profile-identity-player" style="display:none;">
+            <img id="profilePlayerAvatar" class="profile-identity-avatar" alt="" onerror="this.style.display='none'" />
+            <div class="profile-identity-player-text">
+              <div class="profile-identity-player-line">
+                <span id="profilePlayerName" class="profile-identity-player-name"></span>
+                <span id="profilePlayerSource" class="player-source"></span>
+              </div>
+              <div id="profilePlayerTeam" class="profile-identity-player-team"></div>
+            </div>
+          </div>
+          <div id="identityNoMatch" class="profile-identity-player" style="display:none;">
+            <div class="profile-identity-player-text">
+              <div class="profile-identity-player-name">No league player matches this Steam account</div>
+              <div class="profile-identity-player-team">That's normal if you don't play in the league. If you do, your player appears here once an admin adds you to this season's players.</div>
+            </div>
+          </div>
+          <p id="identityLegacyHint" class="profile-twitch-copy" style="display:none;">Self-reported, link Steam to verify</p>
+          <!-- LOGIN_METHOD=password only: Steam is not available, so the id is typed in (self-reported). -->
+          <div id="playerIdForm" style="display:none;">
+            <label for="profilePlayerId" class="profile-identity-label">OpenDota account id <span class="player-source">Self-reported</span></label>
+            <div class="row">
+              <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
+              <button id="btnSavePlayerId" onclick="savePlayerId()">Save</button>
+            </div>
+            <p class="profile-twitch-copy">If you play in the league, enter your OpenDota account id. Tags an admin has given you then appear as stickers on your cards and next to your name on the leaderboard.</p>
+          </div>
+          <div class="row profile-identity-actions">
+            <button id="btnLinkSteam" onclick="linkSteam()" style="display:none">Link Steam</button>
+            <button class="secondary" id="btnUnlinkSteam" onclick="unlinkSteam()" style="display:none">Unlink Steam</button>
+          </div>
+          <p class="profile-twitch-copy profile-twitch-note" id="identitySteamNote" style="display:none">You sign in on steamcommunity.com. Kana Cards never asks for your Steam password.</p>
+          <div class="status" id="steamStatus"></div>
+          <div class="status" id="playerIdStatus"></div>
+        </div>
+        <div class="profile-identity-tags">
+          <h3 class="profile-identity-subtitle">Your Tags</h3>
+          <div id="profileTagsContainer" class="profile-tags"></div>
+          <p id="profileTagGapHint" class="profile-twitch-copy" style="display:none;margin-top:8px;">Link your player so your tags appear as stickers on your cards and on the leaderboard.</p>
+        </div>
+      </div>
+    </div>
 
     <div class="panel">
       <h2>Account</h2>
@@ -433,50 +500,6 @@
       </div>
     </div>
 
-    <!-- Issue #150: Steam link (yes/no only; the Steam id is never shown). Hidden in password mode. -->
-    <div class="panel" id="steamProfilePanel" style="display:none;">
-      <h2>Steam</h2>
-      <p id="steamLinkReminder" class="steam-reminder" style="display:none;">Link Steam now. Password sign-in will end in a later update.</p>
-      <div id="steamUnlinkedState" style="display:none">
-        <p class="profile-twitch-copy">Link your Steam account to sign in with Steam and verify your Dota player id. Sign-in happens on steamcommunity.com; Kana Cards never asks for your Steam password.</p>
-        <button id="btnLinkSteam" onclick="linkSteam()">Link Steam</button>
-      </div>
-      <div id="steamLinkedState" style="display:none">
-        <p class="profile-twitch-status">Steam linked</p>
-        <p class="profile-twitch-copy">Your Dota player id is verified with Steam.</p>
-        <button class="secondary" id="btnUnlinkSteam" onclick="unlinkSteam()">Unlink Steam</button>
-      </div>
-      <div class="status" id="steamStatus"></div>
-    </div>
-
-    <div class="panel">
-      <h2>Dota 2 Player</h2>
-      <p style="font-size:0.8rem;color:#555;margin-bottom:16px;">If you play in the league, link your OpenDota account ID. Tags an admin has given you then appear as stickers on your cards and next to your name on the leaderboard.</p>
-      <div class="row">
-        <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
-        <button id="btnSavePlayerId" onclick="savePlayerId()">Save</button>
-      </div>
-      <p id="profilePlayerIdVerified" class="profile-twitch-copy" style="display:none;margin-top:8px;">Verified with Steam.</p>
-      <div id="profilePlayerPreview" style="display:none;margin-top:12px;display:flex;align-items:center;gap:8px;">
-        <img id="profilePlayerAvatar" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none'" />
-        <span id="profilePlayerName" style="font-size:0.9rem;color:#e0e0e0;"></span>
-        <span id="profilePlayerSource" class="player-source"></span>
-      </div>
-      <div class="status" id="playerIdStatus"></div>
-    </div>
-
-    <div class="panel">
-      <h2>Your Tags</h2>
-      <div id="profileTagsContainer" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-      <p id="profileTagGapHint" style="display:none;font-size:0.8rem;color:#888;margin-top:8px;">
-        Link your Dota player ID above so your tags appear as stickers on your cards and on the leaderboard.
-      </p>
-    </div>
-
-    <div class="panel" id="profilePastSeasonsPanel" style="display:none;">
-      <h2>Past Seasons</h2>
-      <div id="profilePastSeasonsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;"></div>
-    </div>
 
     <div class="panel" id="profileTwitchPanel">
       <h2>Twitch</h2>
@@ -506,6 +529,11 @@
       <div class="status" id="twitchStatus"></div>
     </div>
 
+    <div class="panel" id="profilePastSeasonsPanel" style="display:none;">
+      <h2>Past Seasons</h2>
+      <div id="profilePastSeasonsContainer" style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;"></div>
+    </div>
+
   </div>
 </div>
 
@@ -528,7 +556,8 @@
       <div id="rosterTotals" style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
         <span>This week: <strong id="rosterCombined" style="color:#aaa;">—</strong> pts</span>
         <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
-        <span id="rosterStatus" style="color:#555;"></span>
+        <span id="rosterStatus" style="color:#555;" role="status" aria-live="polite"></span>
+        <button id="rosterRetryBtn" class="secondary roster-retry-btn" style="display:none;" onclick="retryRosterSave()">Retry</button>
       </div>
       <div id="rosterSubsNote" class="card-slot-note" style="display:none;margin-top:6px;text-align:left;"></div>
 
@@ -831,15 +860,16 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">How to link</h3>
       <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Register or log in to a Fantasy account, then open the <strong>Profile</strong> tab.</li>
-        <li>Enter your Dota 2 (OpenDota) player ID in the linking field and save.</li>
+        <li>In the <strong>Player identity</strong> panel, press <strong>Link Steam</strong> and sign in on steamcommunity.com. Steam verifies which league player you are. (Where Steam sign-in is not available, enter your OpenDota account ID there instead; it is shown as self-reported.)</li>
       </ol>
-      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can change or remove the ID at any time from the Profile tab.</p>
+      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can unlink Steam from the Profile tab if your account also has a password.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What linking unlocks</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Tags admins have given you (for example a caster or player-of-note tag) appear as sticker badges on your cards and as chips next to your name on the leaderboard.</li>
         <li>Without linking, your tags still exist but aren't shown on your cards or leaderboard entry.</li>
-        <li>The <strong>Your Tags</strong> section in Profile lists your tags and reminds you if you have tags but haven't linked your ID.</li>
+        <li>If you play in this season's league, you get your own player card once, free, when Steam verifies you.</li>
+        <li>The <strong>Your Tags</strong> section of Player identity lists your tags and reminds you if you have tags but haven't linked your player.</li>
       </ul>
     </div>
 
@@ -1234,10 +1264,11 @@
           <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
         </div>
       </div>
+      <div id="adminMatchesOutOfWeek" style="display:none;margin-bottom:12px;padding:8px 10px;border:1px solid var(--accent, #f60);"></div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Live seen</th><th>Stats in</th><th>MVP picked</th><th>Parse</th><th>Scoring</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="13" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Live seen</th><th>Stats in</th><th>MVP picked</th><th>Parse</th><th>Scoring</th><th>Week</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="14" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>
