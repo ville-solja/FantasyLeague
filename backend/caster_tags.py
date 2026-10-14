@@ -61,6 +61,9 @@ def sync_safely(db, reason: str | None = None) -> tuple[int, int]:
     """sync() inside a savepoint: a failure is logged (exception type only) and rolls
     back only the sync, so the caller's sign-in, connect or admin action still
     succeeds. Does not commit."""
+    # Flush the caller's pending changes first, so only sync() errors are caught
+    # and logged here; a failure in the caller's own write surfaces at its commit.
+    db.flush()
     try:
         with db.begin_nested():
             return sync(db, reason)

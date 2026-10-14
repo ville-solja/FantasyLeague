@@ -280,6 +280,13 @@ function _safeUrl(u) {
   return /^https?:\/\//i.test(s) ? s : "";
 }
 
+// An escaped <img src> value: an http(s) URL or a same-origin path ("/..." but not
+// "//host"), else empty. For URLs that come from ingested or admin data.
+function _imgSrc(u) {
+  const s = String(u ?? "").trim();
+  return _escHtml(/^\/(?!\/)/.test(s) ? s : _safeUrl(s));
+}
+
 function playerLink(id, name) {
   return `<span class="entity-link" tabindex="0" role="button" onclick="openPlayerModal(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openPlayerModal(${id})}">${_escHtml(name)}</span>`;
 }

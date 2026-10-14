@@ -161,7 +161,7 @@ function _renderLeaderboard(showAll) {
   renderIfChanged(tbody, visible.map((r, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td class="lb-name-cell"><div class="lb-name-inner"><img draggable="false" src="${r.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
+      <td class="lb-name-cell"><div class="lb-name-inner"><img draggable="false" src="${_imgSrc(r.avatar_url)}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
       <td>${r.matches}</td>
       <td>${Number(r.avg_points).toFixed(1)}</td>
     </tr>`).join(""));
@@ -184,7 +184,7 @@ async function loadTop() {
     renderIfChanged(document.getElementById("topBody"), rows.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td><img draggable="false" src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
+        <td><img draggable="false" src="${_imgSrc(r.avatar_url)}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
         <td>${Number(r.fantasy_points).toFixed(1)}</td>
       </tr>`).join(""));
     setStatus("topStatus", "");

@@ -28,7 +28,7 @@ function _renderPlayerPool(rows) {
   tbody.innerHTML = visible.map(p => `
     <tr data-player-id="${p.id}" data-player-name="${_escHtml(p.name)}">
       <td><input type="checkbox" class="player-pool-cb" onchange="_updateRemoveBtn()" /></td>
-      <td><img draggable="false" src="${p.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${_escHtml(p.name)}</td>
+      <td><img draggable="false" src="${_imgSrc(p.avatar_url)}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${_escHtml(p.name)}</td>
       <td>${_escHtml(p.team_name || "—")}</td>
       <td style="font-size:0.8rem;color:#888;">${p.id}</td>
       <td>${p.active_card_count}</td>

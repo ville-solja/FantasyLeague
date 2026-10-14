@@ -223,8 +223,8 @@ async function loadTags() {
     _allTags = rows;
     document.getElementById("tagsBody").innerHTML = rows.length
       ? rows.map(t => `<tr data-tag-id="${t.id}">
-          <td><code style="font-size:0.8rem;">${t.key}</code></td>
-          <td>${t.label}</td>
+          <td><code style="font-size:0.8rem;">${_escHtml(t.key)}</code></td>
+          <td>${_escHtml(t.label)}</td>
           <td><button class="danger" style="padding:2px 8px;" onclick="deleteTag(${t.id})">Delete</button></td>
         </tr>`).join("")
       : `<tr><td colspan="3" style="color:#444">No tags defined</td></tr>`;
