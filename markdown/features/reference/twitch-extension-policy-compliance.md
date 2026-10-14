@@ -91,7 +91,7 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 | `routers/leaderboard.py` `roster_leaderboard`, `compute_season_standings` (season leaderboard and End Season), `weekly_leaderboard` | Excluded: `WHERE u.is_tester = 0 AND u.account_type = 'full'` |
 | `routers/admin_season.py` `end_season` | Excluded through `compute_season_standings`, so no `season_archive` row |
 | `routers/admin_season.py` `reset_season` (`db.query(User).update(tokens)`) | Included: tokens reset like everyone's |
-| `routers/admin_users.py` `list_users` (`GET /users`, the admin user search) | Filtered: `?account_type=full` (default) / `twitch` / `all`; rows carry `account_type`, `card_count`, `created_at`, `last_seen_at`, `twitch_linked`, `twitch_identity_shared` (booleans, never the ids) |
+| `routers/admin_users.py` `list_users` (`GET /users`, the admin user search) | Filtered: `?account_type=full` (default) / `twitch` / `all`; rows carry `account_type`, `card_count`, `created_at`, `last_seen_at`, `twitch_linked`, `twitch_identity_shared`, `steam_linked`, `is_demo` (booleans, never the ids) |
 | `routers/admin_users.py` `DELETE /admin/users/{id}` (new, re-auth required) | Soft accounts only; website accounts get 409 |
 | `routers/admin_users.py` toggle tester/admin, force logout, grant tokens, redeem, `is_admin_fresh` | By id; grant tokens works for soft accounts (audited by display name); the others are not offered for them in the UI |
 | `routers/admin_tags.py` `grant_tag` | 404 for soft accounts (hidden from tag lists) |

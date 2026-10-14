@@ -87,7 +87,8 @@ UI details (elements, columns, states, copy): `markdown/ui_description/weekly-re
   `_escHtml`.
 - **Your cards in the results:** `_weeklySummaryPlayerHtml` adds `.weekly-summary-owned`
   (`var(--accent-ghost)` fill) and a "YOUR CARD" / "YOUR SUB" label when `p.card_points != null`,
-  and shows `card_points` instead of match points. The MVP outline still applies.
+  and shows `card_points` instead of match points. The MVP mark still applies (since issue #202 a
+  `--mark-mvp` "MVP" label instead of an outline; see `reference/ui-feedback-polish.md`).
 - **Stacking:** `.reveal-overlay` is now `z-index: 350`, above `.modal-overlay` (300), so the
   card viewer opens on top of the report. `.reveal-overlay ~ .modal-overlay` (popups after
   `#revealModal` in the DOM, such as `#playerModal` and `#teamModal`) is 360, so a player link

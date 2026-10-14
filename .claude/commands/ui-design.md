@@ -43,6 +43,7 @@ These are non-negotiable — violating them produces off-brand output:
 - **No bluish-purple gradients** — only `--grad-orange` / `--grad-dusk` / `--grad-flame`.
 - **Tone:** Dry, terse, confident esports voice. "Draw a card" not "Draw a card! 🎴". Finnish strings on overlays are part of the brand.
 - **Iconography:** Lucide via CDN (`https://unpkg.com/lucide@0.453.0/dist/umd/lucide.min.js`).
+- **States and emphasis:** selected + hover inverts, role and status badges are one family, your own row is a full-row tint, winner and MVP are marked differently, images and controls aren't selectable, data rows are fixed-column grids; follow the "States and emphasis" section of `.claude/skills/README.md` and its shared classes in `style.css`.
 - **Readability:** readable text is never below `--fs-xs` (11px) and data is `--fs-sm` (13px); Big Shoulders only at `--fs-sm` and up (Inter below that); text colour `--fg-muted` or brighter, never `--fg-dim` (3.2:1, borders and placeholders only); `tabular-nums` on points; size with the rem `--fs-*` tokens.
 
 ---

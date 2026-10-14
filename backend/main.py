@@ -26,6 +26,7 @@ import twitch_status
 import steam_openid
 import login_mode
 import card_points
+import caster_tags
 import database
 import sessions
 import soft_accounts
@@ -128,6 +129,7 @@ def _week_maintenance_loop():
                 auto_lock_weeks(db)
                 due_substitutions(db)  # only matters when both fall due in the same tick; otherwise the report opens first with a "substitutions pending" note
                 generate_weekly_summaries(db)
+                _run_caster_tag_sync(db, "Week maintenance")  # issue #201: safety net
                 if time.time() - _last_session_cleanup >= _SESSION_CLEANUP_INTERVAL:
                     deleted = sessions.cleanup_expired(db)
                     _last_session_cleanup = time.time()
@@ -375,6 +377,28 @@ def _ensure_card_points_current():
         db.close()
 
 
+def _run_caster_tag_sync(db, context: str):
+    """Issue #201: match the automatic Caster tags to the approved channels and commit.
+    A failure is logged and rolled back; it never stops the caller."""
+    try:
+        granted, revoked = caster_tags.sync(db)
+        db.commit()
+        if granted or revoked:
+            logger.info("%s: Caster tag sync granted %d, revoked %d", context, granted, revoked)
+    except Exception:
+        db.rollback()
+        logger.exception("%s: Caster tag sync failed", context)
+
+
+def _sync_caster_tags_at_startup():
+    """TWITCH_MVP_CHANNEL_IDS only changes on restart, so sync once at start-up."""
+    db = database.SessionLocal()
+    try:
+        _run_caster_tag_sync(db, "Startup")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _log_level = logging.DEBUG if os.getenv("DEBUG", "").lower() == "true" else logging.INFO
@@ -391,6 +415,7 @@ async def lifespan(app: FastAPI):
     seed_weights()
     _ensure_card_points_current()
     seed_tags()
+    _sync_caster_tags_at_startup()
     if os.getenv("TWITCH_LOCAL_DEV", "").lower() == "true":
         if os.getenv("SECRET_KEY"):
             raise RuntimeError(

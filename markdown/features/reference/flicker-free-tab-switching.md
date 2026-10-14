@@ -67,20 +67,21 @@ The roster DOM outlives a render. Since #186 the grids are a keyed render (`rend
 - **Fixed frame:** `.weekly-summary-modal { height: 85vh; max-height: 85vh }`, and `height: 92vh` at 600 px and below. In the stacked layout (1100 px and below) the popup still scrolls as one page.
 - **Dimming:** `.weekly-summary-col-body.is-loading { opacity: .6; transition: opacity 150ms }`. The transition is off under `prefers-reduced-motion`. `_setWeeklySummaryLoading(on)` toggles the class and `aria-busy="true"` on both column bodies.
 - **`selectWeeklySummaryTab(weekId)`:**
-  1. Bumps `_weeklySummaryReq`, then calls `_stopRecap()`.
-  2. Shows the week at once:
-     - a week in `_weeklySummaryCache` (a `Map` keyed by week id) renders at once, without the recap,
+  1. Returns at once when the week is already the active one (issue #202: clicking the active tab does nothing; closing the popup and revealing reset the active week, so reopening still selects it). Before that, it drops the cache if it belongs to another signed-in user.
+  2. Bumps `_weeklySummaryReq`, then calls `_stopRecap()`.
+  3. Shows the week at once:
+     - a week in `_weeklySummaryCache` (a `Map` keyed by week id, entries `{data, at}` since #202) renders at once, without the recap; when its copy is less than 60 s old, `selectWeeklySummaryTab` stops here, with no fetch,
      - otherwise, if both columns are empty, "Loading…" shows,
      - otherwise the shown week is dimmed.
-  3. Fetches the week. A response whose request number is no longer current is ignored.
-  4. Stores the data in the cache and calls `renderWeeklySummaryContent(data, {playRecap})`. That function renders both columns with `renderIfChanged` and the headers in the same synchronous call. `playRecap` is false for a week that was already cached.
-  5. Scrolls both bodies to the top only when the week changed.
-  6. If the fetch fails, the error replaces the columns of an uncached week. A cached week keeps its content.
+  4. Fetches the week. A response whose request number is no longer current is ignored.
+  5. Stores the data in the cache and calls `renderWeeklySummaryContent(data, {playRecap})`. That function renders both columns with `renderIfChanged` and the headers in the same synchronous call. `playRecap` is false for a week that was already cached.
+  6. Scrolls both bodies to the top only when the week changed.
+  7. If the fetch fails, the error replaces the columns of an uncached week. A cached week keeps its content.
 - **Cache clearing:**
-  - `closeWeeklySummary()` clears the cache, bumps the request counter and removes the dimming.
+  - `closeWeeklySummary()` bumps the request counter, resets the active week and removes the dimming. Since issue #202 it keeps the cache for the page visit; see `markdown/features/core/weekly-summary.md` › "Client Cache" for its lifetime and clearing (reveal, logout, user switch, a changed week list).
   - `revealAllWeeklySummaries()` deletes every listed week from the cache before re-selecting the active one. It is the only reveal path; there is no single-week reveal.
 - **Tab bar:** `renderWeeklySummaryTabs()` rebuilds the buttons only when the `week_id:label:revealed` signature (`_weeklySummaryTabsSig`) or the button count changed. Otherwise it only moves the active mark.
-- **Recap (#152):** it still plays on a week's first revealed view and stops on a week switch or close. Rendering a week again during the same opening, from the cache or its quiet refresh, shows the finished state. An interrupted recap therefore plays again only on a later opening, since the week is not marked played.
+- **Recap (#152):** it plays on a week's first revealed view and stops on a week switch or close. Rendering a week again from the cache or its quiet refresh shows the finished state. Since issue #202 the cache lasts for the page visit, so a recap plays at most once per week per page visit: an interrupted recap does not play again on reopening (the week is cached); the **Replay** button plays it. On a later page visit it plays again only if it never finished, since the week is marked played only at the end.
 
 ## Tests
 

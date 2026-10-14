@@ -623,7 +623,7 @@ As a player, I want my own players marked in the match results, with my card's p
 **Acceptance criteria**
 - A player the user had as a counted card that week gets a filled tile (`var(--accent-ghost)` background) with a "YOUR CARD" label, or "YOUR SUB" for a card that was subbed in. The tile shows the user's card points for that game instead of the match points.
 - Other players show match points in the muted colour.
-- The MVP outline and the "YOUR CARD" tile can appear together on the same player.
+- The MVP outline and the "YOUR CARD" tile can appear together on the same player. *Changed by issue #202: the MVP is marked by a `--mark-mvp` "MVP" label instead of an outline; label and tile still appear together.*
 - The ownership mark uses a label and a filled shape, not colour alone.
 - On a match excluded from scoring there are no card points (`card_points` is null), so no tile is marked there.
 

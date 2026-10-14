@@ -11,7 +11,7 @@ Opened from the **Weekly Report** button at the top right of the header (logged-
 
 - **Title bar** — "Weekly Report" and an X close button.
 - **Week tabs** (`#weeklySummaryTabs`) — one tab per available week, newest first. These are the only tabs. Opening the popup selects the newest week, or the week the recap popup announced. The buttons are rebuilt only when the list of weeks changes; otherwise only the active mark moves.
-- **Switching weeks** — the week on screen stays, dimmed (60% opacity, 150 ms fade, no fade with reduced motion, `aria-busy="true"` on both column bodies), until the new week arrives; then both columns and their headers change together and both scroll to the top. If the player clicks several weeks quickly, the last one clicked is shown. A week already viewed during this opening shows at once from memory and then refreshes quietly; the memory is cleared when the popup closes and when results are revealed.
+- **Switching weeks** — the week on screen stays, dimmed (60% opacity, 150 ms fade, no fade with reduced motion, `aria-busy="true"` on both column bodies), until the new week arrives; then both columns and their headers change together and both scroll to the top. If the player clicks several weeks quickly, the last one clicked is shown. Clicking the week already shown does nothing. A week already viewed in this page visit shows at once from memory, with no dimming; it is fetched again only when that copy is more than 60 s old, and the quiet refresh changes the screen only if the data changed (it never replays the recap). The memory lasts for the page visit (closing the popup keeps it) and is cleared when results are revealed, on logout or a user switch, and when the list of weeks changes. Reopening within 60 s also reuses the list of weeks. See `markdown/features/core/weekly-summary.md`.
 - **Two columns** below the tabs, side by side: **My roster** (480 px) and **Match results** (the rest). Each has a fixed header and its own scrolling body with the shared thin `.k-scroll` scrollbar.
 - **Reveal footer** (`#weeklySummaryRevealFooter`) — a "Reveal results" button under both columns, shown while any listed week is unrevealed. It reveals every listed week at once, and is disabled while its request runs (#185).
 - **Size** — a fixed frame: at most 1280 px wide and exactly 85% of the window height, whatever the week's content; below 600 px, the full width less 16 px and 92% of the window height. The title bar, week tabs and column headers never move when the content changes.
@@ -41,13 +41,13 @@ Each card shows:
 - the player name (player link) and team name (team link),
 - the card's week points,
 - a tag row under the name, left to right in the order the bonuses are added: **RAW {points}**, one chip per modifier ("GPM +10% +1.6"), then the status tag (SUBBED IN / NOT COUNTED), if any. There is no rarity tag in this row. The row wraps. "Did not play" cards have no RAW or modifier chips,
-- one row per game the player played that week, always shown in full: date, "vs {opponent}" (team link), game number in the series (G1, G2…), WIN or LOSS (no tag if the result is unknown), an MVP tag that reads "MVP +{points}" with that game's MVP bonus, and the card's points for that game. A game excluded from scoring shows "Not scored". A card whose player played no games shows "No games this week".
+- one row per game the player played that week, always shown in full: date, "vs {opponent}" (team link), game number in the series (G1, G2…), WIN or LOSS (empty if the result is unknown), an MVP mark that reads "MVP +{points}" with that game's MVP bonus (`--mark-mvp`, no border), and the card's points for that game. A game excluded from scoring shows "Not scored". A card whose player played no games shows "No games this week". The rows are a fixed-column grid (date | opponent | game | result | MVP | points; on phones two lines: date, opponent and points, then game, result and MVP), so the columns line up across rows and cards and an MVP row is no taller than the others; a long opponent name wraps in its column. The player name and the card total in the card header share a baseline. See "Data rows" in the design system's "States and emphasis" rules (`.claude/skills/README.md`).
 
 The RAW value plus the rarity caption, the modifier chips and the MVP bonuses add up to the card's week points.
 
 ### Reveal animation (revealed week)
 
-Plays the first time a revealed week is shown in this browser (usually right after "Reveal results"); afterwards the week opens in the finished state above. Switching back to a week already shown during this opening of the popup shows the finished state; it does not replay.
+Plays the first time a revealed week is shown in this browser (usually right after "Reveal results"); afterwards the week opens in the finished state above. Showing a week again during this page visit (switching back, or reopening the popup) shows the finished state; it does not replay. A recap interrupted by a week switch or by closing the popup does not play again on reopening; **Replay** plays it (issue #202).
 
 - The column starts empty and the header reads "Week total 0.0 pts". Cards appear one at a time in reverse order, each at the top: its slot opens and pushes the earlier cards down, then the card slides in from the left.
 - The card being revealed has an orange border and glow; it goes when the card finishes.
@@ -67,7 +67,7 @@ Plays the first time a revealed week is shown in this browser (usually right aft
 ### Empty / loading / error
 
 - "Loading…" only when the columns are still empty (the first load); otherwise the previous week stays, dimmed, while the next one loads.
-- The API error text if a week fails to load, in place of both columns (the frame keeps its size). A week already shown during this opening keeps its content if a background refresh fails.
+- The API error text if a week fails to load, in place of both columns (the frame keeps its size). A week already shown during this page visit keeps its content if a background refresh fails.
 - "No cards on your roster this week." when the user had no cards for that week.
 
 ## Match results column
@@ -79,7 +79,7 @@ Plays the first time a revealed week is shown in this browser (usually right aft
 ### Content
 
 - Matches grouped by series. Each match shows both teams (logo and team link), the date, a "Not scored" badge for excluded matches and a VOD link when set.
-- After reveal: the winner is outlined with a "Winner" label, and each team's players appear as tiles (avatar, player link, points). The MVP has an outline and "MVP" label.
+- After reveal: the winning team's name is bold in `--mark-winner` under a "Winner" label, and each team's players appear as tiles (avatar, player link, points). The MVP tile has an "MVP" label in `--mark-mvp` on its own line above the avatar. Neither has a ring or outline; winner and MVP never share a colour or a form ("Emphasis inside data" in the design system's "States and emphasis" rules (`.claude/skills/README.md`)).
 - **Your cards:** a player the user had as a counted card that week gets a filled tile with a **YOUR CARD** label (**YOUR SUB** for a subbed-in card), showing the user's card points for that game in the accent colour. Other players show match points in the muted colour. On a match excluded from scoring no tile is marked, since there are no card points.
 - "No matches played during this week." when the week has none; "No weekly reports available yet." when no week is available.
 
@@ -89,6 +89,7 @@ The report follows a readability floor, checked by `backend/tests/test_weekly_re
 
 - **Sizes:** data the player reads is 13 px (`--fs-sm`): game rows, tags, bonus chips, notes, player names and points on result tiles, column meta, the dates. Small all-caps labels (MVP, YOUR CARD, WINNER, the points unit) are 11 px (`--fs-xs`), the minimum.
 - **Typeface:** Big Shoulders only at 13 px and up (titles, tags, chips, the rarity name under the thumbnail, the avatar initials, points). Labels smaller than that use Inter.
+- **Selection:** images (avatars, team logos, roster thumbnails) and buttons can't be selected or dragged; names, dates and points can. Thumbnails still open the card viewer and keep their focus outline. See "Selection" in the design system's "States and emphasis" rules (`.claude/skills/README.md`).
 - **Colour:** readable text uses `--fg-muted` (5.4:1 on cards) or brighter. `--fg-dim` (3.2:1) is only for borders and the pending-chip placeholder.
 - **Numbers:** all points use tabular numerals, so they line up.
 - **"Did not play" cards:** marked by a dashed border and transparent background, not by fading the whole card.

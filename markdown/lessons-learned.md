@@ -15,6 +15,14 @@ Format:
 ---
 
 ### 2026-10-14 — developer — testing
+**Problem:** Node harnesses that paste functions cut with `_fn_body` lose the `async` keyword (`withBusy` then fails to parse), and harnesses that load only `_escHtml` from app-globals.js (the #201 users table) break when a module starts calling a new global helper.
+**Solution:** When pasting an extracted function, re-add `async ` if the source has it (`_globals_src` in `test_issue_202_ui_feedback_polish.py`). When a module gains a call to a global helper, grep `backend/tests` for harnesses that load that module and add the helper there.
+
+### 2026-10-14 — developer — testing
+**Problem:** `test_issue_117` slices `_week_maintenance_loop` from its first `try:` to its first `except Exception`, so a nested try/except added inside the loop hides the later steps from that check.
+**Solution:** Put a new best-effort loop step in a helper that does its own try/except (`main._run_caster_tag_sync`) and call it from the loop. For best-effort work inside a request, use a savepoint wrapper (`caster_tags.sync_safely`, `own_card.grant_in_savepoint`).
+
+### 2026-10-14 — developer — testing
 **Problem:** The #186 Node harness's fake `El` has no `append`/`createTextNode`, and `innerHTML` writes create no children, so code that queries inside rendered markup or uses `append()` fails there (and `loadRoster` swallows the error into the status line).
 **Solution:** Use `appendChild`/`replaceChildren` in app code; for markup queries, patch the harness's `innerHTML` setter in your test (see `_ROSTER_HARNESS` in `test_issue_155_my_team_motion.py`). When a harness test fails oddly, print `status()` first.
 

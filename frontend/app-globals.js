@@ -234,10 +234,39 @@ function setStatus(id, msg, ok = true) {
   el.className = "status " + (ok ? "ok" : "err");
 }
 
-// Issue #169: the ADMIN badge comes only from the server's is_admin flag. A fixed
-// string, styled apart from the filled tag chips (style.css .admin-badge).
+// Issue #169: the ADMIN badge comes only from the server's is_admin flag, as a fixed
+// string. Issue #202: it is a role badge in the admin colour; no tag can take that colour.
 function adminBadgeHtml(isAdmin) {
-  return isAdmin === true ? `<span class="admin-badge" title="Kana Cards admin">ADMIN</span>` : "";
+  return isAdmin === true ? `<span class="role-badge role-badge-admin" title="Kana Cards admin">ADMIN</span>` : "";
+}
+
+// Issue #202: role badge variant and hover reason per tag key; any other tag uses the
+// neutral tag variant with its label as the reason.
+const _TAG_BADGE_VARIANTS = { caster: "caster", season_winner: "winner" };
+const _TAG_BADGE_REASONS = {
+  caster: "Verified caster: an approved tournament streamer",
+  season_winner: "Won a previous season",
+};
+
+function _ownValue(map, key) {
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+}
+
+// A user tag as a role badge. opts.title replaces the reason, opts.suffix is added to the
+// label (Admin › User Management marks synced tags "(auto)").
+function tagBadgeHtml(tag, opts = {}) {
+  const key = String((tag && tag.key) ?? "");
+  const label = String((tag && tag.label) ?? key);
+  const variant = _ownValue(_TAG_BADGE_VARIANTS, key) || "tag";
+  const title = opts.title || _ownValue(_TAG_BADGE_REASONS, key) || label;
+  const text = opts.suffix ? `${label} ${opts.suffix}` : label;
+  return `<span class="role-badge role-badge-${variant}" title="${_escHtml(title)}">${_escHtml(text)}</span>`;
+}
+
+// Issue #202: a neutral status badge (TESTER, ID SHARED, Steam/Twitch links, "(You)").
+function statusBadgeHtml(label, title) {
+  const tip = title ? ` title="${_escHtml(title)}"` : "";
+  return `<span class="status-badge"${tip}>${_escHtml(label)}</span>`;
 }
 
 function _escHtml(s) {

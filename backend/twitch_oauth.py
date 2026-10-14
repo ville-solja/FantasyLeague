@@ -38,6 +38,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func
 
+import caster_tags
 import sessions
 import soft_accounts
 from database import credit_tokens, get_db
@@ -306,6 +307,7 @@ def connect_account(db, user: User, sub: str) -> str:
     user.pending_merge_user_id = pending
     _audit(db, "twitch_connected", actor_id=user.id, actor_username=user.display_name,
            detail=f"user_id={user.id}" + (f" pending_merge_user_id={pending}" if pending else ""))
+    caster_tags.sync_safely(db)  # issue #201: approved streamers get the Caster tag
     if pending:
         db.commit()
         return "merge_ready"
@@ -418,6 +420,7 @@ def disconnect(db, current_user: dict) -> dict:
             synchronize_session=False)
     _audit(db, "twitch_disconnected", actor_id=user.id, actor_username=user.display_name,
            detail=f"user_id={user.id}")
+    caster_tags.sync_safely(db, reason="twitch_disconnected")
     db.commit()
     return {"connected": False, "changed": True}
 

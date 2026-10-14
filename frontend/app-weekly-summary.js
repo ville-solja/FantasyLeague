@@ -5,17 +5,76 @@ let _weeklySummaryRosterCards = {};
 let _weeklyRecapPromptWeek = null;
 // Issue #159: bumped on every week selection; a response for an older selection is ignored.
 let _weeklySummaryReq = 0;
-// week_id -> week data fetched while the popup is open; cleared on close and on reveal.
+// Issue #202: week_id -> {data, at} (at = Date.now() of the fetch), kept for the page
+// session. Cleared on reveal, on logout or user switch (clearWeeklySummaryCache) and when
+// the week list's signature changes. Closing the popup keeps it.
 const _weeklySummaryCache = new Map();
+// Cached weeks and the week list younger than this are shown without a fetch.
+const _WEEKLY_SUMMARY_FRESH_MS = 60000;
+// Date.now() of the last GET /weekly-summary (0 = never), that list's signature and
+// whether it reported unseen reports.
+let _weeklySummaryListAt = 0;
+let _weeklySummaryListSig = null;
+let _weeklySummaryHasUnseen = false;
+// The activeUserId the cached weeks and list belong to. A different signed-in user
+// (including a sign-in in another tab, which shares the cookie) drops them.
+let _weeklySummaryCacheUser = null;
 // week_id:label:revealed of the tab buttons on screen; they are rebuilt only when it changes.
 let _weeklySummaryTabsSig = null;
+
+function _weeklySummaryFresh(at) {
+  return !!at && Date.now() - at < _WEEKLY_SUMMARY_FRESH_MS;
+}
+
+function _weeklySummaryListSignature() {
+  return _weeklySummaryWeeks.map(w => `${w.week_id}:${w.label}:${w.revealed}`).join('|');
+}
+
+// Stores a fetched week list. A changed signature (weeks added, renamed or revealed
+// elsewhere) drops every cached week.
+function _setWeeklySummaryList(data) {
+  _ensureWeeklySummaryOwner();
+  _weeklySummaryWeeks = data.weeks || [];
+  _weeklySummaryHasUnseen = !!data.has_unseen;
+  _weeklySummaryListAt = Date.now();
+  const sig = _weeklySummaryListSignature();
+  if (sig !== _weeklySummaryListSig) _weeklySummaryCache.clear();
+  _weeklySummaryListSig = sig;
+}
+
+function _weeklySummaryCurrentUser() {
+  return typeof activeUserId === 'undefined' || activeUserId == null ? null : String(activeUserId);
+}
+
+// Drops the cache when it belongs to another user than the one signed in now.
+function _ensureWeeklySummaryOwner() {
+  if (_weeklySummaryCacheUser !== _weeklySummaryCurrentUser()) clearWeeklySummaryCache();
+}
+
+// Logout and user switch (app-auth.js): nothing of the previous user's reports is kept.
+// Bumping the request counter also drops a week fetch still in flight for that user.
+function clearWeeklySummaryCache() {
+  _weeklySummaryReq += 1;
+  _stopRecap();
+  _setWeeklySummaryLoading(false);
+  _weeklySummaryCache.clear();
+  _weeklySummaryCacheUser = _weeklySummaryCurrentUser();
+  _weeklySummaryListAt = 0;
+  _weeklySummaryListSig = null;
+  _weeklySummaryHasUnseen = false;
+  _weeklySummaryActiveWeekId = null;
+  ['weeklySummaryRoster', 'weeklySummaryContent'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) renderIfChanged(el, '');
+  });
+}
 
 async function checkWeeklySummaryHighlight() {
   try {
     const res = await fetch(`${API}/weekly-summary`);
     if (!res.ok) return;
     const data = await res.json();
-    _weeklySummaryWeeks = data.weeks || [];
+    _setWeeklySummaryList(data);
     const badge = document.getElementById('weeklyReportBadge');
     if (badge) badge.style.display = data.has_unseen ? '' : 'none';
     maybeShowWeeklyRecapPrompt(data);
@@ -25,13 +84,14 @@ async function checkWeeklySummaryHighlight() {
 async function openWeeklySummary(weekId) {
   document.getElementById('weeklySummaryModal').classList.remove('hidden');
   await loadWeeklySummaryList(weekId);
-  await markWeeklySummarySeen();
+  if (_weeklySummaryHasUnseen) await markWeeklySummarySeen();
 }
 
+// The cache stays (issue #202); the next opening selects its week again.
 function closeWeeklySummary() {
   _stopRecap();
   _weeklySummaryReq += 1;
-  _weeklySummaryCache.clear();
+  _weeklySummaryActiveWeekId = null;
   _setWeeklySummaryLoading(false);
   document.getElementById('weeklySummaryModal').classList.add('hidden');
 }
@@ -48,12 +108,16 @@ function _setWeeklySummaryColumns(rosterHtml, resultsHtml) {
   document.getElementById('weeklySummaryResultsMeta').textContent = '';
 }
 
+// Reuses a week list younger than _WEEKLY_SUMMARY_FRESH_MS; otherwise fetches it once.
 async function loadWeeklySummaryList(weekId) {
+  _ensureWeeklySummaryOwner();
   try {
-    const res = await fetch(`${API}/weekly-summary`);
-    const data = await res.json();
-    if (!res.ok) { _setWeeklySummaryColumns('', _weeklySummaryMessage(data.detail, true)); return; }
-    _weeklySummaryWeeks = data.weeks || [];
+    if (!_weeklySummaryFresh(_weeklySummaryListAt)) {
+      const res = await fetch(`${API}/weekly-summary`);
+      const data = await res.json();
+      if (!res.ok) { _setWeeklySummaryColumns('', _weeklySummaryMessage(data.detail, true)); return; }
+      _setWeeklySummaryList(data);
+    }
     renderWeeklySummaryTabs();
     if (_weeklySummaryWeeks.length) {
       const wanted = _weeklySummaryWeeks.find(w => w.week_id === weekId);
@@ -116,7 +180,11 @@ function _scrollWeeklySummaryColumnsTop() {
 // Issue #159: the frame never empties. A cached week renders at once and refreshes
 // quietly; otherwise the previous week stays, dimmed, until the new one arrives,
 // and both columns swap in one update. "Loading…" shows only in empty columns.
+// Issue #202: the week already selected is a no-op, and a cached week younger than
+// _WEEKLY_SUMMARY_FRESH_MS is not fetched again.
 async function selectWeeklySummaryTab(weekId) {
+  _ensureWeeklySummaryOwner();
+  if (weekId === _weeklySummaryActiveWeekId) return;
   const req = ++_weeklySummaryReq;
   _stopRecap();
   const weekChanged = _weeklySummaryActiveWeekId !== weekId;
@@ -124,11 +192,13 @@ async function selectWeeklySummaryTab(weekId) {
   _markActiveWeeklySummaryTab(weekId);
   const rosterBody = document.getElementById('weeklySummaryRoster');
   const resultsBody = document.getElementById('weeklySummaryContent');
-  const cached = _weeklySummaryCache.get(weekId);
+  const entry = _weeklySummaryCache.get(weekId);
+  const cached = entry ? entry.data : null;
   if (cached) {
     _setWeeklySummaryLoading(false);
     renderWeeklySummaryContent(cached, {playRecap: false});
     if (weekChanged) _scrollWeeklySummaryColumnsTop();
+    if (_weeklySummaryFresh(entry.at)) return;
   } else if (rosterBody.innerHTML.trim() === '' && resultsBody.innerHTML.trim() === '') {
     _setWeeklySummaryColumns(_weeklySummaryMessage('Loading…'), _weeklySummaryMessage('Loading…'));
   } else {
@@ -143,7 +213,7 @@ async function selectWeeklySummaryTab(weekId) {
       if (!cached) _setWeeklySummaryColumns('', _weeklySummaryMessage(data.detail, true));
       return;
     }
-    _weeklySummaryCache.set(weekId, data);
+    _weeklySummaryCache.set(weekId, {data, at: Date.now()});
     // A cached week has had its first view in this opening: never replay the recap.
     renderWeeklySummaryContent(data, {playRecap: !cached});
     if (weekChanged && !cached) _scrollWeeklySummaryColumnsTop();
@@ -172,14 +242,16 @@ function _recapPct(x) {
 
 // mvpStep: the card's breakdown step for this game's MVP bonus (issue #152), if any.
 function _weeklySummaryGameHtml(g, mvpStep, pending) {
-  const result = g.won == null ? ''
+  // Issue #202: every cell is always emitted (empty when not applicable), so the
+  // fixed-column grid lines up across rows and cards.
+  const result = g.won == null ? '<span class="weekly-summary-game-result"></span>'
     : `<span class="weekly-summary-game-result ${g.won ? 'win' : 'loss'}">${g.won ? 'WIN' : 'LOSS'}</span>`;
   const bonus = mvpStep
     ? ` <span class="recap-mvp-bonus">+${_escHtml(Number(mvpStep.points || 0).toFixed(1))}</span>`
     : '';
   const mvp = g.is_mvp
-    ? `<span class="weekly-summary-game-mvp${pending && mvpStep ? ' pending' : ''}"><span>MVP</span>${bonus}</span>`
-    : '';
+    ? `<span class="weekly-summary-game-mvp mark-mvp${pending && mvpStep ? ' pending' : ''}"><span>MVP</span>${bonus}</span>`
+    : '<span class="weekly-summary-game-mvp-none"></span>';
   const pts = g.scored
     ? `<span class="weekly-summary-game-pts">${Number(g.points).toFixed(1)}</span>`
     : '<span class="weekly-summary-game-pts not-scored">Not scored</span>';
@@ -223,7 +295,7 @@ function _weeklySummaryRosterCardHtml(c, revealed, pending = false) {
               onclick="_weeklySummaryShowCard(${Number(c.card_id)})"
               aria-label="Open card ${_escHtml(c.player_name)}">
         <span class="weekly-summary-roster-initials" aria-hidden="true">${_escHtml(initials)}</span>
-        ${avatar ? `<img class="weekly-summary-roster-avatar" src="${_escHtml(avatar)}" alt="" loading="lazy" onerror="this.remove()" />` : ''}
+        ${avatar ? `<img class="weekly-summary-roster-avatar" src="${_escHtml(avatar)}" alt="" loading="lazy" draggable="false" onerror="this.remove()" />` : ''}
       </button>
       <span class="weekly-summary-roster-thumb-rarity" aria-hidden="true">${_escHtml(rarity.toUpperCase())}</span>
       ${rarityCaption}
@@ -612,7 +684,7 @@ function _weeklySummaryTeamHtml(team) {
   // to actually read, rather than cropping the logo into a tiny circle.
   const logoUrl = team.logo_url && (team.logo_url.startsWith('/') ? team.logo_url : _safeUrl(team.logo_url));
   const logo = logoUrl
-    ? `<img class="weekly-summary-team-logo" src="${_escHtml(logoUrl)}" alt="" onerror="this.style.display='none'">`
+    ? `<img class="weekly-summary-team-logo" src="${_escHtml(logoUrl)}" alt="" draggable="false" onerror="this.style.display='none'">`
     : '';
   return `${logo}${teamLink(team.id, team.name || 'Unknown')}`;
 }
@@ -620,11 +692,14 @@ function _weeklySummaryTeamHtml(team) {
 function _weeklySummaryTeamColHtml(team, isWinner, isRight) {
   const sideClass = isRight ? ' right' : '';
   const winnerClass = isWinner ? ' weekly-summary-winner' : '';
-  const winnerLabel = isWinner ? '<div class="weekly-summary-winner-label">Winner</div>' : '';
+  // Issue #202: the shared .mark-winner marks the label and the name (a team link or,
+  // without a team id, plain text).
+  const winnerLabel = isWinner ? '<div class="weekly-summary-winner-label mark-winner">Winner</div>' : '';
+  const markClass = isWinner ? ' mark-winner' : '';
   return `
     <div class="weekly-summary-match-team-col${sideClass}${winnerClass}">
       ${winnerLabel}
-      <div class="weekly-summary-match-team-inner">${_weeklySummaryTeamHtml(team)}</div>
+      <div class="weekly-summary-match-team-inner${markClass}">${_weeklySummaryTeamHtml(team)}</div>
     </div>`;
 }
 
@@ -638,7 +713,7 @@ function _weeklySummaryPlayerHtml(p, subbedInPlayerIds) {
     : '';
   const pointsClass = owned ? 'weekly-summary-points-rostered' : 'weekly-summary-points-neutral';
   const mvpClass = p.is_mvp ? ' weekly-summary-mvp' : '';
-  const mvpLabel = p.is_mvp ? '<div class="weekly-summary-mvp-label">MVP</div>' : '';
+  const mvpLabel = p.is_mvp ? '<div class="weekly-summary-mvp-label mark-mvp">MVP</div>' : '';
   const avatar = _safeUrl(p.avatar_url);
   let pts = '—';
   if (owned) pts = Number(p.card_points).toFixed(1);
@@ -646,7 +721,7 @@ function _weeklySummaryPlayerHtml(p, subbedInPlayerIds) {
   return `
     <div class="weekly-summary-player${mvpClass}${ownedClass}">
       ${mvpLabel}${ownedLabel}
-      ${avatar ? `<img class="weekly-summary-avatar" src="${_escHtml(avatar)}" alt="" onerror="this.style.display='none'">` : ''}
+      ${avatar ? `<img class="weekly-summary-avatar" src="${_escHtml(avatar)}" alt="" draggable="false" onerror="this.style.display='none'">` : ''}
       <div>${playerLink(p.player_id, p.name)}</div>
       <div class="${pointsClass}">${_escHtml(pts)}</div>
     </div>`;
@@ -744,18 +819,22 @@ async function revealAllWeeklySummaries() {
       if (!res.ok) return;
       // Revealed data must never come from a pre-reveal cache entry.
       _weeklySummaryWeeks.forEach(w => { _weeklySummaryCache.delete(w.week_id); w.revealed = true; });
+      _weeklySummaryListSig = _weeklySummaryListSignature();
       _updateWeeklySummaryRevealFooter();
       revealed = true;
     } catch (_) {}
   });
   if (revealed && _weeklySummaryActiveWeekId != null) {
-    await selectWeeklySummaryTab(_weeklySummaryActiveWeekId);
+    const weekId = _weeklySummaryActiveWeekId;
+    _weeklySummaryActiveWeekId = null;  // select the same week again, now revealed
+    await selectWeeklySummaryTab(weekId);
   }
 }
 
 async function markWeeklySummarySeen() {
   try {
     await fetch(`${API}/weekly-summary/seen`, { method: 'POST' });
+    _weeklySummaryHasUnseen = false;
     const badge = document.getElementById('weeklyReportBadge');
     if (badge) badge.style.display = 'none';
   } catch (_) {}

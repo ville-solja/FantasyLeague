@@ -11,7 +11,7 @@ see `markdown/features/reference/schedule-visuals.md`.
 ### Header
 
 - **Season Schedule** title.
-- **Hide results** toggle (`#scheduleHideToggle`, `aria-pressed`). The label always reads "Hide results"; the pressed state (orange outline) shows that hide mode is on. Hide mode is on by default and the choice is remembered in the browser (`kc_schedule_hide`).
+- **Hide results** toggle (`#scheduleHideToggle`, `aria-pressed`). The label always reads "Hide results"; the pressed state (orange outline) shows that hide mode is on. Like every selected control, the pressed toggle inverts (orange fill) on hover and keyboard focus ("Selected + hover" in the design system's "States and emphasis" rules (`.claude/skills/README.md`)). Hide mode is on by default and the choice is remembered in the browser (`kc_schedule_hide`).
 - **Refresh** button: reloads the schedule without clearing the screen.
 - Stale notice (`#scheduleStale`): shown when the server returned stale cached data ("Cached data from …").
 
@@ -30,7 +30,7 @@ The countdown is computed when the tab renders (tab switch or refresh), not on a
 ### Week strip (`#scheduleWeeks`)
 
 - One chip per fantasy week (`W1`, `W2` … from the admin week labels) with its start date. With no fantasy weeks, one chip per Monday-start calendar week, labelled with its date range.
-- The current week's chip has an orange border, "This week" in orange and `aria-current="date"`. Weeks before the current one have a darker fill; upcoming weeks a dashed border. The selected chip is brighter (`aria-pressed="true"`).
+- The current week's chip has an orange border, "This week" in orange and `aria-current="date"`. Weeks before the current one have a darker fill; upcoming weeks a dashed border. The selected chip is brighter (`aria-pressed="true"`) and inverts on hover and keyboard focus, like the selected division chip.
 - A small orange marker sits on the chip of every week that still has hidden results.
 - Previous / next arrow buttons and a **This week** button (disabled while the current week is shown).
 - The tab opens on the current week: the week containing now, else the next to start, else the last. The selected week survives a refresh.
@@ -50,7 +50,7 @@ Each row: time and division badge (plus the league-week tag when it applies), te
 | State | Centre | Actions |
 |---|---|---|
 | Upcoming | "vs" | Stream link or label. Time shows "Time TBD" for an unscheduled fixture; it stays upcoming until its league week ends. |
-| Live | red "LIVE" tag, plus the partial score when results are visible | "Watch live" stream link |
+| Live | red "LIVE" status badge, plus the partial score when results are visible | "Watch live" stream link |
 | Hidden (played, hide mode on, not revealed) | "Played" | **Reveal** |
 | Shown | series score in display type; winner bold, loser muted | **N games** (`aria-expanded`), VOD/stream link |
 
@@ -59,7 +59,7 @@ Each row: time and division badge (plus the league-week tag when it applies), te
 - A played series with no resolved games shows its score and no games button.
 - Team names open the team popup; MVP names open the player popup. In a hidden row (and a hidden Latest result card) team names are plain text, because the team popup lists results.
 - A fixture past its date with no resolved games shows "No result" in the centre and no games button, instead of "vs". A "Time TBD" fixture reads "No result" only after its league week has ended (`week_start` + 7 days); until then it shows "Time TBD" and "vs".
-- **League week tag:** when a feed fixture's league week differs from the number in the fantasy week label it is listed under, a small muted "League week N" tag follows the division badge (e.g. a league week-4 match played on the next Monday evening, listed in Week 5). No tag when the numbers match, when the week label has no number, with calendar weeks, or for the Google Sheet source and DB-derived results. On narrow rows the tag wraps under the time and badge.
+- **League week tag:** when a feed fixture's league week differs from the number in the fantasy week label it is listed under, a neutral "League week N" status badge follows the division badge (status badges: the design system's "States and emphasis" rules (`.claude/skills/README.md`)) (e.g. a league week-4 match played on the next Monday evening, listed in Week 5). No tag when the numbers match, when the week label has no number, with calendar weeks, or for the Google Sheet source and DB-derived results. On narrow rows the tag wraps under the time and badge.
 - **Caster TBD:** an upcoming fixture with no stream link yet shows "Caster TBD" in italics (or the feed's stream label, if it named one) and a greyed-out, dashed Watch button that is not a link.
 - **Streamer name:** before each watch button, in muted text: the feed's stream label, or else the channel taken from the stream URL (`twitch.tv/kanaliiga` → "kanaliiga", `youtube.com/@name` → "name", other sites → their host).
 - **Stream and watch links** are outlined buttons in the display face with an arrow icon (they open in a new tab), next to the games button. A live match's "Watch live" link is the filled orange button. A stream label without a URL stays plain muted text.

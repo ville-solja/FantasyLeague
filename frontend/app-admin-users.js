@@ -11,6 +11,7 @@ async function loadUsers() {
     const rows = await res.json();
     if (!res.ok) return setStatus("usersStatus", rows.detail, false);
     _cachedUsers = rows;
+    _renderAdoptionSummary(rows);
     _renderUsers(rows);
     setStatus("usersStatus", "");
     loadPlayerIdClaims();
@@ -64,7 +65,7 @@ function _fmtUserDate(ts) {
 // seen; no password, tag or admin actions; delete is available.
 function _renderTwitchViewerRow(u) {
   return `<tr data-user-id="${u.id}">
-      <td>${_escHtml(u.username)}${u.twitch_identity_shared ? ' <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#aaa;font-size:0.7rem;">ID SHARED</span>' : ""}</td>
+      <td>${_escHtml(u.username)}${u.twitch_identity_shared ? statusBadgeHtml("ID SHARED", "Twitch identity shared with the extension") : ""}</td>
       <td style="font-size:0.8rem;color:#aaa;">${u.card_count} cards · created ${_fmtUserDate(u.created_at)} · last seen ${_fmtUserDate(u.last_seen_at)}</td>
       <td>${u.tokens}</td>
       <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -91,25 +92,53 @@ async function deleteTwitchViewer(userId) {
   }
 }
 
+// Issue #201: Steam and Twitch link adoption over all website accounts, demo accounts
+// excluded. Computed from the full list, so the search box never changes it.
+function _adoptionSummaryText(rows) {
+  const accounts = rows.filter(u => (u.account_type || "full") === "full" && !u.is_demo);
+  const n = accounts.length;
+  if (!n) return "No website accounts yet";
+  const steam = accounts.filter(u => u.steam_linked).length;
+  const twitch = accounts.filter(u => u.twitch_identity_shared).length;
+  const pct = k => Math.round((k / n) * 100);
+  return `${n} website accounts · Steam linked ${steam} (${pct(steam)}%) · Twitch connected ${twitch} (${pct(twitch)}%)`;
+}
+
+function _renderAdoptionSummary(rows) {
+  const el = document.getElementById("userAdoptionSummary");
+  if (!el) return;
+  const show = _userAccountType() === "full";
+  el.hidden = !show;
+  el.textContent = show ? _adoptionSummaryText(rows) : "";
+}
+
+function _linkBadges(u) {
+  return (u.steam_linked ? statusBadgeHtml("Steam", "Steam linked") : "") +
+    (u.twitch_identity_shared ? statusBadgeHtml("Twitch", "Twitch connected") : "");
+}
+
+const _AUTO_TAG_TITLE = "Given automatically to approved streamers; remove the channel from Approved streamers to take it away";
+
+function _tagChipLabel(t) {
+  return t.source === "caster_sync" ? `${_escHtml(t.label)} (auto)` : _escHtml(t.label);
+}
+
 function _renderUsers(rows) {
   const search = (document.getElementById("userSearch")?.value || "").toLowerCase();
   const visible = search ? rows.filter(u => u.username.toLowerCase().includes(search)) : rows;
   document.getElementById("usersBody").innerHTML = visible.map(u => {
     if (u.account_type === "twitch") return _renderTwitchViewerRow(u);
-    const testerBadge = u.is_tester
-      ? ` <span class="badge" style="background:var(--k-ink-700,#2a2a30);color:#888;font-size:0.7rem;">TESTER</span>`
-      : "";
-    const adminBadge = u.is_admin
-      ? ` <span class="badge" style="background:var(--k-flame-700,#8a2e0c);color:#fff;font-size:0.7rem;">ADMIN</span>`
-      : "";
-    const tagChips = (u.tags || []).map(t =>
-      `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.65rem;padding:1px 6px;border-radius:2px;margin-right:3px;">${t.label}</span>`
-    ).join("");
+    const testerBadge = u.is_tester ? statusBadgeHtml("TESTER", "Tester account") : "";
+    const adminBadge = adminBadgeHtml(u.is_admin);
+    const linkBadges = _linkBadges(u);
+    // Issue #201: a synced Caster tag reads "Caster (auto)" and explains where it comes from.
+    const tagChips = (u.tags || []).map(t => tagBadgeHtml(t,
+      t.source === "caster_sync" ? { title: _AUTO_TAG_TITLE, suffix: "(auto)" } : {})).join("");
     const adminToggleBtn = u.id === activeUserId ? "" :
       `<button class="ghost" style="font-size:0.8rem;" onclick="toggleAdmin(${u.id})">${u.is_admin ? "Demote from admin" : "Promote to admin"}</button>`;
     return `<tr data-user-id="${u.id}">
-      <td>${_escHtml(u.username)}${testerBadge}${adminBadge}</td>
-      <td>${tagChips || '<span style="color:#555;font-size:0.8rem;">—</span>'}</td>
+      <td>${_escHtml(u.username)}${testerBadge}${adminBadge}${linkBadges}</td>
+      <td>${tagChips ? `<span class="badge-list">${tagChips}</span>` : '<span class="table-empty">—</span>'}</td>
       <td>${u.tokens}</td>
       <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <input type="number" min="1" value="1" id="grant_${u.id}" style="width:60px;flex:none;" />
@@ -134,15 +163,20 @@ function openTagManager(userId) {
   if (!row) return;
   const user = _cachedUsers.find(u => u.id === userId);
   if (!user) return;
-  const userTagKeys = new Set((user.tags || []).map(t => t.key));
+  const userTags = new Map((user.tags || []).map(t => [t.key, t]));
   const tagControls = _allTags.length
     ? _allTags.map(t => {
-        const has = userTagKeys.has(t.key);
-        const btn = has
+        const held = userTags.get(t.key);
+        if (held && held.source === "caster_sync") {
+          return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;" title="${_AUTO_TAG_TITLE}">
+          <span style="font-size:0.8rem;">${_tagChipLabel(held)}</span>
+        </span>`;
+        }
+        const btn = held
           ? `<button class="danger" style="padding:2px 8px;font-size:0.75rem;" onclick="revokeUserTag(${userId},${t.id})">Revoke</button>`
           : `<button class="secondary" style="padding:2px 8px;font-size:0.75rem;" onclick="grantUserTag(${userId},${t.id})">Grant</button>`;
         return `<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;">
-          <span style="font-size:0.8rem;">${t.label}</span>${btn}
+          <span style="font-size:0.8rem;">${_escHtml(t.label)}</span>${btn}
         </span>`;
       }).join("")
     : `<span style="color:#555;font-size:0.8rem;">No tag definitions yet.</span>`;
@@ -555,9 +589,13 @@ function _twitchChannelRow(c, actions) {
     : `<span style="color:#888">Name unknown</span>`;
   const date = t => t ? new Date(Number(t) * 1000).toLocaleDateString() : "—";
   const note = c.from_env ? `<div style="color:#888;font-size:12px">from server settings</div>` : "";
+  // Issue #201: the website account whose connected Twitch is this channel gets the Caster tag.
+  const account = c.linked_username
+    ? `<div style="font-size:12px">Account: ${_escHtml(c.linked_username)}</div>`
+    : `<div style="color:#888;font-size:12px">No linked account</div>`;
   const buttons = actions.map(([action, label, cls]) =>
     `<button class="${cls}" onclick="twitchChannelAction('${_escHtml(c.channel_id)}', '${action}')">${label}</button>`).join(" ");
-  return `<tr><td>${name}${note}</td><td>${_escHtml(c.channel_id)}</td>` +
+  return `<tr><td>${name}${note}${account}</td><td>${_escHtml(c.channel_id)}</td>` +
     `<td>${date(c.first_seen_at)}</td><td>${date(c.last_seen_at)}</td><td>${buttons}</td></tr>`;
 }
 

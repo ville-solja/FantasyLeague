@@ -560,11 +560,11 @@ As a player reading the Weekly Report, I want the popup window to stay the same 
   - `selectWeeklySummaryTab()` no longer writes "Loading…" over existing content. The previous week's columns stay visible, dimmed by a `.is-loading` class (opacity about 0.6, a 150 ms fade, no animation with reduced motion), with `aria-busy="true"` on both column bodies.
   - When the new week's data arrives, both columns and their headers are replaced in one update, and both bodies scroll to the top.
   - A slow or out-of-order response for a week the player has already left is ignored, using a request counter, so it can't overwrite the week now shown.
-- **Week cache:** weeks fetched while the popup is open are kept in memory (`_weeklySummaryCache`, keyed by week id). Switching back to one renders it at once, then refreshes quietly in the background with `renderIfChanged`. The cache is cleared when the popup closes, and for the revealed weeks on "Reveal results" (`revealAllWeeklySummaries`, the only reveal path), so revealed data is never stale.
+- **Week cache:** weeks fetched while the popup is open are kept in memory (`_weeklySummaryCache`, keyed by week id). Switching back to one renders it at once, then refreshes quietly in the background with `renderIfChanged`. The cache is cleared when the popup closes, and for the revealed weeks on "Reveal results" (`revealAllWeeklySummaries`, the only reveal path), so revealed data is never stale. *Changed by issue #202: the cache now lasts for the page visit (closing keeps it; entries older than 60 s refresh quietly), see "Reopening the Weekly Report Doesn't Flash" below.*
 - **Tab bar:** `renderWeeklySummaryTabs()` updates the week tab bar in place. It rebuilds the buttons only when the list of weeks (ids, labels, reveal state) changed, and otherwise only moves the `active` class.
 - **First open:** the popup shows its full frame immediately, with "Loading…" in the empty columns only on that first load.
 - **Failure path:** when loading a week fails, the error replaces that week's columns (there is nothing correct to keep). The frame stays the same size, and the dimming is removed. A cached week whose quiet refresh fails keeps its content.
-- **Recap animation (#152):** it still plays only on a week's first revealed view and is stopped on a week switch, as today. Re-rendering a week during the same opening (from the cache or its quiet refresh) doesn't replay it; a recap interrupted by a week switch plays again on a later opening.
+- **Recap animation (#152):** it still plays only on a week's first revealed view and is stopped on a week switch, as today. Re-rendering a week during the same opening (from the cache or its quiet refresh) doesn't replay it; a recap interrupted by a week switch plays again on a later opening. *Changed by issue #202: with the page-visit cache, an interrupted recap does not play again on reopening; the Replay button plays it.*
 
 ---
 
@@ -806,3 +806,107 @@ As a player, I want to notice when I receive tokens, so that MVP drops and grant
   - spending tokens (a draw) updates instantly;
   - the first display after page load animates only if the balance rose since the value last stored for this user (`localStorage` `tokensSeen:<user id>`).
 - **Reduced motion:** instant.
+
+## Design-System States and Emphasis (issue #202)
+
+Plan: `markdown/plans/plan-issue-202-ui-feedback-polish.md`.
+
+### The Design System Defines States and Emphasis
+**User story**
+As a developer or designer, I want the rules for selected, badge, self, emphasis, selection and data-row patterns written in the design system and backed by tokens, so that every surface applies them the same way instead of inventing its own.
+
+**Acceptance criteria**
+- **New section:** `.claude/skills/README.md` gets a "States and emphasis" section under VISUAL FOUNDATIONS with these rules, each naming its tokens and shared class:
+  - **Selected:** accent text plus a 2 px accent underline (tabs) or a 1.5–2 px border (chips, toggles). The schedule chips keep their neutral selected border, because an accent border there marks the current week.
+  - **Selected + hover / focus-visible:** inverted, with an `--accent` fill and `--accent-fg` text, through one shared selector list. Unselected hover stays as it is (muted → `--fg`).
+  - **Role badges:** one family (`.role-badge`): display font, bold, `--fs-sm` (the readability rule allows Big Shoulders only at `--fs-sm` and up), uppercase, `--tr-wider`. Coloured text, no fill, a 1 px border in the same colour, `--r-xs` (2 px). Every badge has a `title` giving its reason. Rarity colours are never used for roles.
+  - **Status badges** (LIVE, league week, ID SHARED, Steam/Twitch, TESTER, "(You)"): the same type and shape, in neutral (`--fg-muted` text, `--border` outline), so they read as information rather than roles. LIVE keeps its semantic red text.
+  - **Self (the signed-in user):** a full-row `--row-self-bg` tint and bold text, plus a "(You)" label in the badge style. No left bars and no inline colours.
+  - **Emphasis inside data:**
+    - the winning side is `--mark-winner` text, bold, with a label;
+    - the MVP is a `--mark-mvp` label before the name;
+    - the two never share a colour or a form.
+    - No rings or outlines around floating elements; borders belong to controls and cards only.
+  - **Selection:** images and controls are `user-select: none` and not draggable. Names, dates, numbers and prose stay selectable.
+  - **Data rows:** repeated rows (game lists, standings, tables) use a fixed-column grid with `tabular-nums` on numbers. Inline chips must not change row height.
+- **Tokens:** `colors_and_type.css` gets the semantic tokens below, in both copies, which stay identical (the existing test):
+  - `--state-selected-hover-bg`, `--state-selected-hover-fg`;
+  - `--badge-admin`, `--badge-winner`, `--badge-caster`, `--badge-tag`, `--badge-status`;
+  - `--row-self-bg`;
+  - `--mark-winner`, `--mark-mvp`.
+- **`/ui-design`:** its core brand rules list in `.claude/commands/ui-design.md` gains one line pointing to "States and emphasis".
+- **Shared classes:** `style.css` gets a "Shared states" section (before GUIDED TOUR) holding the shared classes and selectors. Surfaces use these classes instead of their own copies.
+
+### Selected Controls Respond to Hover Everywhere
+**User story**
+As a player, I want every selected tab, chip or toggle to react when I hover it, so that every control gives the same feedback.
+
+**Acceptance criteria**
+- **Covered controls:** all seven selected controls follow the Selected + hover rule through one shared selector list:
+  - main tabs (`.tab.active`);
+  - Weekly Report week tabs (`.weekly-summary-tab-btn.active`);
+  - How to Play subtabs (`.howtoplay-tab-btn.active`);
+  - Admin subtabs (`.admin-tab-btn.active`);
+  - Schedule division chips (`.schedule-div-chip.active`);
+  - Schedule week chips (`.schedule-week-chip.selected`);
+  - the Schedule hide-results toggle when pressed (`.schedule-hide-toggle[aria-pressed="true"]`).
+- **Focus:** `:focus-visible` on a selected control shows the same style, and the focus outline is kept.
+- **Unselected hover:** unchanged.
+
+### Badges Look Like One Family and Explain Themselves
+**User story**
+As a player, I want role and status badges to look consistent and tell me what they mean, so that I can tell them apart and understand them.
+
+**Acceptance criteria**
+- **Role badges:** the ADMIN badge (`adminBadgeHtml`) and user tags use `.role-badge` with their token colour and a `title`:
+  - ADMIN: "Kana Cards admin";
+  - `caster`: "Verified caster: an approved tournament streamer";
+  - `season_winner`: "Won a previous season";
+  - any other tag: its label.
+
+  This applies wherever they appear: the season and weekly standings (`_lbStandingsRow`; ADMIN also on the past season standings), Profile (`#profileAdminBadge`, `.profile-tags`, replacing `.tag-chip`) and Admin › User Management (`_renderUsers`, where a synced Caster tag still reads "Caster (auto)" with its #201 explanation). The Weekly Report shows no user tags or ADMIN badge; its roster status chips (`.weekly-summary-tag`) stay as they are.
+- **Status badges:** TESTER, LIVE (`.live-tag`), "League week N" (`.league-week-tag`), ID SHARED and the Steam/Twitch link badges (#201) use the neutral status style (`statusBadgeHtml` / `.status-badge`; the two schedule classes share its rule).
+- **Unchanged:** card stickers on card art, rarity badges and the version and demo-mode badges.
+- **No inline styles:** no badge markup in `app-*.js` has an inline `style` attribute. Labels and titles are escaped (`_escHtml`).
+
+### Your Own Row Stands Out Wherever You Appear
+**User story**
+As a logged-in player, I want my own row highlighted in every ranking, so that I can find my placement at a glance.
+
+**Acceptance criteria**
+- **Rankings:** the signed-in user's row in the season and weekly standings has the class `row-self`: a full-row `--row-self-bg` tint and bold text. Its expandable card detail row gets the same tint.
+- **Other rankings:** any other ranking that shows users uses the same class: the past season standings mark the row whose `user_id` matches.
+- **Cleanup:** the inline `color:#f0b429` style and the inline style on the "(You)" label are removed (and the `#f0b429` on My Team's week status line becomes a token). "(You)" uses the status badge style.
+- **Logged out:** no row is highlighted.
+
+### Weekly Report Emphasis Follows the Rules
+**User story**
+As a player reading match results, I want the winner and the MVP marked clearly and differently, so that each highlight is clear and they don't blur together.
+
+**Acceptance criteria**
+- **No rings:** `.weekly-summary-winner` and `.weekly-summary-mvp` draw no border, outline or ring.
+- **Winner:** the winning team name is `--mark-winner`, bold, under its existing "Winner" label.
+- **MVP:** the MVP is a `--mark-mvp` "MVP" label before the player name, on its own line.
+- **My roster:** the MVP chip in My roster game rows uses `--mark-mvp`, matching the results.
+- **Static elements:** images (avatars, team logos, hero icons, roster thumbnails) and controls in the Weekly Report follow the selection rule. Thumbnails still open the card viewer and keep their focus outline.
+- **Game rows:** each My roster game row (`.weekly-summary-game`) follows the data-row rule:
+  - a grid of date | opponent | game | result | MVP | points;
+  - columns line up across rows and cards;
+  - MVP rows are no taller than other rows;
+  - a long opponent name wraps inside its column.
+
+  The player name and total in each card header share a baseline.
+- **Images site-wide:** the selection rule is also applied to `img` in the shared base styles. Card art keeps its hover lift.
+
+### Reopening the Weekly Report Doesn't Flash
+**User story**
+As a player, I want the Weekly Report to open instantly and stay still when its data is already loaded, so that it doesn't flicker.
+
+**Acceptance criteria**
+- **Cache lifetime:** `_weeklySummaryCache` keeps each week's data, with its fetch time, for the page session. Closing the popup no longer clears it.
+- **Clearing it:** on reveal, on logout or user switch (`_clearLocalAuthState()` for logout and an expired session, and `login()`), and when the week list's signature changes.
+- **Reopening:** a cached week renders immediately with no `is-loading` dim. It is fetched again only when its data is more than 60 s old. A quiet refresh re-renders only if the HTML changed (`renderIfChanged`), and never replays the recap.
+- **Week list:** reopening reuses a week list less than 60 s old. Otherwise it fetches the list once.
+- **Same tab:** clicking the active week tab does nothing.
+- **Recap:** a week's recap plays at most once per page visit. One interrupted by a week switch or by closing the popup does not play again on reopening (the week is cached); the **Replay** button plays it.
+- **"Seen":** `POST /weekly-summary/seen` is sent only when the week list reported `has_unseen: true`.

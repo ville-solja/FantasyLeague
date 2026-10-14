@@ -737,6 +737,17 @@ def _m038_twitch_starter_grants_backfill(conn):
                 bonus, len(credited))
 
 
+def _m039_user_tags_source(conn):
+    """Issue #201: user_tags.source ("admin" or "caster_sync"). Existing rows read
+    "admin", so the automatic Caster tag sync never removes them."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(user_tags)")).fetchall()}
+    if not cols or "source" in cols:
+        return
+    conn.execute(text("ALTER TABLE user_tags ADD COLUMN source TEXT NOT NULL DEFAULT 'admin'"))
+    conn.commit()
+    logger.info("Migration: user_tags — added source column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -799,6 +810,7 @@ MIGRATIONS = [
     ("036_promo_codes_limits",       _m036_promo_codes_limits),
     ("037_cards_active_player_unique", _m037_cards_active_player_unique),
     ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
+    ("039_user_tags_source",         _m039_user_tags_source),
 ]
 
 

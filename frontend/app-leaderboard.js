@@ -12,19 +12,21 @@ function toggleLbDetail(userId) {
   if (el) el.classList.toggle("hidden");
 }
 
+// Issue #202: true for the signed-in user's row (never when logged out).
+function _lbIsSelf(userId) {
+  return !!activeUserId && userId != null && String(userId) === String(activeUserId);
+}
+
 function _lbStandingsRow(r, i, ptsKey, showCards = true) {
-  const isMe = activeUserId && String(r.id) === String(activeUserId);
-  const baseStyle = isMe ? "color:#f0b429;font-weight:bold;" : "";
-  const youLabel = isMe ? ` <span style="font-size:0.75rem;opacity:0.7;font-weight:normal;">(You)</span>` : "";
+  const isMe = _lbIsSelf(r.id);
+  const youLabel = isMe ? statusBadgeHtml("(You)", "Your account") : "";
   const cards = showCards ? (r.cards || []) : [];
   const hasCards = cards.length > 0;
-  const cursorStyle = hasCards ? "cursor:pointer;" : "";
   const chevron = hasCards ? `<span class="lb-chevron" id="lb-chevron-${r.id}">›</span>` : "";
   const pts = Number(r[ptsKey] || 0).toFixed(1);
-  const tagChips = (r.tags || []).map(t =>
-    `<span style="display:inline-block;background:var(--k-flame-500,#DC5014);color:#fff;font-size:0.6rem;padding:1px 5px;border-radius:2px;margin-left:4px;vertical-align:middle;">${_escHtml(t.label)}</span>`
-  ).join("");
-  const mainRow = `<tr style="${baseStyle}${cursorStyle}" ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
+  const tagChips = (r.tags || []).map(t => tagBadgeHtml(t)).join("");
+  const rowClass = [isMe ? "row-self" : "", hasCards ? "lb-row-expandable" : ""].filter(Boolean).join(" ");
+  const mainRow = `<tr${rowClass ? ` class="${rowClass}"` : ""} ${hasCards ? `onclick="toggleLbDetail(${r.id})"` : ""}>
     <td>${i + 1}</td>
     <td>${_escHtml(r.username)}${adminBadgeHtml(r.is_admin)}${tagChips}${youLabel}${chevron}</td>
     <td>${pts}</td>
@@ -34,7 +36,7 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   const breakdown = cards.map(c =>
     `<span class="lb-card-chip ${_escHtml(c.card_type)}"><span class="lb-chip-rarity" title="${_escHtml(c.card_type)}">${rarityAbbrev[c.card_type] || "?"}</span> ${_escHtml(c.player_name)} <span class="lb-chip-pts">${Number(c.points).toFixed(1)}</span></span>`
   ).join("");
-  const detailRow = `<tr class="lb-card-detail hidden" id="lb-detail-${r.id}">
+  const detailRow = `<tr class="lb-card-detail hidden${isMe ? " row-self" : ""}" id="lb-detail-${r.id}">
     <td colspan="3"><div class="lb-card-breakdown">${breakdown}</div>
       <div class="lb-rounding-note">Totals are rounded from exact points, so card values may differ by 0.1 in sum.</div></td>
   </tr>`;
@@ -49,7 +51,7 @@ async function loadSeasonLeaderboard() {
     const tbody = document.getElementById("seasonStandingsBody");
     setStatus("seasonStandingsStatus", "");
     if (!rows.length) {
-      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>");
+      renderIfChanged(tbody, "<tr><td colspan='3' class='table-empty'>No data yet</td></tr>");
       return;
     }
     renderIfChanged(tbody, rows.map((r, i) => _lbStandingsRow(r, i, "season_points", false)).join(""));
@@ -67,7 +69,7 @@ async function loadWeeklyLeaderboard(weekId) {
     const tbody = document.getElementById("weeklyStandingsBody");
     setStatus("weeklyStandingsStatus", "");
     if (!rows.length) {
-      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data yet</td></tr>");
+      renderIfChanged(tbody, "<tr><td colspan='3' class='table-empty'>No data yet</td></tr>");
       return;
     }
     renderIfChanged(tbody, rows.map((r, i) => _lbStandingsRow(r, i, "week_points")).join(""));
@@ -108,10 +110,10 @@ async function loadPastSeasonStandings(seasonId) {
     if (!res.ok) return setStatus("pastSeasonStatus", data.detail, false);
     setStatus("pastSeasonStatus", "");
     if (!data.standings.length) {
-      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No data</td></tr>");
+      renderIfChanged(tbody, "<tr><td colspan='3' class='table-empty'>No data</td></tr>");
       return;
     }
-    renderIfChanged(tbody, data.standings.map(r => `<tr>
+    renderIfChanged(tbody, data.standings.map(r => `<tr${_lbIsSelf(r.user_id) ? ' class="row-self"' : ""}>
       <td>${r.rank}</td><td>${_escHtml(r.username)}${adminBadgeHtml(r.is_admin)}</td><td>${Number(r.points).toFixed(1)}</td>
     </tr>`).join(""));
   } catch (e) {
@@ -126,7 +128,7 @@ function _populateLbWeekSelect() {
   renderSelectIfChanged(sel, locked.map(w => `<option value="${w.id}">${_escHtml(w.label)}</option>`).join(""));
   if (!locked.length) {
     sel.style.display = "none";
-    renderIfChanged(document.getElementById("weeklyStandingsBody"), "<tr><td colspan='3' style='color:#444'>No weeks locked yet</td></tr>");
+    renderIfChanged(document.getElementById("weeklyStandingsBody"), "<tr><td colspan='3' class='table-empty'>No weeks locked yet</td></tr>");
   } else {
     sel.style.display = "";
   }
@@ -151,7 +153,7 @@ function _renderLeaderboard(showAll) {
   const rows = _allLeaderboardRows;
   _lbShowAll = showAll;
   if (!rows.length) {
-    renderIfChanged(tbody, "<tr><td colspan='4' style='color:#444'>No data yet</td></tr>");
+    renderIfChanged(tbody, "<tr><td colspan='4' class='table-empty'>No data yet</td></tr>");
     if (toggleBtn) toggleBtn.style.display = "none";
     return;
   }
@@ -159,7 +161,7 @@ function _renderLeaderboard(showAll) {
   renderIfChanged(tbody, visible.map((r, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td class="lb-name-cell"><div class="lb-name-inner"><img src="${r.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
+      <td class="lb-name-cell"><div class="lb-name-inner"><img draggable="false" src="${r.avatar_url || ''}" style="width:20px;height:20px;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</div></td>
       <td>${r.matches}</td>
       <td>${Number(r.avg_points).toFixed(1)}</td>
     </tr>`).join(""));
@@ -182,7 +184,7 @@ async function loadTop() {
     renderIfChanged(document.getElementById("topBody"), rows.map((r, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td><img src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
+        <td><img draggable="false" src="${r.avatar_url || ''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
         <td>${Number(r.fantasy_points).toFixed(1)}</td>
       </tr>`).join(""));
     setStatus("topStatus", "");

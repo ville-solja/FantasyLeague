@@ -79,6 +79,19 @@
   --accent-fg:     var(--k-ink-white);
   --accent-ghost:  rgba(232, 93, 28, 0.12);
 
+  /* States and emphasis (issue #202): see the design system README, "States and
+     emphasis". Flame, amber and neutrals only; rarity colours never mark roles. */
+  --state-selected-hover-bg: var(--accent);
+  --state-selected-hover-fg: var(--accent-fg);
+  --badge-admin:  var(--accent);
+  --badge-winner: var(--k-amber-500);
+  --badge-caster: var(--fg);
+  --badge-tag:    var(--fg-muted);
+  --badge-status: var(--fg-muted);
+  --row-self-bg:  var(--accent-ghost);
+  --mark-winner:  var(--k-amber-500);
+  --mark-mvp:     var(--accent);
+
   /* ---- Type scale (display = Big Shoulders Text) ---------- */
   --font-display: 'Big Shoulders Text', 'Oswald', 'Anton', 'Impact', sans-serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;

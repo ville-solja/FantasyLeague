@@ -612,7 +612,8 @@ class TestRealAdminsCarryABadge:
         assert re.search(r"_escHtml\(r\.username\)\}\$\{adminBadgeHtml\(r\.is_admin\)\}", lb)
         glob = _read("app-globals.js")
         fn = re.search(r"function adminBadgeHtml\(isAdmin\) \{(.*?)\n\}", glob, re.S).group(1)
-        assert "isAdmin === true" in fn and 'class="admin-badge"' in fn and ">ADMIN<" in fn
+        # Issue #202: the ADMIN badge is a role badge in the admin colour.
+        assert "isAdmin === true" in fn and 'class="role-badge role-badge-admin"' in fn and ">ADMIN<" in fn
 
     def test_frontend_profile_renders_admin_badge(self):
         """frontend/app-profile.js renders the ADMIN badge on the profile when is_admin is true."""
@@ -620,23 +621,28 @@ class TestRealAdminsCarryABadge:
         assert 'id="profileAdminBadge"' in _read("index.html")
 
     def test_admin_badge_style_follows_design_system_and_differs_from_tags(self):
-        """style.css: the admin badge uses display type, uppercase, the accent colour and a 2px radius (no pill), with a class distinct from user tags."""
+        """style.css: the admin badge uses display type, uppercase, the admin colour and a 2px radius (no pill), and no user tag can take the admin colour (issue #202: one `.role-badge` family; tags get the caster, winner or neutral tag variant)."""
         css = _read("style.css")
-        block = _css_block(css, ".admin-badge")
-        assert "var(--font-display)" in block
-        assert "text-transform: uppercase" in block
-        assert "var(--accent)" in block
-        assert re.search(r"border-radius:\s*2px", block)
-        assert "pill" not in block and "999" not in block and "50%" not in block
-        assert "border-left" not in block
-        size = re.search(r"font-size:\s*(\d+)px", block)
-        assert size and int(size.group(1)) >= 11
-        # Tag chips are filled flame chips (inline style / .tag-chip); the badge is outlined
-        # and has its own class, which tag rendering never uses.
-        assert "background: var(--accent-ghost)" in block
-        tag_line = next(l for l in _read("app-leaderboard.js").splitlines() if "t.label" in l)
-        assert "admin-badge" not in tag_line and "_escHtml(t.label)" in tag_line
-        assert "admin-badge" not in _read("app-profile.js").split("tag-chip")[1].split("\n")[0]
+        shape = _css_block(css, ".league-week-tag,\n.live-tag")
+        assert "var(--font-display)" in shape
+        assert "text-transform: uppercase" in shape
+        assert re.search(r"border-radius:\s*var\(--r-xs\)", shape)
+        assert "--r-xs: 2px;" in _read("colors_and_type.css")
+        assert "pill" not in shape and "999" not in shape and "50%" not in shape
+        assert "border-left" not in shape
+        assert "font-size: var(--fs-sm)" in shape  # Big Shoulders only at --fs-sm and up
+        assert "var(--badge-admin)" in _css_block(css, ".role-badge-admin")
+        assert "--badge-admin:  var(--accent);" in _read("colors_and_type.css")
+        # No tag can imitate ADMIN: tags render through tagBadgeHtml, whose variants
+        # never include "admin", and their markup never names the admin class.
+        glob = _read("app-globals.js")
+        variants = re.search(r"const _TAG_BADGE_VARIANTS = \{([^}]*)\}", glob).group(1)
+        assert "admin" not in variants
+        tag_fn = re.search(r"function tagBadgeHtml\(tag, opts = \{\}\) \{(.*?)\n\}", glob, re.S).group(1)
+        assert "|| \"tag\"" in tag_fn and "role-badge-admin" not in tag_fn
+        tag_line = next(l for l in _read("app-leaderboard.js").splitlines() if "r.tags" in l)
+        assert "tagBadgeHtml(t)" in tag_line and "role-badge-admin" not in tag_line
+        assert "tagBadgeHtml(t)" in _read("app-profile.js")
 
 
 # ===========================================================================

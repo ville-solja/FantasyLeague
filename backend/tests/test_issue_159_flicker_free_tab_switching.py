@@ -445,7 +445,10 @@ class TestWeeklyReportKeepsItsFrame:
         js = _wsjs()
         assert re.search(r"^let _weeklySummaryReq = 0;$", js, re.M)
         body = _fn_body(js, "selectWeeklySummaryTab")
-        assert body.split("\n")[1].strip() == "const req = ++_weeklySummaryReq;"
+        # Issue #202: before the bump come only the cache owner check and the active-week no-op.
+        assert body.split("\n")[1].strip() == "_ensureWeeklySummaryOwner();"
+        assert body.split("\n")[2].strip() == "if (weekId === _weeklySummaryActiveWeekId) return;"
+        assert body.split("\n")[3].strip() == "const req = ++_weeklySummaryReq;"
         fetched = body[body.index("fetch("):]
         assert fetched.count("if (req !== _weeklySummaryReq) return;") == 2
         assert fetched.index("if (req !== _weeklySummaryReq) return;") < fetched.index("renderWeeklySummaryContent(")
@@ -471,21 +474,28 @@ class TestWeeklyReportKeepsItsFrame:
         assert not _INNERHTML_WRITE.search(cols) and cols.count("renderIfChanged(") == 2
 
     def test_select_weekly_summary_tab_renders_from_cache(self):
-        """Weeks fetched while the popup is open are stored in `_weeklySummaryCache` keyed by week id; a cached week renders at once, then refreshes quietly with renderIfChanged."""
+        """Fetched weeks are stored in `_weeklySummaryCache` keyed by week id (issue #202: as `{data, at}`); a cached week renders at once, then (when stale) refreshes quietly with renderIfChanged."""
         js = _wsjs()
         assert re.search(r"^const _weeklySummaryCache = new Map\(\);$", js, re.M)
         body = _fn_body(js, "selectWeeklySummaryTab")
-        assert "const cached = _weeklySummaryCache.get(weekId);" in body
+        assert "const entry = _weeklySummaryCache.get(weekId);" in body
+        assert "const cached = entry ? entry.data : null;" in body
         cache_branch = body[body.index("if (cached) {"):body.index("} else if (rosterBody")]
         assert "renderWeeklySummaryContent(cached, {playRecap: false});" in cache_branch
+        assert "if (_weeklySummaryFresh(entry.at)) return;" in cache_branch
         assert body.index("renderWeeklySummaryContent(cached") < body.index("fetch(")
-        assert "_weeklySummaryCache.set(weekId, data);" in body
+        assert "_weeklySummaryCache.set(weekId, {data, at: Date.now()});" in body
         # The quiet refresh goes through renderIfChanged inside renderWeeklySummaryContent.
         assert "renderIfChanged(content, html);" in _fn_body(js, "renderWeeklySummaryContent")
 
     def test_close_weekly_summary_clears_cache(self):
-        """closeWeeklySummary clears the whole `_weeklySummaryCache`."""
-        assert "_weeklySummaryCache.clear();" in _fn_body(_wsjs(), "closeWeeklySummary")
+        """Issue #202 replaced this: closeWeeklySummary keeps `_weeklySummaryCache` for the page
+        session (no stale data: entries older than 60 s refresh, and reveal, logout, user switch
+        and a changed week list clear it); see test_issue_202_ui_feedback_polish.py."""
+        js = _wsjs()
+        assert "_weeklySummaryCache.clear();" not in _fn_body(js, "closeWeeklySummary")
+        assert "_weeklySummaryCache.clear();" in _fn_body(js, "clearWeeklySummaryCache")
+        assert "_weeklySummaryCache.clear();" in _fn_body(js, "_setWeeklySummaryList")
 
     def test_reveal_functions_clear_cache_for_revealed_weeks(self):
         """revealAllWeeklySummaries and the single-week reveal path delete the revealed weeks from `_weeklySummaryCache`, so revealed data is never stale."""

@@ -188,7 +188,8 @@ class TestUsernamesCannotExecuteScriptInAdminViews:
         """_renderUsers() in frontend/app-admin-users.js wraps u.username in
         _escHtml() before concatenating it into the users table's innerHTML."""
         src = _read(APP_ADMIN_USERS_JS_PATH)
-        assert "<td>${_escHtml(u.username)}${testerBadge}${adminBadge}</td>" in src
+        # Issue #201 appended the Steam / Twitch link badges after the role badges.
+        assert "<td>${_escHtml(u.username)}${testerBadge}${adminBadge}${linkBadges}</td>" in src
 
     def test_render_users_no_longer_interpolates_raw_username(self):
         """The old unescaped `<td>${u.username}${testerBadge}${adminBadge}</td>`

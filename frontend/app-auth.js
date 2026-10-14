@@ -154,6 +154,7 @@ async function submitSteamSignup() {
     }
     closeSteamSignup();
     document.getElementById("steamSignupUsername").value = "";
+    if (typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
@@ -313,6 +314,8 @@ async function login() {
     const data = await res.json();
     if (!res.ok) return setStatus("loginStatus", data.detail, false);
 
+    // Issue #202: a user switch never shows the previous user's cached Weekly Report.
+    if (typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
@@ -398,6 +401,7 @@ async function register() {
       return;
     }
 
+    if (typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
@@ -424,6 +428,8 @@ function _clearLocalAuthState() {
   activeIsDemo = false;
   localStorage.removeItem("username");
   localStorage.removeItem("is_admin");
+  // Issue #202: the Weekly Report cache lives for the page session, so it goes with the user.
+  if (typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
   updateTokenDisplay(null);
   applyAuthState();
 }
@@ -444,6 +450,10 @@ async function loadMe() {
     }
     if (!res.ok) return;
     const data = await res.json();
+    // Issue #202: a different user on this cookie (signed in from another tab) never sees
+    // the previous user's cached Weekly Report.
+    if (activeUserId != null && String(activeUserId) !== String(data.user_id)
+        && typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
     activeUserId             = data.user_id;
     activeUsername           = data.username;
     activeIsAdmin            = data.is_admin;
