@@ -820,67 +820,79 @@ As a player, I want a button to stay disabled until its action finishes so that 
 - Draw, booster draw, reroll confirm, activate, deactivate, swap (drag), reorder, redeem and Weekly Report reveal buttons are disabled from the click until the response is handled, then re-enabled. They stay disabled where the new state calls for it, e.g. no tokens.
 - A second click during the request sends no second request
 - A failed request re-enables the button and shows the error
-- Roster drag-and-drop ignores new drops while a swap or reorder request is running
+- Roster drag-and-drop ignores new drops while a swap or reorder request is running (replaced by #186: moves apply locally and are never ignored; the autosave sends one save at a time)
 
 
-## My Team Save Roster (#186) *(parked, not yet implemented)*
+## My Team Fluid Roster (#186)
 
-### Arrange the Roster, Then Save Once
+### Moves Apply Instantly and Glide Into Place
 **User story**
-As a player, I want to drag cards between roster and bench and reorder them freely, then save the result once so that my team is stored as one decision.
+As a player, I want a card I drop to land in its new place right away, so that arranging my team feels direct instead of waiting for a reload.
 
 **Acceptance criteria**
-- On My Team for the current (unlocked) week, activate, deactivate, swap and reorder change only the page's draft; no roster request is sent until **Save**
-- **Save** sends `PUT /roster` with the whole layout: `{"active": [card ids in slot order], "bench": [card ids in bench order], "base_version": "<version>"}`
-- The server applies it in one transaction, or not at all, and checks:
-  - every card belongs to the user;
-  - each card appears exactly once;
-  - at most `ROSTER_LIMIT` cards are active;
-  - no two active cards have the same player;
-  - no inactive (removed) player is active.
-- A failed check answers 409 or 422 with a message naming the problem; nothing changes
-- On success the server answers with the saved roster and its new `version`, and the page shows "Roster saved"
-- Saving an unchanged draft is a no-op that still answers 200
-- `PUT /roster` has the per-user `RATE_LIMIT_ROSTER_MUTATION` limit
-- The existing single-card routes keep working unchanged
+- **Local first:** dropping a card (reorder within a zone, bench → roster, roster → bench, swap) changes the page's layout at once, with no network wait.
+- **Glide:** the dropped card glides from where it was released to its slot, and every card that changes position glides from its old place (FLIP, about 220 ms, `--ease-out`).
+- **No refetch:** the page doesn't re-fetch or redraw the roster after a move. It renders from its local layout, keyed by card id, so the DOM nodes move rather than being rebuilt.
+- **Rules checked locally:** a move that would break a rule is refused locally with the cards gliding back:
+  - more than `ROSTER_LIMIT` active cards;
+  - two active cards of the same player;
+  - an inactive (removed) player on the roster.
+  The status line names the rule.
+- **Keyboard and touch:** the keyboard toggle (Enter/Space on a focused card) and touch drags go through the same local layout and animation. A tap without movement still opens the card viewer.
+- **Reduced motion:** cards jump to their places with no glide.
 
-### See Unsaved Changes at a Glance
+### Drag Follows the Pointer and the Roster Makes Room
 **User story**
-As a player, I want an obvious sign that my roster has unsaved changes so that I never think a change is stored when it isn't.
+As a player on desktop or phone, I want the card to follow my finger or mouse and the other cards to make room while I drag, so that I can see where it will land before I let go.
 
 **Acceptance criteria**
-- While the draft differs from the saved roster, a bar shows "Unsaved changes" with **Save** and **Discard**; it is hidden when they match
-- Changed cards are marked in the draft, by an outline or a "moved" badge
-- **Discard** restores the saved roster without a request
-- **Save** is disabled while its request runs (the #185 in-flight guard) and while the draft breaks a rule the page can check, for example more than `ROSTER_LIMIT` active cards; the reason is shown next to it
+- **Pointer drag:** dragging uses Pointer Events instead of HTML5 drag-and-drop. The picked-up card lifts (scale 1.04, shadow) and follows the pointer.
+- **Live preview:** the slot under the pointer previews the result. In a zone, the other cards slide aside; over an occupied roster slot, a swap preview shows the replaced card dimmed with an arrow to the bench.
+- **Touch:**
+  - a press of 250 ms picks a card up;
+  - moving before that scrolls the page as usual;
+  - the page doesn't scroll while a card is held, except near the top or bottom edge, where it auto-scrolls.
+- **Cancel:** releasing outside any zone, pressing Escape, or a cancelled pointer returns the card to its place with a glide.
+- **Unchanged behaviour:** the existing drop-zone highlights (#93) stay, and a click without movement still opens the card viewer.
+- **Locked weeks:** cards can't be picked up, as today.
 
-### Don't Lose Changes by Leaving
+### The Layout Saves Itself
 **User story**
-As a player, I want to be asked before I leave My Team with unsaved changes so that I can save them first.
+As a player, I want my roster stored without pressing anything, so that I can't forget to save before the week locks.
 
 **Acceptance criteria**
-- With unsaved changes, switching to another tab, choosing another week, logging out or opening the Weekly Report shows a prompt: **Save and continue**, **Discard and continue**, **Stay**
-- Closing or reloading the page triggers the browser's own leave-page warning (`beforeunload`); the page can't customise its text
-- The draft is kept in `sessionStorage`. After a reload in the same tab, My Team offers "You have unsaved roster changes. Restore / Discard" when the saved roster's version still matches the draft's `base_version`; otherwise the draft is dropped and a note says the roster changed meanwhile
-- No prompt appears when there are no unsaved changes
+- **Debounced save:** 600 ms after the last move, the page sends `PUT /roster` with the whole layout and the version it is based on:
+  `{"active": [card ids in slot order, null for an empty slot], "bench": [card ids in order], "base_version": "…"}`
+- **One save at a time:** a move during a save is applied locally, and the next save sends the newest layout. Saves never overlap, and moves are never blocked, so `_rosterBusy` no longer ignores drops.
+- **Status line:**
+  - "Saving…" while a save runs;
+  - "Saved" for 2 seconds after it succeeds;
+  - "Couldn't save. Retry" on a network error, with a Retry button. The layout stays as the player arranged it.
+- **Flush instead of waiting:** when the page becomes hidden (`visibilitychange`/`pagehide`, with a `fetch` `keepalive` request), when the player switches tab or week, or when the selected week locks in under 2 minutes. Leaving My Team shows no prompt.
+- **Rate limit:** `PUT /roster` has the per-user `RATE_LIMIT_ROSTER_MUTATION` limit. A burst of moves sends one save, not one per move.
 
-### Don't Lock a Roster You Didn't Mean
+### Saves Are Atomic and Never Overwrite Changes Made Elsewhere
 **User story**
-As a player, I want a warning before the week locks while I have unsaved changes so that my intended roster is the one that counts.
+As a player using two tabs or the Twitch panel, I want a stale page not to undo changes I made elsewhere, so that my latest roster is the one that counts.
 
 **Acceptance criteria**
-- With unsaved changes, the unsaved-changes bar shows the time to lock once the week's `start_time` is within `ROSTER_SAVE_WARNING_MINUTES` (default 30)
-- If the week locks while the draft is unsaved, the draft is not applied. The page says "The week locked before your changes were saved. Your saved roster was used." and keeps the draft for the next week if it is still valid
-- `PUT /roster` for a week whose lock has passed changes the cards for the next week, matching how the single-card routes behave today; the response says which week the roster now counts for
-
-### A Roster Changed Elsewhere Isn't Overwritten
-**User story**
-As a player using two tabs or the Twitch panel, I want saving an old draft to fail rather than silently undo changes I made elsewhere.
-
-**Acceptance criteria**
-- `GET /roster/{user_id}` for the current week returns a `version`: a hash of the user's active card ids in slot order and bench card ids in order
-- `PUT /roster` recomputes the version inside the transaction and answers 409 "Your roster changed since you started editing. Reload to see it." when `base_version` doesn't match; nothing changes
-- After a 409 the page offers **Reload roster**, which discards the draft
+- **Version on read:** `GET /roster/{user_id}` returns `version`, the version of the stored editable layout: a hash of the active card ids in slot order and the bench card ids in order.
+- **Checks:** `PUT /roster` checks in one transaction:
+  - the cards are the user's own;
+  - no card is listed twice;
+  - at most `ROSTER_LIMIT` are active;
+  - there are no two active cards of the same player;
+  - no removed player is active;
+  - `base_version` still matches.
+- **Write:** it then benches every card not in `active` and sets the active slots and the bench order. It answers with the saved roster and its new `version`.
+- **Failures:** a failed check answers 409 (version or rule; a version conflict carries the header `X-Roster-Conflict: version`), 404 for a card the user doesn't own (as the single-card routes answer) or 422 (bad body), and nothing changes.
+- **On a version mismatch** the page:
+  1. fetches the roster;
+  2. animates the cards to the server's layout;
+  3. shows "Your roster changed elsewhere. Showing the latest."
+  Moves made after the failed save are dropped.
+- **Unchanged layout:** saving a layout identical to the stored one is a no-op that still answers 200.
+- **Week lock:** a save for a week whose lock has passed applies to the next week, as the single-card routes do today. The response names the week, and the page says "Week N locked; this change counts from Week N+1" when they differ.
 
 ## Match Scoring Week Override (issue #193)
 

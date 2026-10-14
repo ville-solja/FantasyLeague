@@ -129,6 +129,8 @@ function switchTab(name) {
   }
   const current = document.querySelector(".tab-content.active");
   const sameTab = !!current && current.id === `tab-${name}`;
+  // Issue #186: leaving My Team sends a waiting roster save at once.
+  if (!sameTab && current && current.id === "tab-team" && typeof flushRosterSave === "function") flushRosterSave();
   if (!sameTab) {
     if (current) _tabScroll[current.id.replace(/^tab-/, "")] = window.scrollY;
     document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
@@ -212,4 +214,48 @@ function playerLink(id, name) {
 function teamLink(id, name) {
   if (!id) return _escHtml(name) || "—";
   return `<span class="entity-link" tabindex="0" role="button" onclick="openTeamModal(${id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openTeamModal(${id})}">${_escHtml(name)}</span>`;
+}
+
+/** True when the player asked the system for less motion. */
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+const FLIP_DURATION_MS = 220;
+
+/**
+ * FLIP glide (issues #186, #155): after the DOM has moved, play each element from its
+ * old place to its new one. first maps element -> its getBoundingClientRect() taken
+ * before the change; opts.from = {el, rect} starts one element somewhere else (a
+ * dropped card starts where it was released). Rects include running transforms, so
+ * an interrupted glide continues from where the card is on screen. No motion under
+ * prefers-reduced-motion: the elements are already in place.
+ */
+function flipMove(els, first, opts = {}) {
+  if (prefersReducedMotion()) return;
+  const duration = opts.duration || FLIP_DURATION_MS;
+  const moves = [];
+  for (const el of els) {
+    const a = opts.from && opts.from.el === el ? opts.from.rect : first && first.get(el);
+    if (!a) continue;
+    const b = el.getBoundingClientRect();
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    moves.push([el, dx, dy]);
+  }
+  for (const [el, dx, dy] of moves) {
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+  }
+  if (!moves.length) return;
+  void document.body.offsetWidth; // apply the inverted positions before gliding back
+  for (const [el] of moves) {
+    const seq = (el._flipSeq || 0) + 1;
+    el._flipSeq = seq;
+    el._flipUntil = Date.now() + duration;
+    el.style.transition = `transform ${duration}ms var(--ease-out)`;
+    el.style.transform = "";
+    setTimeout(() => { if (el._flipSeq === seq) el.style.transition = ""; }, duration + 50);
+  }
 }

@@ -556,7 +556,8 @@
       <div id="rosterTotals" style="display:flex;gap:24px;margin-top:8px;font-size:0.82rem;color:#555;">
         <span>This week: <strong id="rosterCombined" style="color:#aaa;">—</strong> pts</span>
         <span>Season: <strong id="rosterSeasonPoints" style="color:#aaa;">—</strong> pts</span>
-        <span id="rosterStatus" style="color:#555;"></span>
+        <span id="rosterStatus" style="color:#555;" role="status" aria-live="polite"></span>
+        <button id="rosterRetryBtn" class="secondary roster-retry-btn" style="display:none;" onclick="retryRosterSave()">Retry</button>
       </div>
       <div id="rosterSubsNote" class="card-slot-note" style="display:none;margin-top:6px;text-align:left;"></div>
 

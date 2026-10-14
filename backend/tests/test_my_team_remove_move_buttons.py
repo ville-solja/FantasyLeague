@@ -166,59 +166,53 @@ class TestDeclutteredCardSlotControls:
 class TestKeyboardFallbackForBenchActiveToggle:
 
     def test_card_image_onkeydown_calls_toggle_card_zone(self):
-        """The card image's `onkeydown` handler in `_cardSlotHTML()` calls
-        `toggleCardZone(cardId, isActiveCard)` on Enter/Space instead of
-        `showRosterCard(cardId)`, and `toggleCardZone()` is defined
-        top-level in `frontend/app-roster.js`."""
+        """Enter/Space on a focused card image calls `toggleCardZone(cardId)`
+        instead of `showRosterCard(cardId)`. Issue #186: the handler is delegated
+        to the grids (`_onRosterKeyDown`), so it is no longer an inline
+        `onkeydown` in `_cardSlotHTML()`; the image stays focusable."""
         js = _read(APP_ROSTER_JS_PATH)
-        fn = _extract_function(js, "_cardSlotHTML")
-        m = re.search(r'onkeydown="([^"]*)"', fn)
-        assert m, "onkeydown attribute not found on card image"
-        onkeydown = m.group(1)
-        assert "toggleCardZone(" in onkeydown
-        assert "showRosterCard(" not in onkeydown
+        fn = _extract_function(js, "_onRosterKeyDown")
+        assert 'e.key !== "Enter" && e.key !== " "' in fn
+        assert "toggleCardZone(" in fn
+        assert "showRosterCard(" not in fn
+        assert 'grid.addEventListener("keydown", _onRosterKeyDown);' in js
+        slot = _extract_function(js, "_cardSlotHTML")
+        assert 'tabindex="0" role="button"' in slot
         assert re.search(r"(?:async\s+)?function\s+toggleCardZone\s*\(", js), \
             "toggleCardZone() not defined top-level"
 
     def test_toggle_card_zone_calls_activate_or_deactivate_card(self):
-        """`toggleCardZone(cardId, isActiveCard)` calls `deactivateCard(cardId)`
-        when the card is currently active and `activateCard(cardId)` when it
-        is currently benched, reusing their existing error handling (roster
-        full, duplicate player active, etc.) rather than introducing new
-        error copy."""
+        """Issue #186: `toggleCardZone(cardId)` moves a roster card to the front of
+        the bench and a bench card to the first free roster slot through the
+        local layout (`_rosterMove` + `_commitRosterLayout`), the same path as a
+        drop, with no single-card route call. The rule messages come from the
+        shared rule check, not new copy in the function."""
         js = _read(APP_ROSTER_JS_PATH)
         fn = _extract_function(js, "toggleCardZone")
-        assert "isActiveCard" in fn
-        assert "deactivateCard(cardId)" in fn
-        assert "activateCard(cardId)" in fn
-        # No new error copy introduced — the function's own body should not
-        # set status text or contain literal error strings itself.
+        assert "_rosterMove(_layout, cardId, target)" in fn
+        assert "_commitRosterLayout(res && res.layout)" in fn
+        assert "/roster/" not in fn and "fetch(" not in fn
         assert "className" not in fn
         assert "textContent" not in fn
 
     def test_toggle_card_zone_gated_on_roster_locked(self):
-        """Pressing Enter/Space on a card image does nothing (no
-        `toggleCardZone()` call takes effect) when `_rosterLocked` is true,
-        matching drag-and-drop's existing lock gating exactly."""
+        """Pressing Enter/Space on a card image does nothing when
+        `_rosterLocked` is true, matching the drag's lock gating."""
         js = _read(APP_ROSTER_JS_PATH)
-        fn = _extract_function(js, "_cardSlotHTML")
-        m = re.search(r'onkeydown="([^"]*)"', fn)
-        assert m, "onkeydown attribute not found on card image"
-        onkeydown = m.group(1)
-        assert "_rosterLocked" in onkeydown
-        # The toggle call must be inside the guarded branch, not unconditional.
-        guard_idx = onkeydown.index("_rosterLocked")
-        toggle_idx = onkeydown.index("toggleCardZone(")
-        assert guard_idx < toggle_idx
+        fn = _extract_function(js, "toggleCardZone")
+        assert "if (_rosterLocked || _drag) return;" in fn
+        guard_idx = fn.index("_rosterLocked")
+        assert guard_idx < fn.index("_rosterMove(")
+        assert "if (_rosterLocked || _drag) return;" in _extract_function(js, "_onRosterPointerDown")
 
     def test_card_image_onclick_still_calls_show_roster_card_unchanged(self):
-        """The card image's `onclick` handler in `_cardSlotHTML()` is
-        unchanged and still calls `showRosterCard(cardId)` to open the card
-        detail modal — the new keyboard toggle only affects `onkeydown`,
-        not mouse click."""
+        """A click on a card still opens the card detail modal with
+        `showRosterCard(cardId)`; the click that ends a drag doesn't. Issue #186:
+        delegated to the grids (`_onRosterClick`) instead of an inline onclick."""
         js = _read(APP_ROSTER_JS_PATH)
-        fn = _extract_function(js, "_cardSlotHTML")
-        m = re.search(r'onclick="([^"]*)"', fn)
-        assert m, "onclick attribute not found on card image"
-        onclick = m.group(1)
-        assert onclick == "if(!window._rosterDragging)showRosterCard(${c.id})"
+        fn = _extract_function(js, "_onRosterClick")
+        assert "if (_rosterSuppressClick) return;" in fn
+        assert "showRosterCard(parseInt(node.dataset.cardId, 10))" in fn
+        assert 'grid.addEventListener("click", _onRosterClick);' in js
+        assert "onclick=" not in _extract_function(js, "_cardSlotHTML")
+

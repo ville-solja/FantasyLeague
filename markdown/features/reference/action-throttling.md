@@ -48,7 +48,7 @@ Every slowapi refusal, route-level or global, returns:
 ```
 with `Retry-After` set to the limit's window in seconds (`60` for a `/minute` limit, `3600` for `/hour`).
 
-The website shows `detail` in the action's existing status area: draws and booster draws through `setStatus("deckStatus", ...)`, rerolls in `#rerollStatus`, roster changes in `#rosterStatus` (all `textContent`). A failed reorder after a drag-and-drop is kept in `_rosterPendingError` and shown by the roster reload that follows, instead of the active-card count. The Twitch panel keeps its own neutral message.
+The website shows `detail` in the action's existing status area: draws and booster draws through `setStatus("deckStatus", ...)`, rerolls in `#rerollStatus`, roster changes in `#rosterStatus` (all `textContent`). Since #186 roster changes are saved by the autosave's `PUT /roster`: its errors go through `_setRosterStatus` (`textContent`). A 429 is waited out and retried once while the status still says "Saving…"; a second refusal shows "Couldn't save." with the server's `detail` and a Retry button. The Twitch panel keeps its own neutral message.
 
 Each refusal logs one INFO line from `main`:
 ```

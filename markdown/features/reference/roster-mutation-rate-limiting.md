@@ -48,21 +48,25 @@ the plain function with the already-resolved `db`/`current_user` dependencies.
 - `POST /roster/{card_id}/deactivate`
 - `POST /roster/swap`
 - `POST /roster/reorder`
+- `PUT /roster` (issue #186: the whole layout; `save_roster` + `save_roster_route`)
 
 Each enforces `RATE_LIMIT_ROSTER_MUTATION` per user, returning the same
 shared 429 response, `{"detail": "Too many requests. Wait a moment and try again."}` (with `Retry-After`; the text changed in #184).
 
-## Frontend guard
+## Frontend: single-flight autosave
 
-`frontend/app-roster.js` ignores a new activate/deactivate/swap/reorder interaction while a
-previous one is still in flight, rather than allowing overlapping requests — no new UI
-affordance, just a guard (`_rosterMutationInFlight` / `_withRosterMutationGuard()`) around the
-existing click (`activateCard`/`deactivateCard`, also used by the keyboard Enter/Space
-toggle via `toggleCardZone`) and HTML5 drag-and-drop interactions (in-zone reorder, bench→active
-swap, active→bench deactivate+reorder, and drops onto empty active slots).
+Since #186 My Team no longer sends one request per action. Every roster change (drag,
+Enter/Space) edits the page's local layout, and the autosave in `frontend/app-roster.js`
+stores the whole layout with `PUT /roster` 600 ms after the last move, one save at a time:
+a move during a save marks the layout dirty and one follow-up save sends the newest layout
+(`_runRosterSave`). A burst of moves therefore costs one request, and requests never overlap.
+On a 429 the autosave waits for `Retry-After` (10 s without it) and retries once by itself,
+still showing "Saving…"; only a second refusal shows "Couldn't save." with Retry. See
+[My Team Fluid Roster](my-team-save-roster.md#autosave). The old
+`_withRosterMutationGuard()` / `_rosterBusy` guard is gone.
 
 ## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
-| `RATE_LIMIT_ROSTER_MUTATION` | `30/minute` | Per-user limit on roster activate/deactivate/swap/reorder |
+| `RATE_LIMIT_ROSTER_MUTATION` | `30/minute` | Per-user limit on roster activate/deactivate/swap/reorder and `PUT /roster` |

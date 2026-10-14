@@ -14,6 +14,14 @@ Format:
 
 ---
 
+### 2026-10-14 — developer — security
+**Problem:** An unbounded Pydantic `int` (card ids in a request body) bound into a SQLite query raises `OverflowError` above 2**63-1, which surfaces as a 500.
+**Solution:** Bound ids in request models, e.g. `Annotated[int, Field(ge=1, le=2**63 - 1)]` (`CardId` in `routers/cards.py`), so an oversized id answers 422. Also size list caps (`max_length`) from what a user can actually reach, not a guess.
+
+### 2026-10-14 — developer — testing
+**Problem:** Frontend behaviour that moves DOM nodes (drag, FLIP, timers, fetch) can't be checked with string tests, and `_css_blocks` keeps the newline before a selector, so a `^…$` selector regex never matches.
+**Solution:** Reuse `_HARNESS` in `tests/test_issue_186_my_team_save_roster.py` (fake DOM with fixed layout, `fire()`, fake timers/frames/fetch) for app-roster.js behaviour. Match CSS rules by exact selector with its `_rule(css, selector)` helper. In Playwright, drop points must be inside the viewport (`elementFromPoint` is null outside it).
+
 ### 2026-10-14 — developer — testing
 **Problem:** Some static CSS tests slice `style.css` from a section header to the end of the file (`test_issue_144_guided_tour` checks every rule after "GUIDED TOUR"), so a block appended at the end inherits that section's rules (no `50%` radius, no `rgba`).
 **Solution:** Put a new CSS block before the "GUIDED TOUR (issue #144)" section, next to related rules, not at the end of `style.css`.

@@ -2,6 +2,7 @@ import io
 import os
 import random
 import time
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -14,6 +15,7 @@ import card_points
 from card_utils import (
     _assign_modifiers, _card_modifiers_map, _card_modifiers_dict_for_image, _format_modifiers,
     _activate_card_atomic, _swap_roster_atomic,
+    RosterLayoutError, apply_roster_layout, roster_version,
 )
 from database import get_db, spend_tokens
 from match_scoring import counted_roster_entry_sql, scored_match_sql
@@ -55,15 +57,31 @@ _card_action_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION, scope="card_ac
 _card_action_ip_limit = limiter.shared_limit(RATE_LIMIT_CARD_ACTION_IP, scope="card_action_ip")
 
 
+# A card id as SQLite can bind it: a larger int raises OverflowError at the bind (a 500).
+CardId = Annotated[int, Field(ge=1, le=2**63 - 1)]
+
+# Most cards one layout save may list on the bench: above anything a user can reach
+# (one token per draw), so a whole bench always fits (issue #186).
+ROSTER_BENCH_MAX = 5000
+
+
 class ReorderRequest(BaseModel):
-    card_ids: list[int] = Field(max_length=500)  # ordered list; positions assigned by index. The frontend sends the whole bench, and bench size is unlimited, so this bounds abuse without breaking large collections
-    slot_indexes: list[int] | None = None  # explicit positions; overrides sequential when provided
+    card_ids: list[CardId] = Field(max_length=500)  # ordered list; positions assigned by index. The frontend sends the whole bench, and bench size is unlimited, so this bounds abuse without breaking large collections
+    slot_indexes: list[Annotated[int, Field(ge=-(2**63), le=2**63 - 1)]] | None = None  # explicit positions; overrides sequential when provided
+
+
+class RosterLayoutRequest(BaseModel):
+    """PUT /roster (issue #186): the whole layout. active has one entry per roster slot
+    (null = empty slot); bench is in order."""
+    active: list[CardId | None] = Field(max_length=ROSTER_LIMIT)
+    bench: list[CardId] = Field(max_length=ROSTER_BENCH_MAX)
+    base_version: str = Field(min_length=1, max_length=64)
 
 
 class SwapRequest(BaseModel):
-    bench_card_id: int   # card moving from bench → active
-    active_card_id: int  # card moving from active → bench
-    slot_index: int      # the active slot the bench card should occupy
+    bench_card_id: CardId   # card moving from bench → active
+    active_card_id: CardId  # card moving from active → bench
+    slot_index: Annotated[int, Field(ge=-(2**63), le=2**63 - 1)]  # the active slot the bench card should occupy
 
 
 _LATEST_TEAM_SUBQUERY = """
@@ -720,8 +738,43 @@ def swap_roster_route(request: Request, body: SwapRequest,
     return swap_roster(body, user, db)
 
 
+def save_roster(body: RosterLayoutRequest, user=Depends(get_current_user), db=Depends(get_db)):
+    """Store the whole roster layout (issue #186) in one transaction: every check
+    passes and base_version still matches, or nothing changes. The live cards are the
+    roster of the next editable week, so after a week's lock a save counts from the
+    next week; the response names that week."""
+    user_id = user["user_id"]
+    try:
+        changed = apply_roster_layout(db, user_id, body.active, body.bench, body.base_version,
+                                      ROSTER_LIMIT)
+    except RosterLayoutError as e:
+        db.rollback()
+        headers = {"X-Roster-Conflict": e.conflict} if e.conflict else None
+        raise HTTPException(status_code=e.status_code, detail=e.detail, headers=headers)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=DUPLICATE_ACTIVE_DETAIL)
+    if changed:
+        db.commit()
+    else:
+        db.rollback()
+    data = _build_roster_response(db, user_id, None)
+    data["version"] = roster_version(db, user_id, ROSTER_LIMIT)
+    return data
+
+
+@router.put("/roster")
+@limiter.limit(RATE_LIMIT_ROSTER_MUTATION, key_func=key_by_user_or_ip)
+def save_roster_route(request: Request, body: RosterLayoutRequest,
+                      user=Depends(get_current_user), db=Depends(get_db)):
+    return save_roster(body, user, db)
+
+
 @router.get("/roster/{user_id}")
 def get_roster(user_id: int, week_id: int = None, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     if user_id != current_user["user_id"] and not is_admin_fresh(db, current_user["user_id"]):
         raise HTTPException(status_code=403, detail="Cannot view another user's roster")
-    return _build_roster_response(db, user_id, week_id)
+    data = _build_roster_response(db, user_id, week_id)
+    # Issue #186: the version of the live layout, which PUT /roster checks.
+    data["version"] = roster_version(db, user_id, ROSTER_LIMIT)
+    return data

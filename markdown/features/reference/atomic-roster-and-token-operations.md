@@ -88,8 +88,7 @@ A user who already redeemed a code that has since reached its cap now gets 409 r
 | Team draw | `drawBooster` | `withBusy(#boosterDrawBtn)`; the picker closes afterwards |
 | Repeat team draw from the reveal | `_drawBoosterForTeam` | `_boosterDrawInFlight` flag (no button) |
 | Reroll confirm | `confirmReroll` | `withBusy(#rerollConfirmBtn)` |
-| Activate / deactivate (Enter or Space on a card) | `activateCard`, `deactivateCard` (`app-roster.js`) | `_withRosterMutationGuard` + `withBusy` on the card image |
-| Drag-and-drop swap, reorder, bench, activate | drop handlers in `_initDragAndDrop` | `_rosterBusy` flag: every drop handler returns early while set |
+| Roster moves (drag, Enter or Space on a card) | `_commitRosterLayout` → `_runRosterSave` (`app-roster.js`) | Since #186 a move only edits the local layout; the autosave sends one `PUT /roster` at a time (single flight), and a move during a save is sent by one follow-up save. Moves are never ignored. See [My Team Fluid Roster](my-team-save-roster.md#autosave) |
 | Redeem | `redeemCode` | `withBusy(#redeemBtn)` |
 | Weekly Report "Reveal results" | `revealAllWeeklySummaries` (`app-weekly-summary.js`) | `withBusy(#weeklySummaryRevealBtn)` |
 

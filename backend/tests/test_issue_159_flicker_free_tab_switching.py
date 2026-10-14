@@ -228,29 +228,28 @@ console.log(JSON.stringify(r));
         assert not _INNERHTML_WRITE.search(src), loader
 
     def test_load_roster_renders_active_grid_bench_and_totals_with_render_if_changed(self):
-        """loadRoster renders `#rosterActiveGrid`, `#benchGrid` and the totals through renderIfChanged, and listeners it attaches (e.g. drag-and-drop) still work when the DOM was not rewritten (re-attached unconditionally or delegated to a stable parent)."""
+        """loadRoster renders the totals through renderIfChanged and `#rosterActiveGrid` / `#benchGrid` through the keyed render of #186 (kept nodes, no rewrite); its listeners are delegated to the stable grids, so they work whether or not the DOM changed."""
         js = _read(_APP_ROSTER_JS_PATH)
         body = _fn_body(js, "loadRoster")
-        assert "const activeWrote = renderIfChanged(activeGrid," in body
-        assert body.count("benchWrote = renderIfChanged(benchGrid,") == 3
         assert 'renderIfChanged(document.getElementById("rosterCombined"),' in body
         assert not _INNERHTML_WRITE.search(body)
-        # Drag-and-drop is wired after every unlocked render, whether or not it wrote,
-        # and the wiring is idempotent: kept slot nodes and the stable grids are bound once.
-        assert "if (!isLocked) _initDragAndDrop();" in body
-        dnd = _fn_body(js, "_initDragAndDrop")
-        assert dnd.count("if (slot._dndBound) return;") == 2
-        assert "if (activeGrid._dndBound) return;" in dnd
-        # Handlers read the latest cards, not the ones captured at bind time.
-        assert "const activeCards = _rosterActive;" in dnd and "const benchCards = _rosterBench;" in dnd
-        assert "_rosterActive = active;" in body and "_rosterBench = bench;" in body
-        # A locked view never reuses draggable nodes: draggable is part of the markup.
-        slot = _fn_body(js, "_cardSlotHTML")
-        assert "function _cardSlotHTML(c, action, draggable = false)" in slot
-        assert 'draggable="true"' in slot
-        assert 'slot.setAttribute("draggable", "true")' not in dnd
-        # The settle animation runs only on grids that were redrawn.
-        assert "activeWrote && activeGrid, benchWrote && benchGrid" in body
+        # Issue #186: the grids are a keyed render. Each card keeps its node, which is
+        # moved, not rebuilt, and a refresh with the same data moves nothing.
+        assert "renderRosterLayout(_layout, { animate: !!opts.animate });" in body
+        render = _fn_body(js, "renderRosterLayout")
+        assert "_placeChildren(activeGrid, activeNodes);" in render
+        assert "kids.every((k, i) => k === nodes[i])) return;" in _fn_body(js, "_placeChildren")
+        node = _fn_body(js, "_rosterSlotNode")
+        assert "let node = _rosterNodes.get(c.id);" in node
+        assert "if (node._slotHtml !== html) {" in node
+        # Listeners are delegated to the stable grids and bound once; handlers read
+        # the current layout, not one captured at bind time.
+        assert '_bindRosterGrid(document.getElementById("rosterActiveGrid"));' in body
+        assert '_bindRosterGrid(document.getElementById("benchGrid"));' in body
+        assert "if (!grid || grid._rosterBound) return;" in _fn_body(js, "_bindRosterGrid")
+        assert "_rosterMove(_layout, cardId, target)" in _fn_body(js, "toggleCardZone")
+        # A locked view can't be dragged: pointerdown checks the lock, not the markup.
+        assert "if (_rosterLocked || _drag) return;" in _fn_body(js, "_onRosterPointerDown")
 
     def test_load_schedule_placeholder_only_when_container_empty(self):
         """loadSchedule writes its "Loading" text into `#scheduleContent` only behind an empty-content check; otherwise the old content stays until new data replaces it."""
@@ -295,7 +294,7 @@ console.log(JSON.stringify(r));
             (_APP_PLAYERS_JS_PATH, "loadPlayers", 'setStatus("playersStatus", e.message, false)'),
             (_APP_PLAYERS_JS_PATH, "loadTeams", 'setStatus("teamsStatus", e.message, false)'),
             (_APP_CARDS_JS_PATH, "loadDeck", 'setStatus("deckStatus", e.message, false)'),
-            (_APP_ROSTER_JS_PATH, "loadRoster", "statusEl.textContent = e.message"),
+            (_APP_ROSTER_JS_PATH, "loadRoster", "_setRosterStatus(e.message, true)"),
         ]
         for path, loader, status in checks:
             body = _fn_body(_read(path), loader)

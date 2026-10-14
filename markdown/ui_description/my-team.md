@@ -37,8 +37,8 @@ Shown for locked weeks only: "Roster locked — {week label} snapshot".
 
 Five fixed card positions (`#rosterActiveGrid`), each showing the card image with its weekly points ("{pts} pts") underneath. Cards sit in their `slot_index` position, so gaps are kept; an empty position shows an "empty slot" placeholder. Clicking a card image opens the card view.
 
-- For the editable week: drag a card to rearrange or move it. Dropping a roster card on another roster card moves it to that position; on an empty slot, it moves there. Dropping a roster card on the bench benches it (placed at the front of the bench). Dropping a bench card on a roster card swaps the two; on an empty slot, it activates the card in that slot. Dropping a bench card on another bench card reorders the bench. A focused card image toggles between roster and bench with Enter or Space. Errors (for example a full roster or a duplicate player) appear in the status line. While a move, swap or toggle request runs, further drops and Enter/Space toggles are ignored (#185).
-- For locked weeks: read-only; no dragging or keyboard toggling.
+- For the editable week: drag a card to rearrange or move it, with a mouse, a pen or a finger (on touch, hold the card for a quarter of a second to pick it up; a quicker swipe scrolls the page). The card lifts and follows the pointer, both zones light up, and the roster makes room live: in a zone the other cards slide aside, and a bench card over a roster card dims that card with an arrow to the bench (a swap). Near the top or bottom of the screen the page scrolls. Dropping a roster card on another roster card moves it to that position; on an empty slot, it moves there; on the bench, it goes before the bench card under it (or last). Dropping a bench card on a roster card swaps the two; on an empty slot (or the roster area), it joins the roster there. Dropping a bench card on the bench reorders it. The move shows at once and the cards glide into place. A move that breaks a rule (full roster, a second card of the same player, a removed player) glides back and the status line names the rule. Releasing outside both zones, Escape or a cancelled touch puts the card back. A focused card image toggles between roster (first free slot) and bench (front) with Enter or Space. Changes save automatically; nothing blocks the next move while a save runs.
+- For locked weeks: read-only; cards can't be picked up and Enter or Space does nothing. Clicking a card still opens it.
 - After bench substitution has run for a locked week, a bench card that was swapped in sits in the slot of the card it replaced, with a **"Subbed in for {player}"** label under its points.
 
 ### Roster totals
@@ -47,7 +47,7 @@ A line under the grid (`#rosterTotals`):
 
 - **This week** — sum of fantasy points earned by the roster cards during the selected week's matches.
 - **Season** — cumulative fantasy points earned across all locked weeks (only counting cards that were in the active roster snapshot for each week, after any bench substitution).
-- **Status** (`#rosterStatus`) — "{n}/5 active" for the editable week; empty for locked weeks; shows the error when a roster change fails.
+- **Status** (`#rosterStatus`) — "{n}/5 active" for the editable week; empty for locked weeks. Autosave (600 ms after the last move, at once when the page is hidden, the tab or week changes, or the week locks within 2 minutes): "Saving…" while a save runs, then "Saved" for 2 seconds. On a network error: "Couldn't save." with a **Retry** button (`#rosterRetryBtn`), and the layout stays as arranged. When the roster changed elsewhere (another tab, the Twitch panel): the cards glide to the latest layout and it says "Your roster changed elsewhere. Showing the latest." A refused move or save names the rule. When the shown week locked before the save: "Week N locked; this change counts from Week N+1". Leaving the tab never prompts.
 - **Substitution note** (`#rosterSubsNote`) — for a locked week whose substitutions haven't run yet: "Substitutions are made {N} hours after the week ends" (N from `substitution_delay_hours`). Hidden otherwise.
 
 ### Bench section
@@ -69,3 +69,9 @@ A spotlight tour of this tab (`frontend/app-tour.js`). It starts from **Show the
 - Esc or a click on the dark area skips; Enter or → goes to the next step; ← goes back. Focus moves into the box and returns to the page on close.
 - Skip, Done, Esc and a backdrop click all save `fantasy.tourSeen.v1` in `localStorage`, so the automatic start doesn't repeat. The automatic start gives up for that visit if a popup stays open for 10 seconds. The How to Play button always starts it.
 - When the tour closes, a waiting "recap is ready" popup (see `weekly-report.md`) appears right away.
+
+## Motion
+
+- **Roster moves (#186, built):** every move (drag, Enter or Space, a conflict reload) glides the cards that change place from their old position to the new one (about 220 ms); a dropped card glides from where it was released. The picked-up card lifts (slightly larger, with a shadow). Details: `markdown/features/reference/my-team-save-roster.md`.
+- **Planned (#155):** proposed in `markdown/plans/plan-issue-155-my-team-motion.md`: new points count up since the last visit, a one-time lock stamp, a one-time substitution reveal, and a token count-up on gains. Each plays once per event and finishes on click.
+- With `prefers-reduced-motion`, nothing glides or lifts: cards jump to their places.
