@@ -229,7 +229,7 @@ class TestOneClearIdentityPanelOnProfile:
         panel = tab[tab.index('id="profileIdentityPanel"'):tab.index("<h2>Account</h2>")]
         assert "Your Tags" in panel and 'id="profileTagsContainer"' in panel
         js = _read("app-profile.js")
-        assert '<span class="tag-chip">${_escHtml(t.label)}</span>' in js
+        assert 'tags.map(t => tagBadgeHtml(t)).join("")' in js  # issue #202: role badges
         assert ">No tags</span>" in js
 
     def test_player_identity_not_linked_state_explains_linking_and_offers_link_steam(self):

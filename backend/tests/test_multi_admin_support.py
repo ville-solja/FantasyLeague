@@ -367,8 +367,9 @@ class TestFrontendAdminBadgeAndToggleButton:
         with open(APP_ADMIN_JS_PATH) as f:
             source = f.read()
         assert "u.is_admin" in source
-        assert "ADMIN</span>" in source
-        assert "TESTER</span>" in source  # existing pattern this mirrors
+        # Issue #202: the shared role/status badge helpers render ADMIN and TESTER.
+        assert "adminBadgeHtml(u.is_admin)" in source
+        assert 'statusBadgeHtml("TESTER"' in source  # existing pattern this mirrors
 
     def test_toggle_admin_button_omitted_on_acting_admins_own_row(self):
         """_renderUsers() renders a Promote to admin / Demote from admin toggle button on every user row except the one where u.id === activeUserId."""

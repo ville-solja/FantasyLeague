@@ -15,7 +15,7 @@ import time
 import requests as _requests
 from sqlalchemy.orm import Session
 
-from models import TwitchChannelApproval
+from models import TwitchChannelApproval, User
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,8 @@ def _lookup_names(channel_ids: list[str]) -> dict[str, dict]:
 # Admin list and decisions
 # ---------------------------------------------------------------------------
 
-def _row_dict(row: TwitchChannelApproval | None, channel_id: str, from_env: bool) -> dict:
+def _row_dict(row: TwitchChannelApproval | None, channel_id: str, from_env: bool,
+              linked: dict[str, str] | None = None) -> dict:
     return {
         "channel_id": channel_id,
         "display_name": row.display_name if row else None,
@@ -155,7 +156,18 @@ def _row_dict(row: TwitchChannelApproval | None, channel_id: str, from_env: bool
         "last_seen_at": row.last_seen_at if row else None,
         "decided_at": row.decided_at if row else None,
         "from_env": from_env,
+        "linked_username": (linked or {}).get(channel_id),
     }
+
+
+def linked_usernames(db: Session, channel_ids: set[str]) -> dict[str, str]:
+    """{channel_id: username} of the website accounts whose connected Twitch id is one
+    of these channels (issue #201). Soft accounts don't count."""
+    if not channel_ids:
+        return {}
+    return {cid: name for cid, name in
+            db.query(User.twitch_account_id, User.username)
+            .filter(User.twitch_account_id.in_(channel_ids), User.account_type == "full").all()}
 
 
 def list_channels(db: Session) -> dict:
@@ -179,16 +191,17 @@ def list_channels(db: Session) -> dict:
         if any(cid in rows for cid in found):
             db.commit()
 
+    linked = linked_usernames(db, env | set(rows))
     result = {"env": [], APPROVED: [], PENDING: [], REJECTED: []}
     for cid in sorted(env):
-        item = _row_dict(rows.get(cid), cid, from_env=True)
+        item = _row_dict(rows.get(cid), cid, from_env=True, linked=linked)
         if cid in env_names:
             item.update(display_name=env_names[cid].get("display_name"), login=env_names[cid].get("login"))
         result["env"].append(item)
     for cid, row in rows.items():
         if cid in env or row.status not in (APPROVED, PENDING, REJECTED):
             continue
-        result[row.status].append(_row_dict(row, cid, from_env=False))
+        result[row.status].append(_row_dict(row, cid, from_env=False, linked=linked))
     for key in (APPROVED, PENDING, REJECTED):
         result[key].sort(key=lambda r: r["last_seen_at"] or 0, reverse=True)
     return result

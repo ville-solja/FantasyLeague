@@ -16,7 +16,7 @@ async function loadProfile() {
     const container = document.getElementById("profileTagsContainer");
     if (container) {
       container.innerHTML = tags.length
-        ? tags.map(t => `<span class="tag-chip">${_escHtml(t.label)}</span>`).join("")
+        ? tags.map(t => tagBadgeHtml(t)).join("")
         : `<span class="profile-tags-empty">No tags</span>`;
     }
     const gapHint = document.getElementById("profileTagGapHint");

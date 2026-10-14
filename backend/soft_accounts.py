@@ -460,6 +460,9 @@ def reverse_merge(db, log: TwitchMergeLog, actor: dict | None = None,
                    f"cards={len(returned_ids)} tokens={tokens_moved} token_shortfall={shortfall} "
                    f"starter_restored={soft_tokens - tokens_moved} from_website={from_website} "
                    f"roster_entries={len(restored)}"))
+    # Issue #201: the website account lost its Twitch id, so its automatic Caster tag goes.
+    import caster_tags
+    caster_tags.sync_safely(db, reason="merge_reversed")
     db.flush()
     return {"log_id": log.id, "soft_user_id": soft.id, "cards_returned": len(returned_ids),
             "tokens_returned": tokens_moved, "token_shortfall": shortfall,

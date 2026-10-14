@@ -32,7 +32,7 @@ function _renderMvpLeaderboard() {
   renderIfChanged(tbody, ranked.map((p, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
+      <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.mvp_count}</td>
     </tr>`).join(""));
 }
@@ -97,7 +97,7 @@ function renderPlayers(rows) {
   }
   renderIfChanged(tbody, sorted.map(p => `
     <tr>
-      <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
+      <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (_escHtml(p.team_name) || "—")}</td>
       <td>${p.matches}</td>
       <td>${Number(p.avg_points).toFixed(1)}</td>
@@ -289,7 +289,7 @@ async function openTeamModal(teamId) {
     } else {
       document.getElementById("teamModalPlayers").innerHTML = t.players.map(p => `
         <tr>
-          <td><img src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${_escHtml(p.name)}</span></td>
+          <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${_escHtml(p.name)}</span></td>
           <td>${p.matches}</td>
           <td>${Number(p.avg_points).toFixed(1)}</td>
           <td>${Number(p.total_points).toFixed(1)}</td>
@@ -313,7 +313,7 @@ function _formatGameDuration(seconds) {
 
 function _gameHeroIconsHtml(heroUrls) {
   return (heroUrls || []).map(url => url
-    ? `<img class="hero-icon" src="${_escHtml(_safeUrl(url))}" title="" onerror="this.style.display='none'" />`
+    ? `<img draggable="false" class="hero-icon" src="${_escHtml(_safeUrl(url))}" title="" onerror="this.style.display='none'" />`
     : `<span class="hero-icon hero-icon-placeholder"></span>`
   ).join("");
 }

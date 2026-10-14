@@ -66,6 +66,10 @@ Only the code, checked against `[a-z_]{1,64}` (otherwise `unknown`), appears in 
 
 When the callback stores the id and no soft account holds it, and this website account never received a Twitch starter (no earlier Twitch starter bonus, no merge), `connect_account` records a `connect` row in `twitch_starter_grants` and, only if that row is new, credits `TWITCH_CONNECT_BONUS_TOKENS` (default `INITIAL_TOKENS`) with `credit_tokens` and audits `twitch_starter_bonus` (user id and amount, no Twitch id), in the same commit, returning `connected_bonus`. A `merge_ready` connect grants nothing: the soft account's starter comes with the merge. The row outlives disconnect and merge reversal, so the Twitch starter bonus is paid once per Twitch account and once per website account. Only a keyed one-way hash of the Twitch user id is kept there (HMAC-SHA256 with a key derived from `SECRET_KEY`), never the id itself, so a disconnected or deleted account's Twitch id can't be read back; rotating `SECRET_KEY` resets this once-per-Twitch-account check. Details: `uniform-twitch-starter-tokens.md`.
 
+### Automatic Caster tag (issue #201)
+
+`connect_account` runs the Caster tag sync before both of its commits ("connected" and "merge_ready"), and `disconnect` runs it (reason `twitch_disconnected`) before its commit, so a website account whose Twitch is an approved streamer channel gains or loses the automatic `caster` tag in the same request. A merge reversal syncs too (reason `merge_reversed`). The sync runs in a savepoint; a failure is logged by exception type and never blocks the connect or disconnect. See `caster-tag-and-link-adoption.md`.
+
 If S joined without the identity share and shares it later, the panel's identity-share step finds W holding the id and makes S W's pending merge (unless one is already pending or W has used its merge). That is what the Profile guidance "Joined on Twitch first? In the Kana Cards Twitch panel, open Settings and choose Share your Twitch identity, then reload this page." relies on.
 
 ### The merge

@@ -630,12 +630,14 @@ class TestYourCardsInMatchResults:
 
     def test_owned_tile_uses_filled_accent_ghost(self):
         """style.css: `.weekly-summary-owned` sets a `var(--accent-ghost)` background (filled
-        shape, not colour alone) and does not remove the MVP outline, so both can co-exist."""
+        shape, not colour alone) and does not hide the MVP mark, so both can co-exist. (Issue
+        #202 replaced the MVP outline with a `--mark-mvp` label; see
+        test_issue_202_ui_feedback_polish.py.)"""
         css = _read(_STYLE_CSS_PATH)
         owned = _css_rule(css, ".weekly-summary-owned")
         assert "background: var(--accent-ghost)" in owned
         assert "outline" not in owned
-        assert "outline: 2px solid var(--accent)" in _css_rule(css, ".weekly-summary-mvp")
+        assert "mark-mvp" in _fn_body(_read(_APP_WEEKLY_SUMMARY_JS_PATH), "_weeklySummaryPlayerHtml")
         fn = _fn_body(_read(_APP_WEEKLY_SUMMARY_JS_PATH), "_weeklySummaryPlayerHtml")
         assert "${mvpClass}${ownedClass}" in fn
 

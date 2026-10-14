@@ -624,6 +624,8 @@ class UserTag(Base):
     tag_id     = Column(Integer, ForeignKey("tag_definitions.id"), nullable=False)
     granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     granted_at = Column(Integer)
+    # Issue #201: "admin" (granted by hand) or "caster_sync" (caster_tags.sync).
+    source     = Column(String, nullable=False, default="admin", server_default="admin")
 
 
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)

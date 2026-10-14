@@ -446,7 +446,7 @@ async function loadBoosterTeams() {
     renderIfChanged(grid, teams.map(t => {
       const exhausted = t.remaining === 0;
       const logo = t.logo_url
-        ? `<img src="${_escHtml(t.logo_url)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-bottom:6px;" onerror="this.style.display='none'">`
+        ? `<img draggable="false" src="${_imgSrc(t.logo_url)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-bottom:6px;" onerror="this.style.display='none'">`
         : `<div style="width:36px;height:36px;border-radius:50%;background:#222;margin-bottom:6px;"></div>`;
       return `<div class="booster-team-tile${exhausted ? " booster-team-tile--exhausted" : ""}"
                    data-team-id="${t.team_id}"

@@ -49,7 +49,8 @@ _ACCOUNT_TYPE_FILTERS = {"full", "twitch", "all"}
 def list_users(account_type: str = "full", db=Depends(get_db), _: dict = Depends(require_admin)):
     """Admin user list. account_type filters it: "full" (website accounts, the
     default), "twitch" (Twitch viewer soft accounts, issue #157) or "all". The
-    Twitch ids themselves are never returned, only whether they are set."""
+    Steam and Twitch ids themselves are never returned, only whether they are set
+    (issue #201: steam_linked, and is_demo for the adoption totals)."""
     if account_type not in _ACCOUNT_TYPE_FILTERS:
         raise HTTPException(status_code=422, detail="account_type must be full, twitch or all")
     query = db.query(User)
@@ -67,7 +68,7 @@ def list_users(account_type: str = "full", db=Depends(get_db), _: dict = Depends
     tags_by_user: dict = {}
     for ut, td in user_tags_rows:
         tags_by_user.setdefault(ut.user_id, []).append(
-            {"id": td.id, "key": td.key, "label": td.label}
+            {"id": td.id, "key": td.key, "label": td.label, "source": ut.source or "admin"}
         )
     card_counts = dict(
         db.query(Card.owner_id, func.count(Card.id))
@@ -84,6 +85,8 @@ def list_users(account_type: str = "full", db=Depends(get_db), _: dict = Depends
             "last_seen_at": u.last_seen_at,
             "twitch_linked": bool(u.twitch_user_id),
             "twitch_identity_shared": bool(u.twitch_account_id),
+            "steam_linked": bool(u.steam_id),
+            "is_demo": bool(u.is_demo),
             "is_tester": bool(u.is_tester),
             "is_admin": bool(u.is_admin),
             "tags": tags_by_user.get(u.id, []),

@@ -271,6 +271,7 @@ th {
 }
 td { padding: 6px 8px; border-bottom: var(--bw-hair) solid var(--k-ink-900); color: var(--fg); }
 th.sortable { cursor: pointer; user-select: none; }
+.table-empty { color: var(--fg-muted); }
 th.sortable:hover { color: var(--fg); }
 th.sort-asc::after  { content: " \2191"; color: var(--k-orange-500); }
 th.sort-desc::after { content: " \2193"; color: var(--k-orange-500); }
@@ -375,24 +376,6 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   line-height: 1.3;
 }
 
-/* Issue #169: ADMIN badge, set only from the server's is_admin. Outlined in the accent
-   colour so it never looks like the filled flame tag chips an admin can grant. */
-.admin-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-  background: var(--accent-ghost);
-  color: var(--accent);
-  font-family: var(--font-display);
-  font-weight: var(--w-bold);
-  font-size: 11px;
-  line-height: 1.5;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  vertical-align: middle;
-}
 /* Verified / Self-reported label next to a linked player's name. */
 .player-source {
   font-family: var(--font-display);
@@ -869,14 +852,8 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
 }
 .badge-division.div1 { background: #1a1a2a; color: #8a8acc; }
 .badge-division.div2 { background: #1a2a1a; color: #7cc07c; }
-.league-week-tag {
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--fg-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+/* Status badge look comes from "Shared states" (issue #202). */
+.league-week-tag { flex-shrink: 0; }
 
 .series-row {
   display: grid;
@@ -914,14 +891,6 @@ button.now-card-btn { flex-shrink: 0; min-width: 96px; min-height: 36px; backgro
   letter-spacing: var(--tr-wide);
 }
 .series-live { display: flex; align-items: center; justify-content: center; gap: 6px; }
-.live-tag {
-  font-family: var(--font-display);
-  font-weight: var(--w-bold);
-  font-size: var(--fs-sm);
-  color: var(--k-err);
-  text-transform: uppercase;
-  letter-spacing: var(--tr-wider);
-}
 /* Fixed slots: links in one column, buttons in another, on every row. */
 .series-links {
   display: grid;
@@ -1802,13 +1771,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.weekly-summary-winner {
-  border: 2px solid var(--accent);
-  border-radius: var(--r-md);
-  padding: 4px 8px;
-}
+/* Issue #202: the winner is marked by its label and a bold name, both .mark-winner
+   (see "Shared states"), with no ring. */
 .weekly-summary-winner-label {
-  color: var(--accent);
   font-size: var(--fs-xs);
   font-weight: var(--w-bold);
   text-transform: uppercase;
@@ -1855,13 +1820,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   color: var(--fg);
   overflow-wrap: anywhere;
 }
-.weekly-summary-mvp {
-  outline: 2px solid var(--accent);
-  border-radius: 8px;
-  padding-top: 4px;
-}
+/* Issue #202: the MVP is a .mark-mvp label on its own line above the avatar, no ring. */
 .weekly-summary-mvp-label {
-  color: var(--accent);
+  display: block;
   font-size: var(--fs-xs);
   font-weight: var(--w-bold);
   text-transform: uppercase;
@@ -1872,8 +1833,8 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .weekly-summary-points-rostered { color: var(--accent); font-weight: var(--w-bold); font-variant-numeric: tabular-nums; }
 
 /* Issue #151: "YOUR CARD" / "YOUR SUB" tile — a filled shape plus a label, so
-   ownership never relies on colour alone. Background only: the MVP outline
-   (.weekly-summary-mvp) still shows on the same tile. */
+   ownership never relies on colour alone. Background only: the MVP label
+   (.weekly-summary-mvp-label) still shows on the same tile. */
 .weekly-summary-owned {
   background: var(--accent-ghost);
   border-radius: var(--r-sm);
@@ -2104,7 +2065,7 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .weekly-summary-roster-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: baseline;
   gap: var(--s-2);
 }
 .weekly-summary-roster-names { min-width: 0; overflow-wrap: anywhere; }
@@ -2165,19 +2126,22 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   margin: var(--s-2) 0 0;
   padding: 0;
 }
+/* Issue #202: a fixed-column grid (date | opponent | game | result | MVP | points), so
+   columns line up across rows and cards and an MVP row is no taller than the others. */
 .weekly-summary-game {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px var(--s-2);
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 1.75rem 2.5rem 4.25rem 3.75rem;
+  align-items: baseline;
+  column-gap: var(--s-2);
   padding: 5px 0;
   font-size: var(--fs-sm);
+  line-height: var(--lh-body);
   color: var(--fg-muted);
   border-top: var(--bw-hair) solid var(--border-soft);
 }
-.weekly-summary-game-date { color: var(--fg-muted); min-width: 40px; font-variant-numeric: tabular-nums; }
-.weekly-summary-game-opp { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.weekly-summary-game-num { color: var(--fg-muted); }
+.weekly-summary-game-date { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.weekly-summary-game-opp { min-width: 0; overflow-wrap: anywhere; }
+.weekly-summary-game-num { color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .weekly-summary-game-result,
 .weekly-summary-game-mvp {
   font-family: var(--font-display);
@@ -2188,10 +2152,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .weekly-summary-game-result.win { color: var(--k-ok); }
 .weekly-summary-game-result.loss { color: var(--fg-muted); }
 .weekly-summary-game-mvp {
-  color: var(--accent);
-  border: var(--bw-hair) solid var(--accent);
   border-radius: var(--r-xs);
-  padding: 0 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 .weekly-summary-game-mvp.pending .recap-mvp-bonus { display: none; }
 .weekly-summary-game-mvp.hl {
@@ -2200,13 +2163,13 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   box-shadow: 0 0 10px var(--accent);
 }
 .weekly-summary-game-pts {
-  margin-left: auto;
+  text-align: right;
   font-weight: var(--w-bold);
   color: var(--fg);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.weekly-summary-game-pts.not-scored { font-weight: var(--w-regular); color: var(--fg-muted); }
+.weekly-summary-game-pts.not-scored { font-weight: var(--w-regular); font-size: var(--fs-xs); color: var(--fg-muted); }
 
 /* ---- Breakdown chips and reveal animation (issue #152) ---- */
 .weekly-recap-controls { display: flex; gap: 4px; margin-left: auto; }
@@ -2362,6 +2325,20 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 @media (max-width: 600px) {
   .weekly-summary-modal { width: calc(100vw - 16px); padding: var(--s-4); height: 92vh; max-height: 92vh; }
   .weekly-summary-reveal-footer { bottom: calc(-1 * var(--s-4)); }
+  /* Every game row takes two lines, so the columns still line up and MVP rows are
+     no taller: date | opponent | points, then game | result | MVP. */
+  .weekly-summary-game {
+    grid-template-columns: 2.75rem 1.75rem 2.5rem minmax(0, 1fr) 3.75rem;
+    grid-template-areas: "date opp opp opp pts" ". num result mvp mvp";
+    column-gap: var(--s-1);
+  }
+  .weekly-summary-game-date { grid-area: date; }
+  .weekly-summary-game-opp { grid-area: opp; }
+  .weekly-summary-game-num { grid-area: num; }
+  .weekly-summary-game-result { grid-area: result; }
+  .weekly-summary-game-mvp,
+  .weekly-summary-game-mvp-none { grid-area: mvp; }
+  .weekly-summary-game-pts { grid-area: pts; }
 }
 
 /* Profile › Player identity (issue #188): full-width panel, tags in a side column */
@@ -2431,20 +2408,128 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 }
 .profile-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .profile-tags-empty { font-size: var(--fs-sm); color: var(--fg-muted); }
-.tag-chip {
-  border: var(--bw-hair) solid var(--k-orange-700);
-  background: var(--accent-ghost);
-  color: var(--k-orange-100);
-  border-radius: var(--r-sm);
-  padding: 4px 10px;
-  font-size: var(--fs-sm);
-}
 
 /* Own player card popup (issue #188): the card viewer's footer carries the reason */
 .reveal-own-card-note {
   font-size: var(--fs-sm);
   line-height: var(--lh-body);
   color: var(--fg);
+}
+
+/* ============================================================
+   SHARED STATES (issue #202) — the design system's "States and emphasis"
+   rules (.claude/skills/README.md). Surfaces use these instead of their own copies.
+   ============================================================ */
+
+/* Selected + hover / focus-visible: inverted, on every selected control. */
+.tab.active:hover,
+.tab.active:focus-visible,
+.weekly-summary-tab-btn.active:hover,
+.weekly-summary-tab-btn.active:focus-visible,
+.howtoplay-tab-btn.active:hover,
+.howtoplay-tab-btn.active:focus-visible,
+.admin-tab-btn.active:hover,
+.admin-tab-btn.active:focus-visible,
+.schedule-div-chip.active:hover,
+.schedule-div-chip.active:focus-visible,
+.schedule-week-chip.selected:hover,
+.schedule-week-chip.selected:focus-visible,
+.schedule-hide-toggle[aria-pressed="true"]:hover,
+.schedule-hide-toggle[aria-pressed="true"]:focus-visible {
+  background: var(--state-selected-hover-bg);
+  color: var(--state-selected-hover-fg);
+}
+/* Accent details inside a selected control ("This week" and the hidden-results marker on
+   a week chip) take the inverted text colour, so they stay visible on the accent fill. */
+.schedule-week-chip.selected:hover .schedule-week-chip-tag,
+.schedule-week-chip.selected:focus-visible .schedule-week-chip-tag {
+  color: var(--state-selected-hover-fg);
+}
+.schedule-week-chip.selected:hover .schedule-week-chip-marker,
+.schedule-week-chip.selected:focus-visible .schedule-week-chip-marker {
+  background: var(--state-selected-hover-fg);
+}
+/* The focus ring stays on top of the inverted fill. */
+.tab.active:focus-visible,
+.weekly-summary-tab-btn.active:focus-visible,
+.howtoplay-tab-btn.active:focus-visible,
+.admin-tab-btn.active:focus-visible,
+.schedule-div-chip.active:focus-visible,
+.schedule-week-chip.selected:focus-visible,
+.schedule-hide-toggle[aria-pressed="true"]:focus-visible {
+  outline: var(--bw-thick) solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Role and status badges: one family. Display type at --fs-sm (the readability
+   floor for Big Shoulders), coloured text, a hairline border, no fill. */
+.role-badge,
+.status-badge,
+.league-week-tag,
+.live-tag {
+  display: inline-block;
+  padding: 0 5px;
+  background: transparent;
+  border: var(--bw-hair) solid currentColor;
+  border-radius: var(--r-xs);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  line-height: 1.25;
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+.role-badge,
+.status-badge { margin-left: 6px; }
+.badge-list { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.badge-list > .role-badge,
+.badge-list > .status-badge,
+.profile-tags > .role-badge { margin-left: 0; }
+.role-badge-admin  { color: var(--badge-admin); }
+.role-badge-winner { color: var(--badge-winner); }
+.role-badge-caster { color: var(--badge-caster); }
+.role-badge-tag    { color: var(--badge-tag); }
+/* Status badges read as information: neutral text and a --border outline. */
+.status-badge,
+.league-week-tag,
+.live-tag {
+  color: var(--badge-status);
+  border-color: var(--border);
+}
+/* LIVE keeps the semantic error red: it is the one status that asks for attention. */
+.live-tag { color: var(--k-err); }
+
+/* Emphasis inside data: the winner is a bold --mark-winner name under its label, the
+   MVP a --mark-mvp label. They never share a colour or a form, and neither is ringed. */
+.mark-winner {
+  color: var(--mark-winner);
+  font-weight: var(--w-bold);
+}
+.mark-mvp {
+  color: var(--mark-mvp);
+  font-weight: var(--w-bold);
+  text-transform: uppercase;
+}
+
+/* Self: the signed-in user's rows, as a full-row tint and bold text (no left bar). */
+.row-self,
+.row-self > td {
+  background: var(--row-self-bg);
+  font-weight: var(--w-bold);
+}
+.lb-row-expandable { cursor: pointer; }
+
+/* Selection: images and controls are not selectable or draggable; text stays selectable. */
+img {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+button {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ============================================================

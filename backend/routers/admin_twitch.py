@@ -16,6 +16,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException
 
+import caster_tags
 import soft_accounts
 import twitch_channels
 import twitch_status
@@ -90,6 +91,7 @@ def list_twitch_channels(admin: dict = Depends(require_admin), db=Depends(get_db
 def _decide(channel_id: str, action: str, admin: dict, db):
     try:
         row = twitch_channels.decide(db, channel_id, action, admin)
+        caster_tags.sync_safely(db)  # issue #201: the Caster tag follows the approval
         db.commit()
     except twitch_channels.ChannelNotFound as exc:
         db.rollback()

@@ -23,7 +23,7 @@ Modifier labels come from `scoring.STAT_LABELS`, shared with the card image (`im
 
 ## Reveal flow
 
-`frontend/app-weekly-summary.js` runs the reveal after a revealed week's columns render (`_maybePlayRecap` from `renderWeeklySummaryContent`), but only when `renderWeeklySummaryContent(data, {playRecap})` is called with `playRecap` true. `selectWeeklySummaryTab` passes `false` for a week already cached during this opening of the popup (#159), so re-rendering a week in the same opening, from the cache or its quiet refresh, shows the finished state. `_playRecap` rebuilds the roster column by hand, so it calls `forgetRendered` on the roster body first; the next `renderIfChanged` then writes the column again.
+`frontend/app-weekly-summary.js` runs the reveal after a revealed week's columns render (`_maybePlayRecap` from `renderWeeklySummaryContent`), but only when `renderWeeklySummaryContent(data, {playRecap})` is called with `playRecap` true. `selectWeeklySummaryTab` passes `false` for a week already cached (#159; since #202 the cache lasts for the page visit, not one opening), so re-rendering a week, from the cache or its quiet refresh, shows the finished state. `_playRecap` rebuilds the roster column by hand, so it calls `forgetRendered` on the roster body first; the next `renderIfChanged` then writes the column again.
 
 
 
@@ -39,7 +39,7 @@ Only the card being revealed has the orange border and glow (`.recap-current`). 
 
 ### Controls and accessibility
 
-- **Plays once per week per browser.** Played week ids are kept in `localStorage` under `weeklyRecapPlayed:<user id>` (`weeklyRecapPlayed:anon` when no user id is known), keeping the last 200 week ids; every access is in try/catch, so when storage is unavailable the animation plays again. A week is marked played when the animation finishes or is skipped. A recap interrupted by `_stopRecap()` (a week switch or closing the popup) is not marked played, so it plays again on a later opening.
+- **Plays once per week per browser.** Played week ids are kept in `localStorage` under `weeklyRecapPlayed:<user id>` (`weeklyRecapPlayed:anon` when no user id is known), keeping the last 200 week ids; every access is in try/catch, so when storage is unavailable the animation plays again. A week is marked played when the animation finishes or is skipped. A recap interrupted by `_stopRecap()` (a week switch or closing the popup) is not marked played. Since issue #202 the week cache lasts for the page visit, so a recap plays at most once per week per page visit: one interrupted by a week switch or by closing the popup does not play again on reopening; the **Replay** button plays it. On a later page visit it plays again.
 - **Skip** (shown while playing) stops the animation and renders the finished state at once. **Replay** (shown when idle on a revealed week with at least one counted card, and hidden with reduced motion) plays it again without touching the stored list.
 - **Cancellation.** `_recapAnimation.runId` is captured by every wait and `requestAnimationFrame` tween; `_stopRecap()` bumps it and clears every pending timer and frame. Skip, `selectWeeklySummaryTab` (switching or reopening a week) and `closeWeeklySummary` call it, so nothing keeps running.
 - **Reduced motion.** With `prefers-reduced-motion: reduce` nothing animates and Replay is hidden; the CSS media query also turns the recap transitions and animations off.

@@ -64,7 +64,36 @@ Reveal state does not affect other users or other weeks.
 
 The "Weekly report" button carries a highlight/badge whenever a newer week's summary has
 become available than the last one the current user opened the popup for. Opening the popup
-(not revealing any particular week) clears it.
+(not revealing any particular week) clears it. The page sends `POST /weekly-summary/seen` only
+when the last week list it fetched reported `has_unseen: true` (issue #202).
+
+## Client Cache (issue #202)
+
+The popup keeps what it has fetched for the page visit, so reopening it doesn't flash:
+
+- **Weeks:** `_weeklySummaryCache` in `frontend/app-weekly-summary.js` maps `week_id` to
+  `{data, at}`, where `at` is the fetch time. Closing the popup keeps it. A cached week renders
+  at once with no dimming; it is fetched again only when it is more than 60 s old
+  (`_WEEKLY_SUMMARY_FRESH_MS`), and that quiet refresh re-renders only if the markup changed
+  (`renderIfChanged`) and never replays the recap. A failed quiet refresh leaves the cached
+  week on screen.
+- **Week list:** reopening within 60 s of the last `GET /weekly-summary` (including the one
+  `checkWeeklySummaryHighlight()` makes on page load) reuses it; otherwise it is fetched once.
+- **Clearing:** revealing results drops the revealed weeks; a fetched week list whose
+  signature (`week_id:label:revealed`) differs from the last one drops every week;
+  `clearWeeklySummaryCache()` drops everything, including the list time, empties both
+  columns and bumps the request counter, so a week fetch still in flight for the previous
+  user is ignored. `app-auth.js` calls it on logout and the 401 path (`_clearLocalAuthState`),
+  before loading a newly signed-in user (password login, registration, Steam sign-up), and in
+  `loadMe()` when `/me` returns a different user id than before.
+- **Owner:** the cache records the `activeUserId` it belongs to. Selecting a week, loading the
+  list and storing a fetched list first check it, and drop the cache when another user is
+  signed in (for example from another tab, which shares the session cookie).
+- **Same tab:** clicking the week tab already shown does nothing.
+- **Recap:** because the cache lasts for the page visit, a week's recap plays at most once
+  per page visit; one interrupted by a week switch or by closing the popup does not play again
+  on reopening (the **Replay** button plays it), and plays again on a later page visit only if
+  it never finished.
 
 ## Recap Popup (issue #151)
 

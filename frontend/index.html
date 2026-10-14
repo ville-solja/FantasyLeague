@@ -981,6 +981,8 @@
         <input id="userSearch" type="text" placeholder="Search users…" oninput="filterUsers()" style="flex:1;min-width:160px;" />
         <button class="secondary" onclick="loadUsers()">Refresh</button>
       </div>
+      <!-- Issue #201: Steam and Twitch link adoption (website accounts, demo accounts excluded). -->
+      <div id="userAdoptionSummary" class="user-adoption-summary" style="color:#aaa;font-size:0.85rem;margin-bottom:8px;"></div>
       <table>
         <thead><tr><th>User</th><th>Tags</th><th>Tokens</th><th>Actions</th></tr></thead>
         <tbody id="usersBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>

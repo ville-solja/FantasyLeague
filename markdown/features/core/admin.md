@@ -67,8 +67,8 @@ treated as a social-engineering attempt and mentioned to the other admins.
 Returns the user list, filtered by account type (issue #157): `full` (website accounts, the
 default), `twitch` (Twitch viewer soft accounts created by the panel's Join) or `all`. Any other
 value returns 422. Each entry contains `id`, `username`, `account_type`, `tokens`, `card_count`,
-`created_at`, `last_seen_at`, `twitch_linked`, `twitch_identity_shared`, `is_tester`, `is_admin`,
-and `tags` (array of `{id, key, label}` objects for admin-granted tags; empty array if none).
+`created_at`, `last_seen_at`, `twitch_linked`, `twitch_identity_shared`, `steam_linked`, `is_demo`, `is_tester`, `is_admin`
+(booleans for the links, never the ids; issue #201), and `tags` (array of `{id, key, label, source}` objects, `source` = `admin` or `caster_sync` for the automatic Caster tag; empty array if none).
 `username` is the user's display name: a soft account has no username and shows as
 `Twitch viewer #{id}`. `twitch_linked` and `twitch_identity_shared` are booleans; the Twitch ids
 themselves are never returned. The admin search box filters the loaded list, so soft accounts
@@ -341,6 +341,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_tag_definition_deleted` | Admin deleted a tag definition |
 | `admin_tag_grant` | Admin granted a tag to a user |
 | `admin_tag_revoke` | Admin revoked a tag from a user |
+| `caster_tag_auto_grant` | The automatic Caster tag was given to a website account whose connected Twitch is an approved streamer channel (issue #201; actor `system`, `detail` is `user_id=… channel=…`) |
+| `caster_tag_auto_revoke` | An automatic Caster tag was removed (issue #201; actor `system`, `detail` is `user_id=… reason=channel_not_approved\|twitch_disconnected\|merge_reversed`) |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
 | `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
 | `admin_match_retry_parse` | Admin retried a match's parse via the Matches tab (`detail` has the fetch result and outcome) |

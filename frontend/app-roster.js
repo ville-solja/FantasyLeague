@@ -108,12 +108,12 @@ async function loadRoster(weekId = null, opts = {}) {
         const now = Date.now() / 1000;
         const isLive = week.start_time <= now && week.end_time >= now;
         weekStatusEl.textContent = isLive ? "In progress" : "Locked";
-        weekStatusEl.style.color = "#888";
+        weekStatusEl.style.color = "var(--fg-muted)";
       } else {
         const lockDate = new Date((week.start_time - 1) * 1000);
         const formatted = lockDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
         weekStatusEl.textContent = `Locks ${formatted}`;
-        weekStatusEl.style.color = "#f0b429";
+        weekStatusEl.style.color = "var(--k-amber-500)";
       }
     }
 

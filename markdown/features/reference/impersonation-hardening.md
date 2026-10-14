@@ -28,7 +28,7 @@ Rows that show another user's name carry `is_admin` (boolean), read from `users.
 | `GET /leaderboard/seasons/{season_id}` | each `standings[]` entry (current admin status of `user_id`) |
 | `GET /profile/{user_id}` | the profile |
 
-The website shows an outlined **ADMIN** badge (`adminBadgeHtml` in `frontend/app-globals.js`, class `.admin-badge`) next to the name on the season and weekly leaderboards, past season standings, and the player's own Profile. It is built only from `is_admin`, never from tags. `POST /admin/tags` refuses a tag whose key or label is `admin` (any case) with 422 "This tag name is reserved".
+The website shows an **ADMIN** role badge (`adminBadgeHtml` in `frontend/app-globals.js`, classes `.role-badge .role-badge-admin` in the admin colour, which no tag variant uses; issue #202, see `ui-feedback-polish.md`) next to the name on the season and weekly leaderboards, past season standings, and the player's own Profile. It is built only from `is_admin`, never from tags. `POST /admin/tags` refuses a tag whose key or label is `admin` (any case) with 422 "This tag name is reserved".
 
 ## Player ids on profiles
 

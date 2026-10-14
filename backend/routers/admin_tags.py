@@ -3,6 +3,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+import caster_tags
 from database import get_db
 from deps import require_admin, _audit
 from models import TagDefinition, User, UserTag
@@ -71,8 +72,8 @@ def grant_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(requi
         raise HTTPException(status_code=404, detail="Tag not found")
     existing = db.query(UserTag).filter_by(user_id=user_id, tag_id=tag_id).first()
     if not existing:
-        db.add(UserTag(user_id=user_id, tag_id=tag_id,
-                       granted_by=admin["user_id"], granted_at=int(time.time())))
+        db.add(UserTag(user_id=user_id, tag_id=tag_id, granted_by=admin["user_id"],
+                       granted_at=int(time.time()), source=caster_tags.SOURCE_ADMIN))
         _audit(db, "admin_tag_grant", actor_id=admin["user_id"],
                actor_username=admin["username"],
                detail=f"user_id={user_id} tag={tag.key}")
@@ -85,6 +86,11 @@ def revoke_tag(user_id: int, tag_id: int, db=Depends(get_db), admin=Depends(requ
     row = db.query(UserTag).filter_by(user_id=user_id, tag_id=tag_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="User does not have this tag")
+    # Issue #201: the sync would grant it again; it follows Approved streamers.
+    if row.source == caster_tags.SOURCE_SYNC:
+        raise HTTPException(status_code=409, detail=(
+            "This tag is given automatically to approved streamers; "
+            "remove the channel from Approved streamers instead"))
     tag = db.get(TagDefinition, tag_id)
     _audit(db, "admin_tag_revoke", actor_id=admin["user_id"],
            actor_username=admin["username"],
