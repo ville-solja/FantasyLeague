@@ -60,6 +60,13 @@ Pointer Events replace HTML5 drag-and-drop (#186), so dragging also works on pho
   a removed player) glides back and the status line names the rule.
 - **Cancel.** Releasing outside both zones, pressing Escape or a cancelled pointer returns
   the card to its place with a glide; nothing is saved.
+- **FLIP.** Every glide uses the shared `flipMove(els, first, opts)` in `app-globals.js`:
+  `first` maps each node to its rect before the DOM change, then each moved node is inverted
+  with a `transform` and played back (`FLIP_DURATION_MS` 220 ms, `opts.duration` to change
+  it; #155's substitution playback passes 700 ms through `renderRosterLayout(layout,
+  { animate: true, duration })`). Nothing glides under `prefers-reduced-motion`. The other My
+  Team animations (count-ups, lock stamp, substitutions) are described in
+  [Weekly Recap Animations](weekly-recap-animations.md#my-team-motion-issue-155).
 
 | Drag from | Drop onto | Result |
 |---|---|---|

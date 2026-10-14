@@ -79,12 +79,56 @@ function updateTokenDisplay(balance) {
   if (!el) return;
   if (balance !== null && activeUserId) {
     const numEl = document.getElementById("headerTokenNum");
-    if (numEl) numEl.textContent = balance;
+    if (numEl) _showTokenBalance(el, numEl, balance);
     el.style.display = "flex";
     if (typeof lucide !== "undefined") lucide.createIcons();
   } else {
+    if (_tokenMotion.finish) _tokenMotion.finish();
+    _tokenMotion.shown = null;
     el.style.display = "none";
   }
+}
+
+// Issue #155: the balance the header chip shows now (null before the first display
+// after page load or a logout) and the finish function of a running count-up.
+const _tokenMotion = { shown: null, finish: null };
+const TOKEN_COUNT_UP_MS = 600;
+
+/**
+ * Write the balance into the header chip. A rise counts the number up, pulses the
+ * chip once and floats "+N"; spending, the same balance and reduced motion show the
+ * number at once. The first display after page load compares with the balance last
+ * shown to this user in this browser (tokensSeen:<user id>).
+ */
+function _showTokenBalance(chip, numEl, balance) {
+  const store = seenStore(`tokensSeen:${activeUserId}`);
+  const prev = _tokenMotion.shown !== null ? _tokenMotion.shown : store.get(null);
+  _tokenMotion.shown = balance;
+  store.set(balance);
+  if (_tokenMotion.finish) _tokenMotion.finish();
+  if (typeof prev !== "number" || !(balance > prev) || prefersReducedMotion()) {
+    numEl.textContent = balance;
+    return;
+  }
+  chip.classList.remove("token-chip-pulse");
+  void chip.offsetWidth; // restart the pulse
+  chip.classList.add("token-chip-pulse");
+  const float = document.createElement("span");
+  float.className = "token-float";
+  float.setAttribute("aria-hidden", "true");
+  float.textContent = `+${balance - prev}`;
+  chip.appendChild(float);
+  const timer = setTimeout(() => finish(), TOKEN_COUNT_UP_MS + 300);
+  const stopTween = tweenNumber(numEl, prev, balance, TOKEN_COUNT_UP_MS);
+  function finish() {
+    if (_tokenMotion.finish !== finish) return;
+    _tokenMotion.finish = null;
+    clearTimeout(timer);
+    stopTween();
+    chip.classList.remove("token-chip-pulse");
+    float.remove();
+  }
+  _tokenMotion.finish = finish;
 }
 
 // Last markup renderIfChanged wrote into each element (issue #159).
@@ -258,4 +302,73 @@ function flipMove(els, first, opts = {}) {
     el.style.transform = "";
     setTimeout(() => { if (el._flipSeq === seq) el.style.transition = ""; }, duration + 50);
   }
+}
+
+/**
+ * Issue #155: one localStorage entry as JSON, for "what this browser last showed".
+ * Every access is in try/catch: storage that is missing, blocked (private mode) or
+ * full, and bad JSON, read as the fallback and drop writes. add(item, cap) keeps a
+ * list with item last and only the newest cap entries.
+ */
+function seenStore(key) {
+  return {
+    get(fallback = null) {
+      try {
+        const raw = localStorage.getItem(key);
+        return raw == null ? fallback : JSON.parse(raw);
+      } catch (_) {
+        return fallback;
+      }
+    },
+    set(value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* not remembered */ }
+    },
+    has(item) {
+      const list = this.get([]);
+      return Array.isArray(list) && list.includes(item);
+    },
+    add(item, cap = 50) {
+      const list = this.get([]);
+      const next = (Array.isArray(list) ? list : []).filter(x => x !== item);
+      next.push(item);
+      this.set(next.slice(-cap));
+    },
+  };
+}
+
+/**
+ * Issue #155: count el's text from `from` to `to` over ms on animation frames
+ * (ease-out by default), ending exactly at `to`. Returns finish(), which jumps to
+ * `to` and stops the frames. opts.format(value) builds the text (default: a whole
+ * number); opts.onDone runs once when it ends either way. Under reduced motion (or
+ * with nothing to count) it writes `to` at once.
+ */
+function tweenNumber(el, from, to, ms, opts = {}) {
+  const format = opts.format || (v => String(Math.round(v)));
+  const ease = opts.ease || (t => 1 - Math.pow(1 - t, 3));
+  let frame = 0, start = null, done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    if (frame) cancelAnimationFrame(frame);
+    frame = 0;
+    if (el) el.textContent = format(to);
+    if (opts.onDone) opts.onDone();
+  };
+  if (!el || !(ms > 0) || from === to || prefersReducedMotion()) {
+    finish();
+    return finish;
+  }
+  el.textContent = format(from);
+  const tick = now => {
+    frame = 0;
+    if (done) return;
+    if (start === null) start = now;
+    const t = Math.min(1, (now - start) / ms);
+    if (t >= 1) { finish(); return; }
+    el.textContent = format(from + (to - from) * ease(t));
+    frame = requestAnimationFrame(tick);
+  };
+  frame = requestAnimationFrame(tick);
+  return finish;
 }

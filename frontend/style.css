@@ -1372,6 +1372,137 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 
 /* ── End drag-and-drop UX ─────────────────────────────────────────────────── */
 
+/* ── My Team motion (issue #155) ──────────────────────────────────────────── */
+
+/* New points since the last visit: the slot glows, "+delta" floats up */
+@keyframes roster-pts-glow {
+  0%   { box-shadow: none; }
+  30%  { box-shadow: 0 0 0 2px var(--accent), var(--sh-glow-orange); }
+  100% { box-shadow: none; }
+}
+.card-slot.roster-pts-glow .card-img { animation: roster-pts-glow 1200ms var(--ease-out) 1; }
+@keyframes roster-pts-float {
+  0%   { transform: translate(-50%, 0); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(-50%, -28px); opacity: 0; }
+}
+.roster-pts-float {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  pointer-events: none;
+  animation: roster-pts-float 1200ms var(--ease-out) 1 forwards;
+}
+
+/* The week locks: the banner stamps in, the lock closes, the cards dim */
+@keyframes roster-lock-stamp {
+  from { transform: scale(1.15); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+#rosterLockedBanner.roster-lock-stamp { animation: roster-lock-stamp 300ms var(--ease-out) 1 both; }
+.roster-lock-icon {
+  display: inline-block;
+  position: relative;
+  width: 10px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.roster-lock-shackle {
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 6px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+}
+.roster-lock-body {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 10px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentColor;
+}
+@keyframes roster-lock-close {
+  from { transform: translateY(-3px); }
+  to   { transform: translateY(0); }
+}
+.roster-lock-stamp .roster-lock-shackle { animation: roster-lock-close 300ms var(--ease-out) 1 both; }
+#rosterActiveGrid .card-slot:not(.card-slot--editable) .card-img,
+#benchGrid .card-slot:not(.card-slot--editable) .card-img { filter: saturate(0.8) brightness(0.92); }
+@keyframes roster-lock-dim {
+  from { filter: none; }
+  to   { filter: saturate(0.8) brightness(0.92); }
+}
+.roster-lock-enter .card-slot .card-img { animation: roster-lock-dim 400ms var(--ease-out) 1 both; }
+
+/* Substitutions play out: the subbed-out card fades on its way to the bench, the
+   substitute's "Subbed in for" label fades in as it arrives */
+@keyframes roster-sub-out {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+.card-slot.roster-sub-out { animation: roster-sub-out 700ms var(--ease-out) 1; }
+.card-slot.roster-sub-pending .card-slot-note { opacity: 0; }
+@keyframes roster-sub-label {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-slot.roster-sub-in .card-slot-note { animation: roster-sub-label 400ms var(--ease-out) 300ms 1 both; }
+
+/* Token gain: the header chip pulses once and "+N" floats up */
+.header-tokens { position: relative; }
+@keyframes token-chip-pulse {
+  0%   { transform: scale(1); box-shadow: none; }
+  40%  { transform: scale(1.1); box-shadow: var(--sh-glow-orange); }
+  100% { transform: scale(1); box-shadow: none; }
+}
+.header-tokens.token-chip-pulse { animation: token-chip-pulse 600ms var(--ease-out) 1; }
+@keyframes token-float {
+  0%   { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-20px); opacity: 0; }
+}
+.token-float {
+  position: absolute;
+  right: 6px;
+  top: -6px;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  pointer-events: none;
+  animation: token-float 900ms var(--ease-out) 1 forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-slot.roster-pts-glow .card-img,
+  .roster-pts-float,
+  #rosterLockedBanner.roster-lock-stamp,
+  .roster-lock-stamp .roster-lock-shackle,
+  .roster-lock-enter .card-slot .card-img,
+  .card-slot.roster-sub-out,
+  .card-slot.roster-sub-in .card-slot-note,
+  .header-tokens.token-chip-pulse,
+  .token-float {
+    animation: none !important;
+    transition: none !important;
+  }
+  .roster-pts-float,
+  .token-float { display: none; }
+}
+
+/* ── End My Team motion ───────────────────────────────────────────────────── */
+
 /* Card reveal modal — fixed slot so placeholder ↔ PNG never resizes the dialog */
 .reveal-img-wrap {
   position: relative;

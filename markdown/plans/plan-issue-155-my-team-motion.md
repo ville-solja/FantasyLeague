@@ -48,7 +48,7 @@ As a player, I want to see which of my cards scored since I last looked, so that
   - its number counts up from the old value to the new one (ease-out, `clamp(600 + delta × 20, 600, 2000)` ms);
   - a floating "+delta" in the accent colour rises above it;
   - its slot glows briefly.
-- The week total counts up in step, and ends at the server's value
+- The week total ("This week", `#rosterCombined`) counts up in step by the new points, and ends at the server's value
 - No animation on the first visit to a week (nothing stored yet), for locked weeks shown for the first time, or for decreases (a corrected score): the value just updates
 - With reduced motion, the values update instantly. Clicking anywhere on the roster finishes the count-ups
 - The final numbers are always the server's values; screen readers get the final value only (`aria-hidden` on the counting text)
@@ -70,12 +70,12 @@ As a player, I want to notice that my roster for the week is now locked, so that
 As a player, I want to see the bench substitutions happen, so that I understand why a bench card scored for me.
 
 **Acceptance criteria**
-- The first time a user views a locked week after its substitutions ran (`substitutions_at` set and at least one substitution), each substitution plays in roster order:
+- The first time a user views a locked week after its substitutions ran (`substitutions_done` in `GET /roster` and at least one substitution), each substitution plays in roster order:
   - the subbed-out card slides down and fades to the bench area;
   - the substitute rises into its slot;
   - the "Subbed in for {player}" label fades in.
   - About 700 ms per substitution, 300 ms apart.
-- It plays once per user and week (`localStorage` `rosterSubsSeen:<user id>`). A re-run that changes the substitutions (for example after an admin week change, #193) plays the new result once again.
+- It plays once per user and week (`localStorage` `rosterSubsSeen:<user id>`, entries such as `5:2>7,4>8`: the week id, then the sorted subbed-out>substitute card id pairs; last 50). A re-run that changes the substitutions (for example after an admin week change, #193) plays the new result once again.
 - Clicking finishes it at once; with reduced motion the final state shows directly
 
 ### Token Gains Are Noticed
