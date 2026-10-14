@@ -136,6 +136,66 @@ def run_substitutions(db, week: Week) -> int:
     return count
 
 
+def week_containing(db, ts, weeks=None) -> Week | None:
+    """The fantasy week whose window contains timestamp `ts` (inclusive, as the scoring
+    queries' BETWEEN). With overlapping weeks the most recently started wins.
+    `weeks` (a list of Week) avoids a query per call when resolving many matches."""
+    if ts is None:
+        return None
+    if weeks is None:
+        return (
+            db.query(Week)
+            .filter(Week.start_time <= ts, Week.end_time >= ts)
+            .order_by(Week.start_time.desc())
+            .first()
+        )
+    hits = [w for w in weeks if w.start_time <= ts <= w.end_time]
+    return max(hits, key=lambda w: w.start_time) if hits else None
+
+
+def scoring_week_for(db, match, weeks=None):
+    """(week, source) the match's points count for (issue #193): the override week as
+    "override" when week_override_id is set, else the week containing start_time as
+    "time", else (None, None)."""
+    if match.week_override_id is not None:
+        if weeks is not None:
+            week = next((w for w in weeks if w.id == match.week_override_id), None)
+        else:
+            week = db.get(Week, match.week_override_id)
+        return week, "override"
+    week = week_containing(db, match.start_time, weeks)
+    return (week, "time") if week else (None, None)
+
+
+def rerun_substitutions_for(db, week_ids, reason, actor_id=None, actor_username="system"):
+    """Re-run bench substitutions for the given weeks whose substitutions have already
+    run (substitutions_at set); weeks not yet due are left to their scheduled run.
+    Writes one admin_substitutions_rerun audit row per week. Returns [(week, count)]
+    in week order. Caller commits."""
+    ids = {wid for wid in week_ids if wid is not None}
+    if not ids:
+        return []
+    result = []
+    targets = (
+        db.query(Week)
+        .filter(Week.id.in_(ids), Week.substitutions_at.isnot(None))
+        .order_by(Week.start_time)
+        .all()
+    )
+    for week in targets:
+        count = run_substitutions(db, week)
+        db.add(AuditLog(
+            timestamp=int(clock.now(db)),
+            actor_id=actor_id,
+            actor_username=actor_username,
+            action="admin_substitutions_rerun",
+            detail=f"id={week.id} label={week.label} substitutions={count} reason={reason}",
+        ))
+        result.append((week, count))
+    db.flush()
+    return result
+
+
 def due_substitutions(db) -> int:
     """Run substitutions once for every locked week whose end_time + delay has passed.
     Returns the number of weeks processed."""

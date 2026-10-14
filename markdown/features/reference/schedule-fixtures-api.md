@@ -25,9 +25,15 @@ An alternative, preferred source for the Schedule tab's fixture list: a structur
 - `_parse_iso_date(iso_date, time_str="") -> str | None` — `"2026-09-14"` (+ optional
   `"HH:MM"`) to a naive ISO datetime string. Distinct from `parse_date_time()` (Finnish d.m.y).
 - `_fixture_to_series(f) -> dict` — one feed fixture to the series dict `parse_match_row()`
-  emits, plus `scheduled` (bool) and `league_week` (the feed's `week`). Precedence: `starts_at`
+  emits, plus `scheduled` (bool), `league_week` (the feed's `week`) and `league_week_start` (the
+  feed's `week_start`). Precedence: `starts_at`
   (UTC ISO → league time, `scheduled: true`) > `date`/`time` (`scheduled: true`) > Thursday
   12:00 of the `week_start` week (`scheduled: false`; see [Weeks, times and team names](#weeks-times-and-team-names)).
+- `league_week_anchor(week_start) -> datetime | None` — Thursday 12:00 (naive league time) of
+  the league week starting `week_start`; the anchor for unscheduled fixtures and for
+  `out_of_week_series` (issue #193).
+- `out_of_week_series(db) -> list[dict]` — feed series counted outside their league week's
+  fantasy week; see `core/weeks.md#week-override`.
 - `parse_fixtures_json(payload) -> (weeks, dropped)` — groups fixtures by `week` into
   `[{label: "Week {n}", div1: [...], div2: [...]}]` ordered ascending; `division` `upper`→`div1`,
   `lower`→`div2` (`_DIVISION_MAP`). A fixture with a missing/unknown `week` or `division`, or
@@ -38,9 +44,10 @@ Both parsers emit the **same** `weeks[]` structure — `[{label, div1: [...], di
 each series dict carrying `team1`, `team2`, `date`, `time`, `stream_label`, `stream_url`,
 `datetime_iso`, `match_status` — so DB result cross-referencing (`series_result`),
 independently-derived `extra_results`, the 1-hour cache, the `/schedule` response shape, and
-the frontend work the same for both sources. The JSON path adds two fields per series: `scheduled` (bool)
+the frontend work the same for both sources. The JSON path adds three fields per series: `scheduled` (bool)
 and `league_week` (int, the feed's `week`), which the frontend uses for "Time TBD" rows and the
-"League week N" tag.
+"League week N" tag, and `league_week_start` (the feed's `week_start`), which the out-of-week
+check anchors on.
 
 ## Feed format
 
@@ -63,7 +70,7 @@ and `league_week` (int, the feed's `week`), which the frontend uses for "Time TB
 |---|---|
 | `division` (`upper`/`lower`) | `div1` / `div2` |
 | `week` (int) | week grouping + `label` = `"Week {n}"`, and `league_week` on each series |
-| `week_start` (ISO date) | approximate `datetime_iso` (its Thursday 12:00) and `match_status` for unscheduled fixtures |
+| `week_start` (ISO date) | `league_week_start`; approximate `datetime_iso` (its Thursday 12:00) and `match_status` for unscheduled fixtures |
 | `team1` / `team2` | same |
 | `starts_at` (ISO datetime, UTC) | `datetime_iso` (converted to local), `scheduled: true` |
 | `date` / `time` (Europe/Helsinki) | `datetime_iso` when `starts_at` is null |
@@ -80,8 +87,9 @@ Flagged per the issue — none block adoption:
   the UI shows "Time TBD". Precise slots appear once the feed populates `starts_at`.
 - **Round-robin only.** No playoff/bracket rows in the feed. As with the sheet, `extra_results`
   still surfaces those from ingested match data.
-- **Week-label coupling.** `POST /admin/sync-match-weeks` matches feed weeks to DB `Week`
-  records by the `"Week {n}"` label — DB week labels must follow that form.
+- **No week-label coupling.** `POST /admin/sync-match-weeks` uses
+  `schedule.out_of_week_series` (issue #193): a series' scheduled fantasy week is the one
+  containing its league week's anchor (`league_week_anchor`), so DB week labels can be anything.
 - **Timezone split.** `starts_at` is UTC; `date`/`time` are Europe/Helsinki. `starts_at` is
   preferred and converted to league time (`LEAGUE_TZ`, Europe/Helsinki), whatever the server's
   own timezone is.

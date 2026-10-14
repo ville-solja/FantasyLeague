@@ -22,6 +22,17 @@ Active cards are saved at lock whatever their player's status, so an active card
 
 Demo Mode: `POST /admin/demo/clock` runs `due_substitutions` synchronously after `auto_lock_weeks` and before `generate_weekly_summaries`.
 
+## Week changes after substitutions ran (issue #193)
+
+Changing which week a match counts for (`week_override_id`) changes who "played" in two weeks. So every week change re-runs the substitutions of the weeks it affects, in the same request:
+
+- **Triggers:** `PUT /matches/{match_id}/week` (the Week picker and the out-of-week banner in Admin › Matches) and `POST /admin/sync-match-weeks` without `dry_run`.
+- **Affected weeks:** each changed match's old and new scoring week (`weeks.scoring_week_for`: the override week, else the week containing `start_time`), when they differ.
+- **Re-run:** `weeks.rerun_substitutions_for(db, week_ids, reason)` calls `run_substitutions` for each affected week whose `substitutions_at` is set, and writes one `admin_substitutions_rerun` audit entry per week with `reason=week_override`. A week whose substitutions haven't run yet is left alone; its scheduled run uses the new assignment.
+- **Result:** the response's `substitution_reruns` lists `{week_id, week_label, substitutions}` per re-run week, and the page shows "Week 4: substitutions re-run (3)".
+
+Readers compute points and counted entries live, so leaderboards, My Team and the Weekly Report show the change on their next load. The request also busts the schedule cache and the Twitch panel cache.
+
 ## Schema
 
 Migration `029_weekly_roster_entries_substitution` (`backend/migrate.py`):
