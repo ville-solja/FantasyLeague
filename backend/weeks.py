@@ -136,6 +136,72 @@ def run_substitutions(db, week: Week) -> int:
     return count
 
 
+def backfill_bench_candidates(db, week: Week) -> dict[int, list[int]]:
+    """Retroactive bench for a week locked before benches were saved (issue #189).
+
+    For each user with a roster in `week`: the cards on that user's roster snapshot
+    (is_bench=0) in `week` or an earlier week (by start_time), not on the roster in
+    `week`, still owned by the user and whose player is active. The app keeps no card
+    acquisition time, so an earlier snapshot is the only proof the user had the card.
+    Ordered as the lock-time snapshot orders a bench (_slot_order), with cards now on
+    the user's roster after the current bench cards. Returns {user_id: [card_id, ...]}."""
+    rows = (
+        db.query(WeeklyRosterEntry.user_id, WeeklyRosterEntry.card_id, WeeklyRosterEntry.week_id)
+        .join(Week, Week.id == WeeklyRosterEntry.week_id)
+        .filter(Week.start_time <= week.start_time,
+                WeeklyRosterEntry.is_bench == False)  # noqa: E712
+        .all()
+    )
+    seen: dict[int, set[int]] = {}
+    in_week: dict[int, set[int]] = {}
+    for user_id, card_id, week_id in rows:
+        seen.setdefault(user_id, set()).add(card_id)
+        if week_id == week.id:
+            in_week.setdefault(user_id, set()).add(card_id)
+    wanted = {(uid, cid) for uid in in_week for cid in seen[uid] - in_week[uid]}
+    if not wanted:
+        return {}
+    cards = (
+        db.query(Card)
+        .join(Player, Player.id == Card.player_id)
+        .filter(Card.id.in_({cid for _, cid in wanted}), Player.is_active == True)  # noqa: E712
+        .all()
+    )
+    result: dict[int, list[Card]] = {}
+    for card in cards:
+        if (card.owner_id, card.id) in wanted:
+            result.setdefault(card.owner_id, []).append(card)
+    return {
+        uid: [c.id for c in sorted(cs, key=lambda c: (bool(c.is_active), *_slot_order(c)))]
+        for uid, cs in result.items()
+    }
+
+
+def backfill_bench(db, week: Week) -> tuple[int, int, int]:
+    """Insert the retroactive bench rows for `week` and run its substitutions (issue
+    #189). Raises ValueError when the week already has bench rows. A week without
+    candidates is left untouched. Returns (users, bench_cards, substitutions). Caller
+    commits."""
+    has_bench = (
+        db.query(WeeklyRosterEntry.id)
+        .filter(WeeklyRosterEntry.week_id == week.id,
+                WeeklyRosterEntry.is_bench == True)  # noqa: E712
+        .first()
+    )
+    if has_bench:
+        raise ValueError(f"{week.label} already has bench rows")
+    candidates = backfill_bench_candidates(db, week)
+    if not candidates:
+        return 0, 0, 0
+    for user_id, card_ids in candidates.items():
+        for order, card_id in enumerate(card_ids):
+            db.add(WeeklyRosterEntry(week_id=week.id, user_id=user_id, card_id=card_id,
+                                     is_bench=True, bench_order=order))
+    db.flush()
+    substitutions = run_substitutions(db, week)
+    return len(candidates), sum(len(c) for c in candidates.values()), substitutions
+
+
 def week_containing(db, ts, weeks=None) -> Week | None:
     """The fantasy week whose window contains timestamp `ts` (inclusive, as the scoring
     queries' BETWEEN). With overlapping weeks the most recently started wins.

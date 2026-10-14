@@ -323,6 +323,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_week_edited` | Admin edited an unlocked week |
 | `admin_week_deleted` | Admin deleted an unlocked, roster-free week |
 | `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`; `reason=week_override` when a week change triggered it) |
+| `admin_bench_backfill` | One-off retroactive bench backfill for a week by `backend/scripts/backfill_bench.py` (#189); actor `script`, `detail` has the week, `users`, `bench_cards` and `substitutions` |
 | `admin_token_grant_event_created` | Admin created a token grant event |
 | `admin_token_grant_event_deleted` | Admin deleted a token grant event |
 | `twitch_soft_account_created` | A viewer pressed Join in the Twitch panel and a soft account was created (`detail` has `user_id=`; the opaque Twitch id is never logged) |
