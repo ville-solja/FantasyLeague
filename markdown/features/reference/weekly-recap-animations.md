@@ -75,6 +75,36 @@ Also `POST /weekly-summary/{week_id}/reveal`, which returns the same body. Each 
 
 No new tables, columns or environment variables.
 
+## Shared motion principles
+
+The recap set the rules that later animations follow, starting with My Team (#155):
+
+- **Short.** Each animation is short (up to about 1.2 s; count-ups up to 2 s).
+- **Once.** Each plays once per event, remembered per browser in `localStorage`, with every access in try/catch.
+- **Skippable.** A click finishes it at once (the token chip's 600 ms count-up is the exception: it simply ends, or jumps on the next update).
+- **Reduced motion.** With `prefers-reduced-motion: reduce` nothing moves and the final state shows; the CSS also turns every animation off in a media query.
+- **No new backend data.** The page compares what it shows now with what it showed last time.
+- **Screen readers** get final values only: counting text is `aria-hidden`, with the final value in visually hidden text (the roster and recap count-ups; the header token chip counts its own number directly).
+
+## My Team motion (issue #155)
+
+*(plan `markdown/plans/plan-issue-155-my-team-motion.md`; user view in `markdown/ui_description/my-team.md#motion`)*
+
+Shared helpers in `frontend/app-globals.js`: `prefersReducedMotion()`, `flipMove(els, first, opts)` (#186), `seenStore(key)` (a JSON `localStorage` entry with `get(fallback)`, `set`, `has` and `add(item, cap)`; storage that is missing, blocked or holds bad JSON reads as the fallback) and `tweenNumber(el, from, to, ms, opts)` (animation-frame count-up, ease-out, ends exactly at `to`, returns a finish function).
+
+`frontend/app-roster.js` runs `_playRosterMotion` at the end of `loadRoster`. `_rosterMotion = {runId, finishers}` holds one finish function per running animation; `_finishRosterMotion()` (at the start of every `loadRoster`, on a click on the roster grids, where it replaces the card click, and on a click anywhere in `#tab-team`) bumps `runId` and calls them all.
+
+| Moment | Stored in | Plays when | What moves |
+|---|---|---|---|
+| New points | `rosterSeenPoints:<user id>:<week id>` = `{cards: {id: points}, total}` | a roster card's points are higher than stored | `.card-slot-pts` counts up over `clamp(600 + delta × 20, 600, 2000)` ms, `.roster-pts-float` "+delta", `.roster-pts-glow`; `#rosterCombined` counts up by the summed gains over the longest card's time |
+| Week locks | `rosterLockSeen:<user id>`, last 50 week ids | a locked week not in the list | `#rosterLockedBanner.roster-lock-stamp` (scale 1.15 → 1, fade, 300 ms) with a CSS lock whose shackle closes; both grids get `.roster-lock-enter` (the cards dim to the locked filter over 400 ms) |
+| Substitutions | `rosterSubsSeen:<user id>`, entries `<week id>:<pairs>` such as `5:2>7,4>8`, last 50 | `substitutions_done`, at least one substitution, entry not stored | renders the before-layout (subbed-out cards in their slots), then per pair in slot order a 700 ms FLIP to the final layout, 300 ms apart; `.roster-sub-out` fades the leaving card, `.roster-sub-pending` / `.roster-sub-in` hide and fade in the "Subbed in for" label. Starts after the lock stamp when both play |
+| Token gain | `tokensSeen:<user id>` | `updateTokenDisplay` gets a balance higher than the one shown (after page load: than the stored one) | `#headerTokenNum` counts up over 600 ms, `.header-tokens.token-chip-pulse`, `.token-float` "+N" |
+
+Pairs come from the roster response: a `subbed_in` card names the replaced player in `subbed_in_for`, matched to a `subbed_out` bench card with that name, or to the next unused `subbed_out` card when no name matches. Seen state is written even under reduced motion. The first visit to a week, decreases and `updateTokenDisplay(null)` (logout, which keeps `tokensSeen`) never animate. The CSS is the "My Team motion (issue #155)" block in `style.css`, before the guided tour section, with every animated class switched off under `prefers-reduced-motion: reduce`.
+
 ## Tests
 
 `backend/tests/test_issue_152_weekly_recap_animations.py`: breakdown math against `_compute_card_points` for every rarity, with and without modifiers and MVP, and a deaths modifier; API step order, fields, rounding and leave-outs; static checks of the chips, controller, Skip/Replay, storage, reduced motion and ARIA.
+
+`backend/tests/test_issue_155_my_team_motion.py`: the My Team motion helpers and each story, through the Node harness of #186 (fake DOM, timers, frames, a fake `localStorage` that can also throw or be missing) plus static CSS checks.

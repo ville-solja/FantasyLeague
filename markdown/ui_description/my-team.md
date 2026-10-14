@@ -31,7 +31,7 @@ A dropdown listing all season weeks. Locked past weeks are labelled with a check
 
 ### Roster locked banner
 
-Shown for locked weeks only: "Roster locked — {week label} snapshot".
+Shown for locked weeks only: "Roster locked — {week label} snapshot". The first time a locked week is opened it stamps in with a lock icon (see Motion).
 
 ### Active roster grid
 
@@ -72,6 +72,10 @@ A spotlight tour of this tab (`frontend/app-tour.js`). It starts from **Show the
 
 ## Motion
 
-- **Roster moves (#186, built):** every move (drag, Enter or Space, a conflict reload) glides the cards that change place from their old position to the new one (about 220 ms); a dropped card glides from where it was released. The picked-up card lifts (slightly larger, with a shadow). Details: `markdown/features/reference/my-team-save-roster.md`.
-- **Planned (#155):** proposed in `markdown/plans/plan-issue-155-my-team-motion.md`: new points count up since the last visit, a one-time lock stamp, a one-time substitution reveal, and a token count-up on gains. Each plays once per event and finishes on click.
-- With `prefers-reduced-motion`, nothing glides or lifts: cards jump to their places.
+- **Roster moves (#186):** every move (drag, Enter or Space, a conflict reload) glides the cards that change place from their old position to the new one (about 220 ms); a dropped card glides from where it was released. The picked-up card lifts (slightly larger, with a shadow). Details: `markdown/features/reference/my-team-save-roster.md`.
+- **New points (#155):** a roster card whose weekly points rose since this browser last showed the week counts up from the old value (600–2000 ms, longer for bigger gains), with a floating orange "+points" and a short glow on the card. "This week" counts up by the same new points. Nothing plays on the first visit to a week or when points went down.
+- **Week locks (#155):** the first time a locked week is opened, the "Roster locked" banner stamps in (300 ms) with a lock icon that closes, and the cards dim to their locked style (slightly desaturated, 400 ms). Locked weeks always show the cards in that dimmed style.
+- **Substitutions (#155):** the first time a week's substitution result is shown, each substitution plays in roster order: the subbed-out card slides down to the bench, the substitute rises into its slot and its "Subbed in for {player}" label fades in (700 ms each, 300 ms apart). A changed result (substitutions re-run after an admin week change) plays once more.
+- **Tokens (#155):** when the header balance rises (MVP drop, weekly token, promo code, starter grant), the number counts up over 600 ms and the chip pulses once with a floating "+N". Spending updates at once.
+- A click anywhere on My Team finishes the running animation at once (a click on a card then only finishes it; the next click opens the card). What was shown is remembered per browser in `localStorage`; with storage blocked nothing breaks, the animations just don't play again reliably. Details: `markdown/features/reference/weekly-recap-animations.md#my-team-motion-issue-155`.
+- With `prefers-reduced-motion`, nothing glides, lifts, counts or pulses: the final state shows at once.

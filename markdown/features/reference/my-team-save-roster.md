@@ -12,7 +12,7 @@ The page keeps `_layout = {active, bench, version}`: `active` has one entry per 
 
 `renderRosterLayout()` renders a layout keyed by card id: each card keeps its `.card-slot` node (`_rosterNodes`), empty slots keep theirs, and a render only reorders nodes (`replaceChildren`) and rewrites a card's inner markup when its points or labels changed. After a move nothing is fetched or redrawn.
 
-`flipMove(els, firstRects, {from})` (app-globals.js, shared with #155) plays each moved node from its old place to its new one: an inverted `translate`, then `transition: transform 220ms var(--ease-out)`. A dropped card starts where it was released (`from`). With `prefers-reduced-motion` it does nothing, so cards jump to their places; the roster's transitions and animations are also off in CSS.
+`flipMove(els, firstRects, {from, duration})` (app-globals.js, shared with #155) plays each moved node from its old place to its new one: an inverted `translate`, then `transition: transform 220ms var(--ease-out)` (or `duration` ms; the #155 substitution playback uses 700). A dropped card starts where it was released (`from`). With `prefers-reduced-motion` it does nothing, so cards jump to their places; the roster's transitions and animations are also off in CSS.
 
 **Rules**, checked locally before a move is shown (`_rosterRuleError`), with the status line naming the rule and the cards gliding back:
 

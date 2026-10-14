@@ -79,6 +79,7 @@ async function loadRoster(weekId = null, opts = {}) {
   if (!activeUserId) return;
   if (!opts.skipFlush) await _settleRosterSave();
   if (_drag) _cancelRosterDrag();
+  _finishRosterMotion();
   try {
     const url = weekId != null
       ? `${API}/roster/${activeUserId}?week_id=${weekId}`
@@ -150,6 +151,7 @@ async function loadRoster(weekId = null, opts = {}) {
     _showRosterCount();
     _bindRosterGrid(document.getElementById("rosterActiveGrid"));
     _bindRosterGrid(document.getElementById("benchGrid"));
+    _playRosterMotion({ week, isLocked, active, bench, combined_value, substitutions_done });
   } catch (e) {
     _setRosterStatus(e.message, true);
   }
@@ -389,7 +391,7 @@ function renderRosterLayout(layout = _layout, opts = {}) {
   if (focused && focused !== document.activeElement && focused.isConnected && typeof focused.focus === "function") {
     focused.focus({ preventScroll: true });
   }
-  if (first) flipMove([...activeNodes, ...benchNodes], first, { from: opts.from });
+  if (first) flipMove([...activeNodes, ...benchNodes], first, { from: opts.from, duration: opts.duration });
 }
 
 /** Substitution label for a locked-week card (issue #129). */
@@ -687,6 +689,7 @@ function _endRosterPointer() {
 /** A click (no drag) on a card opens the card view, also on locked weeks. */
 function _onRosterClick(e) {
   if (_rosterSuppressClick) return;
+  if (_finishRosterMotion()) return; // a click during an animation only finishes it
   const node = e.target && e.target.closest ? e.target.closest(".card-slot[data-card-id]") : null;
   if (node) showRosterCard(parseInt(node.dataset.cardId, 10));
 }
@@ -698,6 +701,238 @@ function _onRosterKeyDown(e) {
   if (!node) return;
   e.preventDefault();
   toggleCardZone(parseInt(node.dataset.cardId, 10));
+}
+
+// ---------------------------------------------------------------------------
+// Motion (issue #155): what changed since this browser last showed the week plays
+// once. New points count up, a newly locked week stamps in, bench substitutions
+// play out. Each is remembered in localStorage (seenStore), a click on the roster
+// finishes everything at once, and with reduced motion the final state just shows.
+// ---------------------------------------------------------------------------
+
+const ROSTER_COUNT_MIN_MS = 600;
+const ROSTER_COUNT_MAX_MS = 2000;
+const ROSTER_LOCK_STAMP_MS = 300;
+const ROSTER_LOCK_DIM_MS = 400;
+const ROSTER_SUB_MS = 700;
+const ROSTER_SUB_GAP_MS = 300;
+const ROSTER_SEEN_WEEKS = 50;
+
+// runId: bumped by every finish, so a pending step of an older run stops.
+// finishers: one function per running animation; each jumps to its final state.
+const _rosterMotion = { runId: 0, finishers: new Set() };
+
+/** Finish every running roster animation at once. Returns whether any was running. */
+function _finishRosterMotion() {
+  const running = [..._rosterMotion.finishers];
+  _rosterMotion.runId += 1;
+  _rosterMotion.finishers.clear();
+  running.forEach(f => f());
+  return running.length > 0;
+}
+
+function _rosterMotionFinisher(fn) {
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    _rosterMotion.finishers.delete(finish);
+    fn();
+  };
+  _rosterMotion.finishers.add(finish);
+  return finish;
+}
+
+function _playRosterMotion({ week, isLocked, active, bench, combined_value, substitutions_done }) {
+  if (!week || week.id == null) return;
+  const tab = document.getElementById("tab-team");
+  if (tab && !tab._rosterMotionBound) {
+    tab._rosterMotionBound = true;
+    tab.addEventListener("click", () => _finishRosterMotion());
+  }
+  _rosterPointsMotion(week, active, combined_value);
+  const stamped = isLocked && _rosterLockMotion(week);
+  if (isLocked && substitutions_done) _rosterSubsMotion(week, active, bench, stamped ? ROSTER_LOCK_STAMP_MS + 100 : 0);
+}
+
+/** clamp(600 + delta × 20, 600, 2000) ms. */
+function _rosterCountUpMs(delta) {
+  return Math.min(ROSTER_COUNT_MAX_MS, Math.max(ROSTER_COUNT_MIN_MS, ROSTER_COUNT_MIN_MS + delta * 20));
+}
+
+const _fmtPts = v => `${Number(v).toFixed(1)} pts`;
+const _fmtTotal = v => Number(v).toFixed(1);
+
+/**
+ * Count el's number up. Screen readers get only the final value: the counting text
+ * is aria-hidden and a visually hidden copy holds the final text. onDone runs when it
+ * ends (also when finished early).
+ */
+function _rosterCountUp(el, from, to, ms, format, onDone) {
+  if (!el) { if (onDone) onDone(); return; }
+  const count = document.createElement("span");
+  count.setAttribute("aria-hidden", "true");
+  const sr = document.createElement("span");
+  sr.className = "visually-hidden";
+  sr.textContent = format(to);
+  el.replaceChildren(count, sr);
+  let finish = null;
+  const stop = tweenNumber(count, from, to, ms, {
+    format,
+    onDone: () => {
+      if (finish) finish();
+    },
+  });
+  finish = _rosterMotionFinisher(() => {
+    stop();
+    // A newer render may have replaced the text meanwhile; leave that alone.
+    if (count.parentNode === el) { el.replaceChildren(); el.textContent = format(to); }
+    if (onDone) onDone();
+  });
+}
+
+/**
+ * Story 1: compare each roster card's points with what this browser last showed for
+ * the week (rosterSeenPoints:<user id>:<week id>) and count the rises up, with a
+ * floating "+delta" and a glow; the week total counts up by the same amount. No
+ * animation on the first visit (nothing stored) or for decreases.
+ */
+function _rosterPointsMotion(week, active, total) {
+  const store = seenStore(`rosterSeenPoints:${activeUserId}:${week.id}`);
+  const before = store.get(null);
+  const shown = { cards: {}, total: Number(total || 0) };
+  active.forEach(c => { shown.cards[c.id] = Number(c.total_points || 0); });
+  store.set(shown);
+  if (!before || typeof before !== "object" || !before.cards || prefersReducedMotion()) return;
+  let gained = 0, longest = 0;
+  active.forEach(c => {
+    const old = before.cards[c.id];
+    const now = shown.cards[c.id];
+    if (typeof old !== "number" || !(now > old)) return;
+    const delta = Math.round((now - old) * 10) / 10;
+    const ms = _rosterCountUpMs(delta);
+    gained += delta;
+    longest = Math.max(longest, ms);
+    const node = _rosterNodes.get(c.id);
+    if (!node) return;
+    node.classList.add("roster-pts-glow");
+    const float = document.createElement("span");
+    float.className = "roster-pts-float";
+    float.setAttribute("aria-hidden", "true");
+    float.textContent = `+${delta.toFixed(1)}`;
+    node.appendChild(float);
+    _rosterCountUp(node.querySelector(".card-slot-pts"), old, now, ms, _fmtPts, () => {
+      node.classList.remove("roster-pts-glow");
+      float.remove();
+    });
+  });
+  if (gained > 0) {
+    const from = Math.round((shown.total - gained) * 10) / 10;
+    _rosterCountUp(document.getElementById("rosterCombined"), from, shown.total, longest, _fmtTotal);
+  }
+}
+
+/**
+ * Story 3: the first time this user opens a locked week (rosterLockSeen:<user id>,
+ * the last 50 week ids), the banner stamps in with a closing lock and the cards dim
+ * to their locked style. Returns whether the stamp plays.
+ */
+function _rosterLockMotion(week) {
+  const store = seenStore(`rosterLockSeen:${activeUserId}`);
+  if (store.has(week.id)) return false;
+  store.add(week.id, ROSTER_SEEN_WEEKS);
+  if (prefersReducedMotion()) return false;
+  const banner = document.getElementById("rosterLockedBanner");
+  const grids = [document.getElementById("rosterActiveGrid"), document.getElementById("benchGrid")].filter(Boolean);
+  if (banner) {
+    const icon = document.createElement("span");
+    icon.className = "roster-lock-icon";
+    icon.setAttribute("aria-hidden", "true");
+    const shackle = document.createElement("span");
+    shackle.className = "roster-lock-shackle";
+    const body = document.createElement("span");
+    body.className = "roster-lock-body";
+    icon.appendChild(shackle);
+    icon.appendChild(body);
+    const text = document.createElement("span");
+    text.textContent = banner.textContent;
+    banner.replaceChildren(icon, text);
+    banner.classList.add("roster-lock-stamp");
+  }
+  grids.forEach(g => g.classList.add("roster-lock-enter"));
+  const finish = _rosterMotionFinisher(() => {
+    clearTimeout(timer);
+    if (banner) banner.classList.remove("roster-lock-stamp");
+    grids.forEach(g => g.classList.remove("roster-lock-enter"));
+  });
+  const timer = setTimeout(finish, Math.max(ROSTER_LOCK_STAMP_MS, ROSTER_LOCK_DIM_MS) + 50);
+  return true;
+}
+
+/** The substitutions of a locked week as [subbed-out card id, substitute id] pairs, in
+ * roster (slot) order. The substitute names the replaced player (subbed_in_for). */
+function _rosterSubPairs(active, bench) {
+  const outs = bench.filter(c => c.subbed_out);
+  const used = new Set();
+  const pairs = [];
+  _layout.active.forEach(id => {
+    const c = id != null ? _rosterById.get(id) : null;
+    if (!c || !c.subbed_in) return;
+    const out = outs.find(o => !used.has(o.id) && o.player_name === c.subbed_in_for)
+      || outs.find(o => !used.has(o.id));
+    if (!out) return;
+    used.add(out.id);
+    pairs.push([out.id, c.id]);
+  });
+  return pairs;
+}
+
+/**
+ * Story 4: the first time this user views the week's substitution result, it plays
+ * out in roster order: the subbed-out card slides down to the bench, the substitute
+ * rises into its slot and its "Subbed in for" label fades in (700 ms each, 300 ms
+ * apart). rosterSubsSeen:<user id> keeps "<week id>:<pairs>", so a re-run that
+ * changes the result (#193) plays once more.
+ */
+function _rosterSubsMotion(week, active, bench, delay) {
+  const pairs = _rosterSubPairs(active, bench);
+  if (!pairs.length) return;
+  const store = seenStore(`rosterSubsSeen:${activeUserId}`);
+  const entry = `${week.id}:${pairs.map(p => p.join(">")).sort().join(",")}`;
+  if (store.has(entry)) return;
+  store.add(entry, ROSTER_SEEN_WEEKS);
+  if (prefersReducedMotion()) return;
+  const step = _copyLayout(_layout);
+  pairs.forEach(([outId, inId]) => {
+    step.active[step.active.indexOf(inId)] = outId;
+    step.bench[step.bench.indexOf(outId)] = inId;
+  });
+  const nodes = pairs.flat().map(id => _rosterNodes.get(id)).filter(Boolean);
+  pairs.forEach(([, inId]) => _rosterNodes.get(inId)?.classList.add("roster-sub-pending"));
+  renderRosterLayout(step);
+  const run = _rosterMotion.runId;
+  const timers = [];
+  const finish = _rosterMotionFinisher(() => {
+    timers.forEach(clearTimeout);
+    nodes.forEach(n => {
+      n.classList.remove("roster-sub-pending", "roster-sub-in", "roster-sub-out");
+      n.style.transition = "none";
+      n.style.transform = "";
+    });
+    renderRosterLayout(_layout);
+  });
+  pairs.forEach(([outId, inId], i) => {
+    timers.push(setTimeout(() => {
+      if (run !== _rosterMotion.runId) return;
+      step.active[step.active.indexOf(outId)] = inId;
+      step.bench[step.bench.indexOf(inId)] = outId;
+      const outNode = _rosterNodes.get(outId), inNode = _rosterNodes.get(inId);
+      if (outNode) outNode.classList.add("roster-sub-out");
+      if (inNode) { inNode.classList.remove("roster-sub-pending"); inNode.classList.add("roster-sub-in"); }
+      renderRosterLayout(step, { animate: true, duration: ROSTER_SUB_MS });
+    }, delay + i * (ROSTER_SUB_MS + ROSTER_SUB_GAP_MS)));
+  });
+  timers.push(setTimeout(finish, delay + pairs.length * (ROSTER_SUB_MS + ROSTER_SUB_GAP_MS)));
 }
 
 // ---------------------------------------------------------------------------

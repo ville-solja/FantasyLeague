@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-14 — developer — testing
+**Problem:** The #186 Node harness's fake `El` has no `append`/`createTextNode`, and `innerHTML` writes create no children, so code that queries inside rendered markup or uses `append()` fails there (and `loadRoster` swallows the error into the status line).
+**Solution:** Use `appendChild`/`replaceChildren` in app code; for markup queries, patch the harness's `innerHTML` setter in your test (see `_ROSTER_HARNESS` in `test_issue_155_my_team_motion.py`). When a harness test fails oddly, print `status()` first.
+
 ### 2026-10-14 — developer — security
 **Problem:** An unbounded Pydantic `int` (card ids in a request body) bound into a SQLite query raises `OverflowError` above 2**63-1, which surfaces as a 500.
 **Solution:** Bound ids in request models, e.g. `Annotated[int, Field(ge=1, le=2**63 - 1)]` (`CardId` in `routers/cards.py`), so an oversized id answers 422. Also size list caps (`max_length`) from what a user can actually reach, not a guess.
