@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-14 — developer — testing
+**Problem:** Some static CSS tests slice `style.css` from a section header to the end of the file (`test_issue_144_guided_tour` checks every rule after "GUIDED TOUR"), so a block appended at the end inherits that section's rules (no `50%` radius, no `rgba`).
+**Solution:** Put a new CSS block before the "GUIDED TOUR (issue #144)" section, next to related rules, not at the end of `style.css`.
+
 ### 2026-10-13 — curated — plans
 **Problem:** Plans and stubs are often wrong about the code: file paths after a split, "as today" behaviour, step numbers, which rules gate a flow, token sources, status codes, model constraints.
 **Solution:** Before pinning a plan's claim in a test, in reviewer-facing copy or in docs, check it in the code (grep the function, route, column or text). When they disagree, follow the code and fix the plan and stories.

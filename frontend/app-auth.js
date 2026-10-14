@@ -40,6 +40,8 @@ function steamUiState(loginMethod, me) {
     linkSteam: steam && loggedIn && !me.steam_linked && !me.is_demo,
     unlinkSteam: steam && loggedIn && !!me.steam_linked && !!me.has_password,
     linkReminder: loginMethod === "steam_signup" && loggedIn && !!me.has_password && !me.steam_linked,
+    // Issue #188: the typed-in OpenDota id only where Steam is not available.
+    playerIdField: !steam && loggedIn,
   };
 }
 
@@ -61,7 +63,7 @@ const _STEAM_RETURN_MESSAGES = {
   unavailable:   ["Steam sign-in is unavailable right now. Try again later, or sign in with your password.", false],
   login_required:["Log in to Kana Cards first.", false],
   no_session:    ["Log in to Kana Cards first, then try again.", false],
-  linked:        ["Steam linked. Your Dota player id is now verified.", true],
+  linked:        ["Steam linked. Your league player is now verified.", true],
   in_use:        ["This Steam account is linked to another Kana Cards account", false],
   unlink_first:  ["Unlink your current Steam account first", false],
   not_allowed:   ["Demo accounts can't link Steam.", false],
@@ -158,6 +160,7 @@ async function submitSteamSignup() {
     applyAuthState();
     switchTab("team");
     loadDeck();
+    showOwnCardGrant();
   } catch (e) {
     setStatus("steamSignupStatus", e.message, false);
   }
@@ -449,6 +452,7 @@ async function loadMe() {
     activeHasPassword        = data.has_password !== false;
     activeIsDemo             = data.is_demo === true;
     activeUsernameChangeAvailableAt = data.username_change_available_at ?? null;
+    activeOwnCardGrant       = data.own_card_grant || null;
     localStorage.setItem("username", activeUsername);
     localStorage.setItem("is_admin", String(activeIsAdmin));
     updateTokenDisplay(data.tokens ?? null);

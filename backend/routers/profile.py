@@ -3,7 +3,10 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import text
 
+import login_mode
+import own_card
 import sessions
 from database import get_db
 from deps import _audit, get_current_user, is_admin_fresh
@@ -58,6 +61,11 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
     user = db.get(User, current_user["user_id"])
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    # Issue #188: Steam-linked league players who have no grant yet (linked before
+    # the feature, or added to the pool later) get their own card here.
+    if own_card.is_candidate(user) and not own_card.has_grant_row(db, user):
+        if own_card.grant_in_savepoint(db, user) is not None:
+            db.commit()
     return {"user_id": user.id, "username": user.username, "is_admin": user.is_admin,
             "tokens": user.tokens if user.tokens is not None else 0,
             "must_change_password": bool(user.must_change_password),
@@ -66,7 +74,9 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
             "has_password": bool(user.password_hash),
             "is_demo": bool(user.is_demo),
             # Issue #169: when the next rename is possible (null = now, or no cooldown).
-            "username_change_available_at": rename_available_at(user)}
+            "username_change_available_at": rename_available_at(user),
+            # Issue #188: the own-card popup until POST /profile/own-card-grant/seen.
+            "own_card_grant": own_card.pending_popup(db, user)}
 
 
 @router.get("/profile/{user_id}")
@@ -92,6 +102,15 @@ def get_profile(user_id: int, db=Depends(get_db),
             result["player_name"] = player.name
             if privileged or verified:
                 result["player_avatar_url"] = player.avatar_url
+            # Issue #188: the player's latest team, for the Player identity panel.
+            team = db.execute(text("""
+                SELECT t.name FROM player_match_stats s
+                JOIN teams t ON t.id = s.team_id
+                LEFT JOIN matches m ON m.match_id = s.match_id
+                WHERE s.player_id = :pid
+                ORDER BY m.start_time DESC, s.match_id DESC LIMIT 1
+            """), {"pid": player.id}).first()
+            result["player_team_name"] = team.name if team else None
     tag_rows = (
         db.query(UserTag, TagDefinition)
         .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
@@ -153,6 +172,9 @@ def update_username_route(request: Request, body: UpdateUsernameBody, db=Depends
 
 
 def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Issue #188: where Steam is available, only Steam sets the player id.
+    if login_mode.steam_enabled():
+        raise HTTPException(status_code=410, detail="Link Steam to verify your player id")
     user_id = current_user["user_id"]
     user = db.get(User, user_id)
     if not user:
@@ -176,6 +198,20 @@ def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user:
 def update_player_id_route(request: Request, body: UpdatePlayerIdBody, db=Depends(get_db),
                            current_user: dict = Depends(get_current_user)):
     return update_player_id(body, db, current_user)
+
+
+def own_card_grant_seen(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
+    changed = own_card.mark_seen(db, current_user["user_id"])
+    db.commit()
+    return {"changed": changed}
+
+
+@router.post("/profile/own-card-grant/seen")
+@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
+def own_card_grant_seen_route(request: Request, db=Depends(get_db),
+                              current_user: dict = Depends(get_current_user)):
+    """Dismiss the own player card popup (issue #188)."""
+    return own_card_grant_seen(db, current_user)
 
 
 def change_password(request: Request, body: ChangePasswordBody, db=Depends(get_db),

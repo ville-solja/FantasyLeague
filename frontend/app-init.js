@@ -159,6 +159,7 @@ async function init() {
     claimTokenEvents();
     checkNotifications();
     checkWeeklySummaryHighlight();
+    showOwnCardGrant();
     loadDeck();
     await loadWeeks();
     loadRoster(_rosterWeekId);

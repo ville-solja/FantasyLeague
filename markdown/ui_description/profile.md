@@ -2,6 +2,8 @@
 
 Visible only to logged-in users.
 
+Four panels (issue #188): **Player identity** across the full width at the top, then **Account** and **Twitch** side by side, then **Past Seasons** (only when present). The layout follows the canvas draft linked in `markdown/plans/plan-issue-188-profile-identity-and-own-player-card.md`.
+
 ## Account panel
 
 - **Username** — editable field pre-filled with the current username. Save button updates it server-side; must remain unique, ignoring letter case. A muted hint below the field lists the allowed characters (letters, digits, underscore, hyphen) and says names that look like staff or the league (admin, Kanaliiga, support…) are not available; other characters get a 422 error in the status line, and a reserved name gets "This name is reserved". Real admins see an **ADMIN** badge next to the "Username" label (`#profileAdminBadge`; outlined accent chip in display type, see Leaderboards). One rename per 7 days by default (issue #169): while the cooldown runs, a second muted line (`#profileRenameHint`) reads "You can rename again on <date>.", and saving a different name shows the server's "You can change your username again on <date> UTC" error. Saving the same name or changing only its letter case is always allowed.
@@ -13,28 +15,34 @@ Visible only to logged-in users.
 
 If a session was ended elsewhere (password change on another device, log out everywhere, a **Sign out** on another device, admin force logout or admin toggle, password reset) or it expired (14 days without a visit or 30 days after login for players; 2 hours idle or 12 hours for admins), the next page load gets 401 from `GET /me`. The header then shows the logged-out state instead of the stale username, and the stored username and admin flag are cleared.
 
-## Steam panel
+## Player identity panel
 
-Issue #150. Shown only when `LOGIN_METHOD` is `both` or `steam_signup` (`GET /config`); driven by `GET /me` `steam_linked` / `has_password` / `is_demo` (`steamUiState` in `app-auth.js`). The Steam id is never shown, only linked yes/no.
+Issue #188 (replaces the Steam, Dota 2 Player and Your Tags panels). Spans the full width (`.profile-identity`, `grid-column: 1 / -1`); on narrow screens the tags column moves under the main column. Driven by `GET /config` `login_method`, `GET /me` `steam_linked` / `has_password` / `is_demo` (`steamUiState` in `app-auth.js`) and `GET /profile/{id}`; `playerIdentityState()` in `app-profile.js` picks one state. The Steam id is never shown, only linked yes/no.
 
-- **Reminder** (`steam_signup` mode, account with a password and no Steam link): a box with an accent border: "Link Steam now. Password sign-in will end in a later update."
-- **Not linked** (never for demo accounts): a short explanation (sign in with Steam and verify your Dota player id; sign-in happens on steamcommunity.com; Kana Cards never asks for your Steam password) and a **Link Steam** button. It navigates to `GET /auth/steam/start?purpose=link`. Without a recent identity check the server sends the browser back with `steam=reauth_required`, the **Confirm your password** prompt opens, and once confirmed the browser goes to Steam; if cancelled: "Confirm your password to link Steam."
-- **Linked:** "Steam linked" (display font, accent colour), "Your Dota player id is verified with Steam." and, for accounts that also have a password, an **Unlink Steam** button. Unlink asks for confirmation, then calls `POST /profile/steam/unlink` (password prompt when needed) and shows "Steam unlinked." Steam-only accounts have no Unlink button.
-- After Steam, the page returns to Profile (`/#profile?steam=<key>`, stripped from the address bar) with a status message by key (`_STEAM_RETURN_MESSAGES` in `app-auth.js`): `linked` "Steam linked. Your Dota player id is now verified."; `in_use` "This Steam account is linked to another Kana Cards account"; `unlink_first` "Unlink your current Steam account first"; `not_allowed` "Demo accounts can't link Steam."; `login_required` "Log in to Kana Cards first."; `not_linked` "This account has no Steam link to confirm with."; `failed`, `cancelled`, `unavailable`, `no_session` as on the login page; `reauth_ok` "Confirmed with Steam. Repeat the action to continue."; `reauth_failed` "That Steam account is not the one linked to this account. Nothing was confirmed."
-- Errors appear in the status line at the bottom of the panel.
+| State | When | Main column |
+|---|---|---|
+| Not linked | Steam modes, no Steam link, no player id | "Link your Steam account to verify which league player you are: your tags then show on your cards and next to your name on the leaderboard, and if you play in this season's league you get your own player card, once." **Link Steam** (never for demo accounts) and the muted note "You sign in on steamcommunity.com. Kana Cards never asks for your Steam password." |
+| Linked | Steam modes, Steam linked, the player is in the database | Heading badge "Steam linked" (display font, accent colour, check icon). The matched player: avatar, name with the label "Verified with Steam", and team (`player_team_name`). **Unlink Steam** for accounts that also have a password. |
+| Linked, no match | Steam modes, Steam linked, no player with that id | "Steam linked" badge, a box "No league player matches this Steam account" with "That's normal if you don't play in the league. If you do, your player appears here once an admin adds you to this season's players." **Unlink Steam** as above. |
+| Self-reported (legacy) | Steam modes, no Steam link, a typed-in id from before | The player's name (if known) labelled "Self-reported" without avatar, read-only, with "Self-reported, link Steam to verify" and **Link Steam**. No id field. |
+| Password mode | `LOGIN_METHOD=password` | The label "OpenDota account id" with "Self-reported", the id field and **Save** (`PUT /profile/player-id`), a note that tags then appear on cards and the leaderboard. A saved id in the database shows the player's name labelled "Self-reported" (no avatar). No Steam controls. |
+
+- **Reminder** (`steam_signup` mode, account with a password and no Steam link): a box with an accent border at the top of the main column: "Link Steam now. Password sign-in will end in a later update."
+- **Link Steam** navigates to `GET /auth/steam/start?purpose=link`. Without a recent identity check the server sends the browser back with `steam=reauth_required`, the **Confirm your password** prompt opens, and once confirmed the browser goes to Steam; if cancelled: "Confirm your password to link Steam."
+- **Unlink Steam** asks for confirmation, then calls `POST /profile/steam/unlink` (password prompt when needed), shows "Steam unlinked." and redraws the panel. The player id stays, so the panel then shows it as self-reported. Steam-only accounts have no Unlink button.
+- After Steam, the page returns to Profile (`/#profile?steam=<key>`, stripped from the address bar) with a status message by key (`_STEAM_RETURN_MESSAGES` in `app-auth.js`): `linked` "Steam linked. Your league player is now verified."; `in_use` "This Steam account is linked to another Kana Cards account"; `unlink_first` "Unlink your current Steam account first"; `not_allowed` "Demo accounts can't link Steam."; `login_required` "Log in to Kana Cards first."; `not_linked` "This account has no Steam link to confirm with."; `failed`, `cancelled`, `unavailable`, `no_session` as on the login page; `reauth_ok` "Confirmed with Steam. Repeat the action to continue."; `reauth_failed` "That Steam account is not the one linked to this account. Nothing was confirmed."
+- **Your Tags** (right column): the tags an admin has granted, as chips (`.tag-chip`, label escaped with `_escHtml`), or "No tags". If the user has tags but no linked player, a hint asks them to link their player so the tags appear on their cards and the leaderboard. Tags show in every state.
+- Errors appear in the status lines at the bottom of the main column.
 
 An account without a password confirms destructive actions (Connect Twitch, merge, Disconnect, Unlink) with **Confirm with Steam** in the re-auth prompt instead of a password; Steam returns to Profile with `reauth_ok`. Connect Twitch then continues to Twitch by itself ("Confirmed with Steam. Continuing to Twitch…"); for the other actions the player repeats the action.
 
-## Dota 2 Player panel
+## Own player card popup
 
-- Optional link between the user's account and an OpenDota account ID (the player's real league account). The panel text explains that linking makes admin-granted tags appear as card stickers and leaderboard chips.
-- For a Steam-linked account the field and **Save** are disabled and "Verified with Steam." shows under them; the id comes from Steam (`PUT /profile/player-id` answers 409).
-- When a valid ID is saved and the player exists in the database, the player's name is shown as a preview with a small uppercase label (`#profilePlayerSource`): "Verified with Steam" (accent colour) for a Steam-verified id, or "Self-reported" (muted) for a typed-in id. The avatar shows only for a verified id (issue #169), as other players would see it.
+Issue #188. Opens on the page load after a grant (any tab, after `GET /me`, and right after Steam sign-up) while `GET /me` returns `own_card_grant`. Shown once per page load; text is set with `textContent`.
 
-## Your Tags panel
-
-- Lists the tags an admin has granted the user.
-- If the user has tags but no linked player ID, a hint asks them to link it so the tags appear on their cards and the leaderboard.
+- **Granted:** the card viewer (`#revealModal`) shows the card (common), with the footer "Your own player card. You linked Steam, and you play in this season's league, so this card of {player name} is yours." and the action button **Nice**.
+- **Already owned:** a small notice (`#ownCardNoticeModal`, eyebrow "Player identity", title "Your own player card"): "You already have a card of {player name}, so no new card was added." with **OK**.
+- Closing either one (button, X, Escape or a backdrop click) calls `POST /profile/own-card-grant/seen`, so it doesn't come back.
 
 ## Past Seasons panel
 

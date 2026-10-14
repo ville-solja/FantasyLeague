@@ -2200,6 +2200,89 @@ body.roster-dragging * { cursor: grabbing !important; }
   .weekly-summary-reveal-footer { bottom: calc(-1 * var(--s-4)); }
 }
 
+/* Profile › Player identity (issue #188): full-width panel, tags in a side column */
+.profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.profile-grid .profile-identity { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .profile-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.profile-identity-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.profile-identity-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+.profile-identity-tags {
+  border-left: var(--bw-hair) solid var(--border-soft);
+  padding-left: 28px;
+}
+@media (max-width: 720px) {
+  .profile-identity-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .profile-identity-tags { border-left: none; padding-left: 0; border-top: var(--bw-hair) solid var(--border-soft); padding-top: 16px; }
+}
+.profile-identity-subtitle {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--k-ink-200);
+  margin-bottom: 10px;
+}
+.profile-identity-player {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-elevated);
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.profile-identity-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.profile-identity-player-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.profile-identity-player-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.profile-identity-player-name { font-weight: var(--w-medium); font-size: var(--fs-md); color: var(--fg); }
+.profile-identity-player-team { font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--fg-muted); }
+.profile-identity-player-team:empty { display: none; }
+.profile-identity-label {
+  display: block;
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+.profile-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-tags-empty { font-size: var(--fs-sm); color: var(--fg-muted); }
+.tag-chip {
+  border: var(--bw-hair) solid var(--k-orange-700);
+  background: var(--accent-ghost);
+  color: var(--k-orange-100);
+  border-radius: var(--r-sm);
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+}
+
+/* Own player card popup (issue #188): the card viewer's footer carries the reason */
+.reveal-own-card-note {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  color: var(--fg);
+}
+
 /* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team
    ============================================================ */
@@ -2363,3 +2446,4 @@ body.roster-dragging * { cursor: grabbing !important; }
   color: var(--fg);
   margin-bottom: 12px;
 }
+

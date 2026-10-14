@@ -27,6 +27,10 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 - Each draw **creates a new Card row** — there is no shared pre-generated pool to exhaust.
 - The new card joins the **active roster** when fewer than `ROSTER_LIMIT` (default 5) cards are active and no active card has the same player; otherwise it goes to the **bench**. The check and the activation are one conditional `UPDATE` (`_activate_card_atomic`), so fast or concurrent draws can't overfill the roster (#185; see [Atomic Roster and Token Operations](../reference/atomic-roster-and-token-operations.md)).
 
+## Own Player Card
+
+A league player who links Steam (or signs up through Steam) gets one free **common** card of themselves when their verified player id is an active player in this season's pool (issue #188). It is created like a draw card (modifiers, stored points, roster or bench by the same rule as above) but costs no token. It is given once per account and once per league player (`own_player_card_grants`), and not at all when the account already owns a card of that player. Draws then treat the granted card as owned like any other card (they prefer unowned players until the user owns every active player, or every player of the team for a team draw). A popup on the next page load shows the card in the card viewer and explains why. A season reset clears the grants with the cards. Details: [Steam Login › Own player card](../reference/steam-login.md#own-player-card-issue-188).
+
 ## Deck Structure
 
 Cards are generated dynamically at draw time rather than from a pre-seeded shared pool. `GET /deck` returns the number of distinct `(player, rarity)` combinations the requesting user has not yet drawn. This count decreases by one each time the user draws a new unique combination.

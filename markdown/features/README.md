@@ -11,7 +11,7 @@ These describe the primary user-visible surfaces of the app.
 | Feature | Description |
 |---|---|
 | [Authentication & Accounts](core/auth.md) | Registration, login, sessions, profile management, forgot-password |
-| [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll |
+| [Cards & Rarities](core/cards.md) | Card generation, rarity distribution, modifiers, scoring formula, reroll, the own player card for Steam-verified league players (#188) |
 | [Weeks & Leaderboards](core/weeks.md) | Weekly roster locks, scoring windows, and leaderboard types |
 | [Weekly Summary Report](core/weekly-summary.md) | Post-week recap popup: series-grouped matches, VOD links, and a per-user Reveal-results gate for MVP highlights and points earned |
 | [Weekly Report Fixes](core/weekly-report-fixes.md) | Docked reveal-all control, spoiler-safe winner hiding before reveal, match date display, and (#151) a side-by-side roster panel with per-game card points, a themed scrollbar and a once-per-week new-recap popup for the Weekly Summary Report |
@@ -73,7 +73,7 @@ Implementation details, integrations, and operator tooling.
 | [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
-| [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile tab shows user's own tags and hints to link Dota ID when tags exist but no player is linked |
+| [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile's Player identity panel shows the linked league player and the user's own tags, with a hint to link the player when tags exist but no player is linked; manual id entry only in `password` mode (#188) |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |
 | [Team Booster Draws](reference/team-booster-draws.md) | Team draw (internal name "booster"): one card for 3 Tokens, restricted to a chosen team's player roster; configurable cost |
 | [Team Draw Explanation](reference/team-draw-explanation.md) | User-facing "team draw" naming for the booster draw, its How to Play explanation, and the admin cost label |
@@ -120,7 +120,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Extension Policy Compliance](reference/twitch-extension-policy-compliance.md) | For Twitch policy 4.5: live info for every viewer, one-button Join creating a Twitch soft account, card draws, collection and roster in the panel, MVP drops to soft accounts; link codes leave the extension (Part 1, #157) |
 | [Twitch Account Connection](reference/twitch-account-connection.md) | Website "Connect Twitch" through Twitch's sign-in (OpenID Connect), merging a Twitch soft account into the website account after confirmation, and retiring the old link codes (Part 2, #160) |
 | [Uniform Twitch Starter Tokens](reference/uniform-twitch-starter-tokens.md) | Issue #187: every Twitch account brings its starter tokens exactly once, whether the player joined in the panel or connected Twitch on the website; grant record per Twitch id, backfill for existing players |
-| [Steam Login](reference/steam-login.md) | Steam OpenID 2.0 sign-in alongside passwords, with a `LOGIN_METHOD` switch (password / both / steam_signup: Steam-only account creation from S17), Link Steam for existing accounts, and admins from `SEED_ADMIN_STEAM_IDS` (#150) |
+| [Steam Login](reference/steam-login.md) | Steam OpenID 2.0 sign-in alongside passwords, with a `LOGIN_METHOD` switch (password / both / steam_signup: Steam-only account creation from S17), Link Steam for existing accounts, admins from `SEED_ADMIN_STEAM_IDS` (#150), and a one-time own player card for Steam-verified league players (#188) |
 | [Impersonation Hardening](reference/impersonation-hardening.md) | Case-insensitive unique usernames, reserved words with look-alike matching, an admin badge, profiles that hide self-reported player ids and avatars, and a rename cooldown (#169) |
 | [Twitch Incident Runbook](reference/twitch-incident-runbook.md) | (#160) What to do if the Twitch sign-in, the developer account or a merge goes wrong: kill switches, secret rotation, audit review, merge reversal, player communication |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |

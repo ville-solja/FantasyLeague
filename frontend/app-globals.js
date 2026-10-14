@@ -10,6 +10,8 @@ let activeHasPassword  = true;
 let activeIsDemo       = false;
 // Issue #169: Unix time the next rename is possible (null = now), from GET /me.
 let activeUsernameChangeAvailableAt = null;
+// Issue #188: the own player card popup still to show ({player_name, card_id, outcome}), from GET /me.
+let activeOwnCardGrant = null;
 // Issue #150: password | both | steam_signup, from GET /config.
 let _loginMethod = "password";
 let _tokenName        = "Tokens";

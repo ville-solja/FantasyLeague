@@ -61,11 +61,11 @@ The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash fro
 
 ## Link Steam
 
-Profile shows **Link Steam** in `both` and `steam_signup` modes for a logged-in account without a Steam link (never for demo accounts). `GET /auth/steam/start?purpose=link` needs a session and a recent identity check (`POST /reauth`); without one it redirects to `/#profile?steam=reauth_required`. The state row is bound to the user, and the callback accepts the link only when the session user is that user. Starting a link or re-auth drops the user's older unused attempts, so only the newest one is live. On an account that is already linked, start redirects straight to `/#profile?steam=linked` without going to Steam.
+Profile's **Player identity** panel shows **Link Steam** in `both` and `steam_signup` modes for a logged-in account without a Steam link (never for demo accounts). `GET /auth/steam/start?purpose=link` needs a session and a recent identity check (`POST /reauth`); without one it redirects to `/#profile?steam=reauth_required`. The state row is bound to the user, and the callback accepts the link only when the session user is that user. Starting a link or re-auth drops the user's older unused attempts, so only the newest one is live. On an account that is already linked, start redirects straight to `/#profile?steam=linked` without going to Steam.
 
 On success `users.steam_id` is set and `player_id` becomes the verified Steam32 id, replacing any self-reported value; audited as `steam_linked`. Every other account that self-reported the same `player_id` has it cleared, audited as `player_id_claim_superseded` (`user_id=<cleared> verified_user_id=<linked> player_id=<id>`); sign-up does the same. A Steam ID already on another account is refused (`in_use`) and nothing changes; only an admin can move it.
 
-`PUT /profile/player-id` answers 409 for a Steam-linked account. Accounts without Steam set it as before.
+In `both` and `steam_signup` modes `PUT /profile/player-id` answers 410 "Link Steam to verify your player id" (issue #188): Steam is the only way to link a player. In `password` mode it answers 409 for a Steam-linked account, and accounts without Steam set a self-reported id as before.
 
 From the start of S17 (`steam_signup`), Profile reminds password accounts without Steam: "Link Steam now. Password sign-in will end in a later update."
 
@@ -107,6 +107,20 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 
 `users.is_demo` (migration 033) marks the throwaway accounts made by `POST /admin/demo/seed-accounts`; the migration flags earlier ones by their `demoN@demo.local` email. Demo accounts keep their passwords in this issue, can never be promoted to admin, never link Steam and are never matched by the Steam callback. One-time demo login links are issue #172.
 
+## Own player card (issue #188)
+
+A Steam-verified account whose `player_id` is an active player in the pool (`Player.is_active`) gets one **common** card of that player, with the usual modifiers and stored points. It goes to the roster when there is room and no active card of that player (`_activate_new_card`), otherwise to the bench. Code: `backend/own_card.py`.
+
+- **When:** after Link Steam (`steam_openid.link_account`), after Steam sign-up (`steam_openid.signup`), both right after `_supersede_player_id_claims` in the same transaction, and on `GET /me` for an account that qualifies but has no grant row yet (players who linked before this feature, or who were added to the pool later). A failure on `GET /me` is logged and the page still loads.
+- **Who:** `steam_id` and `player_id` set, not a demo account, not a Twitch viewer soft account. A self-reported id (no `steam_id`) never qualifies.
+- **Once:** `own_player_card_grants` (new table, created by `create_all`; no migration) has a unique `user_id` and a unique `player_id`, plus `card_id` (NULL for `already_owned`), `outcome` (`granted` or `already_owned`), `granted_at` and `seen_at`. The row is written with `INSERT … ON CONFLICT DO NOTHING`, and the card is created only when that insert added the row, so two simultaneous requests create one card. Unlinking and relinking, or linking the same Steam account to another account, grants nothing more. A season reset deletes the rows along with the cards, so next season's league players get their card again.
+- **Already owned:** if the account owns any card of that player (any rarity, active or benched), no card is created and the row records `already_owned`. Draws treat the granted card as owned like any other card (they prefer unowned players until the user owns every active player, or every player of the team for a team draw).
+- **Failure:** the hooks run the grant in a savepoint (`own_card.grant_in_savepoint`). If creating the card fails, only the grant is rolled back and logged by exception type; the link, sign-up or page load still succeeds, and the next `GET /me` tries again.
+- **Accepted (security review, Low):** removing the player from the pool later leaves the granted card in place with no refund, the same as for drawn cards.
+- **Accepted (security review, Low):** a draw or Twitch merge running at the same moment as the grant can still give the account a second card of that player, as two simultaneous draws can; the one-active-card rule still holds.
+- **Audit:** `own_player_card_granted` with `user_id=… player_id=… card_id=… outcome=…` (never the Steam id).
+- **Popup:** `GET /me` returns `own_card_grant: {player_name, card_id, outcome}` until the player dismisses it with `POST /profile/own-card-grant/seen`, then `null`. The page shows a granted card in the card viewer (`#revealModal`) with "Your own player card. You linked Steam, and you play in this season's league, so this card of {player name} is yours." and **Nice**; for `already_owned` a small notice says "You already have a card of {player name}, so no new card was added." with **OK**. Closing the popup any way (button, X, Escape, backdrop) dismisses it.
+
 ## Endpoints
 
 All four answer 404 in `password` mode; `main.py` also routes any unknown `/auth/steam/*` path to 404 (instead of the static mount's 405). Start, callback and sign-up are limited per IP by `RATE_LIMIT_STEAM_CALLBACK`.
@@ -119,6 +133,9 @@ Verifies Steam's answer, then signs in, starts a sign-up, links or marks the re-
 
 ### `POST /auth/steam/signup`
 Body `{ "username" }`. Creates the account for the pending Steam ID and starts the session; returns `{ "username", "is_admin", "tokens" }`. 400 `signup_expired` without a valid pending sign-up; 422 for a username failing the format rules, or 422 "This name is reserved" for a reserved word (#169); 409 when the username is taken, ignoring letter case (the pending sign-up stays usable) or the Steam ID got linked to another account meanwhile ("This Steam account is linked to another Kana Cards account"; this uses up the pending sign-up). Like `POST /profile/steam/unlink`, it uses the session cookie and is covered by the cross-origin Origin check (`OriginCheckMiddleware` in `main.py`, #136), which applies to every unsafe method outside `/twitch/`.
+
+### `POST /profile/own-card-grant/seen`
+Logged in (401 otherwise); limited per user by `RATE_LIMIT_USER_ACTION`. Dismisses the own player card popup: sets `seen_at` on the account's grant. Returns `{ "changed": true }`, or `false` when there was nothing to dismiss. Available in every login mode.
 
 ### `POST /profile/steam/unlink`
 Needs a recent identity check (403 `reauth_required`). Clears `steam_id`; `player_id` stays; audited as `steam_unlinked`. 409 for an account without a password, since it would lock the player out.

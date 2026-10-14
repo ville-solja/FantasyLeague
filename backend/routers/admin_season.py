@@ -8,7 +8,7 @@ from sqlalchemy import text
 import card_points
 from database import get_db, backup_sqlite_db
 from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
-from models import Card, CardModifier, League, Match, MatchBan, Player, PlayerMatchStats, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
+from models import Card, CardModifier, League, Match, MatchBan, OwnPlayerCardGrant, Player, PlayerMatchStats, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
 from routers.leaderboard import compute_season_standings
 
 router = APIRouter()
@@ -70,7 +70,7 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
     """Clear all per-season data so the next season starts from a clean slate.
 
     Deletes matches, stats, stored card points, bans, weeks, roster snapshots, Twitch season
-    records, all known players and teams, and every user's cards; resets
+    records, all known players and teams, and every user's cards and own-card grants; resets
     user tokens to INITIAL_TOKENS; unmonitors all leagues. User accounts,
     tags, audit logs, and season archives are retained.
 
@@ -125,6 +125,8 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
         "teams":                 db.query(Team).delete(synchronize_session=False),
         "card_modifiers":        db.query(CardModifier).delete(synchronize_session=False),
         "cards":                 db.query(Card).delete(synchronize_session=False),
+        # Issue #188: next season's league players get their own card again.
+        "own_player_card_grants": db.query(OwnPlayerCardGrant).delete(synchronize_session=False),
     }
     initial_tokens = int(os.getenv("INITIAL_TOKENS", "5"))
     counts["users_tokens_reset"] = (

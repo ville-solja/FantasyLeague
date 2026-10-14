@@ -721,7 +721,7 @@ class TestProfilesDontLendOutIdentities:
         js = _read("app-profile.js")
         assert '"Verified with Steam"' in js and '"Self-reported"' in js
         assert "showPlayerPreview(name, verified ? avatarUrl : null)" in js
-        assert "data.player_verified === true" in js
+        assert "profile.player_verified === true" in js  # issue #188: _renderPlayerIdentity
         assert 'id="profilePlayerSource"' in _read("index.html")
 
     def test_privacy_page_states_player_id_visibility(self):

@@ -2,28 +2,22 @@ async function loadProfile() {
   _twitchMergeDismissed = false;
   document.getElementById("profileUsername").value = activeUsername || "";
   document.getElementById("pwUsername").value = activeUsername || "";
-  document.getElementById("profilePlayerPreview").style.display = "none";
   document.getElementById("playerIdStatus").textContent = "";
   document.getElementById("usernameStatus").textContent = "";
+  _renderRenameHint();
+  _renderPlayerIdentity({});
+  loadTwitchConnection();
   try {
     const res = await fetch(`${API}/profile/${activeUserId}`);
     const data = await res.json();
     document.getElementById("profileAdminBadge").innerHTML = adminBadgeHtml(data.is_admin);
-    if (data.player_id) {
-      document.getElementById("profilePlayerId").value = data.player_id;
-      if (data.player_name) _showLinkedPlayer(data.player_name, data.player_avatar_url, data.player_verified === true);
-    } else {
-      document.getElementById("profilePlayerId").value = "";
-    }
-    _renderRenameHint();
-    loadTwitchConnection();
-    _renderSteamProfile();
+    _renderPlayerIdentity(data);
     const tags = data.tags || [];
     const container = document.getElementById("profileTagsContainer");
     if (container) {
       container.innerHTML = tags.length
         ? tags.map(t => `<span class="tag-chip">${_escHtml(t.label)}</span>`).join("")
-        : `<span style="color:#555;font-size:0.85rem;">No tags</span>`;
+        : `<span class="profile-tags-empty">No tags</span>`;
     }
     const gapHint = document.getElementById("profileTagGapHint");
     if (gapHint) {
@@ -36,13 +30,59 @@ async function loadProfile() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Player identity (issue #188): one panel for the Steam link, the league player
+// and the tags. Linking Steam sets and verifies the player id (issue #150); where
+// Steam is available the id can't be typed in. Profile only ever learns linked
+// yes/no, never the Steam id.
+// ---------------------------------------------------------------------------
+
+/** The panel's state: "password" (no Steam: the typed-in, self-reported id),
+ *  "not_linked", "linked" (with a league player), "linked_no_match", or
+ *  "self_reported" (a legacy typed-in id, read-only until Steam replaces it). */
+function playerIdentityState(loginMethod, me, profile) {
+  const steam = loginMethod === "both" || loginMethod === "steam_signup";
+  if (!steam) return "password";
+  if (me && me.steam_linked) return profile && profile.player_name ? "linked" : "linked_no_match";
+  if (profile && profile.player_id) return "self_reported";
+  return "not_linked";
+}
+
+function _renderPlayerIdentity(profile) {
+  const me = {steam_linked: activeSteamLinked, has_password: activeHasPassword, is_demo: activeIsDemo};
+  const ui = steamUiState(_loginMethod, me);
+  const state = playerIdentityState(_loginMethod, me, profile);
+  const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
+  show("identitySteamLinked", state === "linked" || state === "linked_no_match");
+  show("identityNotLinkedState", state === "not_linked");
+  show("identityNoMatch", state === "linked_no_match");
+  show("identityLegacyHint", state === "self_reported");
+  show("playerIdForm", ui.playerIdField);
+  show("btnLinkSteam", ui.linkSteam);
+  show("btnUnlinkSteam", ui.unlinkSteam);
+  show("identitySteamNote", ui.linkSteam);
+  show("steamLinkReminder", ui.linkReminder);
+  // A Steam-only account has no password to change.
+  show("changePasswordForm", activeHasPassword);
+  show("profileNoPasswordNote", !activeHasPassword);
+  document.getElementById("profilePlayerId").value =
+    state === "password" && profile.player_id ? profile.player_id : "";
+  if (profile.player_name && state !== "not_linked" && state !== "linked_no_match") {
+    _showLinkedPlayer(profile.player_name, profile.player_avatar_url,
+                      profile.player_verified === true, profile.player_team_name);
+  } else {
+    document.getElementById("profilePlayerPreview").style.display = "none";
+  }
+}
+
 // Issue #169: a claimed player shows its avatar only when the id is verified through
 // Steam; a typed-in id is labelled "Self-reported", as other players see it.
-function _showLinkedPlayer(name, avatarUrl, verified) {
+function _showLinkedPlayer(name, avatarUrl, verified, teamName) {
   showPlayerPreview(name, verified ? avatarUrl : null);
   const label = document.getElementById("profilePlayerSource");
   label.textContent = verified ? "Verified with Steam" : "Self-reported";
   label.className = verified ? "player-source player-source-verified" : "player-source";
+  document.getElementById("profilePlayerTeam").textContent = teamName || "";
 }
 
 function _renderRenameHint() {
@@ -330,24 +370,6 @@ function handleTwitchErrorReturn() {
 // again). Profile only ever learns linked yes/no, never the Steam id.
 // ---------------------------------------------------------------------------
 
-function _renderSteamProfile() {
-  const me = {steam_linked: activeSteamLinked, has_password: activeHasPassword, is_demo: activeIsDemo};
-  const ui = steamUiState(_loginMethod, me);
-  const show = (id, on) => { document.getElementById(id).style.display = on ? "" : "none"; };
-  show("steamProfilePanel", ui.profileSteamPanel);
-  show("steamUnlinkedState", ui.linkSteam);
-  show("steamLinkedState", activeSteamLinked);
-  show("btnUnlinkSteam", ui.unlinkSteam);
-  show("steamLinkReminder", ui.linkReminder);
-  // A Steam-only account has no password to change.
-  show("changePasswordForm", activeHasPassword);
-  show("profileNoPasswordNote", !activeHasPassword);
-  // A linked Steam account sets the verified player id.
-  document.getElementById("profilePlayerId").disabled = activeSteamLinked;
-  document.getElementById("btnSavePlayerId").disabled = activeSteamLinked;
-  show("profilePlayerIdVerified", activeSteamLinked);
-}
-
 function linkSteam() {
   // A top-level navigation: the server checks the recent identity confirmation and
   // sends the browser to steamcommunity.com, or back here asking for the password.
@@ -362,7 +384,7 @@ async function unlinkSteam() {
     if (!res.ok) return setStatus("steamStatus", data.detail || "Could not unlink Steam", false);
     setStatus("steamStatus", "Steam unlinked.");
     await loadMe();
-    _renderSteamProfile();
+    loadProfile();
   } catch (e) {
     setStatus("steamStatus", e.message, false);
   }
@@ -428,6 +450,7 @@ async function logoutEverywhere() {
   }
 }
 
+// LOGIN_METHOD=password only (issue #188): elsewhere PUT /profile/player-id answers 410.
 async function savePlayerId() {
   const raw = document.getElementById("profilePlayerId").value.trim();
   const player_id = raw ? parseInt(raw) : null;
@@ -439,7 +462,7 @@ async function savePlayerId() {
     const data = await res.json();
     if (!res.ok) return setStatus("playerIdStatus", data.detail, false);
     if (data.player_name) {
-      _showLinkedPlayer(data.player_name, data.player_avatar_url, false);
+      _showLinkedPlayer(data.player_name, data.player_avatar_url, false, null);
       setStatus("playerIdStatus", "Player linked");
     } else if (player_id) {
       document.getElementById("profilePlayerPreview").style.display = "none";
@@ -451,4 +474,51 @@ async function savePlayerId() {
   } catch (e) {
     setStatus("playerIdStatus", e.message, false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Own player card popup (issue #188). GET /me returns own_card_grant until the
+// player dismisses it (POST /profile/own-card-grant/seen). A granted card opens in
+// the card viewer (#revealModal); "already owned" uses a small notice. Text is set
+// with textContent only.
+// ---------------------------------------------------------------------------
+
+let _ownCardGrantShown = false;
+
+function ownCardGrantText(grant) {
+  const name = (grant && grant.player_name) || "your player";
+  return grant && grant.outcome === "granted"
+    ? `Your own player card. You linked Steam, and you play in this season's league, so this card of ${name} is yours.`
+    : `You already have a card of ${name}, so no new card was added.`;
+}
+
+async function showOwnCardGrant() {
+  const grant = activeOwnCardGrant;
+  if (!grant || _ownCardGrantShown) return;
+  _ownCardGrantShown = true;
+  if (grant.outcome === "granted" && Number.isInteger(grant.card_id)) {
+    let card = {id: grant.card_id, card_type: "common", player_name: grant.player_name};
+    try {
+      const res = await fetch(`${API}/cards/${grant.card_id}`);
+      if (res.ok) card = {...(await res.json()), id: grant.card_id};
+    } catch (_) { /* the viewer still shows the image and the text */ }
+    showCard(card, ownCardGrantText(grant), {showActionBtn: true});
+    document.getElementById("revealDestination").classList.add("reveal-own-card-note");
+    document.getElementById("revealActionBtn").textContent = "Nice";
+    _revealOnClose = dismissOwnCardGrant;
+    const modal = document.getElementById("revealModal");
+    modal.onclick = e => { if (e.target === modal) closeReveal(); };
+    return;
+  }
+  document.getElementById("ownCardNoticeText").textContent = ownCardGrantText(grant);
+  document.getElementById("ownCardNoticeModal").classList.remove("hidden");
+}
+
+async function dismissOwnCardGrant() {
+  document.getElementById("ownCardNoticeModal").classList.add("hidden");
+  if (!activeOwnCardGrant) return;
+  activeOwnCardGrant = null;
+  try {
+    await fetch(`${API}/profile/own-card-grant/seen`, { method: "POST" });
+  } catch (_) { /* shown again on the next page load */ }
 }
