@@ -14,7 +14,7 @@ After a week ends, any active card whose player didn't play is replaced by the p
 
 Stored card points (`card_match_points`, issue #141) are per card per match, so substitution and re-runs never touch them; only the set of counted entries changes.
 
-Weeks locked before this feature have no saved bench rows. `run_substitutions` leaves such a week unchanged (no `subbed_out` marks either) and only records `substitutions_at`. On the first deploy, `due_substitutions` therefore processes every such past locked week once: it sets `substitutions_at` and writes a `weekly_substitutions` audit entry with `substitutions=0`, without changing any flags. The same happens for a week in which no user had a bench.
+**Retroactive bench (issue #189).** Weeks locked before this feature had no saved bench rows, so the first deploy's `due_substitutions` gave them `substitutions_at` with 0 substitutions (as it does for any week in which no user had a bench). The one-off operator script `backend/scripts/backfill_bench.py` adds bench rows to such weeks, rebuilt only from cards each user had on an earlier roster snapshot, and then runs `run_substitutions`. See [retroactive-bench-substitution.md](retroactive-bench-substitution.md).
 
 Active cards are saved at lock whatever their player's status, so an active card of a deactivated player is saved as active and subbed out by the normal rule when its player played no scored match.
 

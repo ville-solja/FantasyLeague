@@ -940,3 +940,45 @@ As an admin, I want series played outside their scheduled week to be pointed out
   - `dry_run=true` returns the flagged series;
   - without it, it applies all of them and re-runs substitutions as above.
 - With the season-16 feed, Hoxhunt Fortum–Elisa Oyj (league week 4, played Mon 12.10.) is flagged as scheduled Week 4, counted Week 5, until it is fixed
+
+## Retroactive Bench Substitution (issue #189)
+
+Plan: `markdown/plans/plan-issue-189-retroactive-bench-substitution.md`.
+
+### Operator Backfills the Bench for Earlier Weeks
+**User story**
+As the operator, I want to add bench substitutions to the weeks locked before benches were saved, so that players whose roster cards didn't play get points from their bench as in later weeks.
+
+**Acceptance criteria**
+- **Command:** `python scripts/backfill_bench.py --weeks "Week 2,Week 3,Week 4"`, run from `backend/`, for example `docker compose exec <service> python scripts/backfill_bench.py …`. Weeks are given by label or id.
+- **Which weeks it processes:** only a week that is locked, past its substitution time (`end_time + SUBSTITUTION_DELAY_HOURS`) and without `is_bench = 1` rows. Any other week is skipped with the reason printed ("Week 5: bench already saved, skipped"), and the other weeks still run.
+- **Dry run:** `--dry-run` prints per week:
+  - the number of users who get a bench;
+  - the number of bench cards and of substitutions;
+  - one line per affected user with their username and week points before → after, largest change first.
+
+  It writes nothing to the database.
+- **Apply:** without `--dry-run`, each week is handled in its own transaction:
+  - insert the bench rows (`is_bench = 1`, `bench_order` 0..n);
+  - run `weeks.run_substitutions`;
+  - write one `admin_bench_backfill` audit entry (`actor_username=script`, with `id`, `label`, `users`, `bench_cards` and `substitutions` in `detail`).
+
+  It prints the same report as the dry run.
+- **Exit code:** 1 when a named week doesn't exist (nothing is processed then) or a week fails (that week is rolled back, the others keep their result), 0 otherwise.
+- **After applying:** a second run reports every week as skipped and changes nothing.
+
+### Bench Uses Only Cards the User Provably Had
+**User story**
+As a player, I want a retroactive bench to use only cards I actually had that week, so that a card drawn later can't score for an earlier week, mine or anyone else's.
+
+**Acceptance criteria**
+- **Which cards qualify:** for week W and user U, a card is a bench candidate only when it appears in a `weekly_roster_entries` row with `user_id = U`, `is_bench = 0` and a week whose `start_time` ≤ W's `start_time`.
+- **Exclusions:**
+  - a card already on U's roster in W is not a candidate;
+  - a card no longer owned by U, or whose player is inactive (`players.is_active = 0`), is not a candidate. A refund deactivates the player and leaves `owner_id` as it is, so the inactive-player rule is what excludes refunded cards.
+- **Order:** candidates get `bench_order` in the same order the lock-time snapshot uses (`weeks._slot_order`: `slot_index`, empty slots last, then card id), with U's current bench cards first and current roster cards after them in slot order.
+- **First week:** a week with no earlier locked week gets no bench cards; the report says "no bench cards to add".
+- **Substitution rules:** `run_substitutions` applies its normal rules unchanged: a card whose player played is never replaced, a player is never counted twice, and each bench card fills one slot.
+- **After applying:**
+  - My Team shows the week's "Subbed in for {player}" and "Did not play" labels as for any later week;
+  - the weekly and season leaderboards include the substituted points.
