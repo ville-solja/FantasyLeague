@@ -1,6 +1,6 @@
 # Card Draw Animations
 
-When a player draws a card on the website, it comes off a visible deck in the Draw panel, flies to the centre, flips face up with the rarity burst, and then the rest of the reveal fades in. Any card shown in the card viewer can be flipped to its back, which is a placeholder for now (issue #205). Plan: `markdown/plans/plan-issue-205-card-draw-animations.md`. Design canvas: https://claude.ai/artifact/4xq7DmvxjpJ8m7KxfTz5uB.
+On the website, a drawn card comes off a deck in the Draw panel, flies to the centre and flips face up with the rarity burst. The rest of the reveal then fades in, and on Continue the card lands in the roster slot or bench place it was added to (issue #205). A card back with a Flip control is postponed. Plan: `markdown/plans/plan-issue-205-card-draw-animations.md`. Design canvas: https://claude.ai/artifact/4xq7DmvxjpJ8m7KxfTz5uB.
 
 ---
 
@@ -11,12 +11,19 @@ When a player draws a card on the website, it comes off a visible deck in the Dr
 3. **Travel:** it flies to the modal card's place while the page dims (about 460 ms).
 4. **Flip:** it turns face up with a slight overshoot and the rarity burst (about 520 ms).
 5. **Details:** the rarity label, destination, Reroll and Continue fade in (about 400 ms). The result is the same reveal as before.
+6. **Landing:** Continue sends the card to its open roster slot, or to the front of the bench, where it glows once (about 520 ms, then a 1.2 s glow).
 
-A failed draw plays nothing. With reduced motion, the finished reveal fades in without flight, flip or burst.
+A failed draw plays nothing. Draw another card, ✕, Escape and the backdrop skip the landing.
 
-## Card back *(planned)*
+## In My Team *(planned)*
 
-A **Flip card** button, or a click on the card image, turns the card in the viewer to its back. The back is CSS only (brand pattern and emblem, no league name) and shares its style with the deck. Every card opens front side up. Stats or accolades on the back are a later step.
+- **Draw sidebar:** the sidebar starts with the deck (three stacked CSS card backs, no league name) beside a compact Chance per draw strip. The strip keeps `.rarity-grid` for the guided tour.
+- **Phone:** the card flies up off the top edge, and a notice with **See roster ↑** scrolls to the roster, where the new card glows once.
+- **Reduced motion:** no flight, flip, burst or landing flight. The reveal fades in and the card appears in its slot.
+
+## Card back *(postponed)*
+
+A Flip control in the card viewer, with a placeholder back that could later show stats or accolades. The design is on the canvas.
 
 No endpoints, tables or env vars change.
 

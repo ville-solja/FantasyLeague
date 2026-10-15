@@ -431,7 +431,20 @@ As a player, I want to see my card come off the deck and flip over when I draw s
 - Pressing Draw again during the animation does nothing (the button stays busy until the reveal is shown)
 - With reduced motion, there is no flight, flip or burst: the finished reveal fades in after the result and image are ready
 
-### Flip a Card to Its Back
+### Deck in My Team
+**User story**
+As a player, I want the deck and the drawn card to fit the My Team page so that I see where my new card went.
+
+**Acceptance criteria**
+- The Draw sidebar starts with the deck (three stacked card backs) beside a compact **Chance per draw** strip: four coloured dots with the rarity name and its percentage, from the same `draw_rate_*` weights as today
+- The Draw buttons, hint, promo code and status line stay below, unchanged
+- After the reveal, **Continue** closes the modal and the card flies to where it was added: the open roster slot (when the reveal says "Added to active roster") or the front of the bench ("Added to bench"), shrinking to the slot size (about 520 ms). It then glows once in its rarity colour (about 1.2 s), and the roster count and bench update as today
+- **Draw another card** in the reveal skips the landing and starts the next draw from the deck
+- Closing the reveal another way (✕, Escape, backdrop) skips the landing flight; the roster updates as today
+- On a phone (below 768 px), the card flies up off the top edge. A notice "Added to active roster" / "Added to bench" with **See roster ↑** appears for 5 seconds; See roster scrolls to the roster, and the new card glows once
+- With reduced motion, there is no landing flight: the card appears in its slot with the glow
+
+### Flip a Card to Its Back *(not yet implemented)*
 **User story**
 As a player, I want to flip any card I'm viewing to see its back so that the card feels like a physical object and can later show more about it.
 
@@ -449,4 +462,4 @@ As a player, I want the back of a card to show its stats or accolades so that I 
 
 **Acceptance criteria**
 - The back shows either per-card stats (matches scored, points with this card, average, best match, modifiers) or accolades (MVP picks, weekly bests), as on the canvas's "Later" designs
-- The data comes from stored per-match card points; the front and the flip stay as built in this plan
+- Needs the flip from the story above; the data comes from stored per-match card points
