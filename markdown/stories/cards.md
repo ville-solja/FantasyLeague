@@ -413,3 +413,40 @@ As an admin, I want the cost setting to use the same name players see so that I 
 - The Scoring Weights panel labels `team_booster_cost` as "Team draw cost (Tokens)"
 - `seed_weights()` refreshes the label of every existing weight row to the label defined in `DEFAULT_WEIGHTS` on startup, so relabels reach deployed databases
 - Refreshing labels never changes a weight's value
+
+
+## Card Draw Animations (issue #205)
+
+### Draw From the Deck
+**User story**
+As a player, I want to see my card come off the deck and flip over when I draw so that drawing feels like opening a real card.
+
+**Acceptance criteria**
+- The Draw panel shows a deck: a small stack of card backs next to the Draw buttons, decorative only (`aria-hidden`)
+- Pressing **Draw a card** or confirming a team draw makes the deck stir (a slight wobble) until the draw result has arrived and its card image is loaded and decoded, or 3 seconds have passed
+- Then the deck's top card lifts (about 220 ms), flies to the centre of the screen while the page dims (about 460 ms), and flips face up on its vertical axis with a slight overshoot (about 520 ms). The rarity burst plays behind it in the card's rarity colour
+- After the flip, the rest of the reveal fades in: rarity label, destination ("Added to active roster" / "Added to bench"), Reroll and Continue (about 400 ms). The finished modal is the same as today's draw reveal
+- A failed draw (no tokens, roster full, server error) plays no animation and shows the error as today
+- If the image is not ready after 3 seconds, the card still flies and flips to its rarity face; the PNG appears when it loads. An image error shows today's rarity fallback text
+- Pressing Draw again during the animation does nothing (the button stays busy until the reveal is shown)
+- With reduced motion, there is no flight, flip or burst: the finished reveal fades in after the result and image are ready
+
+### Flip a Card to Its Back
+**User story**
+As a player, I want to flip any card I'm viewing to see its back so that the card feels like a physical object and can later show more about it.
+
+**Acceptance criteria**
+- The card viewer (the reveal modal, opened from a draw, My Team, the Weekly Report or the own-player notice) has a **Flip card** button under the card image, and clicking the card image does the same
+- Flip turns the card 180° on its vertical axis (about 600 ms) to show the back; the button then reads **Show front** and has `aria-pressed="true"`; flipping again shows the front
+- The back is a placeholder: the same pattern and emblem as the deck, the words "Card back", no league name
+- Every card opens front side up; closing the viewer resets it
+- With reduced motion, Flip swaps the faces without rotating
+- Keyboard: the Flip button and the card image are focusable and work with Enter and Space
+
+### Card Back Ready for More *(not yet implemented)*
+**User story**
+As a player, I want the back of a card to show its stats or accolades so that I can see what a card has done for me.
+
+**Acceptance criteria**
+- The back shows either per-card stats (matches scored, points with this card, average, best match, modifiers) or accolades (MVP picks, weekly bests), as on the canvas's "Later" designs
+- The data comes from stored per-match card points; the front and the flip stay as built in this plan
