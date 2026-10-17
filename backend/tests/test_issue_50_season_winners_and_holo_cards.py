@@ -1401,7 +1401,8 @@ def test_accolade_pips_tooltip_and_aria_newest_first_with_team():
     html = _pips([_a("champion", "Season 15", "div1", "Blues"), _a("champion", "Season 16", "div1", "Reds")])
     (_, aria, _), = _pip_attrs(html)
     assert aria == "Div 1 Champion, 2 times: S16 with Reds, S15 with Blues"
-    assert 'data-accolade-tip="Div 1 Champion · S16 with Reds, S15 with Blues"' in html
+    # Issue 208 generalised the tooltip attribute from data-accolade-tip to data-tip.
+    assert 'data-tip="Div 1 Champion · S16 with Reds, S15 with Blues"' in html
     assert 'tabindex="0"' in html
     award = _pip_attrs(_pips([_a("best_match", "Season 14"), _a("best_match", "Season 16")]))
     assert award[0][1] == "Best Single Match, 2 times: S16, S14"
@@ -1418,7 +1419,7 @@ def test_accolade_pips_played_last_with_seasons_count_and_compressed_runs():
     assert "accolade-pip--played" in cls and "accolade-pip--muted" in cls
     assert count == "12"
     assert aria == "Played, 12 seasons: S1–S10, S14, S16"
-    assert 'data-accolade-tip="Played · 12 seasons: S1–S10, S14, S16"' in html
+    assert 'data-tip="Played · 12 seasons: S1–S10, S14, S16"' in html
     assert _pips(played, {"omitPlayed": True}) == ""
 
 
@@ -1726,8 +1727,8 @@ def test_players_tab_filters_and_sorting_no_veteran():
 
 
 def test_player_popup_accolades_section():
-    """Source-reading (app-players.js): popup Accolades section with 'Holo unlocked' banner for champions, counts, pips in header and a per-season chip timeline including 'Played · N matches'."""
-    js = _fe("app-players.js")
+    """Source-reading (app-player-popup.js since issue 208): popup Accolades section with 'Holo unlocked' banner for champions, counts, pips in header and a per-season chip timeline including 'Played · N matches'."""
+    js = _fe("app-player-popup.js")
     html = _fe("index.html")
     fn = _fn_body(js, "renderPlayerAccolades")
     assert "Holo unlocked" in fn and "p.holo_unlocked" in fn

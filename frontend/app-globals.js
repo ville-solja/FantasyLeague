@@ -502,7 +502,7 @@ function accoladePipsHtml(accolades, opts = {}) {
     if (!mine.length) continue;
     const t = _accoladePipText(kind, mine);
     const count = t.count ? `<span class="accolade-pip-count">${_escHtml(t.count)}</span>` : "";
-    pips.push(`<span class="accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}" role="listitem" tabindex="0" aria-label="${_escHtml(t.aria)}" data-accolade-tip="${_escHtml(t.tip)}"><i data-lucide="${kind.icon}" aria-hidden="true"></i>${count}</span>`);
+    pips.push(`<span class="accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}" role="listitem" tabindex="0" aria-label="${_escHtml(t.aria)}" data-tip="${_escHtml(t.tip)}"><i data-lucide="${kind.icon}" aria-hidden="true"></i>${count}</span>`);
   }
   if (!pips.length) return "";
   _initAccoladeTips();
@@ -530,15 +530,16 @@ function accoladeChipsHtml(accolades) {
   }).join("")}</span>`;
 }
 
-// The pip tooltip: one shared element, opened on hover, focus or tap and closed on
-// Escape, blur, mouse leave or a tap elsewhere.
+// The shared tooltip (issue 50, generalised in issue 208): one element for any
+// [data-tip] (accolade pips, the player popup's form chart bars), opened on hover,
+// focus or tap and closed on Escape, blur, mouse leave or a tap elsewhere.
 let _accoladeTipEl = null;
 let _accoladeTipFor = null;
 let _accoladeTipsBound = false;
 
 function _accoladeTipTarget(e) {
   const t = e && e.target;
-  return t && typeof t.closest === "function" ? t.closest("[data-accolade-tip]") : null;
+  return t && typeof t.closest === "function" ? t.closest("[data-tip]") : null;
 }
 
 function showAccoladeTip(pip) {
@@ -550,7 +551,7 @@ function showAccoladeTip(pip) {
     _accoladeTipEl.setAttribute("role", "tooltip");
     document.body.appendChild(_accoladeTipEl);
   }
-  _accoladeTipEl.textContent = pip.getAttribute("data-accolade-tip") || "";
+  _accoladeTipEl.textContent = pip.getAttribute("data-tip") || "";
   const r = pip.getBoundingClientRect();
   _accoladeTipEl.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 260))}px`;
   _accoladeTipEl.style.top = `${r.bottom + 6}px`;

@@ -41,7 +41,7 @@ Implementation details, integrations, and operator tooling.
 | [Configuration & Commands](reference/commands.md) | Environment variables and useful admin commands |
 | [My Team Tab Layout](reference/my-team-tab-layout.md) | Two-column desktop layout for the My Team tab |
 | [Card Player Popup Navigation](reference/card-player-popup.md) | Clickable player name on viewed card; modal stacking fix |
-| [Player Popup Visualizations](reference/player-popup-visualizations.md) | *(planned, #208)* Form chart, points by source with modifier value, league percentiles, heroes and match details in the player popup |
+| [Player Popup Visualizations](reference/player-popup-visualizations.md) | (#208) Form chart, points by source with modifier value, league percentiles, heroes and match details in the player popup |
 | [Tester Account Exclusion](reference/tester-account-exclusion.md) | `is_tester` flag; admin toggle; leaderboard filtering |
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |

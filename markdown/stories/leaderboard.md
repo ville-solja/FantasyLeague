@@ -148,7 +148,7 @@ As a statistician, I want documentation about the weight simulation endpoint so 
 
 ## Player Popup Visualizations
 
-*(Not yet implemented)* Plan: `markdown/plans/plan-issue-208-player-popup-visualizations.md`.
+Plan: `markdown/plans/plan-issue-208-player-popup-visualizations.md`. Feature doc: `markdown/features/reference/player-popup-visualizations.md`.
 
 ### Season Form at a Glance
 **User story**

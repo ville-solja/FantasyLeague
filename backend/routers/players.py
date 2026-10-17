@@ -1,15 +1,23 @@
 import json
+import logging
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 import accolades
+import player_insights
+import schedule
+from card_points import _current_weights
 from database import get_db
 from deps import require_admin
 from enrich import run_profile_enrichment
 from match_scoring import scored_match_sql, scored_stat_sql
-from models import Player, PlayerProfile
+from models import Player, PlayerProfile, Week
 from scoring import display_points
+from weeks import scoring_week_for
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -67,10 +75,12 @@ def get_player(player_id: int, db=Depends(get_db)):
                m.parse_status,
                CASE WHEN {scored_match_sql()} THEN 0 ELSE 1 END as excluded_from_scoring,
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
-               s.tower_damage,
+               s.sen_placed, s.tower_damage, s.hero_id,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
                s.teamfight_participation, s.camps_stacked, s.rune_pickups,
                s.firstblood_claimed, s.stuns,
+               m.duration, m.radiant_team_id, m.dire_team_id, m.radiant_win,
+               m.week_override_id,
                t.id as team_id, t.name as team_name,
                ot.id as opponent_team_id,
                ot.name as opponent_team_name
@@ -83,16 +93,49 @@ def get_player(player_id: int, db=Depends(get_db)):
         ORDER BY COALESCE(m.start_time, 0) DESC
     """), {"player_id": player_id}).fetchall()
 
+    weights = _current_weights(db)
     history = [dict(r._mapping) for r in stats]
+    # Issue 208: hero icons are best effort and never block: only the cached map is
+    # used (a cold cache warms in the background), and a failure never breaks the popup.
+    icons, hero_names = {}, {}
+    if any(r["hero_id"] is not None for r in history):
+        try:
+            icons, hero_names = schedule.cached_hero_maps()
+        except Exception:
+            logger.warning("Hero icon map unavailable for the player popup", exc_info=True)
+    week_list = db.query(Week).all() if history else []
     for r in history:
         r["excluded_from_scoring"] = bool(r["excluded_from_scoring"])
+        r["is_mvp"] = bool(r["is_mvp"])
+        r["won"] = player_insights.won(r["team_id"], r.pop("radiant_team_id"),
+                                       r.pop("dire_team_id"), r.pop("radiant_win"))
+        week, _ = scoring_week_for(db, SimpleNamespace(week_override_id=r.pop("week_override_id"),
+                                                       start_time=r["start_time"]), week_list)
+        r["week_label"] = player_insights.week_short(week.label) if week else None
+        r["hero_icon_url"] = icons.get(r["hero_id"]) if r["hero_id"] is not None else None
+        r["hero_name"] = hero_names.get(r["hero_id"]) if r["hero_id"] is not None else None
+        r["_breakdown"] = player_insights.points_by_source(r, weights, r["is_mvp"])
+
     matches = len(history)
     scored = [r for r in history if not r["excluded_from_scoring"]]
     total_points = sum(r["fantasy_points"] or 0 for r in scored)
     avg_points = total_points / len(scored) if scored else 0
     best = max(scored, key=lambda r: r["fantasy_points"] or 0, default=None)
+
+    league = player_insights.cached_league_aggregates(db, weights)
+    heroes = player_insights.hero_rows(history, icons, hero_names)
+    sources = player_insights.points_sources([r["_breakdown"] for r in scored], league["sources"])
+    modifiers = player_insights.modifier_values(scored, weights)
+    summary = {
+        "wins": sum(1 for r in scored if r["won"] is True),
+        "losses": sum(1 for r in scored if r["won"] is False),
+        "mvps": sum(1 for r in scored if r["is_mvp"]),
+        "avg_rank": player_insights.avg_rank(player_id, league["population"]),
+    }
+
     # Totals above use exact values; each displayed value is rounded once (issue #149).
     for r in history:
+        r["points_breakdown"] = {k: display_points(v, 2) for k, v in r.pop("_breakdown").items()}
         if r["fantasy_points"] is not None:
             r["fantasy_points"] = display_points(r["fantasy_points"])
 
@@ -114,8 +157,16 @@ def get_player(player_id: int, db=Depends(get_db)):
             "match_id": best["match_id"],
             "fantasy_points": best["fantasy_points"],
             "start_time": best["start_time"],
+            "opponent_team_name": best["opponent_team_name"],
         } if best else None,
         "match_history": history,
+        # Issue 208: the popup's form chart, points by source, comparison and heroes.
+        "summary": summary,
+        "league_avg_points": display_points(league["avg_points"]),
+        "points_sources": sources,
+        "modifier_values": modifiers,
+        "league_comparison": player_insights.league_comparison(player_id, league["population"]),
+        "heroes": heroes,
         # Issue #50: the popup's Accolades section.
         **accolades.player_seasons(player_accolades),
         "accolades": player_accolades,

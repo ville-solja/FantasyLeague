@@ -76,6 +76,8 @@ import schedule
 REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 FRONTEND_DIR = os.path.join(REPO_ROOT, "frontend")
 APP_PLAYERS_JS_PATH = os.path.join(FRONTEND_DIR, "app-players.js")
+# The player popup moved to app-player-popup.js (issue 208).
+APP_PLAYER_POPUP_JS_PATH = os.path.join(FRONTEND_DIR, "app-player-popup.js")
 INDEX_HTML_PATH = os.path.join(FRONTEND_DIR, "index.html")
 
 
@@ -235,10 +237,12 @@ class TestMatchHistoryShowsMvpOpponentAndOpenDotaLink:
         assert "Opponent" in headers
         assert headers[-1] != headers[0]
 
-        empty_row = re.search(r"No matches yet", _read(APP_PLAYERS_JS_PATH))
-        assert empty_row, "empty-state row not found"
-        colspan_match = re.search(r"colspan='(\d+)'\s*style='color:#444'>No matches yet", _read(APP_PLAYERS_JS_PATH))
-        assert colspan_match, "colspan on empty-state row not found"
+        # Issue 208: the empty state replaces the table ("No matches yet this season."),
+        # and the per-match Details row spans every column.
+        popup = _read(APP_PLAYER_POPUP_JS_PATH)
+        assert "No matches yet this season." in popup, "empty state not found"
+        colspan_match = re.search(r"const _POPUP_HISTORY_COLS = (\d+);", popup)
+        assert colspan_match, "history column count not found"
         assert int(colspan_match.group(1)) == len(headers)
 
     def test_open_player_modal_history_row_mvp_star_is_first_column(self):
@@ -248,14 +252,14 @@ class TestMatchHistoryShowsMvpOpponentAndOpenDotaLink:
         appended after the Fantasy pts `<td>` — the string ' <span
         style=\"font-size:0.7rem;color:#f5c842' inline-badge pattern used
         today must no longer appear after the fantasy_points cell."""
-        js = _read(APP_PLAYERS_JS_PATH)
-        fn = _extract_function(js, "openPlayerModal")
+        js = _read(APP_PLAYER_POPUP_JS_PATH)
+        fn = _extract_function(js, "_popupHistoryRowHtml")  # issue 208: the row builder
         assert ' <span style="font-size:0.7rem;color:#f5c842' not in fn
         assert "m.is_mvp" in fn
         # The row template's first <td> must be the MVP indicator, before the date <td>.
-        row_template = re.search(r"return `<tr>(.*?)</tr>`;", fn, re.S)
+        row_template = re.search(r"return `<tr[^>]*>(.*?)</tr>", fn, re.S)
         assert row_template, "match-history row template not found"
-        tds = re.findall(r"<td>(.*?)</td>", row_template.group(1), re.S)
+        tds = re.findall(r"<td[^>]*>(.*?)</td>", row_template.group(1), re.S)
         assert "mvpStar" in tds[0] or "is_mvp" in tds[0]
         assert "date" in tds[1]
 
@@ -267,8 +271,8 @@ class TestMatchHistoryShowsMvpOpponentAndOpenDotaLink:
         link to https://www.opendota.com/matches/{m.match_id} with
         target="_blank" rel="noopener", mirroring the Schedule tab's
         per-game OpenDota link attributes."""
-        js = _read(APP_PLAYERS_JS_PATH)
-        fn = _extract_function(js, "openPlayerModal")
+        js = _read(APP_PLAYER_POPUP_JS_PATH)
+        fn = _extract_function(js, "_popupHistoryRowHtml")  # issue 208: the row builder
         assert "m.opponent_team_id" in fn and "m.opponent_team_name" in fn
         assert "teamLink(m.opponent_team_id, m.opponent_team_name)" in fn
         assert "https://www.opendota.com/matches/${m.match_id}" in fn

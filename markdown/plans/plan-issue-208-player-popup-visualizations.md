@@ -109,7 +109,7 @@ As a fantasy manager, I want the full stats of any match a click away, so that t
 | `frontend/style.css` | Chart, strip and history styles in the design system (tokens, tabular numbers, before GUIDED TOUR) |
 | `frontend/app-globals.js` | #50's pip tooltip generalised to `data-tip` (pips keep working) |
 | `markdown/ui_description/players.md`, `markdown/features/core/players.md` | Docs |
-| `backend/tests/test_player_popup_visualizations.py` | Tests |
+| `backend/tests/test_issue_208_player_popup_visualizations.py` | Tests |
 | Node harness test for `app-player-popup.js` | Frontend tests |
 
 No migration, no new env var.

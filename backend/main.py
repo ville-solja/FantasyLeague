@@ -36,6 +36,7 @@ from models import League, LiveMatch, PlayerMatchStats, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league, store_live_matches, retry_unparsed_matches, INGEST_LOCK
 import steam_live
+import schedule
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
@@ -361,6 +362,8 @@ def _start_background_threads():
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
     threading.Thread(target=_backup_loop, daemon=True).start()
+    # Issue 208: warm the hero constants so the player popup never fetches them inline.
+    threading.Thread(target=schedule.warm_hero_maps, daemon=True).start()
     logger.info("DB backup thread started (interval=%dh, retention=%dd)",
                 _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
 

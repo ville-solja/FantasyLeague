@@ -228,7 +228,7 @@
 
 <!-- PLAYER DETAIL MODAL -->
 <div class="modal-overlay hidden" id="playerModal" role="dialog" aria-modal="true" data-close="closePlayerModal" onclick="if(event.target===this)closePlayerModal()">
-  <div class="modal modal-wide">
+  <div class="modal modal-wide player-popup">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:14px;">
         <img id="playerModalAvatar" style="width:48px;height:48px;border-radius:50%;display:none;" onerror="this.style.display='none'" />
@@ -236,20 +236,28 @@
           <div id="playerModalName" class="player-modal-name"></div>
           <div id="playerModalTeam" class="player-modal-team"></div>
           <div id="playerModalPips" class="player-modal-pips"></div>
+          <div id="playerModalMeta" class="player-modal-meta"></div>
         </div>
       </div>
-      <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+      <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
     <div id="playerModalStats"></div>
+    <p id="playerModalEmpty" class="player-popup-empty" hidden></p>
+    <section id="playerModalForm" class="player-popup-section" hidden></section>
+    <section id="playerModalSources" class="player-popup-section" hidden></section>
+    <section id="playerModalCompare" class="player-popup-section" hidden></section>
+    <section id="playerModalHeroes" class="player-popup-section" hidden></section>
     <section id="playerModalAccolades" class="player-accolades" hidden aria-labelledby="playerAccoladesTitle"></section>
+    <section id="playerModalHistorySection" class="player-popup-section">
+      <h2>Match history</h2>
+      <div class="player-history-wrap">
+        <table class="player-history">
+          <thead><tr><th>MVP</th><th>Date</th><th>Hero</th><th>Result</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th><th>Opponent</th><th>OpenDota</th><th>Details</th></tr></thead>
+          <tbody id="playerModalHistory"></tbody>
+        </table>
+      </div>
+    </section>
     <div id="playerProfile" style="display:none;margin-top:4px;"></div>
-    <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>MVP</th><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th><th>Opponent</th><th>OpenDota</th></tr></thead>
-        <tbody id="playerModalHistory"></tbody>
-      </table>
-    </div>
     <div class="status" id="playerModalStatus"></div>
   </div>
 </div>
@@ -1524,6 +1532,7 @@
 <script src="/app-cards.js"></script>
 <script src="/app-roster.js"></script>
 <script src="/app-players.js"></script>
+<script src="/app-player-popup.js"></script>
 <script src="/app-leaderboard.js"></script>
 <script src="/app-history.js"></script>
 <script src="/app-admin-weeks.js"></script>
