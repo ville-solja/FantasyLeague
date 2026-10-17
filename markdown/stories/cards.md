@@ -422,7 +422,7 @@ As an admin, I want the cost setting to use the same name players see so that I 
 As a player, I want to see my card come off the deck and flip over when I draw so that drawing feels like opening a real card.
 
 **Acceptance criteria**
-- The Draw panel shows a deck: a small stack of card backs next to the Draw buttons, decorative only (`aria-hidden`)
+- The Draw panel shows a deck: a small stack of card backs at the top of the Draw panel, beside the Chance per draw strip and above the Draw buttons, decorative only (`aria-hidden`)
 - Pressing **Draw a card** or confirming a team draw makes the deck stir (a slight wobble) until the draw result has arrived and its card image is loaded and decoded, or 3 seconds have passed
 - Then the deck's top card lifts (about 220 ms), flies to the centre of the screen while the page dims (about 460 ms), and flips face up on its vertical axis with a slight overshoot (about 520 ms). The rarity burst plays behind it in the card's rarity colour
 - After the flip, the rest of the reveal fades in: rarity label, destination ("Added to active roster" / "Added to bench"), Reroll and Continue (about 400 ms). The finished modal is the same as today's draw reveal

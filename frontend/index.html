@@ -570,23 +570,20 @@
 
     <div class="panel">
       <h2>Draw</h2>
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Chance per draw</h3>
-      <div class="rarity-grid">
-        <div class="rarity-card-box">
-          <img src="/assets/Card_Template_Common.png" alt="Common" class="rarity-card-thumb" />
-          <div class="count" id="deck-common">—</div>
+      <div class="draw-top">
+        <div class="draw-deck" id="drawDeck" aria-hidden="true">
+          <div class="card-back draw-deck-layer"></div>
+          <div class="card-back draw-deck-layer"></div>
+          <div class="card-back draw-deck-layer"></div>
         </div>
-        <div class="rarity-card-box">
-          <img src="/assets/Card_Template_Rare.png" alt="Rare" class="rarity-card-thumb" />
-          <div class="count" id="deck-rare">—</div>
-        </div>
-        <div class="rarity-card-box">
-          <img src="/assets/Card_Template_Epic.png" alt="Epic" class="rarity-card-thumb" />
-          <div class="count" id="deck-epic">—</div>
-        </div>
-        <div class="rarity-card-box">
-          <img src="/assets/Card_Template_Legendary.png" alt="Legendary" class="rarity-card-thumb" />
-          <div class="count" id="deck-legendary">—</div>
+        <div class="draw-chances">
+          <h3 class="draw-chances-title">Chance per draw</h3>
+          <div class="rarity-grid">
+            <div class="rarity-chance rarity-chance--common"><span class="rarity-dot" aria-hidden="true"></span><span class="rarity-chance-name">Common</span><span class="count" id="deck-common">—</span></div>
+            <div class="rarity-chance rarity-chance--rare"><span class="rarity-dot" aria-hidden="true"></span><span class="rarity-chance-name">Rare</span><span class="count" id="deck-rare">—</span></div>
+            <div class="rarity-chance rarity-chance--epic"><span class="rarity-dot" aria-hidden="true"></span><span class="rarity-chance-name">Epic</span><span class="count" id="deck-epic">—</span></div>
+            <div class="rarity-chance rarity-chance--legendary"><span class="rarity-dot" aria-hidden="true"></span><span class="rarity-chance-name">Legendary</span><span class="count" id="deck-legendary">—</span></div>
+          </div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -607,6 +604,10 @@
       <div class="status" id="deckStatus"></div>
     </div>
 
+  </div>
+  <div class="draw-landed-notice" id="drawLandedNotice" role="status" aria-live="polite" style="display:none;">
+    <span class="draw-landed-notice-text" id="drawLandedNoticeText"></span>
+    <button type="button" class="draw-landed-notice-link" onclick="seeLandedCard()">See roster &uarr;</button>
   </div>
 </div>
 
