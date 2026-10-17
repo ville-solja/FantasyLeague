@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
+import accolades
 from card_draw import _roll_rarity, _pick_player, _pick_player_from_team
 import card_points
 from card_utils import (
@@ -127,7 +128,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         # Snapshot rows (issue #129): counted entries are the roster, the rest (saved
         # bench and subbed-out cards) the bench.
         results = db.execute(text(f"""
-            SELECT c.id, c.card_type,
+            SELECT c.id, c.card_type, c.is_holo,
                    CASE WHEN {counted_roster_entry_sql()} THEN 1 ELSE 0 END as is_active,
                    c.slot_index,
                    wre.id as entry_id, wre.bench_order, wre.subbed_for_entry_id,
@@ -142,7 +143,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY wre.id, c.id, c.card_type, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
+            GROUP BY wre.id, c.id, c.card_type, c.is_holo, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -169,7 +170,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         ws = week.start_time if week else 0
         we = week.end_time if week else now
         results = db.execute(text(f"""
-            SELECT c.id, c.card_type, c.is_active, c.slot_index,
+            SELECT c.id, c.card_type, c.is_holo, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
                    t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
@@ -178,7 +179,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
-            GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
+            GROUP BY c.id, c.card_type, c.is_holo, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -194,6 +195,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     combined_value = sum(float(c["total_points"] or 0.0) for c in active)
     modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
     for c in cards:
+        c["is_holo"] = bool(c["is_holo"])
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
         c["total_points"] = display_points(c["total_points"])
         c["team_logo_url"] = safe_logo_url(c["team_logo_url"])
@@ -230,7 +232,7 @@ def collection_for_user(db, user_id: int) -> list[dict]:
     season points (the card's stored points over all scored matches), rarest first,
     then by player name. Used by the Twitch panel's GET /twitch/me (issue #157)."""
     rows = db.execute(text(f"""
-        SELECT c.id, c.card_type, c.is_active, c.slot_index,
+        SELECT c.id, c.card_type, c.is_holo, c.is_active, c.slot_index,
                p.id as player_id, p.name as player_name, p.avatar_url,
                t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                COALESCE(SUM(CASE WHEN m.match_id IS NOT NULL THEN cmp.points END), 0) as season_points
@@ -240,7 +242,7 @@ def collection_for_user(db, user_id: int) -> list[dict]:
         LEFT JOIN matches m ON m.match_id = cmp.match_id AND {scored_match_sql()}
         {_LATEST_TEAM_SUBQUERY}
         WHERE c.owner_id = :user_id
-        GROUP BY c.id, c.card_type, c.is_active, c.slot_index, p.id, p.name, p.avatar_url,
+        GROUP BY c.id, c.card_type, c.is_holo, c.is_active, c.slot_index, p.id, p.name, p.avatar_url,
                  t.id, t.name, t.logo_url
     """), {"user_id": user_id}).fetchall()
     cards = [dict(r._mapping) for r in rows]
@@ -248,6 +250,7 @@ def collection_for_user(db, user_id: int) -> list[dict]:
     rank = {"legendary": 0, "epic": 1, "rare": 2, "common": 3}
     for c in cards:
         c["is_active"] = bool(c["is_active"])
+        c["is_holo"] = bool(c["is_holo"])
         c["season_points"] = display_points(c["season_points"])
         c["team_logo_url"] = safe_logo_url(c["team_logo_url"])
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
@@ -306,6 +309,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         league_id=None,
         is_active=False,
         generation=1,
+        is_holo=accolades.roll_holo(db, player.id, rarity, weights),
     )
     db.add(card)
     db.flush()
@@ -341,6 +345,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "is_active": is_active,
+        "is_holo": bool(card.is_holo),
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
     }
@@ -435,7 +440,8 @@ def draw_booster(team_id: int, db=Depends(get_db),
                             detail="No players available for this team")
 
     card = Card(card_type=rarity, player_id=player.id, owner_id=user_id,
-                league_id=None, is_active=False, generation=1)
+                league_id=None, is_active=False, generation=1,
+                is_holo=accolades.roll_holo(db, player.id, rarity, weights_map))
     db.add(card)
     db.flush()
     is_active = _activate_new_card(db, card, user_id)
@@ -468,6 +474,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "team_name": team_row.name if team_row else team.name,
         "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
         "is_active": is_active,
+        "is_holo": bool(card.is_holo),
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
     }
@@ -507,6 +514,8 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
     return {
         "id": card.id,
         "card_type": card.card_type,
+        "is_holo": bool(card.is_holo),
+        "player_id": card.player_id,
         "player_name": player.name if player else None,
         "avatar_url": player.avatar_url if player else None,
         "team_name": team_row.name if team_row else None,
@@ -521,7 +530,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
     result = db.execute(text("""
-        SELECT c.card_type, p.name as player_name, p.avatar_url,
+        SELECT c.card_type, c.is_holo, p.name as player_name, p.avatar_url,
                p.id as player_id,
                t.name as team_name, t.logo_url as team_logo_url
         FROM cards c
@@ -532,11 +541,11 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
-    # Resolve tag keys for the player's linked user (if any)
+    # Tag stickers of the user verifiably linked to the player, if any (issue #209).
+    import player_links
     tag_keys: list = []
-    linked_user = db.execute(text(
-        "SELECT id FROM users WHERE player_id = :pid LIMIT 1"
-    ), {"pid": result.player_id}).first()
+    linked = player_links.verified_users_for_player(db, result.player_id)
+    linked_user = linked[0] if linked else None
     if linked_user:
         ut_rows = (
             db.query(UserTag, TagDefinition)
@@ -553,6 +562,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
         team_logo_url=result.team_logo_url,
         card_modifiers=mods,
         tag_keys=tag_keys,
+        is_holo=bool(result.is_holo),
     )
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=False, compress_level=5)

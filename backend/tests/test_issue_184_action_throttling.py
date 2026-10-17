@@ -416,7 +416,7 @@ class TestEveryPlayerActionHasALimit:
 
     @pytest.mark.parametrize("method,path", [
         ("PUT", "/profile/username"),
-        ("PUT", "/profile/player-id"),
+        # PUT /profile/player-id was removed by issue #209.
         ("PUT", "/profile/password"),
         ("POST", "/weekly-summary/{week_id}/reveal"),
         ("POST", "/weekly-summary/reveal-all"),

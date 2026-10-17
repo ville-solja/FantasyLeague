@@ -40,7 +40,7 @@ Production runs `docker compose up -d` behind a TLS-terminating reverse proxy (n
 | `HTTPS_ONLY` | `true` | Marks session cookies `Secure`; see below |
 | `SECRET_KEY` | 32+ random characters | Signs session cookies; shorter keys are refused with `ENV=production` |
 | `APP_BASE_URL` | e.g. `https://your-deployment.example.com` | Links in reset emails; also accepted by the cross-origin check. Required for Steam sign-in when `LOGIN_METHOD` is `both` or `steam_signup` (Steam start answers 503 without it) |
-| `LOGIN_METHOD` | `password`, `both` or `steam_signup` | Whether Steam sign-in is offered and password registration is open; see [Steam Login](markdown/features/reference/steam-login.md) |
+| `LOGIN_METHOD` | `password`, `both` or `steam_signup` | Whether Steam sign-in is offered and password registration is open; only Steam links an account to a league player, so `password` mode has no player linking and production should run a Steam mode; see [Steam Login](markdown/features/reference/steam-login.md) |
 
 ### Production requires HTTPS
 

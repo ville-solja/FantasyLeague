@@ -16,7 +16,8 @@ Two new tables power the system:
   `source`: `admin` (granted by hand) or `caster_sync` (the automatic Caster tag, issue #201).
 
 Tags are granted to **users** (app accounts). When rendering a card image, the system
-resolves the player's linked user (`User.player_id == card.player_id`) and composites the
+resolves the user with a Steam-verified link to the card's player
+(`player_links.verified_users_for_player`, issue #209) and composites the
 relevant sticker PNGs onto the card. Multiple tags produce multiple stickers stacked
 horizontally in the top-left corner.
 

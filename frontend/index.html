@@ -195,9 +195,11 @@
     <div class="reveal-img-wrap" id="revealImgWrap">
       <div class="reveal-img-placeholder" id="revealImgPlaceholder" role="status" aria-live="polite" aria-busy="false"></div>
       <img id="revealCardImg" class="reveal-card-img" alt="" width="200" height="283" style="display:none;" />
+      <div class="reveal-pips" id="revealPips"></div>
     </div>
     <div class="player-name" id="revealPlayer"></div>
     <div id="revealTeam" style="font-size:0.82rem;color:#888;margin-bottom:12px;"></div>
+    <div class="reveal-accolades" id="revealAccolades"></div>
     <div id="revealDestination" style="font-size:0.75rem;color:#666;margin-bottom:20px;"></div>
     <button id="rerollBtn" onclick="openRerollConfirm()" style="margin-bottom:8px;width:100%;background:#1a2a1a;border:1px solid #2a4a2a;color:#5a9;">Reroll Modifiers (1 token)</button>
     <div id="rerollConfirm" style="display:none;background:#111;border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:8px;font-size:0.85rem;color:#aaa;">
@@ -226,26 +228,36 @@
 
 <!-- PLAYER DETAIL MODAL -->
 <div class="modal-overlay hidden" id="playerModal" role="dialog" aria-modal="true" data-close="closePlayerModal" onclick="if(event.target===this)closePlayerModal()">
-  <div class="modal modal-wide">
+  <div class="modal modal-wide player-popup">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:14px;">
         <img id="playerModalAvatar" style="width:48px;height:48px;border-radius:50%;display:none;" onerror="this.style.display='none'" />
         <div>
           <div id="playerModalName" class="player-modal-name"></div>
           <div id="playerModalTeam" class="player-modal-team"></div>
+          <div id="playerModalPips" class="player-modal-pips"></div>
+          <div id="playerModalMeta" class="player-modal-meta"></div>
         </div>
       </div>
-      <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+      <button class="ghost" onclick="closePlayerModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
     <div id="playerModalStats"></div>
+    <p id="playerModalEmpty" class="player-popup-empty" hidden></p>
+    <section id="playerModalForm" class="player-popup-section" hidden></section>
+    <section id="playerModalSources" class="player-popup-section" hidden></section>
+    <section id="playerModalCompare" class="player-popup-section" hidden></section>
+    <section id="playerModalHeroes" class="player-popup-section" hidden></section>
+    <section id="playerModalAccolades" class="player-accolades" hidden aria-labelledby="playerAccoladesTitle"></section>
+    <section id="playerModalHistorySection" class="player-popup-section">
+      <h2>Match history</h2>
+      <div class="player-history-wrap">
+        <table class="player-history">
+          <thead><tr><th>MVP</th><th>Date</th><th>Hero</th><th>Result</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th><th>Opponent</th><th>OpenDota</th><th>Details</th></tr></thead>
+          <tbody id="playerModalHistory"></tbody>
+        </table>
+      </div>
+    </section>
     <div id="playerProfile" style="display:none;margin-top:4px;"></div>
-    <h2 style="margin-top:16px;margin-bottom:8px;">Match history</h2>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>MVP</th><th>Date</th><th>Fantasy pts</th><th>K/A/D</th><th>GPM</th><th>Wards</th><th>Tower dmg</th><th>Opponent</th><th>OpenDota</th></tr></thead>
-        <tbody id="playerModalHistory"></tbody>
-      </table>
-    </div>
     <div class="status" id="playerModalStatus"></div>
   </div>
 </div>
@@ -282,6 +294,107 @@
       <button id="addPlayerCloseBtn" class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
     </div>
     <div class="status" id="addPlayerStatus"></div>
+  </div>
+</div>
+
+<!-- Player Management: Mark champions (issue 50) -->
+<div class="modal-overlay hidden" id="markChampionsModal" role="dialog" aria-modal="true" aria-labelledby="markChampionsTitle" data-close="closeMarkChampions" onclick="closeMarkChampions()">
+  <div class="modal champ-modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;" id="markChampionsTitle">MARK CHAMPIONS</h2>
+      <button class="ghost" onclick="closeMarkChampions()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="champ-mode" role="radiogroup" aria-label="Start from">
+      <label><input type="radio" name="champMode" value="current" checked onchange="setChampMode('current')" /> From this season</label>
+      <label><input type="radio" name="champMode" value="past" onchange="setChampMode('past')" /> Past season</label>
+    </div>
+    <div class="champ-fields">
+      <label>Season <select id="champSeason"></select></label>
+      <label>Division <select id="champDivision" onchange="if (_champMode === 'current') _fillChampTeams()"><option value="div1">Div 1</option><option value="div2">Div 2</option></select></label>
+      <label id="champTeamPickWrap">Team <select id="champTeamPick" onchange="champPickTeam()"></select></label>
+      <label>Team name <input id="champTeamName" type="text" maxlength="100" placeholder="Team name" /></label>
+    </div>
+    <div class="champ-roster" id="champRoster"></div>
+    <div class="champ-roster-actions">
+      <button type="button" class="secondary" onclick="champAddRow()">+ Add player</button>
+      <span class="champ-count-note" id="champCountNote"></span>
+    </div>
+    <label class="champ-paste">Paste players, one "&lt;id&gt; &lt;name&gt;" per line
+      <textarea id="champPaste" rows="3" placeholder="123456789 Glete"></textarea>
+    </label>
+    <button type="button" class="secondary" onclick="champApplyPaste()">Add pasted players</button>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="champSaveBtn" style="flex:1;" onclick="saveChampions()">Save champions</button>
+      <button class="secondary" onclick="closeMarkChampions()">Cancel</button>
+    </div>
+    <div class="status" id="champStatus"></div>
+  </div>
+</div>
+
+<!-- Player Management: Add accolade (issue 50) -->
+<div class="modal-overlay hidden" id="addAccoladeModal" role="dialog" aria-modal="true" aria-labelledby="addAccoladeTitle" data-close="closeAddAccolade" onclick="closeAddAccolade()">
+  <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;" id="addAccoladeTitle">ADD ACCOLADE</h2>
+      <button class="ghost" onclick="closeAddAccolade()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="champ-fields">
+      <label>Season <input id="accSeason" type="text" maxlength="100" placeholder="Season 15" /></label>
+      <label>Kind
+        <select id="accKind" onchange="accKindChanged()">
+          <option value="most_points">Most Points</option>
+          <option value="best_average">Best Average</option>
+          <option value="best_match">Best Single Match</option>
+          <option value="fantasy_winner">Fantasy Winner (a user)</option>
+          <option value="played">Played (one or more players)</option>
+        </select>
+      </label>
+      <label id="accPlayerWrap">OpenDota id <input id="accPlayerId" type="number" min="1" oninput="accFillName()" /></label>
+      <label id="accNameWrap">Player name <input id="accPlayerName" type="text" maxlength="100" /></label>
+      <label id="accUserWrap" hidden>Username <input id="accUsername" type="text" maxlength="100" /></label>
+      <label id="accValueWrap">Value (optional) <input id="accValue" type="number" step="0.1" /></label>
+      <label id="accBulkWrap" hidden>Players, one "&lt;id&gt; &lt;name&gt;" per line
+        <textarea id="accBulk" rows="5" placeholder="123456789 Glete"></textarea>
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="accSaveBtn" style="flex:1;" onclick="saveAccolade()">Add</button>
+      <button class="secondary" onclick="closeAddAccolade()">Cancel</button>
+    </div>
+    <div class="status" id="accStatus"></div>
+  </div>
+</div>
+
+<!-- Season Lifecycle: End Season dialog (issue 50) -->
+<div class="modal-overlay hidden" id="endSeasonModal" role="dialog" aria-modal="true" aria-labelledby="endSeasonTitle" data-close="closeEndSeasonDialog" onclick="closeEndSeasonDialog()">
+  <div class="modal champ-modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h2 style="margin:0;" id="endSeasonTitle">END SEASON</h2>
+      <button class="ghost" onclick="closeEndSeasonDialog()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
+    </div>
+    <label class="champ-fields">Season label <input id="endSeasonDialogLabel" type="text" maxlength="100" /></label>
+    <h3 class="end-season-sub">Awards</h3>
+    <div id="endSeasonAwards"></div>
+    <p class="end-season-played" id="endSeasonPlayed"></p>
+    <h3 class="end-season-sub">Champions</h3>
+    <div class="end-season-champs">
+      <div class="end-season-div" data-division="div1">
+        <label>Div 1 winner <select id="endSeasonTeam_div1" onchange="endSeasonPickTeam('div1')"></select></label>
+        <div class="end-season-players" id="endSeasonPlayers_div1"></div>
+        <div class="end-season-add"><input id="endSeasonAdd_div1" type="number" min="1" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div1')">Add</button></div>
+      </div>
+      <div class="end-season-div" data-division="div2">
+        <label>Div 2 winner <select id="endSeasonTeam_div2" onchange="endSeasonPickTeam('div2')"></select></label>
+        <div class="end-season-players" id="endSeasonPlayers_div2"></div>
+        <div class="end-season-add"><input id="endSeasonAdd_div2" type="number" min="1" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div2')">Add</button></div>
+      </div>
+    </div>
+    <p class="end-season-warning" id="endSeasonChampWarning" hidden>No champions recorded; add them in Player management</p>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="endSeasonContinueBtn" style="flex:1;" onclick="confirmEndSeason()">Continue to END SEASON</button>
+      <button class="secondary" onclick="closeEndSeasonDialog()">Cancel</button>
+    </div>
+    <div class="status" id="endSeasonDialogStatus"></div>
   </div>
 </div>
 
@@ -397,6 +510,7 @@
 <div class="tabs" id="tabBar">
   <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
   <button class="tab active" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">Leaderboards</button>
+  <button class="tab" id="tab-btn-history"     onclick="switchTab('history')">History</button>
   <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
@@ -440,16 +554,7 @@
               <div class="profile-identity-player-team">That's normal if you don't play in the league. If you do, your player appears here once an admin adds you to this season's players.</div>
             </div>
           </div>
-          <p id="identityLegacyHint" class="profile-twitch-copy" style="display:none;">Self-reported, link Steam to verify</p>
-          <!-- LOGIN_METHOD=password only: Steam is not available, so the id is typed in (self-reported). -->
-          <div id="playerIdForm" style="display:none;">
-            <label for="profilePlayerId" class="profile-identity-label">OpenDota account id <span class="player-source">Self-reported</span></label>
-            <div class="row">
-              <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
-              <button id="btnSavePlayerId" onclick="savePlayerId()">Save</button>
-            </div>
-            <p class="profile-twitch-copy">If you play in the league, enter your OpenDota account id. Tags an admin has given you then appear as stickers on your cards and next to your name on the leaderboard.</p>
-          </div>
+          <p id="identitySteamRequired" class="profile-twitch-copy" style="display:none;">Player linking needs Steam sign-in.</p>
           <div class="row profile-identity-actions">
             <button id="btnLinkSteam" onclick="linkSteam()" style="display:none">Link Steam</button>
             <button class="secondary" id="btnUnlinkSteam" onclick="unlinkSteam()" style="display:none">Unlink Steam</button>
@@ -651,6 +756,19 @@
   </div>
 </div>
 
+<!-- TAB: HISTORY (issue 50) -->
+<div id="tab-history" class="tab-content">
+  <div class="history-layout">
+    <div class="history-seasons" id="historySeasons"></div>
+    <aside class="panel history-fame">
+      <h2>Hall of fame</h2>
+      <p class="history-fame-note">Players by titles: champion and season awards. Seasons played don't count.</p>
+      <div id="historyFame"></div>
+    </aside>
+  </div>
+  <div class="status" id="historyStatus"></div>
+</div>
+
 <!-- TAB: PLAYERS -->
 <div id="tab-players" class="tab-content">
   <div class="grid">
@@ -660,17 +778,26 @@
         <input type="text" id="playersSearch" placeholder="Filter by name or team..." oninput="filterPlayers()" style="max-width:280px;" />
         <button class="secondary" onclick="loadPlayers()">Refresh</button>
       </div>
+      <div class="players-filters" role="group" aria-label="Show players">
+        <button type="button" class="players-filter-chip active" data-filter="all" aria-pressed="true" onclick="setPlayersFilter('all')">All</button>
+        <button type="button" class="players-filter-chip" data-filter="champions" aria-pressed="false" onclick="setPlayersFilter('champions')">Champions</button>
+        <button type="button" class="players-filter-chip" data-filter="new" aria-pressed="false" onclick="setPlayersFilter('new')">New this season</button>
+      </div>
+      <div class="players-table-wrap">
       <table>
         <thead><tr id="playersTableHead">
           <th data-col="name"         data-default-dir="asc">Player</th>
           <th data-col="team_name"    data-default-dir="asc">Team</th>
+          <th data-col="seasons_played" data-default-dir="desc">Seasons</th>
+          <th data-col="titles_count" data-default-dir="desc">Titles</th>
           <th data-col="matches"      data-default-dir="desc">Matches</th>
           <th data-col="avg_points"   data-default-dir="desc">Avg pts</th>
           <th data-col="total_points" data-default-dir="desc">Total pts</th>
           <th data-col="mvp_count"    data-default-dir="desc">MVPs</th>
         </tr></thead>
-        <tbody id="playersBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
+        <tbody id="playersBody"><tr><td colspan="8" style="color:#444">—</td></tr></tbody>
       </table>
+      </div>
       <div class="status" id="playersStatus"></div>
     </div>
 
@@ -861,9 +988,9 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">How to link</h3>
       <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Register or log in to a Fantasy account, then open the <strong>Profile</strong> tab.</li>
-        <li>In the <strong>Player identity</strong> panel, press <strong>Link Steam</strong> and sign in on steamcommunity.com. Steam verifies which league player you are. (Where Steam sign-in is not available, enter your OpenDota account ID there instead; it is shown as self-reported.)</li>
+        <li>In the <strong>Player identity</strong> panel, press <strong>Link Steam</strong> and sign in on steamcommunity.com. Steam verifies which league player you are: your player ID is your Steam account's OpenDota id, and it can't be typed in. (Where Steam sign-in is not available, there is no player linking.)</li>
       </ol>
-      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can unlink Steam from the Profile tab if your account also has a password.</p>
+      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can unlink Steam from the Profile tab if your account also has a password; that removes your player link too.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What linking unlocks</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
@@ -1054,6 +1181,8 @@
         <h2 style="margin:0;">Player Management</h2>
         <div style="display:flex;gap:8px;">
           <button onclick="openAddPlayerPopup()">Add</button>
+          <button class="secondary" onclick="openMarkChampions()">Mark champions</button>
+          <button class="secondary" onclick="openAddAccolade()">Add accolade</button>
           <button class="secondary" onclick="openBulkAddPlayersPopup()">Bulk Add</button>
           <button id="removePlayersBtn" class="danger" disabled onclick="openRemovePlayersConfirm()">Remove</button>
           <button class="secondary" onclick="loadPlayerPool()">Refresh</button>
@@ -1067,6 +1196,19 @@
         <tbody id="playerPoolBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="playerPoolStatus"></div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin:0;">Champions and accolades</h2>
+        <button class="secondary" onclick="loadSeasonAccolades()">Refresh</button>
+      </div>
+      <div class="accolade-admin-wrap">
+      <table id="accoladeAdminTable">
+        <thead><tr><th>Season</th><th>Title</th><th>Winner</th><th>Value</th><th>Source</th><th></th></tr></thead>
+        <tbody id="accoladeAdminBody"><tr><td colspan="6" style="color:#444">—</td></tr></tbody>
+      </table>
+      </div>
+      <div class="status" id="accoladeAdminStatus"></div>
     </div>
   </div>
 
@@ -1214,7 +1356,7 @@
             computed live and are destroyed by reset — always run End Season first.
           </p>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-            <input id="endSeasonLabel" type="text" placeholder="Season label e.g. Season 15" style="min-width:200px;" />
+            <input id="endSeasonLabel" type="text" placeholder="Season label (default: the current season)" style="min-width:200px;" />
             <button onclick="endSeason()">End Season (Archive)</button>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
@@ -1381,7 +1523,9 @@
 <script src="/app-cards.js"></script>
 <script src="/app-roster.js"></script>
 <script src="/app-players.js"></script>
+<script src="/app-player-popup.js"></script>
 <script src="/app-leaderboard.js"></script>
+<script src="/app-history.js"></script>
 <script src="/app-admin-weeks.js"></script>
 <script src="/app-admin-users.js"></script>
 <script src="/app-admin-notifications.js"></script>

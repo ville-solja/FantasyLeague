@@ -297,7 +297,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
 | `admin_seeded_from_env` | A verified Steam sign-in, sign-up or link with an ID in `SEED_ADMIN_STEAM_IDS` made the account an admin (issue #150; written only for Steam seeding, not for `SEED_ADMIN_USERNAME` password seeding) |
 | `steam_linked` | A user linked Steam on Profile; `player_id` became the verified Steam32 id (issue #150; the Steam id is never in `detail`) |
-| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150) |
+| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150); the player link is cleared too, and `detail` adds `player_id_cleared=1` when one was set (issue #209) |
+| `player_links_cleared` | Migration 041 cleared typed-in player ids (no `steam_id`) on upgrade; one entry, `detail` is `migration=041 count=N`, none when N is 0 (issue #209) |
 | `own_player_card_granted` | A Steam-verified league player got their own player card, or it was recorded as already owned (issue #188; `detail` has `user_id=`, `player_id=`, `card_id=` and `outcome=`) |
 | `player_id_claim_superseded` | A Steam-verified account took a player id another account had self-reported; that account's `player_id` was cleared (`detail` is `user_id=<cleared> verified_user_id=<verified> player_id=<id>`; issue #150) |
 | `admin_reauth` | An admin confirmed their password via `POST /reauth`, or their Steam account via the Steam re-auth round trip (`detail` is `ok` or `failed: …`; Steam adds `method=steam`) |
@@ -352,6 +353,10 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
 | `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_champions_set` | Admin saved a season and division's champion set (Mark champions); detail has added and removed counts |
+| `admin_accolade_added` | Admin added one or more season accolades (also written once per season by `backfill_played.py`) |
+| `admin_accolade_updated` | Admin edited a season accolade |
+| `admin_accolade_removed` | Admin removed a season accolade |
 | `admin_db_backup` | Admin created a database backup from the admin panel (`detail` has the filename) |
 | `admin_db_backup_download` | Admin downloaded a database backup (`detail` has the filename) |
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
@@ -409,6 +414,7 @@ These features have dedicated reference documents:
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |

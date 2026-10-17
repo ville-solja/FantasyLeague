@@ -3,6 +3,7 @@ import io
 import logging
 import os
 import re
+import threading
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -35,6 +36,12 @@ _cache = {"data": None, "fetched_at": None}
 # are effectively static within a patch, so there is no need to refresh this on
 # the same 1-hour cadence as the schedule cache above.
 _hero_icon_cache = None
+_hero_name_cache: dict = {}  # {hero_id: localized name}, filled by the same fetch
+_hero_fetch_lock = threading.Lock()
+# Guards only the warm-started flag, never held during a fetch, so popup requests
+# never wait on a slow OpenDota call (issue 208).
+_hero_warm_lock = threading.Lock()
+_hero_warm_started = False
 
 
 # -----------------------
@@ -404,24 +411,76 @@ def build_team_lookup(db):
         return {}
 
 
+def _hero_icon_url(icon):
+    """CDN URL for an OpenDota hero icon path; only a same-host path ("/apps/...") is
+    accepted, so a crafted value can't change the URL's host."""
+    if not isinstance(icon, str) or not icon.startswith("/") or icon.startswith("//") or "\\" in icon:
+        return None
+    return f"https://cdn.cloudflare.steamstatic.com{icon}"
+
+
 def _fetch_hero_icon_map() -> dict:
     """{hero_id: full icon URL}, fetched once per process lifetime — hero constants
     are effectively static within a patch."""
     global _hero_icon_cache
     if _hero_icon_cache is not None:
         return _hero_icon_cache
-    from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+    with _hero_fetch_lock:
+        if _hero_icon_cache is not None:
+            return _hero_icon_cache
+        from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+        try:
+            data = opendota_get_json(f"{OPEN_DOTA_URL}/constants/heroes", label="constants/heroes") or {}
+        except Exception:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        icons = {}
+        for h in data.values():
+            url = _hero_icon_url(h.get("icon")) if h.get("id") else None
+            if url:
+                icons[h["id"]] = url
+        _hero_name_cache.update({
+            h["id"]: h["localized_name"]
+            for h in data.values() if h.get("id") and isinstance(h.get("localized_name"), str)
+        })
+        _hero_icon_cache = icons
+        return _hero_icon_cache
+
+
+def warm_hero_maps() -> None:
+    """Fill the hero icon and name caches (startup thread / background warm)."""
+    global _hero_warm_started
+    with _hero_warm_lock:
+        _hero_warm_started = True
     try:
-        data = opendota_get_json(f"{OPEN_DOTA_URL}/constants/heroes", label="constants/heroes") or {}
+        _fetch_hero_icon_map()
     except Exception:
-        data = {}
-    if not isinstance(data, dict):
-        data = {}
-    _hero_icon_cache = {
-        h["id"]: f"https://cdn.cloudflare.steamstatic.com{h['icon']}"
-        for h in data.values() if h.get("id") and h.get("icon")
-    }
-    return _hero_icon_cache
+        logger.warning("Hero constants warm-up failed", exc_info=True)
+
+
+def warm_hero_maps_in_background() -> None:
+    """Start one background warm-up per process; returns immediately."""
+    global _hero_warm_started
+    with _hero_warm_lock:
+        if _hero_warm_started or _hero_icon_cache is not None:
+            return
+        _hero_warm_started = True
+    threading.Thread(target=warm_hero_maps, daemon=True).start()
+
+
+def cached_hero_maps() -> tuple[dict, dict]:
+    """({hero_id: icon URL}, {hero_id: name}) from the cache, never fetching. On a cold
+    cache this starts the background warm-up and returns empty maps (issue 208)."""
+    if _hero_icon_cache is None:
+        warm_hero_maps_in_background()
+        return {}, {}
+    return _hero_icon_cache, _hero_name_cache
+
+
+def hero_name_map() -> dict:
+    """{hero_id: name} from the fetch _fetch_hero_icon_map() made; empty before it."""
+    return _hero_name_cache
 
 
 def _pad5(icons):

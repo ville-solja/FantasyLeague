@@ -36,6 +36,7 @@ from models import League, LiveMatch, PlayerMatchStats, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league, store_live_matches, retry_unparsed_matches, INGEST_LOCK
 import steam_live
+import schedule
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
 from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
@@ -56,6 +57,8 @@ from routers import admin_tags as admin_tags_router
 from routers import admin_players as admin_players_router
 from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
+from routers import admin_accolades as admin_accolades_router
+from routers import history as history_router
 from routers import admin_backups as admin_backups_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
@@ -359,6 +362,8 @@ def _start_background_threads():
     threading.Thread(target=_profile_enrichment_loop, daemon=True).start()
     logger.info("Profile enrichment thread started (interval=%ds)", _ENRICHMENT_INTERVAL)
     threading.Thread(target=_backup_loop, daemon=True).start()
+    # Issue 208: warm the hero constants so the player popup never fetches them inline.
+    threading.Thread(target=schedule.warm_hero_maps, daemon=True).start()
     logger.info("DB backup thread started (interval=%dh, retention=%dd)",
                 _DB_BACKUP_INTERVAL_HOURS, _DB_BACKUP_RETENTION_DAYS)
 
@@ -423,6 +428,8 @@ async def lifespan(app: FastAPI):
                 "this bypass must never run in production"
             )
     twitch_module.warn_if_mvp_channels_unset()
+    import image as _card_image
+    _card_image.warn_if_holo_template_missing()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
@@ -827,6 +834,8 @@ app.include_router(admin_tags_router.router)
 app.include_router(admin_players_router.router)
 app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
+app.include_router(admin_accolades_router.router)
+app.include_router(history_router.router)
 app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)

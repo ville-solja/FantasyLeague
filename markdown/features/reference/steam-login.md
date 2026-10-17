@@ -63,9 +63,9 @@ The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash fro
 
 Profile's **Player identity** panel shows **Link Steam** in `both` and `steam_signup` modes for a logged-in account without a Steam link (never for demo accounts). `GET /auth/steam/start?purpose=link` needs a session and a recent identity check (`POST /reauth`); without one it redirects to `/#profile?steam=reauth_required`. The state row is bound to the user, and the callback accepts the link only when the session user is that user. Starting a link or re-auth drops the user's older unused attempts, so only the newest one is live. On an account that is already linked, start redirects straight to `/#profile?steam=linked` without going to Steam.
 
-On success `users.steam_id` is set and `player_id` becomes the verified Steam32 id, replacing any self-reported value; audited as `steam_linked`. Every other account that self-reported the same `player_id` has it cleared, audited as `player_id_claim_superseded` (`user_id=<cleared> verified_user_id=<linked> player_id=<id>`); sign-up does the same. A Steam ID already on another account is refused (`in_use`) and nothing changes; only an admin can move it.
+On success `users.steam_id` is set and `player_id` becomes the verified Steam32 id; audited as `steam_linked`. Every other account that still holds the same `player_id` has it cleared (since migration 041, #209, only leftovers can), audited as `player_id_claim_superseded` (`user_id=<cleared> verified_user_id=<linked> player_id=<id>`); sign-up does the same. A Steam ID already on another account is refused (`in_use`) and nothing changes; only an admin can move it.
 
-In `both` and `steam_signup` modes `PUT /profile/player-id` answers 410 "Link Steam to verify your player id" (issue #188): Steam is the only way to link a player. In `password` mode it answers 409 for a Steam-linked account, and accounts without Steam set a self-reported id as before.
+Steam is the only way to link a player (issue #209): `PUT /profile/player-id` is gone (404 in every mode), and with `LOGIN_METHOD=password` there is no player linking. A player link exists only while `steam_id` and `player_id` are both set; every reader uses `backend/player_links.py`. See `player-linking-and-tag-visibility.md`.
 
 From the start of S17 (`steam_signup`), Profile reminds password accounts without Steam: "Link Steam now. Password sign-in will end in a later update."
 
@@ -112,7 +112,7 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 A Steam-verified account whose `player_id` is an active player in the pool (`Player.is_active`) gets one **common** card of that player, with the usual modifiers and stored points. It goes to the roster when there is room and no active card of that player (`_activate_new_card`), otherwise to the bench. Code: `backend/own_card.py`.
 
 - **When:** after Link Steam (`steam_openid.link_account`), after Steam sign-up (`steam_openid.signup`), both right after `_supersede_player_id_claims` in the same transaction, and on `GET /me` for an account that qualifies but has no grant row yet (players who linked before this feature, or who were added to the pool later). A failure on `GET /me` is logged and the page still loads.
-- **Who:** `steam_id` and `player_id` set, not a demo account, not a Twitch viewer soft account. A self-reported id (no `steam_id`) never qualifies.
+- **Who:** a verified player link (`player_links.verified_player_id`: `steam_id` and `player_id` set, a full, non-demo account).
 - **Once:** `own_player_card_grants` (new table, created by `create_all`; no migration) has a unique `user_id` and a unique `player_id`, plus `card_id` (NULL for `already_owned`), `outcome` (`granted` or `already_owned`), `granted_at` and `seen_at`. The row is written with `INSERT … ON CONFLICT DO NOTHING`, and the card is created only when that insert added the row, so two simultaneous requests create one card. Unlinking and relinking, or linking the same Steam account to another account, grants nothing more. A season reset deletes the rows along with the cards, so next season's league players get their card again.
 - **Already owned:** if the account owns any card of that player (any rarity, active or benched), no card is created and the row records `already_owned`. Draws treat the granted card as owned like any other card (they prefer unowned players until the user owns every active player, or every player of the team for a team draw).
 - **Failure:** the hooks run the grant in a savepoint (`own_card.grant_in_savepoint`). If creating the card fails, only the grant is rolled back and logged by exception type; the link, sign-up or page load still succeeds, and the next `GET /me` tries again.
@@ -138,10 +138,10 @@ Body `{ "username" }`. Creates the account for the pending Steam ID and starts t
 Logged in (401 otherwise); limited per user by `RATE_LIMIT_USER_ACTION`. Dismisses the own player card popup: sets `seen_at` on the account's grant. Returns `{ "changed": true }`, or `false` when there was nothing to dismiss. Available in every login mode.
 
 ### `POST /profile/steam/unlink`
-Needs a recent identity check (403 `reauth_required`). Clears `steam_id`; `player_id` stays; audited as `steam_unlinked`. 409 for an account without a password, since it would lock the player out.
+Needs a recent identity check (403 `reauth_required`). Clears `steam_id` and, in the same transaction, `player_id` (issue #209); audited as `steam_unlinked`, with `player_id_cleared=1` in the detail when a player id was set. 409 for an account without a password, since it would lock the player out.
 
 ### `GET /admin/player-id-claims`
-Admin only. Superseded self-reported player ids, newest first: `[{ "timestamp", "player_id", "superseded_user_id", "superseded_username", "verified_user_id", "verified_username" }]`, read from the `player_id_claim_superseded` audit rows. Shown under Admin › User Management.
+Admin only. Superseded player id claims (self-reported ids from before #209), newest first: `[{ "timestamp", "player_id", "superseded_user_id", "superseded_username", "verified_user_id", "verified_username" }]`, read from the `player_id_claim_superseded` audit rows. Shown under Admin › User Management.
 
 `GET /me` adds `steam_linked`, `has_password` and `is_demo` (booleans only; the Steam ID is never returned anywhere).
 

@@ -487,7 +487,9 @@ def _raw_interpolations(src, field_patterns):
 
 
 def _players_js():
-    return _read(os.path.join(_FRONTEND_DIR, "app-players.js"))
+    # The player popup moved to app-player-popup.js (issue 208); both files are checked.
+    return (_read(os.path.join(_FRONTEND_DIR, "app-players.js")) + "\n"
+            + _read(os.path.join(_FRONTEND_DIR, "app-player-popup.js")))
 
 
 def _function_source(src, name):

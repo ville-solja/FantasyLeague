@@ -95,7 +95,7 @@ host, so the port is not reachable from outside at all. Covered by
   rate. The limit is checked after login is resolved and before the handler runs, so a refused
   request spends no tokens and creates no card. See `reference/action-throttling.md`
 - Other player write routes (issue #184) — per-user limit (`RATE_LIMIT_USER_ACTION`) on
-  `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password`,
+  `PUT /profile/username`, `PUT /profile/password`,
   `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`,
   `POST /weekly-summary/seen`, `POST /weekly-summary/prompted`, `POST /claim-events`,
   `POST /notifications/{notification_id}/dismiss`, `DELETE /sessions/{session_id}`,

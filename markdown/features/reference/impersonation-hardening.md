@@ -38,13 +38,13 @@ A player id is a Steam32 id, so it leads to a Steam profile. `GET /profile/{user
 |---|---|---|
 | `player_id` | yes | never (key absent) |
 | `player_name` | yes | yes |
-| `player_verified` | yes | yes: true when the account has a `steam_id` (#150) and a player id |
-| `player_avatar_url` | yes | only when `player_verified` is true; otherwise `null` |
+| `player_verified` | yes | yes: true when the account has a verified player link (`steam_id` and player id, #150, #209) |
+| `player_avatar_url` | yes | yes (since #209 only verified links are shown at all) |
 | `is_admin` | yes | yes |
 
 Whether the viewer is an admin is checked with `deps.is_admin_fresh`, so a demoted admin loses the id on the next request. `GET /me` is unchanged regarding `player_id`. No leaderboard, weekly report, season archive or tag response carries a user's `player_id`; card rows carry league player ids, which are public. Another user's roster (`GET /roster/{user_id}`) stays admin-only.
 
-On Profile, the linked player's name carries "Verified with Steam" or "Self-reported", and the avatar shows only for a verified id. The privacy page states that a linked player id identifies a Steam account and is shown only to the player and admins.
+On Profile, the linked player's name carries "Verified with Steam". Before #209 a typed-in id was shown as "Self-reported" without avatar; since #209 only Steam links a player (`player-linking-and-tag-visibility.md`). The privacy page states that a linked player id identifies a Steam account and is shown only to the player and admins.
 
 ## Configuration
 

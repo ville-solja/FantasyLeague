@@ -518,8 +518,8 @@ As an existing player, I want to link my Steam account, so that my player id is 
 - On success, `users.steam_id` is set and `player_id` becomes the verified Steam32 id, replacing any self-reported value. The action is audited as `steam_linked`, and the callback redirects to `/#profile?steam=linked`.
 - If another account had self-reported the same `player_id`, that account's `player_id` is cleared and audited as `player_id_claim_superseded` (both user ids). Admin › User Management lists these claims.
 - A Steam ID already stored on another account is refused with "This Steam account is linked to another Kana Cards account". Nothing changes, and only an admin can move it.
-- **Unlink Steam** on Profile needs a recent check, clears `steam_id` (`player_id` stays) and is audited as `steam_unlinked`. It is refused for an account without a password, because it would lock the player out.
-- `PUT /profile/player-id` answers 409 for an account with a linked Steam ID, whose id is verified. Accounts without Steam can still set it as today.
+- **Unlink Steam** on Profile needs a recent check, clears `steam_id` (`player_id` stays *(superseded by #209)*: unlinking now clears `player_id` too) and is audited as `steam_unlinked`. It is refused for an account without a password, because it would lock the player out.
+- `PUT /profile/player-id` answers 409 for an account with a linked Steam ID, whose id is verified. Accounts without Steam can still set it as today. *(superseded by #209)* (the route is removed)
 - From the start of S17 (`LOGIN_METHOD=steam_signup`), Profile reminds accounts that have a password and no Steam link: "Link Steam now. Password sign-in will end in a later update."
 - Demo accounts never see Link Steam and can't link Steam.
 - **Failure path:** a link callback with another user's state, or with no session, changes nothing and redirects with `steam=failed` or `steam=no_session`.
@@ -597,11 +597,11 @@ As a league player, I want my picture and Steam-linked id not to appear on someo
   - never returns the numeric `player_id`;
   - returns `player_name` and `player_verified`, true when the account has a `steam_id` and a player id;
   - returns `player_avatar_url` only when `player_verified` is true.
-- The profile shows the in-game name with "Verified with Steam" or "Self-reported", and the avatar only when verified.
+- The profile shows the in-game name with "Verified with Steam" or "Self-reported", and the avatar only when verified. *(superseded by #209)* (only verified links show a player)
 - The player themselves (`GET /profile/{own id}`) and admins (checked against the database, not the session) still see the numeric id and the avatar. `GET /me` is unchanged regarding `player_id`.
 - No other endpoint returns another user's `player_id`. A test checks every response that carries other users' data (leaderboards, weekly report, season archive, profile with its tags) and asserts that no row carrying a user identity (`id`/`user_id` with `username`) has a `player_id` key; card rows carrying a league player's id are fine. Another user's roster view stays admin-only.
 - The privacy page says that a linked player id identifies a Steam account, and that Kana Cards shows it only to the player and to admins.
-- **Failure path:** a profile with a self-reported id of a well-known player shows "Self-reported" and that player's name, with no avatar and no number.
+- **Failure path:** a profile with a self-reported id of a well-known player shows "Self-reported" and that player's name, with no avatar and no number. *(superseded by #209)* (such a profile now shows no player)
 
 ### Renames Are Limited
 **User story**
@@ -628,9 +628,9 @@ As a player, I want my Steam link and my league player identity in one place, so
   - **Steam linked** and the matched league player's avatar, name and team, or "No league player matches this Steam account" when none exists;
   - the account's tags as chips, or "No tags";
   - **Unlink Steam** for accounts with a password, as today.
-- No OpenDota account id field when `LOGIN_METHOD` is `both` or `steam_signup`; `PUT /profile/player-id` answers 410 "Link Steam to verify your player id"
-- With `LOGIN_METHOD=password`, the panel keeps the id field, labelled "Self-reported"
-- An existing self-reported id is shown read-only with "Self-reported, link Steam to verify"; tags still show
+- No OpenDota account id field when `LOGIN_METHOD` is `both` or `steam_signup`; `PUT /profile/player-id` answers 410 "Link Steam to verify your player id" *(superseded by #209)* (now 404)
+- With `LOGIN_METHOD=password`, the panel keeps the id field, labelled "Self-reported" *(superseded by #209)* (password mode shows "Player linking needs Steam sign-in")
+- An existing self-reported id is shown read-only with "Self-reported, link Steam to verify"; tags still show *(superseded by #209)* (migration 041 clears such ids)
 - The Steam id itself is never shown, as today
 
 ### Own Player Card When Steam Matches a League Player
@@ -664,3 +664,43 @@ As a player, I want the granted card to count like any other card I own, so that
 - After a grant, a standard draw and a team draw treat the granted player as owned, under the existing `_pick_player` and `_pick_player_from_team` rules
 - No grant is made when the account already owns that player, so the grant itself never creates a second card of a player
 - The one-active-card-per-player rule holds: if an active card of that player exists, the granted card goes to the bench
+
+## Steam-Verified Player Links Only (issue #209)
+
+Plan: `markdown/plans/plan-issue-209-steam-verified-player-links.md`. Feature doc: `markdown/features/reference/player-linking-and-tag-visibility.md`.
+
+### Only Steam Links an Account to a Player
+**User story**
+As a league player, I want my player identity to come only from Steam, so that nobody can claim my player and show their tags or titles on my cards.
+
+**Acceptance criteria**
+- **Route removed:** `PUT /profile/player-id` no longer exists; a request gets 404 in every login mode. Its Profile field and save button are gone.
+- **Steam sets the link:** Steam sign-in and Link Steam still set `player_id` from the Steam id, unchanged.
+- **Unlinking Steam:** clears `player_id` in the same transaction. The `steam_unlinked` audit detail adds `player_id_cleared=1` when one was set.
+- **Panel without a verified link:** in a Steam mode, an account without a verified link sees the existing "not linked" state with **Link Steam**. There is no "Self-reported" state any more.
+- **Password mode:** the panel shows "Player linking needs Steam sign-in", and no field or button.
+
+### Every Feature Trusts Only Verified Links
+**User story**
+As the operator, I want one rule for "this account is this player", used everywhere, so that no feature quietly trusts an unverified claim.
+
+**Acceptance criteria**
+- **One helper:** a shared helper (`player_links.py`) gives the verified player of a user, and the users verified for a player: `steam_id` and `player_id` set, on a full, non-demo account (the existing `own_card.is_candidate` rule).
+- **Every reader uses it:**
+  - the card image tag stickers (`routers/cards.py`);
+  - `GET /profile/{user_id}` (`player_name`, `player_avatar_url`, `player_team_name`, and `player_id` for the owner and admins);
+  - `own_card.is_candidate`;
+  - `accolades._linked_users`.
+- **Tag stickers:** a card's tag stickers come only from a user with a verified link to that player. An account holding a stale `player_id` without Steam adds none.
+- **Guard test:** a test fails when backend code outside the helper reads `users.player_id` or `User.player_id` without `steam_id`. The allow-list is the helper, Steam linking (`steam_openid.py`), the migration and `admin_users.py`'s claims history.
+
+### Typed-in Links Are Cleared Once
+**User story**
+As the operator, I want the old typed-in links removed on upgrade, so that the database holds only verified links and nothing depends on legacy claims.
+
+**Acceptance criteria**
+- **Migration `041_clear_unverified_player_links`:** sets `player_id = NULL` for every user with `player_id` set and `steam_id` NULL.
+- **Audit:** it writes one `player_links_cleared` entry with `count=N`, and none when N is 0.
+- **Idempotent:** a second run changes nothing and writes no entry.
+- **Verified links stay:** accounts with Steam keep their `player_id`.
+- **Deploy note:** the PR and the migration doc say to run `scripts/backup-db.sh` first, because the cleared values can't be restored otherwise.

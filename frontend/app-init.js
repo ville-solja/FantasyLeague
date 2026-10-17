@@ -151,6 +151,7 @@ function _handleResetTokenParam() {
 
 async function init() {
   await loadConfig();
+  loadAccolades();  // issue 50: accolade pips on every card, loaded once per page
   await loadMe();
   applyAuthState();
   _handleResetTokenParam();

@@ -10,8 +10,8 @@ between seasons.
 
 ```
 Season running
-    ↓  admin: POST /admin/season/end        (archive standings)
-Standings snapshotted to season_archive
+    ↓  admin: POST /admin/season/end        (archive standings, record accolades)
+Standings snapshotted to season_archive; awards, champions and Played kept in season_accolades
     ↓  admin: POST /admin/season/reset      (clean slate; users retained; players/teams cleared)
 Empty season state
     ↓  admin: add monitored league, add players (Player Management tab), create weeks (date-only forms)
@@ -29,6 +29,17 @@ Body: `{"season_label": "Season 15"}`. Snapshots the current season leaderboard
 `compute_season_standings()` helper also used by `GET /leaderboard/season`. 409 if the label
 is already archived. Logged as `admin_season_archived`. The stored `points` are the standings' one-decimal display values (`scoring.display_points`, issue #149).
 
+Issue #50: the body also takes optional `champions: [{division, team_name, player_account_ids}]`.
+In the same transaction the call records the season's accolades in `season_accolades`: the
+four awards, the champions and one `played` row per player with a scored match. If that fails,
+nothing is committed (500). The audit detail adds `accolades=N champions=M`. The admin UI shows
+a preview first (`GET /admin/season/accolades-preview`), with the label prefilled from the
+current season: "Season N" parsed from the monitored leagues' OpenDota names ("Kanaliiga Season
+16", "Kanaliiga Season 16 Lower"), which stay monitored until Reset; without such a name it is
+inferred from the archives and accolades. Past seasons' Played rows are backfilled with
+`backend/scripts/backfill_played.py --season "Season N"`, which finds the leagues by name. See
+[Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md).
+
 ### `POST /admin/season/reset`
 Body: `{"force": false}`. Before any deletes, takes an automatic online backup of the live
 SQLite database (`backup_sqlite_db()` in `backend/database.py`, using SQLite's online backup
@@ -39,10 +50,11 @@ fresh backup existing first. Deletes all rows from `player_match_stats`, `match_
 `matches`, `weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`,
 `teams`, `card_modifiers`, `cards` and `own_player_card_grants` (issue #188, so next season's
 league players get their own player card again). Resets every user's `tokens` to `INITIAL_TOKENS` and
-unmonitors all leagues. Retains users, tags, audit logs, and `season_archive` rows. Returns 409
+unmonitors all leagues. Retains users, tags, audit logs, `season_archive` rows and
+`season_accolades` rows (issue #50; the response's `kept.season_accolades` counts them). Returns 409
 if any locked week exists with no `season_archive` row archived at or after that week's start
 time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
-includes `{"status", "initial_tokens", "counts": {...}, "backup_path"}` with a per-table
+includes `{"status", "initial_tokens", "counts": {...}, "kept": {"season_accolades": N}, "backup_path"}` with a per-table
 deleted-row count (including `own_player_card_grants`) and the path of the pre-reset backup file. Logged as `admin_season_reset`,
 with the backup path prefixed to the counts in the detail string.
 
@@ -85,6 +97,7 @@ cannot be edited/deleted) is unchanged.
 | Table | Purpose |
 |---|---|
 | `season_archive` | One row per user per archived season: label, user_id, username (denormalised), points, rank, archived_at. Unique on (season_label, user_id). |
+| `season_accolades` | Champions, awards, fantasy winners and seasons played (issue #50); never touched by Reset. See [Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md). |
 
 ## Retired Configuration
 
@@ -103,7 +116,8 @@ explicitly in `.env`.
 ## Admin UI
 
 The Settings tab (admin panel) has a "Season Lifecycle" section: a season-label input with
-an "End Season (Archive)" button (asks the admin to type `END SEASON`), a "Reset Season…"
+an "End Season (Archive)" button. It opens a dialog with the season's awards, the Played count
+and the Div 1 and Div 2 champion pickers (issue #50), then asks the admin to type `END SEASON`; a "Reset Season…"
 button that opens a type-to-confirm modal (must type `RESET SEASON`; the backend checks it as
 `confirm`, issue #150), and a table of previously archived seasons. The Leaderboard tab
 shows a "Past Seasons" panel with a season selector once at least one archive exists. The

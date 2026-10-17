@@ -46,7 +46,7 @@ The link code from `POST /twitch/link-code` is now drawn with `secrets.choice`, 
 
 `_safeUrl(u)` in `frontend/app-globals.js` returns `u` only when it starts with `http://` or `https://`, otherwise `""`. `_escHtml` now also escapes `'`.
 
-- `app-players.js`: `bio_text` (rendered with `white-space: pre-wrap` so line breaks survive), hero names, every `facts.*` value, player and team names in the tables, player modal and team modal, schedule `time`, `stream_label`, unlinked team labels and `data.error` go through `_escHtml`. Avatar, stream and hero-icon URLs go through `_escHtml(_safeUrl(...))`; avatars set via `.src` go through `_safeUrl`.
+- `app-players.js` and `app-player-popup.js` (the player modal, moved there in issue 208): `bio_text` (rendered with `white-space: pre-wrap` so line breaks survive), hero names, every `facts.*` value, player and team names in the tables, player modal and team modal, schedule `time`, `stream_label`, unlinked team labels and `data.error` go through `_escHtml`. Avatar, stream and hero-icon URLs go through `_escHtml(_safeUrl(...))`; avatars set via `.src` go through `_safeUrl`.
 - `app-roster.js`: the card `alt` escapes the player name. The image `onerror` fallback no longer builds HTML inline; it calls `_cardImgFallback(this)`, which builds the placeholder with `textContent` from a `data-player-name` attribute.
 - `app-admin-ingest.js`: audit log `action` and `detail`.
 

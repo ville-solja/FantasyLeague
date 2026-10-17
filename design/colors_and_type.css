@@ -92,6 +92,26 @@
   --mark-winner:  var(--k-amber-500);
   --mark-mvp:     var(--accent);
 
+  /* Accolade symbols (issue 50): one colour per kind. Icon and plate differ too, so no
+     symbol relies on colour alone. Champions: amber (Div 1) and silver (Div 2). */
+  --accolade-div1:    var(--k-amber-500);
+  --accolade-div2:    var(--k-ink-200);
+  --accolade-points:  var(--k-orange-500);
+  --accolade-average: var(--k-orange-300);
+  --accolade-match:   var(--k-amber-300);
+  --accolade-fantasy: var(--k-orange-100);
+  --accolade-played:  var(--fg-muted);
+
+  /* Chart series (issue 208): a categorical set validated for the dark card surface,
+     used only for the fills of stacked bars and their legend swatches. Text never
+     wears these colours; single-series bars and strips use --fg-muted / --accent. */
+  --series-1:     #e0702e;
+  --series-2:     #3f8fd8;
+  --series-3:     #b48a1e;
+  --series-4:     #8e62d4;
+  --series-5:     #2a9c84;
+  --series-other: #55555e;
+
   /* ---- Type scale (display = Big Shoulders Text) ---------- */
   --font-display: 'Big Shoulders Text', 'Oswald', 'Anton', 'Impact', sans-serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
