@@ -421,6 +421,35 @@ function _cardImgFallback(img) {
 }
 
 // ---------------------------------------------------------------------------
+// Issue #205: where a drawn card arrived, and its one-time rarity glow
+// ---------------------------------------------------------------------------
+
+const ROSTER_ARRIVED_MS = 1200;
+
+/** The node a drawn card went to: its own slot once the roster has re-rendered,
+ * else the open roster slot (is_active) or the front of the bench. */
+function rosterArrivalSlot(card) {
+  if (!card) return null;
+  const own = _rosterNodes.get(card.id);
+  if (own && own.isConnected) return own;
+  const grid = document.getElementById(card.is_active ? "rosterActiveGrid" : "benchGrid");
+  if (!grid) return null;
+  return grid.querySelector(card.is_active ? ".card-slot-empty" : ".card-slot[data-card-id]");
+}
+
+/** One glow in the card's rarity colour on the card that just arrived. */
+function markArrived(cardId) {
+  const node = _rosterNodes.get(cardId);
+  if (!node || !node.isConnected) return false;
+  node.classList.remove("card-slot--arrived");
+  void node.offsetWidth; // restart the glow when it is still running
+  node.classList.add("card-slot--arrived");
+  clearTimeout(node._arrivedTimer);
+  node._arrivedTimer = setTimeout(() => node.classList.remove("card-slot--arrived"), ROSTER_ARRIVED_MS);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Pointer drag (mouse, pen and touch): the card follows the pointer, the roster
 // makes room live, and the drop applies locally
 // ---------------------------------------------------------------------------

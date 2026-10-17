@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-15 — developer — testing
+**Problem:** In cloud sessions, three `test_test_background_task_isolation.py` lifespan tests fail (or hang when run alone) because their subprocess starts the real loops, which call `api.opendota.com` through an egress proxy that refuses it; pytest-xdist may also be missing.
+**Solution:** Treat those three as environmental when the proxy log shows refused `api.opendota.com` connections; install `requirements-dev.txt` for `-n auto`. For draw/reveal behaviour in `app-cards.js`, reuse `_HARNESS` / `_run` in `test_issue_205_card_draw_animations.py` (fake `Image`, `fetch`, timers and `Element.animate`).
+
 ### 2026-10-14 — developer — testing
 **Problem:** Node harnesses that paste functions cut with `_fn_body` lose the `async` keyword (`withBusy` then fails to parse), and harnesses that load only `_escHtml` from app-globals.js (the #201 users table) break when a module starts calling a new global helper.
 **Solution:** When pasting an extracted function, re-add `async ` if the source has it (`_globals_src` in `test_issue_202_ui_feedback_polish.py`). When a module gains a call to a global helper, grep `backend/tests` for harnesses that load that module and add the helper there.
