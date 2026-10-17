@@ -40,8 +40,6 @@ function steamUiState(loginMethod, me) {
     linkSteam: steam && loggedIn && !me.steam_linked && !me.is_demo,
     unlinkSteam: steam && loggedIn && !!me.steam_linked && !!me.has_password,
     linkReminder: loginMethod === "steam_signup" && loggedIn && !!me.has_password && !me.steam_linked,
-    // Issue #188: the typed-in OpenDota id only where Steam is not available.
-    playerIdField: !steam && loggedIn,
   };
 }
 

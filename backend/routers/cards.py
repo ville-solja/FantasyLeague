@@ -541,11 +541,11 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
-    # Resolve tag keys for the player's linked user (if any)
+    # Tag stickers of the user verifiably linked to the player, if any (issue #209).
+    import player_links
     tag_keys: list = []
-    linked_user = db.execute(text(
-        "SELECT id FROM users WHERE player_id = :pid LIMIT 1"
-    ), {"pid": result.player_id}).first()
+    linked = player_links.verified_users_for_player(db, result.player_id)
+    linked_user = linked[0] if linked else None
     if linked_user:
         ut_rows = (
             db.query(UserTag, TagDefinition)

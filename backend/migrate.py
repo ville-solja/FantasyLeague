@@ -756,6 +756,27 @@ def _m040_cards_is_holo(conn):
         conn.commit()
 
 
+def _m041_clear_unverified_player_links(conn):
+    """Issue #209: a player link exists only through Steam. Typed-in player ids (no
+    steam_id) are cleared once, with one audit entry carrying the count. Irreversible:
+    run scripts/backup-db.sh before deploying."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if not {"player_id", "steam_id"} <= cols:
+        return
+    cleared = conn.execute(text(
+        "UPDATE users SET player_id = NULL "
+        "WHERE player_id IS NOT NULL AND steam_id IS NULL")).rowcount
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+    if cleared and "audit_logs" in tables:
+        conn.execute(text(
+            "INSERT INTO audit_logs (timestamp, actor_id, actor_username, action, detail) "
+            "VALUES (:ts, NULL, 'system', 'player_links_cleared', :detail)"),
+            {"ts": int(__import__("time").time()), "detail": f"migration=041 count={cleared}"})
+    conn.commit()
+    logger.info("Migration 041: cleared %d unverified player link(s)", cleared)
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -820,6 +841,7 @@ MIGRATIONS = [
     ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
     ("039_user_tags_source",         _m039_user_tags_source),
     ("040_cards_is_holo",            _m040_cards_is_holo),
+    ("041_clear_unverified_player_links", _m041_clear_unverified_player_links),
 ]
 
 

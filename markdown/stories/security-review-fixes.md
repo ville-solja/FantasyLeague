@@ -199,7 +199,7 @@ As the operator, I want every write route a player can reach to carry an explici
 
 **Acceptance criteria**
 - These routes get a per-user limit `RATE_LIMIT_USER_ACTION` (default `60/minute`):
-  - `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password`
+  - `PUT /profile/username`, `PUT /profile/player-id` *(removed in #209)*, `PUT /profile/password`
   - `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted`
   - `POST /claim-events`, `POST /notifications/{notification_id}/dismiss`
   - `DELETE /sessions/{session_id}`, `POST /logout-everywhere`

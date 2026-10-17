@@ -1489,7 +1489,7 @@ def test_get_accolades_fantasy_winner_only_while_linked(db):
     _acc(db, "Season 15", "fantasy_winner", user_id=jiri.id, username="jiri", value=140)
     client = _client(db)
     assert client.get("/accolades").json()["players"] == {}
-    jiri.player_id = 7  # self-reported (PUT /profile/player-id, no Steam): no pip
+    jiri.player_id = 7  # stale id without Steam (typed in before #209): no pip
     db.commit()
     assert client.get("/accolades").json()["players"] == {}
     assert client.get("/history/seasons").json()["hall_of_fame"] == []

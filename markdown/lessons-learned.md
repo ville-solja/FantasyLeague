@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-17 — developer — endpoints
+**Problem:** After removing `PUT /profile/player-id`, a request answered 405, not 404, even in an app with only the profile router: `GET /profile/{user_id}` matches the path for any method, so Starlette reports a method mismatch.
+**Solution:** Give path parameters a convertor (`/profile/{user_id:int}`) so a removed sibling path matches nothing and answers 404. FastAPI binds `user_id` as usual.
+
 ### 2026-10-17 — developer — frontend
 **Problem:** Moving functions or constants out of a frontend module broke Node harnesses that load only that module (`test_issue_156` loads app-players.js and needed `_NOT_SCORED_TOOLTIP`), and a class that sets `display` (`.hero-grid { display: grid }`) overrides the `hidden` attribute, so "hidden" elements showed.
 **Solution:** Before moving code between modules, grep `backend/tests` for every identifier the remaining code still uses, and keep shared constants in the module loaded first. Add `.cls[hidden] { display: none; }` for any class with a `display` value that the code hides with `hidden`.

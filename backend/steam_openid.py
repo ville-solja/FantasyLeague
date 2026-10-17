@@ -277,7 +277,8 @@ def verify_assertion(db, params: dict[str, str], expected_return_to: str) -> str
 # ---------------------------------------------------------------------------
 
 def _supersede_player_id_claims(db, user: User, player_id: int) -> None:
-    """Clear the same self-reported player id on other accounts (audited)."""
+    """Clear the same player id on other accounts (audited). Since migration 041 (#209)
+    only Steam-linked accounts hold a player id, so this catches leftovers only."""
     others = (db.query(User).filter(User.player_id == player_id, User.id != user.id).all())
     for other in others:
         other.player_id = None
@@ -508,9 +509,14 @@ def unlink(db, current_user: dict) -> dict:
     if not user.password_hash:
         raise HTTPException(status_code=409,
                             detail="This account signs in only through Steam, so Steam can't be unlinked")
+    # Issue #209: the player link exists only through Steam, so it goes with it.
+    detail = f"user_id={user.id}"
+    if user.player_id is not None:
+        detail += " player_id_cleared=1"
     user.steam_id = None
+    user.player_id = None
     _audit(db, "steam_unlinked", actor_id=user.id, actor_username=user.username,
-           detail=f"user_id={user.id}")
+           detail=detail)
     db.commit()
     return {"steam_linked": False, "changed": True}
 
@@ -518,7 +524,7 @@ def unlink(db, current_user: dict) -> dict:
 @router.post("/profile/steam/unlink", dependencies=[Depends(login_mode.require_steam)])
 @limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def unlink_route(request: Request, current_user: dict = Depends(require_recent_player_reauth), db=Depends(get_db)):
-    """Unlink Steam (needs a recent check). The verified player id stays."""
+    """Unlink Steam (needs a recent check). The player link is cleared with it (#209)."""
     return unlink(db, current_user)
 
 

@@ -2,8 +2,8 @@
 Tests for plan-issue-188-profile-identity-and-own-player-card.md (resolves GitHub issue #188).
 
 Profile's Steam and Dota 2 Player panels merge into one "Player identity" panel;
-manual OpenDota linking (`PUT /profile/player-id`) answers 410 unless
-`LOGIN_METHOD=password`. A Steam-verified league player gets one common card of
+manual OpenDota linking (`PUT /profile/player-id`) answered 410 unless
+`LOGIN_METHOD=password`; issue #209 removed it (tests updated to match). A Steam-verified league player gets one common card of
 themselves, recorded once in the new `own_player_card_grants` table, with a popup
 on the next page load (`GET /me` -> `own_card_grant`, dismissed with
 `POST /profile/own-card-grant/seen`). One class per user story; one test per
@@ -296,65 +296,46 @@ class TestOneClearIdentityPanelOnProfile:
         assert _steam_ui("both", {"steam_linked": True, "has_password": False,
                                   "is_demo": False})["unlinkSteam"] is False
 
-    @pytest.mark.parametrize("mode_value", ["both", "steam_signup"])
-    def test_update_player_id_returns_410_when_steam_available(self, db, monkeypatch, mode_value):
-        """PUT /profile/player-id answers 410 'Link Steam to verify your player id' in both and steam_signup modes and changes nothing."""
-        from fastapi import HTTPException
-        from routers.profile import UpdatePlayerIdBody, update_player_id
-        monkeypatch.setenv("LOGIN_METHOD", mode_value)
-        user = _user(db, player_id=777)
-        db.commit()
-        with pytest.raises(HTTPException) as exc:
-            update_player_id(UpdatePlayerIdBody(player_id=4242), db=db, current_user=_acting(user))
-        assert exc.value.status_code == 410
-        assert exc.value.detail == "Link Steam to verify your player id"
-        db.refresh(user)
-        assert user.player_id == 777
+    # Issue #209 removed PUT /profile/player-id and the typed-in id: the route test
+    # below replaces the old 410 / password-mode tests, and the two frontend tests pin
+    # the panel without the id field or the "self-reported" state.
+    @pytest.mark.parametrize("mode_value", ["password", "both", "steam_signup"])
+    def test_update_player_id_route_removed(self, web, mode, mode_value):
+        """PUT /profile/player-id no longer exists (issue #209): 404 in every mode, nothing changes."""
+        from models import User
+        mode(mode_value)
+        uid = web.add_user("alice", player_id=777)
+        client = web.login("alice")
+        assert client.put("/profile/player-id", json={"player_id": 4242}).status_code == 404
+        assert web.get(User, uid).player_id == 777
 
-    def test_update_player_id_still_works_in_password_mode(self, db, monkeypatch):
-        """With LOGIN_METHOD=password, PUT /profile/player-id still sets a self-reported player id."""
-        from routers.profile import UpdatePlayerIdBody, update_player_id
-        monkeypatch.setenv("LOGIN_METHOD", "password")
-        user = _user(db)
-        db.commit()
-        result = update_player_id(UpdatePlayerIdBody(player_id=4242), db=db, current_user=_acting(user))
-        assert result["player_id"] == 4242
-        db.refresh(user)
-        assert user.player_id == 4242 and user.steam_id is None
-
-    def test_frontend_no_opendota_field_outside_password_mode(self):
-        """app-profile.js renders the OpenDota id field only when the login method is password, labelled 'Self-reported'."""
+    def test_frontend_no_opendota_field_in_any_mode(self):
+        """The Player identity panel has no OpenDota id field in any login mode (issue #209); password mode shows the Steam note."""
         tab = self._profile_tab()
-        form = tab[tab.index('id="playerIdForm"'):]
-        form = form[:form.index('id="btnSavePlayerId"')]
-        assert 'id="profilePlayerId"' in form and "Self-reported" in form
-        assert 'id="playerIdForm" style="display:none;"' in tab
-        assert 'show("playerIdForm", ui.playerIdField);' in _read("app-profile.js")
+        assert 'id="playerIdForm"' not in tab and 'id="profilePlayerId"' not in tab
+        assert "Player linking needs Steam sign-in" in tab
+        assert "playerIdField" not in _read("app-auth.js")
         me = {"steam_linked": False, "has_password": True, "is_demo": False}
-        ui = _steam_ui("password", me)
-        if ui is None:
+        state = _identity_state("password", me, {"player_id": 4242})
+        if state is None:
             return
-        assert ui["playerIdField"] is True
-        assert _steam_ui("both", me)["playerIdField"] is False
-        assert _steam_ui("steam_signup", me)["playerIdField"] is False
-        assert _identity_state("password", me, {"player_id": 4242}) == "password"
+        assert state == "steam_required"
 
-    def test_frontend_legacy_self_reported_id_read_only_with_hint(self):
-        """An existing self-reported id is shown read-only with 'Self-reported, link Steam to verify'; tags still show."""
+    def test_frontend_stale_typed_in_id_shows_not_linked(self):
+        """A leftover typed-in id (no Steam) shows the not-linked state with Link Steam (issue #209); tags still show."""
         tab = self._profile_tab()
-        assert 'id="identityLegacyHint"' in tab
-        assert "Self-reported, link Steam to verify" in tab
+        assert 'id="identityLegacyHint"' not in tab
+        assert "Self-reported" not in tab
         js = _read("app-profile.js")
-        assert 'show("identityLegacyHint", state === "self_reported");' in js
+        assert "self_reported" not in js
         # Tags render whatever the state.
         assert js.index("_renderPlayerIdentity(data);") < js.index("profileTagsContainer")
         me = {"steam_linked": False, "has_password": True, "is_demo": False}
         state = _identity_state("both", me, {"player_id": 4242, "player_name": "Legacy"})
         if state is None:
             return
-        assert state == "self_reported"
-        # Read-only: no id field outside password mode.
-        assert _steam_ui("both", me)["playerIdField"] is False
+        assert state == "not_linked"
+        assert _steam_ui("both", me)["linkSteam"] is True
 
     def test_me_and_profile_never_expose_steam_id(self, db):
         """GET /me and GET /profile/{id} never return the Steam id, and the panel never renders it."""

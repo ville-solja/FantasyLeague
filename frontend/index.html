@@ -554,16 +554,7 @@
               <div class="profile-identity-player-team">That's normal if you don't play in the league. If you do, your player appears here once an admin adds you to this season's players.</div>
             </div>
           </div>
-          <p id="identityLegacyHint" class="profile-twitch-copy" style="display:none;">Self-reported, link Steam to verify</p>
-          <!-- LOGIN_METHOD=password only: Steam is not available, so the id is typed in (self-reported). -->
-          <div id="playerIdForm" style="display:none;">
-            <label for="profilePlayerId" class="profile-identity-label">OpenDota account id <span class="player-source">Self-reported</span></label>
-            <div class="row">
-              <input id="profilePlayerId" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="OpenDota account ID" />
-              <button id="btnSavePlayerId" onclick="savePlayerId()">Save</button>
-            </div>
-            <p class="profile-twitch-copy">If you play in the league, enter your OpenDota account id. Tags an admin has given you then appear as stickers on your cards and next to your name on the leaderboard.</p>
-          </div>
+          <p id="identitySteamRequired" class="profile-twitch-copy" style="display:none;">Player linking needs Steam sign-in.</p>
           <div class="row profile-identity-actions">
             <button id="btnLinkSteam" onclick="linkSteam()" style="display:none">Link Steam</button>
             <button class="secondary" id="btnUnlinkSteam" onclick="unlinkSteam()" style="display:none">Unlink Steam</button>
@@ -997,9 +988,9 @@
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">How to link</h3>
       <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Register or log in to a Fantasy account, then open the <strong>Profile</strong> tab.</li>
-        <li>In the <strong>Player identity</strong> panel, press <strong>Link Steam</strong> and sign in on steamcommunity.com. Steam verifies which league player you are. (Where Steam sign-in is not available, enter your OpenDota account ID there instead; it is shown as self-reported.)</li>
+        <li>In the <strong>Player identity</strong> panel, press <strong>Link Steam</strong> and sign in on steamcommunity.com. Steam verifies which league player you are: your player ID is your Steam account's OpenDota id, and it can't be typed in. (Where Steam sign-in is not available, there is no player linking.)</li>
       </ol>
-      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can unlink Steam from the Profile tab if your account also has a password.</p>
+      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">You can unlink Steam from the Profile tab if your account also has a password; that removes your player link too.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What linking unlocks</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">

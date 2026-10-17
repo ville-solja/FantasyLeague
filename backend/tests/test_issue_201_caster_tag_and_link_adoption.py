@@ -315,7 +315,8 @@ def test_caster_auto_tag_shows_on_leaderboard_card_sticker_and_profile(db, monke
     _caster(db)
     db.add(Player(id=77, name="Caster Player"))
     db.commit()
-    user = _web(db, twitch_id=_CH, player_id=77)
+    # Issue #209: card stickers follow a Steam-verified player link only.
+    user = _web(db, twitch_id=_CH, player_id=77, steam_id="76561197960265805")
     _add_row(db, status="approved")
     _sync(db)
 

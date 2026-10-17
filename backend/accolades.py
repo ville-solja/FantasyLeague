@@ -16,6 +16,7 @@ import time
 from sqlalchemy import text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+import player_links
 from match_scoring import scored_stat_sql
 from models import League, Player, SeasonAccolade, TagDefinition, User, UserTag, Weight
 from scoring import display_points
@@ -415,19 +416,15 @@ def _entry(row) -> dict:
 
 
 def _linked_users(db) -> dict[int, int]:
-    """{user_id: player_id} for every Steam-verified link: a full, non-demo account with
-    a steam_id and a player_id (the own_card.is_candidate rule). A self-reported id
-    (PUT /profile/player-id, no steam_id) never counts, so nobody can put their fantasy
-    win on someone else's player or publish a username-player link by typing an id."""
-    return {r.id: r.player_id for r in db.query(User.id, User.player_id).filter(
-        User.player_id.isnot(None), User.steam_id.isnot(None),
-        User.account_type == "full", User.is_demo == False).all()}  # noqa: E712
+    """{user_id: player_id} for every Steam-verified link (player_links, issue #209), so
+    nobody can put their fantasy win on someone else's player."""
+    return player_links.verified_links(db)
 
 
 def accolades_for(db, player_ids=None, include_live: bool = True,
                   current: str | None = None) -> dict[int, list[dict]]:
     """{player_id: [accolade, ...]} with champion and award titles, fantasy_winner
-    seasons resolved through the winning user's current link (users.player_id), and
+    seasons resolved through the winning user's current verified link, and
     played seasons, including the live season for players with a scored match. No
     user ids or usernames. Each accolade: kind, division, season, season_short,
     team_name, value, match_id."""

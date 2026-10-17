@@ -297,7 +297,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
 | `admin_seeded_from_env` | A verified Steam sign-in, sign-up or link with an ID in `SEED_ADMIN_STEAM_IDS` made the account an admin (issue #150; written only for Steam seeding, not for `SEED_ADMIN_USERNAME` password seeding) |
 | `steam_linked` | A user linked Steam on Profile; `player_id` became the verified Steam32 id (issue #150; the Steam id is never in `detail`) |
-| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150) |
+| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150); the player link is cleared too, and `detail` adds `player_id_cleared=1` when one was set (issue #209) |
+| `player_links_cleared` | Migration 041 cleared typed-in player ids (no `steam_id`) on upgrade; one entry, `detail` is `migration=041 count=N`, none when N is 0 (issue #209) |
 | `own_player_card_granted` | A Steam-verified league player got their own player card, or it was recorded as already owned (issue #188; `detail` has `user_id=`, `player_id=`, `card_id=` and `outcome=`) |
 | `player_id_claim_superseded` | A Steam-verified account took a player id another account had self-reported; that account's `player_id` was cleared (`detail` is `user_id=<cleared> verified_user_id=<verified> player_id=<id>`; issue #150) |
 | `admin_reauth` | An admin confirmed their password via `POST /reauth`, or their Steam account via the Steam re-auth round trip (`detail` is `ok` or `failed: …`; Steam adds `method=steam`) |
