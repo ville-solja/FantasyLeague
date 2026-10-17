@@ -9,6 +9,23 @@ const REROLL_IMAGE_MIN_MS = 280;
 
 const DRAW_RARITY_KEYS = ["common", "rare", "epic", "legendary"];
 
+// Issue #205: draw from the deck, and the landing in My Team.
+const DRAW_PREPARE_MAX_MS = 3000;  // the deck stirs until the card image is decoded, at most this long
+const DRAW_LIFT_MS = 220;
+const DRAW_TRAVEL_MS = 460;
+const DRAW_FLIP_MS = 520;
+const DRAW_DETAILS_MS = 400;
+const DRAW_LANDING_MS = 520;
+const DRAW_PHONE_MAX_PX = 768;     // below this the roster sits above the Draw panel
+const DRAW_NOTICE_MS = 5000;
+const DRAW_FLIGHT_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+let _revealEntering = false;       // the reveal is open but its card is still flying in
+let _revealDrawn = null;           // the drawn card the reveal shows, for the landing
+let _drawRosterReload = null;      // the loadRoster() a draw started; the landing waits for it
+let _revealDetailsTimer = null;
+let _landedNoticeTimer = null;
+let _landedCardId = null;
+
 function _normalizeDrawRarity(cardType) {
   const t = String(cardType || "common").toLowerCase();
   return DRAW_RARITY_KEYS.includes(t) ? t : "common";
@@ -38,7 +55,14 @@ function _prefersReducedMotion() {
 }
 
 function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
-  modal.classList.remove("reveal-overlay--draw");
+  modal.classList.remove(
+    "reveal-overlay--draw",
+    "reveal-overlay--entering",
+    "reveal-overlay--dim",
+    "reveal-overlay--details-in",
+    "reveal-overlay--fade-in",
+  );
+  _revealEntering = false;
   _stripDrawBurstClasses(document.getElementById("revealDrawBurst"));
   _stripRevealImgWrapRarity(imgWrap);
   if (imgWrap) {
@@ -56,7 +80,19 @@ function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
   }
 }
 
-/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean }} [opts] */
+/** Full-screen flash in the card's rarity colour (none with reduced motion). */
+function _playDrawBurst(card) {
+  const burst = document.getElementById("revealDrawBurst");
+  if (_prefersReducedMotion() || !burst) return;
+  _stripDrawBurstClasses(burst);
+  burst.classList.add("reveal-draw-burst--active", `reveal-draw-burst--rarity-${_normalizeDrawRarity(card.card_type)}`);
+  _drawBurstHideTimer = setTimeout(() => {
+    _drawBurstHideTimer = null;
+    _stripDrawBurstClasses(burst);
+  }, DRAW_REVEAL_FLASH_MS);
+}
+
+/** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
   const actionBtn = document.getElementById("revealActionBtn");
@@ -72,6 +108,7 @@ function showCard(card, footer, opts = {}) {
   _stripRevealDrawFx(modal, imgWrap, placeholder, img);
 
   _openCardId = card.id || null;
+  _revealDrawn = null;
   cardEl.className = `reveal-card ${card.card_type}`;
   document.getElementById("revealRarity").textContent = card.card_type;
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
@@ -182,18 +219,10 @@ function showCard(card, footer, opts = {}) {
   };
 
   if (drawFx && imgWrap) {
-    const rarityKey = _normalizeDrawRarity(card.card_type);
-    const burst = document.getElementById("revealDrawBurst");
+    // Issue #205: a draw from the deck plays the burst at flip time instead.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (!reduceMotion && burst) {
-          _stripDrawBurstClasses(burst);
-          burst.classList.add("reveal-draw-burst--active", `reveal-draw-burst--rarity-${rarityKey}`);
-          _drawBurstHideTimer = setTimeout(() => {
-            _drawBurstHideTimer = null;
-            _stripDrawBurstClasses(burst);
-          }, DRAW_REVEAL_FLASH_MS);
-        }
+        if (!opts.deferBurst) _playDrawBurst(card);
         if (reduceMotion) imgWrap.classList.add("reveal-img-wrap--draw-soft");
       });
     });
@@ -211,6 +240,8 @@ function _updateRevealActionBtn() {
 }
 
 function revealAction() {
+  // Issue #205: nothing to act on until the flying card has landed in the reveal.
+  if (_revealEntering) return;
   if (_revealOnClose) return closeReveal();
   const cost = _revealBoosterTeamId ? (_teamBoosterCost ?? 3) : 1;
   const canAfford = _tokenBalance !== null && _tokenBalance >= cost;
@@ -224,7 +255,10 @@ function revealAction() {
       drawCard();
     }
   } else {
+    // Continue: the drawn card flies to where it was added (issue #205).
+    const landing = _takeRevealLanding();
     closeReveal();
+    if (landing) _playLandingFlight(landing);
   }
 }
 
@@ -233,12 +267,23 @@ let _revealKeyHandler = null;
 // dismissed by Nice, the X or a backdrop click).
 let _revealOnClose = null;
 
+/**
+ * The draw reveal. Issue #205: with motion it opens invisibly ("entering") so
+ * _playDrawFlight can measure the card's place and fly the card in; the caller
+ * always follows with _playDrawFlight, which shows the rest. With reduced motion
+ * the finished reveal fades in.
+ */
 function showReveal(card, boosterTeamId = null) {
   _revealBoosterTeamId = boosterTeamId ?? null;
+  const entering = !_prefersReducedMotion();
   showCard(card, card.is_active ? "Added to active roster" : "Added to bench", {
     drawAnimation: true,
     showActionBtn: true,
+    deferBurst: entering,
   });
+  _revealDrawn = card;
+  _revealEntering = entering;
+  document.getElementById("revealModal").classList.add(entering ? "reveal-overlay--entering" : "reveal-overlay--fade-in");
   _updateRevealActionBtn();
   if (!_revealKeyHandler) {
     _revealKeyHandler = (e) => {
@@ -258,6 +303,7 @@ function closeReveal() {
   _stripRevealDrawFx(modal, imgWrap, placeholder, img);
   modal.classList.add("hidden");
   _revealBoosterTeamId = null;
+  _revealDrawn = null;
   closeRerollConfirm();
   document.getElementById("revealDestination").classList.remove("reveal-own-card-note");
   if (_revealOnClose) {
@@ -390,6 +436,259 @@ async function loadDeck() {
   }
 }
 
+// ── Draw from the deck (issue #205) ─────────────────────────────────────────
+
+function _setDeckStirring(on) {
+  const deck = document.getElementById("drawDeck");
+  if (deck) deck.classList.toggle("draw-deck--stirring", Boolean(on));
+}
+
+/**
+ * Load and decode the drawn card's image before anything moves. Resolves with
+ * { state: "ready" | "slow" | "error" | "none", src }: "slow" after
+ * DRAW_PREPARE_MAX_MS, while the image keeps loading for the reveal.
+ */
+function _prepareDrawnCard(card) {
+  return new Promise(resolve => {
+    if (!card || !card.id) { resolve({ state: "none", src: "" }); return; }
+    const src = cardImageUrl(card.id);
+    let done = false;
+    let timer = null;
+    const finish = state => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve({ state, src });
+    };
+    timer = setTimeout(() => finish("slow"), DRAW_PREPARE_MAX_MS);
+    const img = new window.Image();
+    img.onload = () => {
+      if (typeof img.decode === "function") img.decode().then(() => finish("ready"), () => finish("ready"));
+      else finish("ready");
+    };
+    img.onerror = () => finish("error");
+    img.src = src;
+  });
+}
+
+/** element.animate(), or null where the Web Animations API is missing or fails. */
+function _drawAnimate(el, keyframes, opts) {
+  if (!el || typeof el.animate !== "function") return null;
+  try {
+    return el.animate(keyframes, { fill: "forwards", ...opts });
+  } catch (e) {
+    return null;
+  }
+}
+
+function _animationDone(anim) {
+  return anim && anim.finished ? anim.finished.then(() => {}, () => {}) : Promise.resolve();
+}
+
+/** A transform that shows an element laid out at rect `to` at rect `from` (origin top left). */
+function _rectTransform(from, to, extra = "") {
+  const sx = to.width ? from.width / to.width : 1;
+  const sy = to.height ? from.height / to.height : 1;
+  return `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${sx}, ${sy})${extra}`;
+}
+
+function _fixedClone(className, rect) {
+  const el = document.createElement("div");
+  el.className = className;
+  el.setAttribute("aria-hidden", "true");
+  el.style.left = `${rect.left}px`;
+  el.style.top = `${rect.top}px`;
+  el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
+  return el;
+}
+
+/** The card's face in flight: its decoded image, else its rarity face. */
+function _drawCardFace(card, prep) {
+  if (prep && prep.state === "ready" && prep.src) {
+    const img = document.createElement("img");
+    img.className = "draw-flight-img";
+    img.alt = "";
+    img.src = prep.src;
+    return img;
+  }
+  const face = document.createElement("div");
+  face.className = `draw-flight-rarity draw-flight-rarity--${_normalizeDrawRarity(card.card_type)}`;
+  face.textContent = (card.card_type || "").toUpperCase() || "Card";
+  return face;
+}
+
+/** The deck's rectangle; the Draw button's when the deck is not laid out. */
+function _drawDeckRect() {
+  for (const id of ["drawDeck", "drawBtn"]) {
+    const el = document.getElementById(id);
+    const r = el && el.getBoundingClientRect();
+    if (r && r.width > 0 && r.height > 0) return r;
+  }
+  return null;
+}
+
+/**
+ * The deck's top card lifts, flies to the reveal card's place while the page dims,
+ * and flips face up with the rarity burst; then the rest of the reveal fades in.
+ * Without the Web Animations API (or a layout to measure) the reveal just shows.
+ */
+async function _playDrawFlight(card, prep) {
+  let flight = null;
+  let burst = false;
+  try {
+    if (!_revealEntering) return;
+    const modal = document.getElementById("revealModal");
+    const wrap = document.getElementById("revealImgWrap");
+    const to = wrap && wrap.getBoundingClientRect();
+    const from = _drawDeckRect();
+    if (!to || !to.width || !to.height || !from) return;
+    flight = _fixedClone("draw-flight", to);
+    if (typeof flight.animate !== "function") { flight = null; return; }
+    const inner = document.createElement("div");
+    inner.className = "draw-flight-inner";
+    const front = document.createElement("div");
+    front.className = "draw-flight-face draw-flight-face--front";
+    front.appendChild(_drawCardFace(card, prep));
+    const back = document.createElement("div");
+    back.className = "draw-flight-face draw-flight-face--back card-back";
+    inner.appendChild(front);
+    inner.appendChild(back);
+    flight.appendChild(inner);
+    const start = _rectTransform(from, to);
+    const lifted = _rectTransform({ ...from, top: from.top - 24 }, to, " rotate(-3deg)");
+    flight.style.transform = start;
+    document.body.appendChild(flight);
+
+    await _animationDone(_drawAnimate(flight, [{ transform: start }, { transform: lifted }],
+      { duration: DRAW_LIFT_MS, easing: DRAW_FLIGHT_EASE }));
+    if (!_revealEntering) return;
+    modal.classList.add("reveal-overlay--dim");
+    await _animationDone(_drawAnimate(flight, [{ transform: lifted }, { transform: "none" }],
+      { duration: DRAW_TRAVEL_MS, easing: DRAW_FLIGHT_EASE }));
+    if (!_revealEntering) return;
+    burst = true;
+    _playDrawBurst(card);
+    await _animationDone(_drawAnimate(inner, [
+      { transform: "rotateY(180deg)" },
+      { transform: "rotateY(-12deg) scale(1.06)", offset: 0.75 },
+      { transform: "rotateY(0deg) scale(1)" },
+    ], { duration: DRAW_FLIP_MS, easing: "ease-out" }));
+  } catch (e) {
+    // A failed animation must not hide the result: the reveal still shows below.
+  } finally {
+    if (flight) flight.remove();
+    if (_revealEntering && !burst) _playDrawBurst(card);
+    _finishRevealEntering(card, prep);
+  }
+}
+
+/** The flown card has reached its place: show the reveal card and fade the details in. */
+function _finishRevealEntering(card, prep) {
+  if (!_revealEntering) return;
+  _revealEntering = false;
+  const modal = document.getElementById("revealModal");
+  modal.classList.remove("reveal-overlay--entering", "reveal-overlay--dim");
+  modal.classList.add("reveal-overlay--details-in");
+  clearTimeout(_revealDetailsTimer);
+  _revealDetailsTimer = setTimeout(() => modal.classList.remove("reveal-overlay--details-in"), DRAW_DETAILS_MS + 200);
+  // A slow image flew in as its rarity face; the reveal keeps that face until the PNG loads.
+  const placeholder = document.getElementById("revealImgPlaceholder");
+  if (prep && prep.state === "slow" && placeholder && placeholder.style.display !== "none"
+      && placeholder.classList.contains("reveal-img-placeholder--drawing")) {
+    placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
+    placeholder.textContent = (card.card_type || "").toUpperCase() || "Card";
+  }
+}
+
+/** Before Continue closes the reveal: the drawn card and where it is on screen. */
+function _takeRevealLanding() {
+  const card = _revealDrawn;
+  if (!card || !card.id) return null;
+  const wrap = document.getElementById("revealImgWrap");
+  const img = document.getElementById("revealCardImg");
+  const from = wrap ? wrap.getBoundingClientRect() : null;
+  const src = img && img.style.display !== "none" && img.src ? img.src : "";
+  return { card, from, src };
+}
+
+function _isPhoneWidth() {
+  const w = window.innerWidth || 0;
+  return w > 0 && w < DRAW_PHONE_MAX_PX;
+}
+
+/** An element's rectangle when it is laid out and on screen, else null. */
+function _onScreenRect(el) {
+  const r = el && el.getBoundingClientRect();
+  if (!r || !r.width || !r.height) return null;
+  if (r.bottom <= 0 || r.top >= (window.innerHeight || 0)) return null;
+  return r;
+}
+
+/** Continue: after the roster re-rendered, the card flies to its slot (or off the
+ * top edge on a phone or when the slot is off screen) and glows once there. */
+async function _playLandingFlight({ card, from, src }) {
+  try { await _drawRosterReload; } catch (e) { /* loadRoster shows its own error */ }
+  const phone = _isPhoneWidth();
+  const slot = typeof rosterArrivalSlot === "function" ? rosterArrivalSlot(card) : null;
+  const to = phone ? null : _onScreenRect(slot);
+  if (!_prefersReducedMotion() && from && from.width && from.height) {
+    const target = to || {
+      left: from.left + from.width / 4, top: -from.height / 2 - 40,
+      width: from.width / 2, height: from.height / 2,
+    };
+    await _flyToSlot(card, src, from, target, to ? slot : null);
+  }
+  if (phone) _showLandedNotice(card);
+  else if (typeof markArrived === "function") markArrived(card.id);
+}
+
+async function _flyToSlot(card, src, from, to, slot) {
+  const clone = _fixedClone("draw-landing", to);
+  if (typeof clone.animate !== "function") return;
+  clone.appendChild(_drawCardFace(card, { state: src ? "ready" : "none", src }));
+  const start = _rectTransform(from, to);
+  clone.style.transform = start;
+  document.body.appendChild(clone);
+  if (slot) slot.style.visibility = "hidden";
+  try {
+    await _animationDone(_drawAnimate(clone, [{ transform: start }, { transform: "none" }],
+      { duration: DRAW_LANDING_MS, easing: DRAW_FLIGHT_EASE }));
+  } finally {
+    clone.remove();
+    if (slot) slot.style.visibility = "";
+  }
+}
+
+/** Phone: "Added to active roster" / "Added to bench" with See roster, for 5 seconds. */
+function _showLandedNotice(card) {
+  const notice = document.getElementById("drawLandedNotice");
+  if (!notice) return;
+  _landedCardId = card.id;
+  document.getElementById("drawLandedNoticeText").textContent = card.is_active ? "Added to active roster" : "Added to bench";
+  notice.style.display = "";
+  clearTimeout(_landedNoticeTimer);
+  _landedNoticeTimer = setTimeout(_hideLandedNotice, DRAW_NOTICE_MS);
+}
+
+function _hideLandedNotice() {
+  clearTimeout(_landedNoticeTimer);
+  _landedNoticeTimer = null;
+  const notice = document.getElementById("drawLandedNotice");
+  if (notice) notice.style.display = "none";
+}
+
+/** See roster: scroll up to the roster and glow the new card once. */
+function seeLandedCard() {
+  const grid = document.getElementById("rosterActiveGrid");
+  if (grid && typeof grid.scrollIntoView === "function") {
+    grid.scrollIntoView({ block: "start", behavior: _prefersReducedMotion() ? "auto" : "smooth" });
+  }
+  if (_landedCardId != null && typeof markArrived === "function") markArrived(_landedCardId);
+  _landedCardId = null;
+  _hideLandedNotice();
+}
+
 // ── Team Draw (internal name: booster) ──────────────────────────────────────────────────────
 
 let _selectedBoosterTeamId = null;
@@ -493,19 +792,26 @@ let _boosterDrawInFlight = false;
 async function _drawBoosterForTeam(teamId) {
   if (_boosterDrawInFlight) return;
   _boosterDrawInFlight = true;
+  _setDeckStirring(true);
   try {
     const res = await fetch(`${API}/draw/booster/${teamId}`, { method: "POST" });
     const data = await res.json();
     if (!res.ok) { setStatus("deckStatus", data.detail, false); return; }
     updateTokenDisplay(data.tokens ?? null);
     _updateBoosterBtn();
-    if (data.id) { const warm = new window.Image(); warm.src = cardImageUrl(data.id); }
+    // Issue #205: the team picker steps aside so the card flies from the deck.
+    const picker = document.getElementById("boosterModal");
+    if (picker) picker.classList.add("hidden");
+    const prep = await _prepareDrawnCard(data);
+    _setDeckStirring(false);
     showReveal(data, teamId);
     loadDeck();
-    loadRoster(_rosterWeekId);
+    await _playDrawFlight(data, prep);
+    _drawRosterReload = loadRoster(_rosterWeekId);
   } catch (e) {
     setStatus("deckStatus", e.message, false);
   } finally {
+    _setDeckStirring(false);
     _boosterDrawInFlight = false;
   }
 }
@@ -523,23 +829,31 @@ async function drawBooster() {
   closeBoosterModal();
 }
 
+/**
+ * Issue #205: the deck stirs while the draw answers and its image loads and decodes
+ * (3 s at most), then the card flies from the deck into the reveal. The button stays
+ * busy until the reveal shows. The roster reloads after the flight, so the new card
+ * appears in its slot when it lands.
+ */
 async function drawCard() {
   const btn = document.getElementById("drawBtn");
   await withBusy(btn, async () => {
+    _setDeckStirring(true);
     try {
       const res = await fetch(`${API}/draw`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) return setStatus("deckStatus", data.detail, false);
       updateTokenDisplay(data.tokens ?? null);
-      if (data.id) {
-        const warm = new window.Image();
-        warm.src = cardImageUrl(data.id);
-      }
+      const prep = await _prepareDrawnCard(data);
+      _setDeckStirring(false);
       showReveal(data);
       loadDeck();
-      loadRoster(_rosterWeekId);
+      await _playDrawFlight(data, prep);
+      _drawRosterReload = loadRoster(_rosterWeekId);
     } catch (e) {
       setStatus("deckStatus", e.message, false);
+    } finally {
+      _setDeckStirring(false);
     }
   });
 }
