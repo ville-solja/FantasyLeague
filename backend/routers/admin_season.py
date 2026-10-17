@@ -1,17 +1,25 @@
+import logging
 import os
 import time
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
+import accolades
 import card_points
 from database import get_db, backup_sqlite_db
 from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
-from models import Card, CardModifier, League, Match, MatchBan, OwnPlayerCardGrant, Player, PlayerMatchStats, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
+from models import Card, CardModifier, League, Match, MatchBan, OwnPlayerCardGrant, Player, PlayerMatchStats, SeasonAccolade, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
 from routers.leaderboard import compute_season_standings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# An OpenDota account id as SQLite can bind it (a larger int would be a 500).
+AccountId = Annotated[int, Field(ge=1, le=2**63 - 1)]
 
 AUDIT_LOG_LIMIT_MAX = 1000
 
@@ -20,12 +28,54 @@ AUDIT_LOG_LIMIT_MAX = 1000
 # Season lifecycle — End Season archive + Season Reset
 # ---------------------------------------------------------------------------
 
+class SeasonEndChampions(BaseModel):
+    """One division's winning team at End Season (issue #50)."""
+    division: Literal["div1", "div2"]
+    team_name: str = Field(..., min_length=1, max_length=100)
+    player_account_ids: list[AccountId] = Field(..., max_length=50)
+
+    @field_validator("team_name")
+    @classmethod
+    def _team_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Team name cannot be empty")
+        return v
+
+
 class SeasonEndBody(BaseModel):
     season_label: str = Field(..., min_length=1, max_length=100)
+    # Optional: the finals may not be played yet; Mark champions adds them later.
+    champions: list[SeasonEndChampions] | None = Field(None, max_length=2)
+
+    @field_validator("champions")
+    @classmethod
+    def _one_per_division(cls, v):
+        if v and len({c.division for c in v}) != len(v):
+            raise ValueError("One champion team per division")
+        return v
 
 
 class SeasonResetBody(BaseModel):
     force: bool = False
+
+
+@router.get("/admin/season/accolades-preview")
+def accolades_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
+    """What End Season will record (issue #50): the four awards (ties included), how
+    many players get a played row, and the season's teams with their players for the
+    champion picker. season_label is the live season's label."""
+    label = accolades.current_season_label(db)
+    recorded = {d: db.query(SeasonAccolade).filter(
+        SeasonAccolade.season_label == label, SeasonAccolade.kind == "champion",
+        SeasonAccolade.division == d).count() for d in accolades.DIVISIONS}
+    return {
+        "season_label": label,
+        "awards": accolades.compute_awards(db),
+        "played_count": len(accolades.played_player_ids(db)),
+        "teams": accolades.season_teams(db),
+        "champions_recorded": recorded,
+    }
 
 
 @router.post("/admin/season/end", dependencies=[Depends(require_recent_reauth),
@@ -36,6 +86,10 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
 
     Run this BEFORE a season reset — standings are computed live from match
     stats and are destroyed by the reset.
+
+    In the same transaction it records the season's accolades (issue #50): the four
+    awards, the optional champions and one played row per player with a scored match.
+    If recording fails nothing is committed.
     """
     season_label = body.season_label.strip()
     if not season_label:
@@ -56,11 +110,27 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
             rank=rank,
             archived_at=now,
         ))
+    champions = [c.model_dump() for c in body.champions] if body.champions else None
+    try:
+        recorded = accolades.record_season(db, season_label, champions, admin["user_id"])
+    except Exception:
+        db.rollback()
+        logger.exception("End Season: recording accolades failed for %s", season_label)
+        raise HTTPException(status_code=500,
+                            detail="Recording accolades failed; nothing was archived")
     _audit(db, "admin_season_archived", actor_id=admin["user_id"],
            actor_username=admin["username"],
-           detail=f"season_label={season_label} users={len(standings)}")
+           detail=f"season_label={season_label} users={len(standings)} "
+                  f"accolades={recorded['accolades']} champions={recorded['champions']}")
     db.commit()
-    return {"season_label": season_label, "archived_users": len(standings)}
+    result = {"season_label": season_label, "archived_users": len(standings),
+              "accolades": recorded["accolades"], "awards": recorded["awards"],
+              "champions": recorded["champions"], "played": recorded["played"]}
+    if recorded["played"] == 0 and recorded["awards"] == 0:
+        result["note"] = "No scored matches: no awards or played rows recorded"
+    if not champions:
+        result["warning"] = "No champions recorded; add them in Player management"
+    return result
 
 
 @router.post("/admin/season/reset", dependencies=[Depends(require_recent_reauth),
@@ -72,7 +142,7 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
     Deletes matches, stats, stored card points, bans, weeks, roster snapshots, Twitch season
     records, all known players and teams, and every user's cards and own-card grants; resets
     user tokens to INITIAL_TOKENS; unmonitors all leagues. User accounts,
-    tags, audit logs, and season archives are retained.
+    tags, audit logs, season archives and season accolades (issue #50) are retained.
 
     Players and teams are wiped along with match data — this also clears the
     admin-curated Player Pool, so a new season (or a new league entirely)
@@ -137,12 +207,14 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
         db.query(League).filter(League.is_monitored == True)  # noqa: E712
         .update({League.is_monitored: False}, synchronize_session=False)
     )
-    detail = f"backup={backup_path} " + " ".join(f"{k}={v}" for k, v in counts.items())
+    kept = {"season_accolades": db.query(SeasonAccolade).count()}
+    detail = (f"backup={backup_path} " + " ".join(f"{k}={v}" for k, v in counts.items())
+              + f" kept_season_accolades={kept['season_accolades']}")
     _audit(db, "admin_season_reset", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=detail)
     db.commit()
     return {"status": "ok", "initial_tokens": initial_tokens, "counts": counts,
-            "backup_path": backup_path}
+            "kept": kept, "backup_path": backup_path}
 
 
 @router.get("/audit-logs")

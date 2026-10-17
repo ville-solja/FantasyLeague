@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-17 — developer — models
+**Problem:** A plan's "unique on (a, b, c)" with nullable columns doesn't hold in SQLite: NULLs are distinct in a unique index, so two rows with the same values and a NULL never collide and `ON CONFLICT DO NOTHING` inserts duplicates.
+**Solution:** Index the nullable parts through `COALESCE` (`Index(..., func.coalesce(col, ''), unique=True)`, as `ux_season_accolades_key` in `models.py`); `ON CONFLICT DO NOTHING` without a target then honours it. Test the NULL case explicitly.
+
 ### 2026-10-15 — developer — testing
 **Problem:** In cloud sessions, three `test_test_background_task_isolation.py` lifespan tests fail (or hang when run alone) because their subprocess starts the real loops, which call `api.opendota.com` through an egress proxy that refuses it; pytest-xdist may also be missing.
 **Solution:** Treat those three as environmental when the proxy log shows refused `api.opendota.com` connections; install `requirements-dev.txt` for `-n auto`. For draw/reveal behaviour in `app-cards.js`, reuse `_HARNESS` / `_run` in `test_issue_205_card_draw_animations.py` (fake `Image`, `fetch`, timers and `Element.animate`).

@@ -41,6 +41,7 @@ Implementation details, integrations, and operator tooling.
 | [Configuration & Commands](reference/commands.md) | Environment variables and useful admin commands |
 | [My Team Tab Layout](reference/my-team-tab-layout.md) | Two-column desktop layout for the My Team tab |
 | [Card Player Popup Navigation](reference/card-player-popup.md) | Clickable player name on viewed card; modal stacking fix |
+| [Player Popup Visualizations](reference/player-popup-visualizations.md) | *(planned, #208)* Form chart, points by source with modifier value, league percentiles, heroes and match details in the player popup |
 | [Tester Account Exclusion](reference/tester-account-exclusion.md) | `is_tester` flag; admin toggle; leaderboard filtering |
 | [Profile Header Link](reference/profile-header-link.md) | Clickable username button in header; one-click access to Profile tab |
 | [MVP Fantasy Bonus](reference/mvp-fantasy-bonus.md) | Per-match score bonus for the Twitch-appointed MVP; configurable weight |
@@ -127,7 +128,7 @@ Implementation details, integrations, and operator tooling.
 | [Impersonation Hardening](reference/impersonation-hardening.md) | Case-insensitive unique usernames, reserved words with look-alike matching, an admin badge, profiles that hide self-reported player ids and avatars, and a rename cooldown (#169) |
 | [Twitch Incident Runbook](reference/twitch-incident-runbook.md) | (#160) What to do if the Twitch sign-in, the developer account or a merge goes wrong: kill switches, secret rotation, audit review, merge reversal, player communication |
 | [Automatic Bench Substitution](reference/automatic-bench-substitution.md) | After a week ends, active cards whose player played 0 matches are swapped for the highest bench card whose player did; bench saved at lock; admin re-run |
-| [Season Champions, Accolades and Holo Cards](reference/season-winners-and-holo-cards.md) | *(planned, #50 #53 #105)* Division champions get Holo Legendaries (`holo_chance`); accolades (awards, seasons played) kept across Season Reset; card stickers, veterans in the Players list, player popup, History tab |
+| [Season Champions, Accolades and Holo Cards](reference/season-winners-and-holo-cards.md) | *(#50 #53 #105)* Division champions get Holo Legendaries (`holo_chance`); accolades (awards, seasons played) kept across Season Reset; accolade symbols on cards, seasons played in the Players list, player popup, History tab |
 | [Retroactive Bench Substitution](reference/retroactive-bench-substitution.md) | (#189) One-off script that adds bench substitutions to weeks locked before benches were saved (Weeks 2–4), rebuilt only from cards each user had on a roster by then; dry run first |
 | [Forgot Password Cooldown](reference/forgot-password-cooldown.md) | Per-account cooldown on password-reset emails, independent of source IP, closing the remaining gap after issue #121's per-IP limit |
 | [Password Reset Token Flow](reference/password-reset-token-flow.md) | Replaces the forgot-password flow's immediate password-overwrite with a single-use, expiring reset token — a username alone no longer changes anyone's real password |

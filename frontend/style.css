@@ -2641,6 +2641,188 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 }
 
 /* ============================================================
+   SEASON HISTORY, ACCOLADES AND HOLO CARDS (issue 50)
+   The pip and chip symbols themselves are in SHARED STATES below.
+   ============================================================ */
+
+/* Pips on a card: an HTML overlay stacked down the card's right edge from the top
+   corner, beside the art and clear of the name. Sized in em from the card's width. */
+.card-slot .card-pips,
+.reveal-pips .card-pips {
+  position: absolute;
+  top: 3.4em;
+  right: 0.35em;
+  z-index: 3;
+  font-size: 11px;
+  pointer-events: none;
+}
+.reveal-pips .card-pips { font-size: 12px; }
+.card-pips .accolade-pips {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.3em;
+}
+.card-pips .accolade-pip { pointer-events: auto; }
+.reveal-accolades { margin: -4px 0 12px; }
+.reveal-accolades .accolade-chips { justify-content: center; }
+
+/* Holo: one iridescent sweep across the card art on the draw reveal (off under
+   reduced motion). The sheen stays on the card art, never on the page chrome. */
+.reveal-img-wrap--holo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: var(--r-lg);
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 25%, var(--k-amber-300) 40%, var(--k-rarity-rare) 50%, var(--k-rarity-epic) 60%, transparent 75%);
+  background-size: 250% 100%;
+  mix-blend-mode: color-dodge;
+  opacity: 0;
+  animation: holo-sweep 1400ms var(--ease-out) 900ms 1 both;
+}
+@keyframes holo-sweep {
+  0%   { opacity: 0;    background-position: 100% 0; }
+  20%  { opacity: 0.55; }
+  100% { opacity: 0;    background-position: 0% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-img-wrap--holo::after { animation: none; display: none; }
+}
+
+/* Players tab: filter chips, Seasons count with recent-season bars, Titles pips. */
+.players-filters { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.players-filter-chip {
+  background: transparent;
+  color: var(--fg-muted);
+  border: var(--bw-thin) solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 2px 10px;
+  font-size: var(--fs-sm);
+}
+.players-filter-chip:hover { color: var(--fg); }
+.players-filter-chip.active { color: var(--accent); border-color: var(--accent); }
+.players-table-wrap { overflow-x: auto; }
+.seasons-cell { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
+.seasons-count {
+  min-width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  cursor: help;
+}
+.season-bars { display: inline-flex; gap: 2px; align-items: flex-end; }
+.season-bar {
+  width: 4px;
+  height: 14px;
+  border-radius: 1px;
+  border: var(--bw-hair) solid var(--border);
+}
+.season-bar--played   { background: var(--accolade-played); border-color: var(--accolade-played); }
+.season-bar--champion { background: var(--accolade-div1); border-color: var(--accolade-div1); }
+.season-bar--empty    { background: transparent; }
+.players-titles { white-space: nowrap; font-size: var(--fs-sm); }
+
+/* Player popup: the Accolades section (pips in the header, counts, timeline). */
+.player-modal-pips { margin-top: 4px; font-size: var(--fs-sm); }
+.player-accolades { margin-top: var(--s-4); }
+.player-accolades h2 { margin-bottom: var(--s-2); }
+.player-accolades-holo {
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
+  border: var(--bw-hair) solid var(--accolade-div1);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+}
+.player-accolades-holo strong { color: var(--accolade-div1); }
+.player-accolades-timeline { list-style: none; margin: var(--s-3) 0 0; padding: 0; }
+.player-accolades-season {
+  display: grid;
+  grid-template-columns: 3.5em 1fr;
+  gap: var(--s-2);
+  align-items: start;
+  padding: var(--s-1) 0;
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.player-accolades-season-label {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* History tab: season panels and the hall of fame sidebar. */
+.history-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: var(--s-4);
+  align-items: start;
+}
+.history-seasons { display: flex; flex-direction: column; gap: var(--s-4); }
+.history-champions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.history-champion-team { margin: var(--s-2) 0 var(--s-1); font-weight: var(--w-bold); }
+.history-champion-players { list-style: none; margin: 0; padding: 0; }
+.history-champion-player { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 2px 0; }
+.history-champion-none,
+.history-empty-note,
+.history-fame-note,
+.history-played { color: var(--fg-muted); font-size: var(--fs-sm); }
+.history-sub { margin: var(--s-2) 0; }
+.history-award-row,
+.history-fame-row,
+.end-season-award-row {
+  display: grid;
+  gap: var(--s-2);
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.history-award-row { grid-template-columns: minmax(0, 14em) minmax(0, 1fr) 6em; }
+.history-award-value,
+.history-fame-rank,
+.history-fame-count,
+.end-season-num,
+.accolade-admin-num { font-variant-numeric: tabular-nums; text-align: right; }
+.history-fame-row { grid-template-columns: 1.5em minmax(0, 1fr) auto 2em; font-size: var(--fs-sm); }
+.history-empty { color: var(--fg-muted); }
+@media (max-width: 760px) {
+  .history-layout { grid-template-columns: 1fr; }
+  .history-award-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+}
+
+/* Admin: champions and accolades table, Mark champions, Add accolade, End Season. */
+.accolade-admin-wrap { overflow-x: auto; }
+.accolade-admin-actions { white-space: nowrap; text-align: right; }
+.accolade-admin-id { color: var(--fg-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.champ-modal { max-width: 560px; }
+.champ-mode { display: flex; gap: var(--s-4); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
+.champ-fields { display: grid; gap: var(--s-2); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
+.champ-fields label { display: grid; gap: 2px; }
+.champ-fields label[hidden] { display: none; }
+.champ-roster { display: grid; gap: var(--s-1); margin-bottom: var(--s-2); }
+.champ-row { display: grid; grid-template-columns: 10em minmax(0, 1fr) auto; gap: var(--s-1); }
+.champ-roster-actions { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); }
+.champ-count-note { color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.champ-paste { display: grid; gap: 2px; margin-bottom: var(--s-2); font-size: var(--fs-sm); }
+.end-season-sub { margin: var(--s-3) 0 var(--s-2); }
+.end-season-award-row { grid-template-columns: 10em minmax(0, 1fr) 5em; font-size: var(--fs-sm); }
+.end-season-played { color: var(--fg-muted); font-size: var(--fs-sm); }
+.end-season-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s-3); }
+.end-season-div label { display: grid; gap: 2px; font-size: var(--fs-sm); }
+.end-season-players { display: grid; gap: 2px; margin: var(--s-2) 0; font-size: var(--fs-sm); }
+.end-season-add { display: flex; gap: var(--s-1); }
+.end-season-warning { margin-top: var(--s-3); color: var(--k-warn); font-size: var(--fs-sm); }
+@media (max-width: 480px) {
+  .champ-row { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
    SHARED STATES (issue #202) — the design system's "States and emphasis"
    rules (.claude/skills/README.md). Surfaces use these instead of their own copies.
    ============================================================ */
@@ -2659,7 +2841,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .schedule-week-chip.selected:hover,
 .schedule-week-chip.selected:focus-visible,
 .schedule-hide-toggle[aria-pressed="true"]:hover,
-.schedule-hide-toggle[aria-pressed="true"]:focus-visible {
+.schedule-hide-toggle[aria-pressed="true"]:focus-visible,
+.players-filter-chip.active:hover,
+.players-filter-chip.active:focus-visible {
   background: var(--state-selected-hover-bg);
   color: var(--state-selected-hover-fg);
 }
@@ -2680,7 +2864,8 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .admin-tab-btn.active:focus-visible,
 .schedule-div-chip.active:focus-visible,
 .schedule-week-chip.selected:focus-visible,
-.schedule-hide-toggle[aria-pressed="true"]:focus-visible {
+.schedule-hide-toggle[aria-pressed="true"]:focus-visible,
+.players-filter-chip.active:focus-visible {
   outline: var(--bw-thick) solid var(--accent);
   outline-offset: 2px;
 }
@@ -2755,6 +2940,110 @@ button {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* Accolade symbols (issue 50): pips for a glance, chips where the names fit. One
+   colour token, Lucide icon and plate per kind (ACCOLADE_KINDS in app-globals.js);
+   champions sit on a filled plate, awards on an outlined one, Played is muted.
+   Sized in em, so a card's overlay scales with the card. */
+.accolade-pips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  vertical-align: middle;
+}
+.accolade-pip,
+.accolade-chip { --pip-color: var(--accolade-played); }
+.accolade-pip--div1,           .accolade-chip--div1           { --pip-color: var(--accolade-div1); }
+.accolade-pip--div2,           .accolade-chip--div2           { --pip-color: var(--accolade-div2); }
+.accolade-pip--most_points,    .accolade-chip--most_points    { --pip-color: var(--accolade-points); }
+.accolade-pip--best_average,   .accolade-chip--best_average   { --pip-color: var(--accolade-average); }
+.accolade-pip--best_match,     .accolade-chip--best_match     { --pip-color: var(--accolade-match); }
+.accolade-pip--fantasy_winner, .accolade-chip--fantasy_winner { --pip-color: var(--accolade-fantasy); }
+.accolade-pip--played,         .accolade-chip--played         { --pip-color: var(--accolade-played); }
+.accolade-pip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  box-sizing: border-box;
+  border: var(--bw-thin) solid var(--pip-color);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  color: var(--pip-color);
+  cursor: help;
+}
+.accolade-pip--filled { background: var(--pip-color); color: var(--k-ink-950); }
+.accolade-pip--muted  { border-color: var(--border); }
+.accolade-pip svg { width: 1.05em; height: 1.05em; stroke-width: 2.25; }
+.accolade-pip:focus-visible {
+  outline: var(--bw-thick) solid var(--accent);
+  outline-offset: 2px;
+}
+.accolade-pip-count {
+  position: absolute;
+  right: -0.45em;
+  bottom: -0.45em;
+  min-width: 1.2em;
+  padding: 0 0.15em;
+  box-sizing: border-box;
+  border: var(--bw-hair) solid var(--pip-color);
+  border-radius: var(--r-xs);
+  background: var(--k-ink-950);
+  color: var(--pip-color);
+  font-family: var(--font-body);
+  font-weight: var(--w-bold);
+  font-size: max(var(--fs-xs), 0.7em);
+  line-height: 1.15;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.accolade-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.accolade-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0 6px;
+  border: var(--bw-hair) solid var(--pip-color);
+  border-radius: var(--r-xs);
+  color: var(--pip-color);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.accolade-chip--filled { background: var(--pip-color); color: var(--k-ink-950); }
+.accolade-chip--muted  { border-color: var(--border); }
+.accolade-chip svg { width: 1em; height: 1em; }
+/* Inside a data row a chip adds no border (rows keep their height). */
+td .accolade-chip { border-color: transparent; }
+/* Chips where the names fit; at phone width the same accolades as pips. */
+.accolade-swap .accolade-pips { display: none; }
+@media (max-width: 600px) {
+  .accolade-swap .accolade-chips { display: none; }
+  .accolade-swap .accolade-pips { display: inline-flex; }
+}
+/* The pip tooltip: name and seasons, on hover, focus or tap. */
+.accolade-tip {
+  position: fixed;
+  z-index: 400;
+  display: none;
+  max-width: 250px;
+  padding: 6px 8px;
+  border: var(--bw-hair) solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+  box-shadow: var(--sh-md);
+  pointer-events: none;
+}
+.accolade-tip--open { display: block; }
 
 /* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team

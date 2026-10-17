@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
+import accolades
 from database import get_db
 from deps import require_admin
 from enrich import run_profile_enrichment
@@ -46,7 +47,13 @@ def list_players(db=Depends(get_db)):
         GROUP BY p.id, p.name, p.avatar_url, t.name, t.id
         ORDER BY total_points DESC
     """)).fetchall()
-    return [_rounded_points(r._mapping) for r in results]
+    rows = [_rounded_points(r._mapping) for r in results]
+    # Issue #50: seasons played (with the live season) and titles, newest first.
+    current = accolades.current_season_label(db)
+    per_player = accolades.accolades_for(db, [r["id"] for r in rows], current=current)
+    for r in rows:
+        r.update(accolades.player_seasons(per_player.get(r["id"], [])))
+    return rows
 
 
 @router.get("/players/{player_id}")
@@ -91,6 +98,8 @@ def get_player(player_id: int, db=Depends(get_db)):
 
     team_name = history[0]["team_name"] if history else None
     team_id = history[0]["team_id"] if history else None
+    current = accolades.current_season_label(db)
+    player_accolades = accolades.accolades_for(db, [player_id], current=current).get(player_id, [])
 
     return {
         "id": player.id,
@@ -107,6 +116,12 @@ def get_player(player_id: int, db=Depends(get_db)):
             "start_time": best["start_time"],
         } if best else None,
         "match_history": history,
+        # Issue #50: the popup's Accolades section.
+        **accolades.player_seasons(player_accolades),
+        "accolades": player_accolades,
+        "current_season": current,
+        "current_season_matches": len(scored),
+        "holo_unlocked": accolades.holo_eligible(db, player_id, current),
     }
 
 

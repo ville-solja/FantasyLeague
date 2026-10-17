@@ -1,11 +1,15 @@
 let _playersData = [];
 let _playerSort = { col: null, dir: "desc" };
+// Issue 50: All | champions | new (first season is the live one). There is no status
+// for long careers: the seasons count already shows it.
+let _playersFilter = "all";
 
 async function loadPlayers() {
   try {
     const res = await fetch(`${API}/players`);
     const rows = await res.json();
     if (!res.ok) throw new Error(rows.detail || "Failed to load");
+    rows.forEach(p => { p.titles_count = Array.isArray(p.titles) ? p.titles.length : 0; });
     _playersData = rows;
     // The player's sort stays across refreshes (issue #159), so an unchanged
     // refresh leaves the table as it is.
@@ -40,8 +44,50 @@ function _renderMvpLeaderboard() {
 function _getFilteredPlayers() {
   const q = document.getElementById("playersSearch").value.toLowerCase();
   return _playersData.filter(p =>
-    p.name.toLowerCase().includes(q) || (p.team_name || "").toLowerCase().includes(q)
+    (p.name.toLowerCase().includes(q) || (p.team_name || "").toLowerCase().includes(q))
+    && _playerMatchesFilter(p)
   );
+}
+
+/** Champions: a champion title in any season. New this season: the live season is
+ * their first (one season played, and it has a scored match now). */
+function _playerMatchesFilter(p) {
+  if (_playersFilter === "champions") return (p.titles || []).some(t => t.kind === "champion");
+  if (_playersFilter === "new") {
+    const seasons = p.seasons || [];
+    return seasons.length === 1 && (!_accoladesCurrentSeason || seasons[0] === _accoladesCurrentSeason);
+  }
+  return true;
+}
+
+function setPlayersFilter(name) {
+  _playersFilter = ["champions", "new"].includes(name) ? name : "all";
+  document.querySelectorAll(".players-filter-chip").forEach(btn => {
+    const on = btn.dataset.filter === _playersFilter;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  renderPlayers(_getFilteredPlayers());
+}
+
+/** The last six seasons any player is known to have played, oldest first. */
+function _knownSeasons(rows) {
+  const all = new Set();
+  rows.forEach(p => (p.seasons || []).forEach(s => all.add(s)));
+  return [...all].sort((a, b) => (_seasonNumber(a) ?? -1) - (_seasonNumber(b) ?? -1)).slice(-6);
+}
+
+/** Seasons column: the count (tabular), one bar per recent season (grey played,
+ * amber champion season, empty not played); hovering the count lists the seasons. */
+function _playerSeasonsCellHtml(p, recent) {
+  const seasons = p.seasons || [];
+  const champ = new Set((p.titles || []).filter(t => t.kind === "champion").map(t => t.season));
+  const list = seasons.map(s => _seasonShort({ season: s })).join(", ") || "No seasons yet";
+  const bars = recent.map(s => {
+    const state = champ.has(s) ? "champion" : (seasons.includes(s) ? "played" : "empty");
+    return `<span class="season-bar season-bar--${state}"></span>`;
+  }).join("");
+  return `<span class="seasons-cell"><span class="seasons-count" tabindex="0" title="${_escHtml(list)}" aria-label="${_escHtml(`${seasons.length} seasons: ${list}`)}">${seasons.length}</span><span class="season-bars" aria-hidden="true">${bars}</span></span>`;
 }
 
 function filterPlayers() {
@@ -92,18 +138,22 @@ function renderPlayers(rows) {
   const sorted = _sortPlayers(rows);
   const tbody = document.getElementById("playersBody");
   if (!sorted.length) {
-    renderIfChanged(tbody, "<tr><td colspan='6' style='color:#444'>No players found</td></tr>");
+    renderIfChanged(tbody, "<tr><td colspan='8' style='color:#444'>No players found</td></tr>");
     return;
   }
-  renderIfChanged(tbody, sorted.map(p => `
+  const recent = _knownSeasons(_playersData);
+  const wrote = renderIfChanged(tbody, sorted.map(p => `
     <tr>
       <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (_escHtml(p.team_name) || "—")}</td>
+      <td>${_playerSeasonsCellHtml(p, recent)}</td>
+      <td class="players-titles">${accoladePipsHtml(p.titles || [])}</td>
       <td>${p.matches}</td>
       <td>${Number(p.avg_points).toFixed(1)}</td>
       <td>${Number(p.total_points).toFixed(1)}</td>
       <td>${p.mvp_count}</td>
     </tr>`).join(""));
+  if (wrote) refreshAccoladeIcons();
 }
 
 async function loadTeams() {
@@ -140,6 +190,7 @@ async function openPlayerModal(playerId) {
   document.getElementById("playerModalStatus").textContent = "";
   const profileEl = document.getElementById("playerProfile");
   if (profileEl) { profileEl.style.display = "none"; profileEl.innerHTML = ""; }
+  renderPlayerAccolades(null);
 
   try {
     const res = await fetch(`${API}/players/${playerId}`);
@@ -166,6 +217,8 @@ async function openPlayerModal(playerId) {
         <div class="player-modal-stat"><div class="val">${Number(p.total_points).toFixed(1)}</div><div class="lbl">Total pts</div></div>
         ${p.best_match ? `<div class="player-modal-stat"><div class="val">${Number(p.best_match.fantasy_points).toFixed(1)}</div><div class="lbl">Best match</div></div>` : ""}
       </div>`;
+
+    renderPlayerAccolades(p);
 
     if (!p.match_history.length) {
       document.getElementById("playerModalHistory").innerHTML =
@@ -199,6 +252,54 @@ async function openPlayerModal(playerId) {
   } catch (e) {
     setStatus("playerModalStatus", e.message, false);
   }
+}
+
+/**
+ * Issue 50: the popup's Accolades section, self-contained so the popup redesign
+ * (plan-issue-208-player-popup-visualizations.md) can move it. Pips in the header; a "Holo
+ * unlocked" banner for past champions; counts; a timeline by season, newest first,
+ * each season listing its chips (the live season's Played chip with its matches).
+ */
+function renderPlayerAccolades(p) {
+  const pipsEl = document.getElementById("playerModalPips");
+  const section = document.getElementById("playerModalAccolades");
+  const list = p && Array.isArray(p.accolades) ? p.accolades : [];
+  if (pipsEl) pipsEl.innerHTML = accoladePipsHtml(list);
+  if (!section) return;
+  if (!list.length) {
+    section.hidden = true;
+    section.innerHTML = "";
+    return;
+  }
+  const champions = list.filter(a => a.kind === "champion").length;
+  const awards = list.filter(a => a.kind !== "champion" && a.kind !== "played").length;
+  const seasons = new Set(list.filter(a => a.kind === "played").map(a => a.season)).size;
+  const bySeason = new Map();
+  list.slice().sort(_accoladeNewestFirst).forEach(a => {
+    const entry = a.kind === "played" && a.season === p.current_season
+      ? { ...a, matches: p.current_season_matches } : a;
+    if (!bySeason.has(a.season)) bySeason.set(a.season, []);
+    bySeason.get(a.season).push(entry);
+  });
+  const timeline = [...bySeason.values()].map(items => `
+      <li class="player-accolades-season">
+        <span class="player-accolades-season-label">${_escHtml(_seasonShort(items[0]))}</span>
+        ${accoladeChipsHtml(items)}
+      </li>`).join("");
+  const banner = p.holo_unlocked
+    ? `<div class="player-accolades-holo"><strong>Holo unlocked.</strong> A past champion: their Legendary cards can be drawn as Holo.</div>`
+    : "";
+  section.innerHTML = `
+    <h2 id="playerAccoladesTitle">Accolades</h2>
+    ${banner}
+    <div class="player-modal-stat-grid">
+      <div class="player-modal-stat"><div class="val">${champions}</div><div class="lbl">Champion titles</div></div>
+      <div class="player-modal-stat"><div class="val">${awards}</div><div class="lbl">Season awards</div></div>
+      <div class="player-modal-stat"><div class="val">${seasons}</div><div class="lbl">Seasons played</div></div>
+    </div>
+    <ol class="player-accolades-timeline">${timeline}</ol>`;
+  section.hidden = false;
+  refreshAccoladeIcons();
 }
 
 const _PARTIAL_STATS_TOOLTIP =

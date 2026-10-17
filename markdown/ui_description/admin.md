@@ -25,6 +25,17 @@ Six destructive actions also ask the admin to type the action's name (issue #150
 
 - **Recalculate** button — re-applies the current scoring weights to all stored player match stats without re-fetching from OpenDota, then rebuilds every stored per-match card point (`card_match_points`). The response includes `recalculated` (stat rows) and `card_points` (stored card-point rows written), and the status line shows both counts. If the card-point rebuild fails, the recalculated stats are kept, the previous card points stay, and the status line shows the error. Use after adjusting weights.
 
+## Player Management: champions and accolades (issue #50)
+
+- **Mark champions** and **Add accolade** buttons sit next to **Add**. Each pool row shows the player's titles as chips beside the name (pips at phone width).
+- **Mark champions** modal: **From this season** (the current season, a division, and a team whose players for the season fill the roster) or **Past season** (Season 1 to the last ended season, a typed team name, players by OpenDota id). One editable roster: OpenDota id, name and **Remove** per row, **+ Add player**, and a paste box for "`<id> <name>`" lines. Typing an id fills the name from the pool or earlier accolades. A note reads "5 players", or "6 players (usually 5)" for another count. Ids must be positive whole numbers listed once, and every row needs a name. **Save champions** replaces that season and division's champions with the list shown.
+- **Add accolade** modal: season, kind (Most Points, Best Average, Best Single Match, Fantasy Winner, Played), a player (OpenDota id and name) or a username for Fantasy Winner, an optional value; Played takes several "`<id> <name>`" lines.
+- **Champions and accolades** table under the pool: Season, Title (chip), Winner, Value, Source, **Edit** and **Remove**. A season and division's champions are one row, "[Team] · N players": Edit opens Mark champions filled in, Remove clears the set after a confirmation. Saves need the password re-entry prompt. See `markdown/features/reference/season-winners-and-holo-cards.md`.
+
+## Season Lifecycle: End Season dialog (issue #50)
+
+**End Season (Archive)** opens a dialog: the season label (the typed one, else the current season), the four awards with their winners and values, the Played count, and a Div 1 and a Div 2 winner picker. Picking a team ticks the players who played for it this season; a stand-in can be unticked and a player added by OpenDota id. With no champion picked the dialog warns "No champions recorded; add them in Player management". **Continue to END SEASON** opens the typed confirmation.
+
 ## Database Backups panel
 
 Settings tab, below Season Lifecycle. See `markdown/features/reference/admin-db-backup.md`.

@@ -748,6 +748,14 @@ def _m039_user_tags_source(conn):
     logger.info("Migration: user_tags — added source column")
 
 
+def _m040_cards_is_holo(conn):
+    """Issue #53: a past champion's Legendary can be drawn as Holo."""
+    cols = [r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()]
+    if "is_holo" not in cols:
+        conn.execute(text("ALTER TABLE cards ADD COLUMN is_holo BOOLEAN NOT NULL DEFAULT 0"))
+        conn.commit()
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -811,6 +819,7 @@ MIGRATIONS = [
     ("037_cards_active_player_unique", _m037_cards_active_player_unique),
     ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
     ("039_user_tags_source",         _m039_user_tags_source),
+    ("040_cards_is_holo",            _m040_cards_is_holo),
 ]
 
 

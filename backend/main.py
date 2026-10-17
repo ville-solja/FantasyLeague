@@ -56,6 +56,8 @@ from routers import admin_tags as admin_tags_router
 from routers import admin_players as admin_players_router
 from routers import admin_leagues as admin_leagues_router
 from routers import admin_season as admin_season_router
+from routers import admin_accolades as admin_accolades_router
+from routers import history as history_router
 from routers import admin_backups as admin_backups_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
@@ -423,6 +425,8 @@ async def lifespan(app: FastAPI):
                 "this bypass must never run in production"
             )
     twitch_module.warn_if_mvp_channels_unset()
+    import image as _card_image
+    _card_image.warn_if_holo_template_missing()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
@@ -827,6 +831,8 @@ app.include_router(admin_tags_router.router)
 app.include_router(admin_players_router.router)
 app.include_router(admin_leagues_router.router)
 app.include_router(admin_season_router.router)
+app.include_router(admin_accolades_router.router)
+app.include_router(history_router.router)
 app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)

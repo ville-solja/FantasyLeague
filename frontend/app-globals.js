@@ -204,6 +204,7 @@ function switchTab(name) {
     });
     loadPastSeasons();
   }
+  if (name === "history")       loadHistory();
   if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
@@ -408,3 +409,219 @@ function tweenNumber(el, from, to, ms, opts = {}) {
   frame = requestAnimationFrame(tick);
   return finish;
 }
+
+// ACCOLADES (issue 50)
+// Season accolades as symbols. Pips for a glance (cards, the Players list, the popup
+// header), chips where the names fit (Player management, the popup timeline, History).
+// Same order, names, icons and tokens as ACCOLADE_KINDS in backend/accolades.py.
+const ACCOLADE_KINDS = [
+  { key: "div1", kind: "champion", division: "div1", name: "Div 1 Champion", icon: "crown", plate: "filled", token: "--accolade-div1" },
+  { key: "div2", kind: "champion", division: "div2", name: "Div 2 Champion", icon: "trophy", plate: "filled", token: "--accolade-div2" },
+  { key: "most_points", kind: "most_points", division: null, name: "Most Points", icon: "flame", plate: "outlined", token: "--accolade-points" },
+  { key: "best_average", kind: "best_average", division: null, name: "Best Average", icon: "gauge", plate: "outlined", token: "--accolade-average" },
+  { key: "best_match", kind: "best_match", division: null, name: "Best Single Match", icon: "zap", plate: "outlined", token: "--accolade-match" },
+  { key: "fantasy_winner", kind: "fantasy_winner", division: null, name: "Fantasy Winner", icon: "medal", plate: "outlined", token: "--accolade-fantasy" },
+  { key: "played", kind: "played", division: null, name: "Played", icon: "calendar-check", plate: "muted", token: "--accolade-played" },
+];
+
+function _accoladeKindKey(a) {
+  return a && a.kind === "champion" ? String(a.division || "") : String((a && a.kind) || "");
+}
+
+function _accoladeKind(a) {
+  const key = _accoladeKindKey(a);
+  return ACCOLADE_KINDS.find(k => k.key === key) || null;
+}
+
+function _seasonNumber(label) {
+  const m = /^\s*(?:season|s)\s*(\d+)\s*$/i.exec(String(label ?? ""));
+  return m ? parseInt(m[1], 10) : null;
+}
+
+function _seasonShort(a) {
+  if (a && a.season_short) return String(a.season_short);
+  const n = _seasonNumber(a && a.season);
+  return n === null ? String((a && a.season) || "") : `S${n}`;
+}
+
+/** Newest season first; within a season, champions first (ACCOLADE_KINDS order). */
+function _accoladeNewestFirst(a, b) {
+  const na = _seasonNumber(a.season), nb = _seasonNumber(b.season);
+  const sa = na === null ? -1 : na, sb = nb === null ? -1 : nb;
+  if (sa !== sb) return sb - sa;
+  const ka = ACCOLADE_KINDS.indexOf(_accoladeKind(a)), kb = ACCOLADE_KINDS.indexOf(_accoladeKind(b));
+  return ka - kb;
+}
+
+/** "S1–S10, S14, S16": played seasons, oldest first, consecutive numbers as runs. */
+function _compressSeasonRuns(list) {
+  const nums = [], other = [];
+  for (const a of list) {
+    const n = _seasonNumber(a.season);
+    if (n === null) other.push(_seasonShort(a));
+    else if (!nums.includes(n)) nums.push(n);
+  }
+  nums.sort((x, y) => x - y);
+  const parts = [];
+  for (let i = 0; i < nums.length;) {
+    let j = i;
+    while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    parts.push(j > i ? `S${nums[i]}–S${nums[j]}` : `S${nums[i]}`);
+    i = j + 1;
+  }
+  return parts.concat(other).join(", ");
+}
+
+/** {tip, aria, count} for one kind's accolades (already newest first). */
+function _accoladePipText(kind, list) {
+  if (kind.key === "played") {
+    const n = new Set(list.map(a => a.season)).size;
+    const seasons = `${n} season${n === 1 ? "" : "s"}: ${_compressSeasonRuns(list)}`;
+    return { tip: `Played · ${seasons}`, aria: `Played, ${seasons}`, count: String(n) };
+  }
+  const seasons = list.map(a => (kind.kind === "champion" && a.team_name)
+    ? `${_seasonShort(a)} with ${a.team_name}` : _seasonShort(a)).join(", ");
+  const times = list.length > 1 ? `, ${list.length} times` : "";
+  return { tip: `${kind.name} · ${seasons}`, aria: `${kind.name}${times}: ${seasons}`,
+           count: list.length > 1 ? String(list.length) : "" };
+}
+
+/**
+ * Compact form: one pip per earned kind in ACCOLADE_KINDS order, a count from two
+ * (Played always shows its seasons count and comes last, muted). Each pip is
+ * focusable, carries its text as aria-label and shows it as a tooltip on hover,
+ * focus or tap. opts.omitPlayed leaves Played out (small cards, the Titles column).
+ * Empty input gives "".
+ */
+function accoladePipsHtml(accolades, opts = {}) {
+  const list = Array.isArray(accolades) ? accolades.slice().sort(_accoladeNewestFirst) : [];
+  const pips = [];
+  for (const kind of ACCOLADE_KINDS) {
+    if (kind.key === "played" && opts.omitPlayed) continue;
+    const mine = list.filter(a => _accoladeKind(a) === kind);
+    if (!mine.length) continue;
+    const t = _accoladePipText(kind, mine);
+    const count = t.count ? `<span class="accolade-pip-count">${_escHtml(t.count)}</span>` : "";
+    pips.push(`<span class="accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}" role="listitem" tabindex="0" aria-label="${_escHtml(t.aria)}" data-accolade-tip="${_escHtml(t.tip)}"><i data-lucide="${kind.icon}" aria-hidden="true"></i>${count}</span>`);
+  }
+  if (!pips.length) return "";
+  _initAccoladeTips();
+  return `<span class="accolade-pips" role="list" aria-label="Accolades">${pips.join("")}</span>`;
+}
+
+/** The full name on a chip: "S16 Div 1 Champion", "S16 Played · 7 matches". */
+function _accoladeChipLabel(a, kind) {
+  const matches = kind.key === "played" && Number.isFinite(a.matches)
+    ? ` · ${a.matches} match${a.matches === 1 ? "" : "es"}` : "";
+  return `${_seasonShort(a)} ${kind.name}${matches}`;
+}
+
+/** Expanded form: one chip per accolade with its symbol and full name, newest
+ * season first, champions first within a season. */
+function accoladeChipsHtml(accolades) {
+  const list = Array.isArray(accolades) ? accolades.filter(a => _accoladeKind(a)).sort(_accoladeNewestFirst) : [];
+  if (!list.length) return "";
+  return `<span class="accolade-chips">${list.map(a => {
+    const kind = _accoladeKind(a);
+    const detail = kind.kind === "champion" && a.team_name ? `with ${a.team_name}`
+      : (a.value != null && Number.isFinite(Number(a.value)) ? `${Number(a.value).toFixed(1)} pts` : "");
+    const tip = detail ? ` title="${_escHtml(detail)}"` : "";
+    return `<span class="accolade-chip accolade-chip--${kind.plate} accolade-chip--${kind.key}"${tip}><i data-lucide="${kind.icon}" aria-hidden="true"></i>${_escHtml(_accoladeChipLabel(a, kind))}</span>`;
+  }).join("")}</span>`;
+}
+
+// The pip tooltip: one shared element, opened on hover, focus or tap and closed on
+// Escape, blur, mouse leave or a tap elsewhere.
+let _accoladeTipEl = null;
+let _accoladeTipFor = null;
+let _accoladeTipsBound = false;
+
+function _accoladeTipTarget(e) {
+  const t = e && e.target;
+  return t && typeof t.closest === "function" ? t.closest("[data-accolade-tip]") : null;
+}
+
+function showAccoladeTip(pip) {
+  if (typeof document === "undefined" || !pip) return;
+  if (!_accoladeTipEl) {
+    _accoladeTipEl = document.createElement("div");
+    _accoladeTipEl.id = "accoladeTip";
+    _accoladeTipEl.className = "accolade-tip";
+    _accoladeTipEl.setAttribute("role", "tooltip");
+    document.body.appendChild(_accoladeTipEl);
+  }
+  _accoladeTipEl.textContent = pip.getAttribute("data-accolade-tip") || "";
+  const r = pip.getBoundingClientRect();
+  _accoladeTipEl.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 260))}px`;
+  _accoladeTipEl.style.top = `${r.bottom + 6}px`;
+  _accoladeTipEl.classList.add("accolade-tip--open");
+  pip.setAttribute("aria-describedby", "accoladeTip");
+  _accoladeTipFor = pip;
+}
+
+function hideAccoladeTip() {
+  if (_accoladeTipEl) _accoladeTipEl.classList.remove("accolade-tip--open");
+  if (_accoladeTipFor) _accoladeTipFor.removeAttribute("aria-describedby");
+  _accoladeTipFor = null;
+}
+
+function _initAccoladeTips() {
+  if (_accoladeTipsBound || typeof document === "undefined" || !document.addEventListener) return;
+  _accoladeTipsBound = true;
+  document.addEventListener("mouseover", e => { const pip = _accoladeTipTarget(e); if (pip) showAccoladeTip(pip); });
+  document.addEventListener("mouseout", e => {
+    const pip = _accoladeTipTarget(e);
+    if (pip && pip === _accoladeTipFor && !pip.contains(e.relatedTarget)) hideAccoladeTip();
+  });
+  document.addEventListener("focusin", e => { const pip = _accoladeTipTarget(e); if (pip) showAccoladeTip(pip); });
+  document.addEventListener("focusout", e => { if (_accoladeTipTarget(e) === _accoladeTipFor) hideAccoladeTip(); });
+  document.addEventListener("click", e => {
+    const pip = _accoladeTipTarget(e);
+    if (!pip) { hideAccoladeTip(); return; }  // a tap elsewhere
+    if (pip === _accoladeTipFor) hideAccoladeTip();
+    else showAccoladeTip(pip);
+  });
+  // Escape closes an open tooltip first, before any dialog it sits in.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || !_accoladeTipFor) return;
+    hideAccoladeTip();
+    e.stopPropagation();
+  }, true);
+}
+
+/** Renders Lucide icons placed by the helpers above (data-lucide). */
+function refreshAccoladeIcons() {
+  if (typeof lucide !== "undefined" && lucide.createIcons) lucide.createIcons();
+}
+
+// GET /accolades, loaded once per page and used for every card.
+let _accoladesByPlayer = {};
+let _accoladesCurrentSeason = "";
+let _accoladesLoading = null;
+
+function loadAccolades(force = false) {
+  if (_accoladesLoading && !force) return _accoladesLoading;
+  _accoladesLoading = fetch(`${API}/accolades`)
+    .then(res => (res.ok ? res.json() : null))
+    .then(data => {
+      if (!data) return;
+      _accoladesByPlayer = data.players || {};
+      _accoladesCurrentSeason = data.current_season || "";
+      if (typeof _rerenderRosterPips === "function") _rerenderRosterPips();
+    })
+    .catch(() => { /* cards render without pips */ });
+  return _accoladesLoading;
+}
+
+/** One player's accolades from GET /accolades ([] when none or not loaded). */
+function playerAccolades(playerId) {
+  const list = _accoladesByPlayer[String(playerId)];
+  return Array.isArray(list) ? list : [];
+}
+
+/** The pip overlay stacked down a card's right edge. */
+function cardPipsHtml(playerId) {
+  const pips = accoladePipsHtml(playerAccolades(playerId));
+  return pips ? `<div class="card-pips">${pips}</div>` : "";
+}
+// END ACCOLADES (issue 50)

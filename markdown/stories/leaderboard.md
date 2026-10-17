@@ -145,3 +145,67 @@ As a statistician, I want documentation about the weight simulation endpoint so 
 
 **Acceptance criteria**
 - `GET /simulate` returns machine-readable documentation of the endpoint: parameters, response shape, examples
+
+## Player Popup Visualizations
+
+*(Not yet implemented)* Plan: `markdown/plans/plan-issue-208-player-popup-visualizations.md`.
+
+### Season Form at a Glance
+**User story**
+As a fantasy manager, I want to see a player's season as a chart of match scores, so that I can tell whether they're in form before drafting or keeping their card.
+
+**Acceptance criteria**
+- **Form chart** under the header: one bar per match, oldest left. Bar height is fantasy points, grouped under scoring-week labels ("W3").
+- **Markers:**
+  - MVP is a star above the bar;
+  - a win is a filled square under the bar, a loss a hollow one, so the result never relies on colour;
+  - an excluded match is a dashed ghost bar labelled "Not scored";
+  - a partial-stats match is hatched.
+- **Reference lines:** the player's average (solid) and the league average per match (dashed), each labelled.
+- **Bars are buttons:**
+  - hover, focus or tap shows a tooltip with date, opponent, hero, result, points and K/D/A, using the same tooltip component as #50's pips;
+  - activating a bar scrolls to and highlights that match's row in the history.
+- **Summary tiles** above the chart: Matches with W–L, Avg pts with the league rank ("#7 of 84"), Total pts, Best match (with its opponent), and MVPs.
+- **Accessibility:** the chart has an `aria-label` summary ("12 matches, average 14.2, last 3 above average"). The history table is its data equivalent.
+- **Motion:** the bars grow once on open; nothing moves under reduced motion.
+- **Empty state:** with no matches, the chart, tiles and the sections below are replaced by "No matches yet this season."
+
+### Where a Player's Points Come From
+**User story**
+As a fantasy manager, I want to see which stats earn a player their points, so that I understand their playstyle and know which card modifiers are worth the most on their card.
+
+**Acceptance criteria**
+- **Points by source:** one 100 % stacked bar plus a row per source, giving average points per scored match, share of the total, and a marker for the league's average for that source.
+- **Sources,** from `SCORING_STATS` and the death pool: Kills, Assists, Farm (last hits and denies), GPM, Vision (observer wards), Objectives (towers and Roshan), Teamfight, Stuns, Jungle and runes (camps and runes), First blood, Survival (death pool), and MVP bonus.
+- **Modifier value:** a line "A +10 % modifier is worth most on: Kills (+0.42 / match), GPM (+0.38)". It uses `modifier_bonus_pct` and each stat's average points, per stat rather than per group, and the top three.
+- **Your card:** when the viewer owns a card of this player, its modifiers are highlighted in that list with their value per match. When they don't, the list is shown unhighlighted.
+- **One formula:** values come from the server, using the same scoring code as match points. The parts of a match add up to its fantasy points.
+
+### Compared with the League
+**User story**
+As a fantasy manager, I want to see how a player's averages rank against the league, so that a number like "6.2 assists" means something.
+
+**Acceptance criteria**
+- **Percentile strips** for Kills, Deaths, Assists, GPM, Last hits, Wards, Stuns and Teamfight %. Each row shows the label, the player's average, a 0–100 track with the league median tick and the player's dot, and "Top 15 %" or "Bottom 30 %".
+- **Deaths** are ranked lower-is-better and say so ("fewer deaths than 80 % of players").
+- **Population:** players with at least 3 scored matches this season, with the size shown ("vs 84 players"). Below 3 matches, the section shows "Not enough matches to compare yet".
+- **Role:** a Core or Support chip in the header, computed live from this season's averages (same rule as today's `role_tendency`: support when wards ≥ 3 and GPM < 450).
+
+### Heroes Played
+**User story**
+As a visitor, I want to see which heroes a player has played in the league and how those games went, so that their style and comfort picks are visible.
+
+**Acceptance criteria**
+- **This season:** hero icons from the match history, each with games, W–L and average points, sorted by games. The top six show, then "Show all".
+- **Career heroes:** when profile facts exist, a smaller list "Career (OpenDota, updated <date>)" with games and win rate. It is hidden when there are no facts.
+- **Unknown heroes:** a match without `hero_id` counts in no hero row.
+
+### Match Details on Demand
+**User story**
+As a fantasy manager, I want the full stats of any match a click away, so that the table stays readable but nothing is hidden.
+
+**Acceptance criteria**
+- **New history columns:** Hero (icon) and Result (W or L, as text) after Date. The existing columns stay.
+- **Details:** each row has a **Details** toggle (`aria-expanded`) that opens a panel with every stat, including the never-shown ones (last hits, denies, towers, Roshan, teamfight, camps, runes, first blood, stuns, sentry wards, duration). The panel also shows that match's points breakdown by source, with the MVP bonus.
+- **Badges stay:** Partial stats and Not scored badges and tooltips are unchanged.
+- **Phone width:** the table becomes one stacked row per match (date, opponent, result, hero, points), with the same Details toggle. Nothing scrolls sideways.

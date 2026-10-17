@@ -20,3 +20,7 @@ competitor-analysis/
 
 # Local screen recordings for debugging (not part of the app)
 demos/
+
+# Played backfill match cache (backend/scripts/backfill_played.py, issue #50)
+backfill_played_cache.json
+backfill_played_cache.json.tmp

@@ -71,7 +71,7 @@ function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
   _stripDrawBurstClasses(document.getElementById("revealDrawBurst"));
   _stripRevealImgWrapRarity(imgWrap);
   if (imgWrap) {
-    imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft");
+    imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft", "reveal-img-wrap--holo");
   }
   if (placeholder) {
     placeholder.classList.remove(
@@ -97,6 +97,31 @@ function _playDrawBurst(card) {
   }, DRAW_REVEAL_FLASH_MS);
 }
 
+/** The rarity label: the card type ("legendary", shown in capitals), with " · Holo"
+ * for a Holo card, so it reads "Legendary · Holo" (issue 50). */
+function _rarityLabel(card) {
+  const t = String((card && card.card_type) || "");
+  return card && card.is_holo ? `${t} · Holo` : t;
+}
+
+/**
+ * Issue 50: the player's accolade pips as an HTML overlay down the card's right edge
+ * (accoladePipsHtml), and in the card viewer their chips below the card
+ * (accoladeChipsHtml). Not part of the card image, so they stay hoverable.
+ */
+function _renderCardAccolades(card, drawFx) {
+  const pipsEl = document.getElementById("revealPips");
+  const chipsEl = document.getElementById("revealAccolades");
+  const list = card && card.player_id && typeof playerAccolades === "function" ? playerAccolades(card.player_id) : [];
+  const pips = list.length && typeof accoladePipsHtml === "function" ? accoladePipsHtml(list) : "";
+  const titles = list.filter(a => a.kind !== "played");
+  if (pipsEl) pipsEl.innerHTML = pips ? `<div class="card-pips">${pips}</div>` : "";
+  if (chipsEl) {
+    chipsEl.innerHTML = !drawFx && titles.length && typeof accoladeChipsHtml === "function" ? accoladeChipsHtml(titles) : "";
+  }
+  if (typeof refreshAccoladeIcons === "function" && (pips || titles.length)) refreshAccoladeIcons();
+}
+
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
@@ -114,8 +139,9 @@ function showCard(card, footer, opts = {}) {
 
   _openCardId = card.id || null;
   _revealDrawn = null;
-  cardEl.className = `reveal-card ${card.card_type}`;
-  document.getElementById("revealRarity").textContent = card.card_type;
+  cardEl.className = `reveal-card ${card.card_type}${card.is_holo ? " holo" : ""}`;
+  document.getElementById("revealRarity").textContent = _rarityLabel(card);
+  _renderCardAccolades(card, drawFx);
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
   const revealPlayerEl = document.getElementById("revealPlayer");
   if (card.player_id && !drawFx) {
@@ -232,6 +258,8 @@ function showCard(card, footer, opts = {}) {
       requestAnimationFrame(() => {
         if (!opts.deferBurst) _playDrawBurst(card);
         if (reduceMotion) imgWrap.classList.add("reveal-img-wrap--draw-soft");
+        // Issue 50: a Holo card's art gets one iridescent sweep (none under reduced motion).
+        else if (card.is_holo) imgWrap.classList.add("reveal-img-wrap--holo");
       });
     });
   }
