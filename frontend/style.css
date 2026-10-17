@@ -392,15 +392,19 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
    ============================================================ */
 /* Card back: brand cross-hatch and a diamond emblem, CSS only (no image, no name).
    Used by the deck and by the back face of a card in flight. */
+/* Sized in em, so a card back drawn larger (the flying card, scaled down to the
+   deck at the start) keeps the same pattern proportions as it grows (issue 205). At the
+   16px base: 2px border, 2px lines every 12px. */
 .card-back {
   position: relative;
   box-sizing: border-box;
-  border: var(--bw-thick) solid var(--k-ink-500);
+  font-size: 16px;
+  border: 0.125em solid var(--k-ink-500);
   border-radius: var(--r-lg);
   background-color: var(--k-ink-900);
   background-image:
-    repeating-linear-gradient(45deg, var(--accent-ghost) 0 2px, transparent 2px 12px),
-    repeating-linear-gradient(-45deg, var(--accent-ghost) 0 2px, transparent 2px 12px);
+    repeating-linear-gradient(45deg, var(--accent-ghost) 0 0.125em, transparent 0.125em 0.75em),
+    repeating-linear-gradient(-45deg, var(--accent-ghost) 0 0.125em, transparent 0.125em 0.75em);
   overflow: hidden;
 }
 .card-back::before,
@@ -414,7 +418,7 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
 .card-back::before {
   width: 32%;
   aspect-ratio: 1;
-  border: 3px solid var(--accent);
+  border: 0.1875em solid var(--accent);
 }
 .card-back::after {
   width: 15%;
@@ -1661,6 +1665,10 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .reveal-overlay.reveal-overlay--entering:not(.reveal-overlay--dim) { background-color: transparent; }
 .reveal-overlay--entering .reveal-card { background: transparent; border-color: transparent; box-shadow: none; }
 .reveal-overlay--entering .reveal-card > * { visibility: hidden; }
+/* The card image sets visibility: visible for itself, so hide it explicitly too:
+   the real card must not show at its resting place until the flying card has
+   arrived and flipped (issue 205). */
+.reveal-overlay--entering .reveal-img-wrap .reveal-card-img { visibility: hidden; }
 .reveal-overlay--details-in .reveal-card { animation: reveal-frame-in 400ms var(--ease-out) both; }
 .reveal-overlay--details-in .reveal-card > :not(.reveal-img-wrap) { animation: reveal-details-in 400ms var(--ease-out) 120ms both; }
 @keyframes reveal-frame-in {
