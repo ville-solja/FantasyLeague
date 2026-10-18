@@ -43,6 +43,8 @@ SOURCE_SEASON_END = "season_end"
 SOURCE_ADMIN = "admin"
 DEFAULT_HOLO_CHANCE = 20.0
 WINNER_TAG_KEY = "season_winner"
+# The first season with an OpenDota record (issue 212): seasons-played counts start here.
+FIRST_COUNTED_SEASON = 4
 
 _SEASON_RE = re.compile(r"\s*(?:season|s)\s*(\d+)\s*", re.I)
 # "Season N" anywhere in an OpenDota league name ("Kanaliiga Season 16 Lower").

@@ -11,6 +11,7 @@ async function loadPlayers() {
     if (!res.ok) throw new Error(rows.detail || "Failed to load");
     rows.forEach(p => { p.titles_count = Array.isArray(p.titles) ? p.titles.length : 0; });
     _playersData = rows;
+    _renderSeasonsLegend(rows);
     // The player's sort stays across refreshes (issue #159), so an unchanged
     // refresh leaves the table as it is.
     _initPlayerSortHeaders();
@@ -70,6 +71,21 @@ function setPlayersFilter(name) {
   renderPlayers(_getFilteredPlayers());
 }
 
+/** Issue 212: seasons are counted from the first season with an OpenDota record;
+ * the backend sends that season on every row (seasons_counted_from). */
+function _seasonsCountedFrom(rows) {
+  const n = (rows || []).map(p => p.seasons_counted_from).find(v => Number.isInteger(v));
+  return n === undefined ? null : n;
+}
+
+function _renderSeasonsLegend(rows) {
+  const el = document.getElementById("playersSeasonsLegend");
+  if (!el) return;
+  const from = _seasonsCountedFrom(rows);
+  el.textContent = from === null ? "" : `Seasons played since Season ${from} (earlier seasons have no OpenDota record)`;
+  el.hidden = from === null;
+}
+
 /** The last six seasons any player is known to have played, oldest first. */
 function _knownSeasons(rows) {
   const all = new Set();
@@ -82,7 +98,9 @@ function _knownSeasons(rows) {
 function _playerSeasonsCellHtml(p, recent) {
   const seasons = p.seasons || [];
   const champ = new Set((p.titles || []).filter(t => t.kind === "champion").map(t => t.season));
-  const list = seasons.map(s => _seasonShort({ season: s })).join(", ") || "No seasons yet";
+  const from = Number.isInteger(p.seasons_counted_from) ? p.seasons_counted_from : null;
+  const list = (seasons.map(s => _seasonShort({ season: s })).join(", ") || "No seasons yet")
+    + (from === null ? "" : `. Counted from Season ${from}`);
   const bars = recent.map(s => {
     const state = champ.has(s) ? "champion" : (seasons.includes(s) ? "played" : "empty");
     return `<span class="season-bar season-bar--${state}"></span>`;

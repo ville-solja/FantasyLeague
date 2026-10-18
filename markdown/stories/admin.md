@@ -853,7 +853,7 @@ As an admin entering champions once a season, I want a plain roster editor where
 **Acceptance criteria**
 - **Mark champions, paste box removed:** the paste box and its parser are removed; **+ Add player** stays.
 - **Mark champions, layout:** each roster row shows the id field (fixed width), the name field (the remaining width, never under 12 characters wide) and **Remove** on one line in a modal at least 640 px wide. Below 640 px the row stacks.
-- **Add accolade:** no spinner on the id or the value. The bulk Played box stays, because the S1–S15 backfill fallback uses it.
+- **Add accolade:** no spinner on the id or the value. The bulk Played box stays, because it is the fallback for S1–S3 and the Div 2 gaps the OpenDota backfill can't reach.
 
 ### Matches Are Organised for Setting MVPs
 **User story**

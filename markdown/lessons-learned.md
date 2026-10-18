@@ -15,6 +15,10 @@ Format:
 ---
 
 ### 2026-10-18 — developer — testing
+**Problem:** Tests load operator scripts with `spec_from_file_location` + `exec_module` without adding them to `sys.modules`, so a `@dataclass` in a script with `from __future__ import annotations` fails at import (`'NoneType' object has no attribute '__dict__'`).
+**Solution:** In `backend/scripts/*.py`, use a plain class with `__init__` (as `SeasonResult` in `backfill_played.py`) instead of `@dataclass`.
+
+### 2026-10-18 — developer — testing
 **Problem:** A TestClient on a bare router can't sign in by setting a `session` cookie to a raw sid (the cookie is a signed Starlette session, and without `SessionMiddleware` `get_current_user` raises), and in Node harnesses a stub defined before a module is silently replaced by the module's own function of the same name.
 **Solution:** Add `SessionMiddleware` and override `deps.get_current_user` with the user's identity dict; `require_admin` still checks `is_admin` in the database (`_signed_in` in `test_issue_214_admin_enhancements.py`). In harnesses, stub only globals the loaded modules don't define, and assert on the call you mean (filter `fetch` calls by method) rather than the last one.
 

@@ -13,7 +13,11 @@ Table of all players who have participated in any ingested league. Sortable colu
   (one season played, the current one). Selected chips follow "States and emphasis" in the design system.
 - **Seasons** — the seasons-played count in tabular numbers (recorded seasons plus the current one when
   the player has a scored match), then one bar per season for the last six known seasons: grey played,
-  amber a champion season, empty not played. Hovering or focusing the count lists the seasons.
+  amber a champion season, empty not played. Hovering or focusing the count lists the seasons and
+  ends with "Counted from Season 4" (issue 212).
+- **Seasons legend** (issue 212) — under the table: "Seasons played since Season 4 (earlier seasons
+  have no OpenDota record)". The number comes from `seasons_counted_from` on `GET /players`; the
+  legend is hidden when the list is empty.
 - **Titles** — the player's accolade pips (champion and award titles; Played is the Seasons column).
   Each pip shows its name and seasons on hover, focus or tap. Sorting by Titles counts them.
   There is no Veteran status. See `features/reference/season-winners-and-holo-cards.md`.

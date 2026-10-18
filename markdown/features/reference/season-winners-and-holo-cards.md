@@ -47,13 +47,15 @@ The label is used for the live Played season, the Holo rule ("a season other tha
   - **Saving** calls `PUT /admin/season-champions`, which makes that season and division's champions exactly the list shown.
 - **Add accolade:** season, kind (Most Points, Best Average, Best Single Match, Fantasy Winner, Played), a player (OpenDota id and name, filled from the pool) or a username for Fantasy Winner, and an optional value. Played takes several "`<id> <name>`" lines at once.
 
-## Backfill of Played (S1–S15)
+## Backfill of Played
 
-`backend/scripts/backfill_played.py` is a one-off operator tool, like `backfill_bench.py`. Each division is its own OpenDota league, named after its season, so the season label comes from the league names:
+`backend/scripts/backfill_played.py` is an operator tool, like `backfill_bench.py`. Each division is its own OpenDota league. Past seasons' leagues (S4–S16) are listed in `backend/scripts/kanaliiga_leagues.json`, and `--all` backfills every season in it except the live one, with a call budget (`--max-calls`, default 900) and a full report. That run, the league table and the run book are in [season-participation-backfill.md](season-participation-backfill.md) (#212).
 
 ```
 cd backend
-# find the season's leagues by name ("Kanaliiga Season 14", "Kanaliiga Season 14 Lower")
+python scripts/backfill_played.py --all --dry-run
+python scripts/backfill_played.py --all
+# one season: from the league file, else found by name ("Kanaliiga Season 14", "Kanaliiga Season 14 Lower")
 python scripts/backfill_played.py --season "Season 14" --dry-run
 python scripts/backfill_played.py --season "Season 14"
 # or name the leagues; the label comes from their names
@@ -61,14 +63,16 @@ python scripts/backfill_played.py --league <div1 id> --league <div2 id> --dry-ru
 ```
 
 - **Season label:** each `--league`'s OpenDota name is read (`ingest.get_league_info`, cached) and "Season N" parsed from it. `--season` is optional: given with leagues, it must agree with their names (otherwise an error, nothing written); it is required only when the names carry no number (then that label is used). Leagues that name different seasons are an error.
-- **Discovery:** `--season "Season N"` without `--league` reads OpenDota's league list (`/leagues`) and takes the leagues named "`<prefix>` Season N", with or without a division suffix ("Lower", "Lower Division"); `--name-prefix` defaults to "Kanaliiga". It prints each league found. **Seasons 1–4 have no numbered OpenDota league**: the script says so and points to the Add accolade Played paste.
+- **League file first:** `--season "Season N"` without `--league` takes the season's leagues from the league file when it lists the season (Season 4's league is named just "Kanaliiga"). Explicit `--league` ids take precedence.
+- **Discovery:** for a season not in the file, `--season "Season N"` without `--league` reads OpenDota's league list (`/leagues`) and takes the leagues named "`<prefix>` Season N", with or without a division suffix ("Lower", "Lower Division"); `--name-prefix` defaults to "Kanaliiga". It prints each league found. **Seasons 1–4 have no numbered OpenDota league** (Season 4's unnumbered one is in the league file): the script says so and points to the Add accolade Played paste.
 - **Rows:** every `account_id` in the leagues' matches gets one `played` row for the season, with source `admin`.
 - **Names:** the current pool name, else the match's `personaname` (capped at 100 characters), else "Player <id>". Anonymous slots, and any account id that isn't a whole number in 1..2^63−1 (booleans included), are skipped and counted. Invalid match ids are skipped.
 - **Safe to rerun:** `INSERT … ON CONFLICT DO NOTHING`. League names and fetched matches are cached in a local JSON file (`--cache`, default `backfill_played_cache.json` in the working directory, git-ignored), so an interrupted run resumes without fetching them again. It waits `--pause` seconds (default 1.2) before each OpenDota call after the first.
-- **Report:** per season, "matches, players, new rows, anonymous slots skipped". `--dry-run` prints it (and what discovery found) and writes nothing.
-- **Audit:** one `admin_accolade_added` entry per run, detail `season_label=… played=N source=backfill`, actor "script".
-- **Errors:** a season that can't be resolved writes nothing; a league OpenDota can't return (an error, an empty answer or anything but a list of match ids) is reported and nothing is recorded for it. The exit code is 1 in both cases.
-- **Operator input:** the script stores no league ids. Take a backup first (`bash scripts/backup-db.sh`). Seasons with no reachable league use the Add accolade Played paste.
+- **Report:** per season, "matches, players, new rows, anonymous slots skipped, already recorded, unreadable matches"; `--all` adds totals and the seasons-per-player distribution. `--dry-run` prints it (and what discovery found) and writes nothing. An unreadable match isn't cached, so the next run retries it.
+- **Budget:** `--max-calls` caps OpenDota calls per run (default 900; cache hits don't count). A budget stop exits 2 with "Budget used: resume to continue from Season N"; finished seasons are recorded.
+- **Audit:** one `admin_accolade_added` entry per season, detail `season_label=… played=N source=backfill`, actor "script".
+- **Errors:** an invalid league file or a season that can't be resolved writes nothing; a league OpenDota can't return (an error, an empty answer or anything but a list of match ids) is reported and nothing is recorded for it. The exit code is 1 in both cases.
+- **Operator input:** the script stores no league ids; they live in the league file. Take a backup first (`bash scripts/backup-db.sh`). Seasons with no reachable league use the Add accolade Played paste.
 
 ## Cards
 
@@ -111,7 +115,7 @@ Each kind has a Lucide icon, a colour token (`--accolade-*`, in both copies of `
 |---|---|---|
 | `GET /history/seasons` | public | `{current_season, seasons: [{season_label, season_short, champions: {div1, div2}, awards: {most_points, best_average, best_match, fantasy_winner}, played_count}], hall_of_fame: [{player_account_id, player_name, titles, champion_titles, award_titles, accolades}]}`; no user ids (fantasy winners by username) |
 | `GET /accolades` | public | `{current_season, current_season_short, players: {"<player id>": [{kind, division, season, season_short, team_name, value, match_id}]}}`; Played includes the live season; fantasy winner only through a current Steam-verified link; no user ids or usernames |
-| `GET /players`, `GET /players/{id}` | public | add `seasons_played`, `seasons` (newest first) and `titles` (champion and award accolades, newest first); the detail also adds `accolades`, `current_season`, `current_season_matches` and `holo_unlocked` |
+| `GET /players`, `GET /players/{id}` | public | add `seasons_played`, `seasons` (newest first) and `titles` (champion and award accolades, newest first); list rows also carry `seasons_counted_from` (the first season counts start from, 4, #212); the detail also adds `accolades`, `current_season`, `current_season_matches` and `holo_unlocked` |
 | `GET /admin/season/accolades-preview` | admin | see End Season |
 | `POST /admin/season/end` | admin, re-auth, typed confirmation | optional `champions` |
 | `PUT /admin/season-champions` | admin, re-auth | `{season_label, division, team_name, players: [{account_id, name}]}` (at most 50); replaces the set in one transaction; an empty list clears the division; 422 on duplicate, non-positive or oversized ids, empty names, an unknown division, or players without a team name; audit `admin_champions_set` with season, division and `added=` / `removed=` |
@@ -141,5 +145,5 @@ No new environment variable.
 
 ## After deploy (by hand)
 
-With Add accolade and Mark champions, enter the S15 awards (Glete: most points; Keikari [PV]: best average; ImperialZod: best single match; Jiri: fantasy winner) and the S15 champion teams (Mark champions › Past season). Then run the Played backfill per season (`--season "Season N"`, S5–S15, `--dry-run` first); S1–S4 use the Played paste.
+With Add accolade and Mark champions, enter the S15 awards (Glete: most points; Keikari [PV]: best average; ImperialZod: best single match; Jiri: fantasy winner) and the S15 champion teams (Mark champions › Past season). Then run the Played backfill for S4–S15 with `--all` (`--dry-run` first; run book in [season-participation-backfill.md](season-participation-backfill.md)); S1–S3 have no OpenDota league and use the Played paste.
 

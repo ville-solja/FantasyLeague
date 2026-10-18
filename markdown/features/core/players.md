@@ -100,7 +100,7 @@ Returns full detail for a single player, including a complete per-match history 
   "heroes": [
     {"hero_id": 14, "hero_name": "Pudge", "icon_url": "https://...", "games": 5, "wins": 3, "losses": 2, "avg_points": 27.9}
   ],
-  "seasons_played": 3, "seasons": ["Season 16", "Season 15", "Season 14"], "titles": [],
+  "seasons_played": 3, "seasons": ["Season 16", "Season 15", "Season 14"], "titles": [], "seasons_counted_from": 4,
   "accolades": [], "current_season": "Season 16", "current_season_matches": 18,
   "holo_unlocked": false
 }

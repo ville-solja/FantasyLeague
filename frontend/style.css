@@ -2721,6 +2721,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .season-bar--champion { background: var(--accolade-div1); border-color: var(--accolade-div1); }
 .season-bar--empty    { background: transparent; }
 .players-titles { white-space: nowrap; font-size: var(--fs-sm); }
+/* Issue 212: where the seasons count starts. */
+.players-seasons-legend { margin: var(--s-2) 0 0; font-size: var(--fs-xs); color: var(--fg-muted); }
+.players-seasons-legend[hidden] { display: none; }
 
 /* Player popup: the Accolades section (pips in the header, counts, timeline). */
 .player-modal-pips { margin-top: 4px; font-size: var(--fs-sm); }

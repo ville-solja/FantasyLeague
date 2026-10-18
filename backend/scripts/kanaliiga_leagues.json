@@ -1,0 +1,21 @@
+{
+  "_about": "Kanaliiga seasons and their OpenDota league ids (issue 212), read by backfill_played.py. Each division is its own league. empty_leagues are listed so the gaps are explicit; OpenDota has no matches for them, so they are not fetched. Seasons 1-3 have no OpenDota league. See markdown/features/reference/season-participation-backfill.md.",
+  "seasons": [
+    {"season": 4, "leagues": [12481], "note": "12481 is named just \"Kanaliiga\" (no number); played Nov-Dec 2020, between Season 3 and Season 5."},
+    {"season": 5, "leagues": [12837], "note": "One league; whether a lower division existed is unknown."},
+    {"season": 6, "leagues": [13501], "note": "One league; whether a lower division existed is unknown."},
+    {"season": 7, "leagues": [13943], "note": "One league; whether a lower division existed is unknown."},
+    {"season": 8, "leagues": [14537], "note": "One league; whether a lower division existed is unknown."},
+    {"season": 9, "leagues": [15007], "note": "One league; whether a lower division existed is unknown."},
+    {"season": 10, "leagues": [15715], "empty_leagues": [15753], "note": "15753 \"Lower Division\": no matches, so Division 2 players are not recorded."},
+    {"season": 11, "leagues": [16268, 16270], "note": "16270 is the Lower division."},
+    {"season": 12, "leagues": [17028, 17029], "note": "17029 is the Lower division."},
+    {"season": 13, "leagues": [17812], "empty_leagues": [17813], "note": "17813 \"Lower\": no matches, so Division 2 players are not recorded."},
+    {"season": 14, "leagues": [18649, 18650], "note": "18650 is the Lower division."},
+    {"season": 15, "leagues": [19368, 19369], "note": "19369 is the Lower division."},
+    {"season": 16, "leagues": [20162, 20163], "note": "Live season at the time of writing; --all skips the live season."}
+  ],
+  "unused_leagues": [
+    {"league": 17814, "note": "\"Kanaliiga Season 3 Middle\": no matches."}
+  ]
+}
