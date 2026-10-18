@@ -687,11 +687,11 @@ As the operator, I want one rule for "this account is this player", used everywh
 **Acceptance criteria**
 - **One helper:** a shared helper (`player_links.py`) gives the verified player of a user, and the users verified for a player: `steam_id` and `player_id` set, on a full, non-demo account (the existing `own_card.is_candidate` rule).
 - **Every reader uses it:**
-  - the card image tag stickers (`routers/cards.py`);
+  - the card image tag stickers (`routers/cards.py`; since #217 the card tag symbols, `tags` in `GET /accolades`);
   - `GET /profile/{user_id}` (`player_name`, `player_avatar_url`, `player_team_name`, and `player_id` for the owner and admins);
   - `own_card.is_candidate`;
   - `accolades._linked_users`.
-- **Tag stickers:** a card's tag stickers come only from a user with a verified link to that player. An account holding a stale `player_id` without Steam adds none.
+- **Tag stickers:** a card's tag stickers (tag symbols since #217) come only from a user with a verified link to that player. An account holding a stale `player_id` without Steam adds none.
 - **Guard test:** a test fails when backend code outside the helper reads `users.player_id` or `User.player_id` without `steam_id`. The allow-list is the helper, Steam linking (`steam_openid.py`), the migration and `admin_users.py`'s claims history.
 
 ### Typed-in Links Are Cleared Once

@@ -3,7 +3,6 @@ import colorsys
 import io
 import logging
 import os
-from pathlib import Path
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -74,36 +73,6 @@ _MODIFIER_LINE_GAP = 50
 _MODIFIER_MAX_WIDTH = 500
 # Epic/Legendary templates' cutouts/plates sit slightly higher than common/rare — nudge content down.
 _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
-
-
-STICKER_DIR = os.path.join(_ASSETS_DIR, "stickers")
-STICKER_SIZE = (60, 60)
-STICKER_START_X = 10   # left edge, stack horizontally
-STICKER_Y = 10
-
-
-def _apply_stickers(img, tag_keys: list):
-    """Composite sticker PNGs for each tag key onto img (in-place alpha composite).
-
-    Missing sticker files are silently skipped.
-    Returns the modified image.
-    """
-    if not PIL_AVAILABLE or not tag_keys:
-        return img
-    sticker_root = Path(STICKER_DIR).resolve()
-    for i, key in enumerate(tag_keys):
-        path = (sticker_root / f"{key}.png").resolve()
-        if not path.is_relative_to(sticker_root):
-            continue
-        if not path.exists():
-            continue
-        try:
-            sticker = Image.open(path).convert("RGBA").resize(STICKER_SIZE, Image.LANCZOS)
-            x = STICKER_START_X + i * (STICKER_SIZE[0] + 4)
-            img.alpha_composite(sticker, (x, STICKER_Y))
-        except Exception:
-            pass
-    return img
 
 
 _FONT_PATHS = [
@@ -296,11 +265,10 @@ def generate_card_image(
     team_name: str | None,
     team_logo_url: str | None,
     card_modifiers: dict | None = None,
-    tag_keys: list | None = None,
     is_holo: bool = False,
 ):
-    """Composite a player card PNG and return a PIL Image. Accolades are not drawn:
-    the frontend overlays them as HTML pips (issue #53); tag stickers are."""
+    """Composite a player card PNG and return a PIL Image. Accolades and user tags are
+    not drawn: the frontend overlays them as HTML pips (issues #53 and #217)."""
     ct = (card_type or "common").lower()
     template = _load_template(ct, is_holo)
 
@@ -345,9 +313,5 @@ def generate_card_image(
                             team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
 
     _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
-
-    # ── Sticker badges ──────────────────────────────────────────────────────
-    if tag_keys:
-        _apply_stickers(base, tag_keys)
 
     return base

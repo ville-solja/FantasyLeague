@@ -1283,11 +1283,11 @@ def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch, caplog):
 
 
 def test_image_does_not_draw_accolades():
-    """Source-reading (image.py): accolades are not composited into the card image (caster stickers still are)."""
+    """Source-reading (image.py): accolades are not composited into the card image (nor, since issue #217, tag stickers)."""
     src = _read("backend", "image.py")
-    assert "accolade" not in src.replace("Accolades are not drawn", "")
+    assert "accolade" not in src.replace("Accolades and user tags are", "")
     assert "season_accolades" not in src and "SeasonAccolade" not in src
-    assert "_apply_stickers(base, tag_keys)" in src  # caster stickers are still baked in
+    assert "_apply_stickers" not in src  # issue #217: tags are HTML tag pips now
     cards_src = _read("backend", "routers", "cards.py")
     img_fn = cards_src[cards_src.index("def get_card_image("):cards_src.index("def get_card_image_route(")]
     assert "accolade" not in img_fn

@@ -76,7 +76,8 @@ Implementation details, integrations, and operator tooling.
 | [Agent Lessons Log](reference/agent-lessons-log.md) | Append-only lessons file read by agents at run start to avoid recurring pitfalls |
 | [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
-| [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card stickers and leaderboard chips; new tags need only a DB row + image asset |
+| [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card tag symbols and leaderboard chips; new tags need only a DB row |
+| [Tag Symbols on Cards](reference/tag-symbols-on-cards.md) | Caster, admin and other tags as symbols on the card's left edge with tooltips (`tags` in `GET /accolades`); baked tag stickers retired (#217) |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile's Player identity panel shows the linked league player and the user's own tags, with a hint to link the player when tags exist but no player is linked; only Steam links a player, and every reader uses `player_links.py` (#209) |
 | [Caster Tag and Link Adoption](reference/caster-tag-and-link-adoption.md) | *(#201)* Approved streamers with Twitch connected get the Caster tag automatically (removed when no longer approved or unlinked; admin grants untouched); User Management shows Steam and Twitch link badges and totals |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |

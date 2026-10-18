@@ -25,9 +25,8 @@ Approach notes (for the developer filling these in):
   through to the `/` static mount (lessons-learned: 405) in the full `main.app`;
   use an app with only the profile router (as the `web` fixture does), where an
   unknown path answers 404.
-- Tag stickers: patch `image.generate_card_image` and capture `tag_keys`, as in
-  test_issue_201_caster_tag_and_link_adoption.py::test_caster_auto_tag_shows_on_leaderboard_card_sticker_and_profile;
-  skip when Pillow is missing.
+- Card tags: since issue #217 they are tag pips fed by GET /accolades `tags`
+  (`_card_tag_keys`), no longer `tag_keys` passed to `image.generate_card_image`.
 - Migration 041: the latest migration today is `040_cards_is_holo`. Build a legacy
   engine as in tests/test_migrate.py (`legacy_engine`) / test_issue_129_*, record
   earlier migrations as applied where needed, seed `users` rows and an
@@ -94,28 +93,11 @@ def _tag(db, user, key):
     db.flush()
 
 
-def _card_image_tag_keys(db, monkeypatch, player_id):
-    """Render a card of player_id with image generation patched; return its tag_keys."""
-    import image
-    from models import Card
-    from routers import cards as cards_router
-    if not image.PIL_AVAILABLE:
-        pytest.skip("Pillow not installed")
-    owner = _user(db, f"owner{player_id}")
-    card = Card(owner_id=owner.id, player_id=player_id, card_type="common",
-                is_active=False, generation=1)
-    db.add(card)
-    db.commit()
-    seen = {}
-
-    def fake_generate(**kwargs):
-        seen["tag_keys"] = kwargs["tag_keys"]
-        from PIL import Image
-        return Image.new("RGB", (2, 2))
-
-    monkeypatch.setattr(image, "generate_card_image", fake_generate)
-    cards_router.get_card_image(card.id, db=db)
-    return seen["tag_keys"]
+def _card_tag_keys(db, player_id):
+    """The tag keys shown on player_id's cards: GET /accolades `tags` (issue #217
+    moved card tags from image stickers to tag pips fed by this field)."""
+    from routers.history import get_accolades
+    return [t["key"] for t in get_accolades(db=db)["tags"].get(str(player_id), [])]
 
 
 # ---------------------------------------------------------------------------
@@ -533,25 +515,25 @@ class TestEveryFeatureTrustsOnlyVerifiedLinks:
         assert "player_id" not in public
         assert public["player_name"] == "Meatstorm" and public["player_team_name"] == "Chickens"
 
-    # --- tag stickers ---
+    # --- card tags (stickers until issue #217, now tag pips from GET /accolades) ---
 
-    def test_card_image_tag_stickers_from_verified_user(self, db, monkeypatch):
-        """A card's tag stickers come from the user with a verified link to the card's player."""
+    def test_card_tags_from_verified_user(self, db):
+        """A card's tags come from the user with a verified link to the card's player."""
         _player(db)
         alice = _linked_user(db, "alice")
         _tag(db, alice, "caster")
         db.commit()
-        assert _card_image_tag_keys(db, monkeypatch, _STEAM32) == ["caster"]
+        assert _card_tag_keys(db, _STEAM32) == ["caster"]
 
-    def test_card_image_stale_player_id_adds_no_tag_stickers(self, db, monkeypatch):
-        """Failure path: a tagged account holding the card's player_id without steam_id adds no tag stickers."""
+    def test_card_stale_player_id_adds_no_tags(self, db):
+        """Failure path: a tagged account holding the card's player_id without steam_id adds no card tags."""
         _player(db, pid=4242, name="Somebody")
         claimant = _user(db, "claimant", player_id=4242)
         _tag(db, claimant, "caster")
         db.commit()
-        assert _card_image_tag_keys(db, monkeypatch, 4242) == []
+        assert _card_tag_keys(db, 4242) == []
 
-    def test_card_image_prefers_verified_user_over_earlier_stale_claim(self, db, monkeypatch):
+    def test_card_prefers_verified_user_over_earlier_stale_claim(self, db):
         """With a stale claimant (lower user id) and a verified user on the same player, only the verified user's tags appear."""
         _player(db)
         claimant = _user(db, "claimant", player_id=_STEAM32)
@@ -560,7 +542,7 @@ class TestEveryFeatureTrustsOnlyVerifiedLinks:
         _tag(db, alice, "caster")
         db.commit()
         assert claimant.id < alice.id
-        assert _card_image_tag_keys(db, monkeypatch, _STEAM32) == ["caster"]
+        assert _card_tag_keys(db, _STEAM32) == ["caster"]
 
     # --- guard ---
 

@@ -2663,6 +2663,24 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   gap: 0.3em;
 }
 .card-pips .accolade-pip { pointer-events: auto; }
+/* Tag pips on a card (issue 217): the same overlay down the card's left edge, opposite
+   the accolade pips, so the two columns never overlap. */
+.card-slot .card-tag-pips,
+.reveal-pips .card-tag-pips {
+  position: absolute;
+  top: 3.4em;
+  left: 0.35em;
+  z-index: 3;
+  font-size: 11px;
+  pointer-events: none;
+}
+.reveal-pips .card-tag-pips { font-size: 12px; }
+.card-tag-pips .tag-pips {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.3em;
+}
+.card-tag-pips .card-tag-pip { pointer-events: auto; }
 .reveal-accolades { margin: -4px 0 12px; }
 .reveal-accolades .accolade-chips { justify-content: center; }
 
@@ -3034,6 +3052,38 @@ td .accolade-chip { border-color: transparent; }
 @media (max-width: 600px) {
   .accolade-swap .accolade-chips { display: none; }
   .accolade-swap .accolade-pips { display: inline-flex; }
+}
+/* Tag symbols (issue 217): a linked user's tags as pips, built only by tagPipsHtml
+   (TAG_SYMBOLS in app-globals.js). The accolade pip's shape, with one colour token and
+   Lucide icon per kind: admin shield, caster mic, any other tag a tag icon. */
+.tag-pips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  vertical-align: middle;
+}
+.player-modal-pips .tag-pips { margin-right: 0.25em; }
+.card-tag-pip { --pip-color: var(--tag-generic); }
+.card-tag-pip--admin  { --pip-color: var(--tag-admin); }
+.card-tag-pip--caster { --pip-color: var(--tag-caster); }
+.card-tag-pip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  box-sizing: border-box;
+  border: var(--bw-thin) solid var(--pip-color);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  color: var(--pip-color);
+  cursor: help;
+}
+.card-tag-pip svg { width: 1.05em; height: 1.05em; stroke-width: 2.25; }
+.card-tag-pip:focus-visible {
+  outline: var(--bw-thick) solid var(--accent);
+  outline-offset: 2px;
 }
 /* The pip tooltip: name and seasons, on hover, focus or tap. */
 .accolade-tip {

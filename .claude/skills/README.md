@@ -162,6 +162,19 @@ Season accolades (issue 50) read like a mana cost: every kind has its own Lucide
 - The registry is `ACCOLADE_KINDS` in `frontend/app-globals.js`, mirrored in `backend/accolades.py`. No view builds its own symbol markup.
 - **Holo**: the iridescent sheen of a Holo card is allowed only on the card art (the card image and its one-time reveal sweep), never on chrome.
 
+### Tag symbols
+User tags (issue 217) show on a player's cards as pips down the card's **left** edge, opposite the accolade pips, for the user verifiably linked to that player. They share the accolade pip's shape, tooltip and focus behaviour; every kind has its own Lucide icon, so colour is never the only difference.
+
+| Tag | Tooltip | Icon | Colour token |
+|---|---|---|---|
+| Admin (the linked user is a site admin) | Kana Cards admin | `shield` | `--tag-admin` (= `--badge-admin`) |
+| Caster | Caster | `mic` | `--tag-caster` (= `--badge-caster`) |
+| Any other tag | the tag's label | `tag` | `--tag-generic` (= `--badge-tag`) |
+
+- **Pips** (`.card-tag-pip`, built only by `tagPipsHtml`): top to bottom admin, caster, then other tags in tag-definition order. Used on cards (`.card-tag-pips`, beside `.card-pips`) and in the player popup header, before the accolade pips.
+- **Season winner** is never a tag pip: the Fantasy Winner accolade pip already shows it.
+- The registry is `TAG_SYMBOLS` in `frontend/app-globals.js`; the data is `tags` in `GET /accolades` (keys and labels only). Card images carry no tag stickers.
+
 ### Transparency / blur
 - **85% black overlay** behind all modals.
 - **Gradient protection** on hero imagery: `linear-gradient(180deg, transparent 0%, rgba(0,0,0,.85) 100%)`.

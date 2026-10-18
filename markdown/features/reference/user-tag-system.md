@@ -1,8 +1,9 @@
 # User Tag System
 
 A generic tagging mechanism that lets admins grant named badges to users. Tags appear as
-sticker overlays on player card images and as role badges in the leaderboard. Adding a new
-tag type requires only a new database row and a sticker image asset — no code change.
+symbols on player cards ([Tag Symbols on Cards](tag-symbols-on-cards.md), issue #217) and as
+role badges in the leaderboard. Adding a new tag type requires only a new database row — no
+code change.
 
 ---
 
@@ -11,15 +12,14 @@ tag type requires only a new database row and a sticker image asset — no code 
 Two new tables power the system:
 
 - **`TagDefinition`** — each row defines a tag type: a unique `key` (slug), a `label`
-  (display name), and an optional sticker asset resolved at `assets/stickers/{key}.png`.
+  (display name).
 - **`UserTag`** — records which user holds which tag, who granted it, when, and its
   `source`: `admin` (granted by hand) or `caster_sync` (the automatic Caster tag, issue #201).
 
-Tags are granted to **users** (app accounts). When rendering a card image, the system
-resolves the user with a Steam-verified link to the card's player
-(`player_links.verified_users_for_player`, issue #209) and composites the
-relevant sticker PNGs onto the card. Multiple tags produce multiple stickers stacked
-horizontally in the top-left corner.
+Tags are granted to **users** (app accounts). On cards, a player shows the tags of the
+user with a Steam-verified link to that player (`player_links.verified_links`, issue #209)
+as tag pips down the card's left edge, fed by `tags` in `GET /accolades`
+(`accolades.tags_by_player`). Card images carry no tags (issue #217).
 
 Initial seed tags: `caster` ("Caster") and `season_winner` ("Season Winner").
 
@@ -44,8 +44,7 @@ next start. See [Caster Tag and Link Adoption](caster-tag-and-link-adoption.md).
 Returns all defined tag types ordered by key.
 
 ### `POST /admin/tags`
-Creates a new tag definition. Body: `{"key": "...", "label": "..."}`. The key names a sticker
-file, so it must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, `_` and `-`, not
+Creates a new tag definition. Body: `{"key": "...", "label": "..."}`. The key must match `^[a-z0-9][a-z0-9_-]*$` (lowercase letters, digits, `_` and `-`, not
 starting with `_` or `-`, at most 50 characters); anything else returns 422 (issue #135).
 Returns 409 if the key already exists. Returns 422 "This tag name is reserved" when the key or
 label is `admin` (any case): the ADMIN badge comes only from `users.is_admin` (issue #169).
@@ -67,16 +66,14 @@ streamers instead" for an automatic (`caster_sync`) row, which stays. Logged as
 
 ---
 
-## Card image stickers
+## Tag symbols on cards
 
-Sticker images live at `assets/stickers/{tag_key}.png`, 60 × 60 px, RGBA. The image
-pipeline in `backend/image.py` composites each sticker starting at `(10, 10)`, spaced
-64 px apart horizontally. Missing sticker files are silently skipped, and so is any key whose
-path resolves outside `STICKER_DIR` (for example a legacy key containing `../`) — the file is
-never opened.
-
-Placeholder assets for `caster.png` and `season_winner.png` are included for CI/testing
-and replaced by real artwork before deploy.
+Until issue #217, card images composited a 60 × 60 PNG sticker per tag from
+`assets/stickers/{key}.png`. That is retired: `backend/image.py` has no sticker code and the
+card image route reads no tags. Cards show tags as HTML symbols instead: admin (shield),
+caster (mic) and any other tag (a generic tag icon, its label as the tooltip); the
+`season_winner` tag shows no symbol because the Fantasy Winner accolade covers it. See
+[Tag Symbols on Cards](tag-symbols-on-cards.md). The sticker PNGs stay in the repo, unused.
 
 ---
 
@@ -107,7 +104,8 @@ A separate **Tag Definitions** panel allows creating and deleting tag types.
 ## Adding a new tag
 
 1. Call `POST /admin/tags` with the new key and label (or insert via admin UI).
-2. Place a 60 × 60 px RGBA PNG at `assets/stickers/{key}.png`.
-3. Grant the tag to relevant users via the admin panel.
+2. Grant the tag to relevant users via the admin panel.
 
-No backend or frontend code changes are required.
+No backend or frontend code changes are required: a new tag shows on cards with the generic
+tag symbol and its label as the tooltip. A dedicated icon and colour need an entry in
+`TAG_SYMBOLS` (`frontend/app-globals.js`).

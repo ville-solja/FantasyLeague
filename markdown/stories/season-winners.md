@@ -135,7 +135,7 @@ As a visitor or collector, I want every accolade to have its own symbol, with a 
   - the pips stack down the card's right edge from the top-right corner, beside the art and clear of the name and rarity, read top to bottom like a mana cost (a row across the top would collide with long names);
   - they are sized in em, so they scale with the card, like the card back in issue 205;
   - they are an HTML overlay, not part of the card image, so they stay hoverable, and an accolade added later shows without rebuilding cached images;
-  - caster tag stickers stay baked into the image as today.
+  - caster tag stickers stay baked into the image as today (superseded by #217: tags are symbols on the card's left edge).
 - **Data:** `GET /accolades` (public) returns, per player:
   - their champion and award accolades: kind, division, short and full season label, team name and value;
   - `fantasy_winner` seasons, only for a player whose winning user has a Steam-verified link now, without the user id or username;

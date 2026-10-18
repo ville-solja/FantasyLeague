@@ -2,8 +2,8 @@
 
 Users link their league player in the Profile tab's **Player identity** panel, and only through
 Steam (`both` and `steam_signup` login modes; issues #150, #209). This connection causes any
-admin-granted tags to appear as sticker badges on their cards and as chips on their leaderboard
-entry. The same panel shows the user's current tags so they can understand and verify the link
+admin-granted tags to appear as tag symbols on their cards (issue #217) and as chips on their
+leaderboard entry. The same panel shows the user's current tags so they can understand and verify the link
 (issue #188). With `LOGIN_METHOD=password` there is no player linking.
 
 ---
@@ -24,9 +24,11 @@ entry. The same panel shows the user's current tags so they can understand and v
 
 Every feature goes through it:
 
-- **Card image tag stickers** (`GET /cards/{card_id}/image`, `routers/cards.py`): the stickers of
-  the first user from `verified_users_for_player` for the card's player. An account that holds a
-  stale `player_id` without Steam adds none.
+- **Card tag symbols** (`tags` in `GET /accolades`, `accolades.tags_by_player`; #217): the tags
+  of every user in `verified_links` for that player, plus an `admin` symbol for a site admin. An
+  account that holds a stale `player_id` without Steam adds none. (Until #217 these were stickers
+  baked into the card image from `verified_users_for_player`; see
+  [Tag Symbols on Cards](tag-symbols-on-cards.md).)
 - **`GET /profile/{user_id}`**: `player_id`, `player_name`, `player_avatar_url`,
   `player_team_name` and `player_verified` come from `verified_player_id`.
 - **Own player card** (`own_card.is_candidate`, `has_grant_row`, `grant_own_player_card`; #188).
@@ -40,7 +42,7 @@ code outside the allow-list reads `User.player_id`, an instance's `user.player_i
 
 The Player identity panel has a **Your Tags** column: tag chips if any tags are granted, or a
 "No tags" placeholder. If a user has tags but no player linked yet, a hint is shown prompting
-them to link their player so stickers appear on their cards.
+them to link their player so their tags appear as symbols on their cards.
 
 ---
 

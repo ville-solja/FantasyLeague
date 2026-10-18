@@ -39,7 +39,7 @@ DB or endpoint surface):
 
   Story: Players Subtab
     - Explains linking a Dota 2 (OpenDota) player ID via the Profile tab
-    - Explains what linking unlocks (tags as card stickers and leaderboard chips)
+    - Explains what linking unlocks (tags as card tag symbols and leaderboard chips)
     - Explains that linking is optional and can be changed later from Profile
     - Clarifies that a player's real match performance counts toward other users'
       rosters without needing a Fantasy account (failure case: Players panel
@@ -288,10 +288,11 @@ class TestPlayersSubtab:
 
     def test_players_subtab_explains_what_linking_unlocks(self):
         """#howtoplay-panel-players explains that linking unlocks admin-granted
-        tags appearing as card stickers and leaderboard chips, per
-        reference/player-linking-and-tag-visibility.md."""
+        tags appearing as tag symbols on cards and leaderboard chips, per
+        reference/player-linking-and-tag-visibility.md (issue #217 replaced the
+        card stickers with tag symbols)."""
         panel = _extract_panel(_read(INDEX_HTML_PATH), "players")
-        assert "sticker" in panel.lower()
+        assert "tag symbols" in panel.lower() and "sticker" not in panel.lower()
         assert "chip" in panel.lower()
         assert "tag" in panel.lower()
         assert "leaderboard" in panel.lower()
@@ -306,7 +307,7 @@ class TestPlayersSubtab:
     def test_players_subtab_clarifies_match_performance_counts_without_linking(self):
         """#howtoplay-panel-players clarifies that a player does not need a
         Fantasy account for their real match performance to count toward other
-        users' rosters — only linking affects their own tags/stickers (failure
+        users' rosters — only linking affects how their own tags show (failure
         case: content wrongly implies a Fantasy account is required for match
         stats to count toward other users)."""
         panel = _extract_panel(_read(INDEX_HTML_PATH), "players")

@@ -1,8 +1,8 @@
 """Tests for the User Tag System feature (plan-user-tag-system.md).
 
 Covers: TagDefinition / UserTag models, admin tag CRUD endpoints, grant/revoke
-endpoints, audit logging, leaderboard tags inclusion, card image sticker
-compositing, and migration correctness.
+endpoints, audit logging, leaderboard tags inclusion, the retired card image stickers (issue #217),
+and migration correctness.
 """
 
 import time
@@ -96,85 +96,25 @@ def _fetch_tags_for_users(db, user_ids):
 
 
 # ===========================================================================
-# Story: See Tag Stickers on a Player Card
+# Story: Card Images Stop Carrying Tag Stickers (issue #217)
+# Tags show as HTML tag pips on cards instead (tests/test_issue_217_*).
 # ===========================================================================
 
-class TestCardStickers:
+class TestCardStickersRetired:
 
-    def test_card_image_includes_sticker_for_tagged_user(self, db):
-        """Card PNG for a player linked to a tagged user has a sticker composited on it."""
-        from image import _apply_stickers, PIL_AVAILABLE, STICKER_DIR
-        if not PIL_AVAILABLE:
-            pytest.skip("PIL not available")
-        from PIL import Image
-        # Create a test sticker file
-        sticker_path = os.path.join(STICKER_DIR, "test_sticker_temp.png")
-        os.makedirs(STICKER_DIR, exist_ok=True)
-        try:
-            sticker_img = Image.new("RGBA", (60, 60), (255, 0, 0, 255))
-            sticker_img.save(sticker_path)
-            # Create a base image and apply sticker
-            base = Image.new("RGBA", (597, 845), (0, 0, 0, 255))
-            # Sample a pixel before sticker
-            before = base.getpixel((10, 10))
-            result = _apply_stickers(base, ["test_sticker_temp"])
-            after = result.getpixel((10, 10))
-            # The sticker (red) should have composited over the black base
-            assert after != before or after[0] > 0, "Sticker was not applied to image"
-        finally:
-            if os.path.exists(sticker_path):
-                os.remove(sticker_path)
+    def test_image_module_has_no_sticker_helpers(self):
+        """image.py no longer composites tag stickers: _apply_stickers and STICKER_* are gone."""
+        import image
+        assert not hasattr(image, "_apply_stickers")
+        assert not [n for n in dir(image) if n.startswith("STICKER")]
 
-    def test_card_image_has_no_sticker_for_untagged_user(self, db):
-        """Card PNG for a player with no linked tags has no sticker applied."""
-        from image import _apply_stickers, PIL_AVAILABLE
-        if not PIL_AVAILABLE:
-            pytest.skip("PIL not available")
-        from PIL import Image
-        base = Image.new("RGBA", (597, 845), (30, 30, 30, 255))
-        original_pixels = list(base.get_flattened_data())
-        result = _apply_stickers(base, [])
-        result_pixels = list(result.get_flattened_data())
-        assert original_pixels == result_pixels, "Image was modified even though no tags were given"
-
-    def test_missing_sticker_file_is_silently_skipped(self, db):
-        """_apply_stickers does not raise when the sticker PNG file does not exist."""
-        from image import _apply_stickers, PIL_AVAILABLE
-        if not PIL_AVAILABLE:
-            pytest.skip("PIL not available")
-        from PIL import Image
-        base = Image.new("RGBA", (597, 845), (50, 50, 50, 255))
-        # This key has no corresponding file — should not raise
-        result = _apply_stickers(base, ["nonexistent_sticker_xyz"])
-        assert result is not None
-
-    def test_two_stickers_are_placed_side_by_side(self, db):
-        """When a user has two tags both stickers appear at distinct x-positions."""
-        from image import _apply_stickers, PIL_AVAILABLE, STICKER_DIR, STICKER_START_X, STICKER_SIZE
-        if not PIL_AVAILABLE:
-            pytest.skip("PIL not available")
-        from PIL import Image
-        os.makedirs(STICKER_DIR, exist_ok=True)
-        path1 = os.path.join(STICKER_DIR, "test_red_temp.png")
-        path2 = os.path.join(STICKER_DIR, "test_blue_temp.png")
-        try:
-            Image.new("RGBA", (60, 60), (255, 0, 0, 255)).save(path1)
-            Image.new("RGBA", (60, 60), (0, 0, 255, 255)).save(path2)
-            base = Image.new("RGBA", (597, 845), (0, 0, 0, 255))
-            result = _apply_stickers(base, ["test_red_temp", "test_blue_temp"])
-            # First sticker at x=STICKER_START_X, second at x=STICKER_START_X + STICKER_SIZE[0] + 4
-            x1 = STICKER_START_X
-            x2 = STICKER_START_X + STICKER_SIZE[0] + 4
-            y = 10
-            pixel1 = result.getpixel((x1 + 5, y + 5))
-            pixel2 = result.getpixel((x2 + 5, y + 5))
-            # First sticker area should be reddish, second should be bluish
-            assert pixel1[0] > pixel1[2], f"First sticker area should be red-dominant, got {pixel1}"
-            assert pixel2[2] > pixel2[0], f"Second sticker area should be blue-dominant, got {pixel2}"
-        finally:
-            for p in [path1, path2]:
-                if os.path.exists(p):
-                    os.remove(p)
+    def test_generate_card_image_rejects_tag_keys(self):
+        """generate_card_image takes no tag_keys argument, so tags cannot reach the image."""
+        import inspect
+        import image
+        assert "tag_keys" not in inspect.signature(image.generate_card_image).parameters
+        with pytest.raises(TypeError):
+            image.generate_card_image("common", "X", None, None, None, tag_keys=["caster"])
 
 
 # ===========================================================================

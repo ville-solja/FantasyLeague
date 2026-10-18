@@ -565,7 +565,7 @@
         <div class="profile-identity-tags">
           <h3 class="profile-identity-subtitle">Your Tags</h3>
           <div id="profileTagsContainer" class="profile-tags"></div>
-          <p id="profileTagGapHint" class="profile-twitch-copy" style="display:none;margin-top:8px;">Link your player so your tags appear as stickers on your cards and on the leaderboard.</p>
+          <p id="profileTagGapHint" class="profile-twitch-copy" style="display:none;margin-top:8px;">Link your player so your tags appear as symbols on your cards and on the leaderboard.</p>
         </div>
       </div>
     </div>
@@ -994,7 +994,7 @@
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What linking unlocks</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Tags admins have given you (for example a caster or player-of-note tag) appear as sticker badges on your cards and as chips next to your name on the leaderboard.</li>
+        <li>Tags admins have given you (for example a caster or player-of-note tag) appear as tag symbols down the left edge of your cards (hover or tap one for its name) and as chips next to your name on the leaderboard. If you are a site admin, an admin symbol shows there too.</li>
         <li>Without linking, your tags still exist but aren't shown on your cards or leaderboard entry.</li>
         <li>If you play in this season's league, you get your own player card once, free, when Steam verifies you.</li>
         <li>The <strong>Your Tags</strong> section of Player identity lists your tags and reminds you if you have tags but haven't linked your player.</li>
@@ -1067,7 +1067,7 @@
         <li><strong>SQLite with safety nets</strong> — one small league and one server process don't need a database server, and a single file keeps hosting simple. To protect it, numbered migrations run at startup, automatic backups are taken daily and kept for 14 days, admins can take a backup on demand, and a backup script runs before every deploy. The trade-off is a single process: rate limits are kept in memory and the app does not scale across machines.</li>
         <li><strong>Seasons run by admins</strong> — league seasons don't follow fixed dates, so admins create the weeks, end a season and archive its standings from the admin panel. Weeks lock automatically when they start. Earlier versions used environment-variable season dates, which needed a redeploy for every change.</li>
         <li><strong>Demo Mode</strong> — with <code>DEMO_MODE=true</code>, an admin clock override and disposable demo accounts show the whole pre-lock → lock → scored cycle on demand, without waiting for a real week. Match polling is off in this mode, and without it the demo endpoints don't exist.</li>
-        <li><strong>Tags separate from profile linking</strong> — admin-granted tags (card stickers, leaderboard chips) are their own feature, not part of profile linking. A new tag needs only a database row and an image, and a tag exists even before its player links a profile.</li>
+        <li><strong>Tags separate from profile linking</strong> — admin-granted tags (tag symbols on cards, leaderboard chips) are their own feature, not part of profile linking. A new tag needs only a database row (it gets a generic tag symbol), and a tag exists even before its player links a profile.</li>
         <li><strong>Safe by default</strong> — the app refuses to start with unsafe settings, such as a missing secret key or HTTPS turned off in production. State-changing requests from other sites are rejected, and logins and other sensitive actions are rate-limited.</li>
       </ul>
 
