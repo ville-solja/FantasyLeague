@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-18 — ship — testing
+**Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.
+**Solution:** Call route functions with the `db` fixture (or override `get_db`) instead of the real app's database. When disabling rate limits, disable the instance the router imported (`<router_module>.limiter.enabled = False`) and restore it on teardown. Never use regexes to parse HTML in tests (CodeQL `py/bad-tag-filter`); use `html.parser`.
+
 ---
 
 ### 2026-10-18 — developer — testing

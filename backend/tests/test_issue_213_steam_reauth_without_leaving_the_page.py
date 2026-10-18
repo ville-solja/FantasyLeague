@@ -433,11 +433,33 @@ class TestDonePage:
 
     def test_done_page_has_no_inline_script(self):
         """AC (source-reading): steam-reauth-done.html exists, loads only the local steam-reauth-done.js, and has no inline <script> body, inline event handlers or external scripts."""
+        from html.parser import HTMLParser
+
+        class _Scan(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.scripts, self.handlers, self._in_script, self.script_text = [], [], False, ""
+
+            def handle_starttag(self, tag, attrs):
+                self.handlers += [name for name, _ in attrs if name.lower().startswith("on")]
+                if tag == "script":
+                    self.scripts.append(dict(attrs))
+                    self._in_script = True
+
+            def handle_endtag(self, tag):
+                if tag == "script":
+                    self._in_script = False
+
+            def handle_data(self, data):
+                if self._in_script:
+                    self.script_text += data
+
         html = _read("steam-reauth-done.html")
-        scripts = re.findall(r"<script\b([^>]*)>([^<]*)</script>", html, re.I)
-        assert scripts == [(' src="/steam-reauth-done.js"', "")]
-        assert html.lower().count("<script") == 1
-        assert not re.search(r"\son[a-z]+\s*=", html, re.I)
+        scan = _Scan()
+        scan.feed(html)
+        assert scan.scripts == [{"src": "/steam-reauth-done.js"}]
+        assert scan.script_text.strip() == ""
+        assert scan.handlers == []
         assert "http://" not in html and "https://" not in html
         js = _read("steam-reauth-done.js")
         assert "import " not in js and "fetch(" not in js and "innerHTML" not in js
@@ -705,17 +727,19 @@ class TestBothMethods:
         assert out == {"form": False, "password": False, "steamBlock": True, "steamInstead": False,
                        "title": "Confirm with Steam"}
 
-    def test_reauth_modal_steam_unavailable_shows_message(self, monkeypatch):
+    def test_reauth_modal_steam_unavailable_shows_message(self, monkeypatch, db):
         """AC failure path (Node harness): /auth/steam/start answering 503 steam_unavailable shows "Steam confirmation is unavailable on this server", leaves no dead popup open and keeps the password form where the account has one."""
         # The page learns it from GET /config: false without APP_BASE_URL (where start answers 503).
-        client = _main_client()
+        # Called directly with the in-memory db fixture: the app's own database has no
+        # tables in a fresh CI checkout.
+        import main
         monkeypatch.setenv("LOGIN_METHOD", "both")
         monkeypatch.delenv("APP_BASE_URL", raising=False)
-        assert client.get("/config").json()["steam_reauth_available"] is False
+        assert main.get_config(db)["steam_reauth_available"] is False
         monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000")
-        assert client.get("/config").json()["steam_reauth_available"] is True
+        assert main.get_config(db)["steam_reauth_available"] is True
         monkeypatch.setenv("LOGIN_METHOD", "password")
-        assert client.get("/config").json()["steam_reauth_available"] is False
+        assert main.get_config(db)["steam_reauth_available"] is False
         assert "cfg.steam_reauth_available === true" in _read("app-globals.js")
 
         body = """
