@@ -112,7 +112,8 @@ on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for every
 An account without a password (created through Steam, issue #150) gets 409 `"use_steam_reauth"`,
 which does not count as a failed login; it confirms with a Steam round trip
 (`GET /auth/steam/start?purpose=reauth`), which sets the same `reauth_at` through
-`sessions.mark_reauth`.
+`sessions.mark_reauth`. Since #213 the round trip runs in a popup and the action retries by itself; see
+[Steam Re-auth Without Leaving the Page](../reference/steam-reauth-popup.md).
 
 ### `GET /sessions`
 

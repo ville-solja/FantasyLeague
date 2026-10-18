@@ -18,7 +18,7 @@ Code: `backend/steam_openid.py` (routes, checks, clean-up), `backend/login_mode.
 
 - An unknown value is logged once and treated as `password`. An empty value is the same as unset.
 - `steam` is reserved for issue #172 (password sign-in ends). Until #172 ships it is logged as "not available yet" and treated as `steam_signup`, so setting it early never reopens registration.
-- `GET /config` returns `login_method`; the login page and Profile follow it.
+- `GET /config` returns `login_method` (the login page and Profile follow it) and `steam_reauth_available` (true only when Steam is enabled and `APP_BASE_URL` is set; the re-auth prompt uses it, #213).
 - In `both` and `steam_signup` without `APP_BASE_URL`, start-up logs a warning and `GET /auth/steam/start` answers 503 `steam_unavailable`.
 
 In `steam_signup` mode password sign-in, `POST /forgot-password`, `POST /reset-password`, `PUT /profile/password` and `POST /reauth` keep working for existing password accounts. Demo accounts (`DEMO_MODE` only) are still created by `POST /admin/demo/seed-accounts`.
@@ -56,6 +56,7 @@ When `APP_BASE_URL` starts with `http://localhost`, the state and sign-up cookie
 | `/#profile?steam=in_use` | "This Steam account is linked to another Kana Cards account" |
 | `/#profile?steam=unlink_first` / `not_allowed` / `no_session` / `login_required` | Another Steam account is linked; demo account; no website session |
 | `/#<tab>?steam=reauth_ok` / `reauth_failed` / `not_linked` | Steam re-auth result; `<tab>` is `profile` or `admin` |
+| `/steam-reauth-done.html?steam=<key>` | Re-auth in a popup (`return_tab=popup`, issue #213): every redirect of that attempt, with a key from this table |
 
 The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash from the address bar and shows the message.
 
@@ -71,7 +72,21 @@ From the start of S17 (`steam_signup`), Profile reminds password accounts withou
 
 ## Re-authentication through Steam
 
-Accounts created through Steam have no password. `POST /reauth` answers 409 `use_steam_reauth` for them, without counting a failed login. The re-auth prompt instead offers **Confirm with Steam**, which navigates to `GET /auth/steam/start?purpose=reauth&return_tab=<profile|admin>` (any other `return_tab` returns to Profile; never a free URL). The callback calls `sessions.mark_reauth` on the current session only when the verified Steam ID equals the session user's, so every check that reads it passes: destructive admin actions (`require_recent_reauth`), Connect Twitch, merge and Disconnect (`require_recent_player_reauth`, #160), and Link/Unlink Steam. The round trip leaves the page, so the player repeats the action afterwards, except Connect Twitch: `_promptReauth("connectTwitch")` stores it in `sessionStorage` (`reauthResume`) and `handleSteamReturn` resumes it on `reauth_ok` (only actions listed in `_REAUTH_RESUMABLE` in `app-auth.js`). Audited as `admin_reauth` / `player_reauth` with `method=steam`.
+Accounts created through Steam have no password. `POST /reauth` answers 409 `use_steam_reauth` for them, without counting a failed login. The re-auth prompt instead offers **Confirm with Steam**, which opens `GET /auth/steam/start?purpose=reauth&return_tab=popup` in a popup (#213, below); its full-page fallback navigates to `…&return_tab=<profile|admin>` (any other `return_tab` returns to Profile; never a free URL). The callback calls `sessions.mark_reauth` on the current session only when the verified Steam ID equals the session user's, so every check that reads it passes: destructive admin actions (`require_recent_reauth`), Connect Twitch, merge and Disconnect (`require_recent_player_reauth`, #160), and Link/Unlink Steam. Audited as `admin_reauth` / `player_reauth` with `method=steam`.
+
+**In a popup (issue #213, `reference/steam-reauth-popup.md`).** **Confirm with Steam** first opens `GET /auth/steam/start?purpose=reauth&return_tab=popup` in a small window, so the page and any open dialog stay as they are. `popup` is accepted for `purpose=reauth` only: login and link ignore it and behave as before. Every redirect of a popup attempt, including start's `login_required` and `not_linked`, the callback's failures and a replayed or expired popup state, goes to `/steam-reauth-done.html?steam=<key>`. That static page maps the key to a result and posts `{type: "steam-reauth", result}` to its opener with `location.origin` as the target, then closes:
+
+| `?steam=` | Posted `result` | Modal |
+|---|---|---|
+| `reauth_ok` | `ok` | closes; `adminFetch` retries the original request once |
+| `reauth_failed` | `reauth_failed` | "That Steam account is not the one linked to this account. Nothing was confirmed." |
+| `no_session` | `no_session` | "Log in to Kana Cards first, then try again." |
+| `not_linked` | `not_linked` | "This account has no Steam link to confirm with." |
+| anything else or missing | `failed` | "Steam sign-in did not complete. Nothing was changed. Try again." |
+
+Only `ok` retries; the other results keep the modal open with the message. An admin with a password and a linked Steam account sees **Confirm with Steam instead** under the password field.
+
+**Full-page fallback.** When the browser blocks the popup, **Continue on this page** (`startSteamReauthFullPage`) runs the original round trip: `return_tab=<profile|admin>`, back to `/#<tab>?steam=<key>`. That path leaves the page, so the player repeats the action afterwards, except Connect Twitch: `_promptReauth("connectTwitch")` stores it in `sessionStorage` (`reauthResume`) and `handleSteamReturn` resumes it on `reauth_ok` (only actions listed in `_REAUTH_RESUMABLE` in `app-auth.js`).
 
 ## Admins
 
@@ -125,8 +140,8 @@ A Steam-verified account whose `player_id` is an active player in the pool (`Pla
 
 All four answer 404 in `password` mode; `main.py` also routes any unknown `/auth/steam/*` path to 404 (instead of the static mount's 405). Start, callback and sign-up are limited per IP by `RATE_LIMIT_STEAM_CALLBACK`.
 
-### `GET /auth/steam/start?purpose=login|link|reauth[&return_tab=profile|admin]`
-Begins a Steam sign-in, link (session and recent check) or re-auth (session and a linked Steam ID). 303 to Steam with the state cookie; 400 for another purpose; 503 `steam_unavailable` without `APP_BASE_URL`.
+### `GET /auth/steam/start?purpose=login|link|reauth[&return_tab=profile|admin|popup]`
+Begins a Steam sign-in, link (session and recent check) or re-auth (session and a linked Steam ID). 303 to Steam with the state cookie; 400 for another purpose; 503 `steam_unavailable` without `APP_BASE_URL`. `return_tab=popup` counts for `purpose=reauth` only (issue #213).
 
 ### `GET /auth/steam/callback`
 Verifies Steam's answer, then signs in, starts a sign-up, links or marks the re-auth. Always redirects back to the site (see Redirect keys).

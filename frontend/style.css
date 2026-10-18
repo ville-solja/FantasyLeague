@@ -3624,6 +3624,17 @@ td .accolade-chip { border-color: transparent; }
 .bulk-preview-in_pool .bulk-preview-status { color: var(--fg-muted); }
 .bulk-preview-not_found .bulk-preview-status { color: var(--k-err); }
 
+/* Re-auth modal: Steam popup options (issue 213) */
+.reauth-steam-instead { width: 100%; margin-top: var(--s-2); }
+.reauth-notice { margin-top: var(--s-3); }
+.steam-reauth-done {
+  max-width: 420px;
+  margin: var(--s-5) auto;
+  padding: 0 var(--s-4);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
 /* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team
    ============================================================ */

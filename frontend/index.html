@@ -1606,12 +1606,19 @@
     </form>
     <!-- Issue #150: accounts without a password confirm through a Steam round trip. -->
     <div id="reauthSteamBlock" style="display:none;">
-      <p class="profile-twitch-copy">This action needs a fresh sign-in. Confirm with Steam; you come back here and repeat the action. It stays confirmed on this device for a few minutes.</p>
+      <p class="profile-twitch-copy">This action needs a fresh sign-in. Confirm with Steam in a small window; this page stays as it is and the action continues afterwards. It stays confirmed on this device for a few minutes.</p>
       <div style="display:flex;gap:8px;">
         <button type="button" style="flex:1;" onclick="startSteamReauth()">Confirm with Steam</button>
         <button type="button" class="secondary" onclick="closeReauthModal()">Cancel</button>
       </div>
     </div>
+    <!-- Issue 213: accounts with a password and a linked Steam account may use either. -->
+    <button type="button" id="reauthSteamInstead" class="ghost reauth-steam-instead" style="display:none;" onclick="startSteamReauth()">Confirm with Steam instead</button>
+    <div id="reauthPopupBlocked" class="reauth-notice" style="display:none;">
+      <p class="profile-twitch-copy">Your browser blocked the Steam window. Continue on this page instead: you come back here and repeat the action.</p>
+      <button type="button" class="secondary" onclick="startSteamReauthFullPage()">Continue on this page</button>
+    </div>
+    <p id="reauthSteamUnavailable" class="reauth-notice status err" style="display:none;">Steam confirmation is unavailable on this server.</p>
     <div class="status err" id="reauthStatus" style="margin-top:8px;"></div>
   </div>
 </div>

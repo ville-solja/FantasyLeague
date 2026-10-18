@@ -32,8 +32,11 @@ The check is the `require_recent_reauth` dependency (`backend/deps.py`), added a
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
 `adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
 `reauth_required`, calls `POST /reauth`, and retries the action once. An admin without a password
-(created through Steam) gets **Confirm with Steam** instead, a Steam round trip
-(`GET /auth/steam/start?purpose=reauth&return_tab=admin`) after which the action is repeated. All
+(created through Steam) gets **Confirm with Steam** instead: a Steam check in a popup
+(`GET /auth/steam/start?purpose=reauth&return_tab=popup`, #213) after which the action retries by itself
+and open dialogs are kept. If the popup is blocked, **Continue on this page** uses the full-page round trip
+(`return_tab=admin`), after which the action is repeated. Admins with both a password and Steam can choose
+**Confirm with Steam instead**. All
 other admin endpoints work without re-authentication.
 
 ### Typed confirmation

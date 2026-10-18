@@ -141,8 +141,9 @@ async function adminFetch(url, options) {
   return fetch(url, options);
 }
 
-// An action the Steam confirmation resumes on return (handleSteamReturn), e.g.
-// "connectTwitch"; without one the page asks the user to repeat the action.
+// An action the full-page Steam confirmation resumes on return (handleSteamReturn),
+// e.g. "connectTwitch"; without one the page asks the user to repeat the action. The
+// popup path (issue 213) needs none: the caller's promise resolves in place.
 let _reauthResume = null;
 
 function _promptReauth(resume) {
@@ -156,17 +157,64 @@ function _promptReauth(resume) {
   return new Promise(resolve => { _reauthResolve = resolve; });
 }
 
-// Issue #150: an account without a password (created through Steam) confirms with a
-// Steam round trip instead. That leaves the page, so the action is repeated afterwards.
+// Issue #150: an account without a password (created through Steam) confirms with
+// Steam. Issue 213: an account with a password and a linked Steam account may use
+// either, so the password view also offers "Confirm with Steam instead".
 function _showReauthMethod(method) {
   const steam = method === "steam";
   document.getElementById("reauthTitle").textContent = steam ? "Confirm with Steam" : "Confirm your password";
   document.getElementById("reauthPasswordText").style.display = steam ? "none" : "";
   document.getElementById("reauthForm").style.display = steam ? "none" : "";
   document.getElementById("reauthSteamBlock").style.display = steam ? "" : "none";
+  const steamOn = _loginMethod === "both" || _loginMethod === "steam_signup";
+  document.getElementById("reauthSteamInstead").style.display =
+    !steam && steamOn && activeSteamLinked ? "" : "none";
+  _showSteamNotice(null);
 }
 
+/** Shows one of the modal's Steam notices ("blocked", "unavailable") or none. */
+function _showSteamNotice(which) {
+  document.getElementById("reauthPopupBlocked").style.display = which === "blocked" ? "" : "none";
+  document.getElementById("reauthSteamUnavailable").style.display = which === "unavailable" ? "" : "none";
+}
+
+// ---------------------------------------------------------------------------
+// Steam re-auth in a popup (issue 213)
+//
+// Confirm with Steam opens GET /auth/steam/start?purpose=reauth&return_tab=popup in a
+// small window, so the page and any open dialog stay as they are. The popup ends on
+// /steam-reauth-done.html, which posts {type: "steam-reauth", result} to this window
+// (same origin only) and closes. On "ok" the prompt resolves and adminFetch retries
+// the original request once; other results show their message and retry nothing.
+// A popup closed without a message counts as not confirmed. A blocked popup offers
+// the full-page round trip (startSteamReauthFullPage) as before.
+// ---------------------------------------------------------------------------
+
+const _STEAM_POPUP_MESSAGES = {
+  reauth_failed: "That Steam account is not the one linked to this account. Nothing was confirmed.",
+  no_session:    "Log in to Kana Cards first, then try again.",
+  not_linked:    "This account has no Steam link to confirm with.",
+  failed:        "Steam sign-in did not complete. Nothing was changed. Try again.",
+};
+const _STEAM_POPUP_CLOSED_GRACE_MS = 500;
+
+let _steamPopup = null;   // {win, timer} while a popup is open
+
 function startSteamReauth() {
+  _showSteamNotice(null);
+  document.getElementById("reauthStatus").textContent = "";
+  if (!_steamReauthAvailable) return _showSteamNotice("unavailable");
+  // Opened straight from the click, so the browser treats it as requested.
+  let win = null;
+  try {
+    win = window.open(`${API}/auth/steam/start?purpose=reauth&return_tab=popup`,
+                      "steamReauth", "popup,width=800,height=700");
+  } catch (e) { win = null; }
+  if (!win) return _showSteamNotice("blocked");
+  _watchSteamPopup(win);
+}
+
+function startSteamReauthFullPage() {
   const active = document.querySelector(".tab-content.active");
   const tab = active && active.id === "tab-admin" ? "admin" : "profile";
   try {
@@ -176,7 +224,47 @@ function startSteamReauth() {
   window.location.href = `${API}/auth/steam/start?purpose=reauth&return_tab=${tab}`;
 }
 
+function _watchSteamPopup(win) {
+  _stopSteamPopup(false);
+  const popup = { win, timer: null };
+  popup.timer = setInterval(() => {
+    if (!win.closed) return;
+    clearInterval(popup.timer);
+    // A result posted just before the window closed is still on its way: wait briefly.
+    setTimeout(() => {
+      if (_steamPopup !== popup) return;
+      _steamPopup = null;
+      _finishReauth(false);
+    }, _STEAM_POPUP_CLOSED_GRACE_MS);
+  }, 500);
+  _steamPopup = popup;
+}
+
+function _stopSteamPopup(closeWindow) {
+  const popup = _steamPopup;
+  _steamPopup = null;
+  if (!popup) return;
+  clearInterval(popup.timer);
+  if (closeWindow && !popup.win.closed) {
+    try { popup.win.close(); } catch (e) { /* already gone */ }
+  }
+}
+
+function _onSteamReauthMessage(event) {
+  if (!_steamPopup || event.origin !== window.location.origin || event.source !== _steamPopup.win) return;
+  const data = event.data;
+  if (!data || typeof data !== "object" || data.type !== "steam-reauth") return;
+  const result = data.result;
+  if (result !== "ok" && !Object.hasOwn(_STEAM_POPUP_MESSAGES, result)) return;
+  _stopSteamPopup(false);
+  if (result === "ok") return _finishReauth(true);
+  document.getElementById("reauthStatus").textContent = _STEAM_POPUP_MESSAGES[result];
+}
+
+window.addEventListener("message", _onSteamReauthMessage);
+
 function _finishReauth(confirmed) {
+  _stopSteamPopup(true);
   document.getElementById("reauthModal").classList.add("hidden");
   document.getElementById("reauthPassword").value = "";
   const resolve = _reauthResolve;

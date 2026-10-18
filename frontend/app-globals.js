@@ -14,6 +14,8 @@ let activeUsernameChangeAvailableAt = null;
 let activeOwnCardGrant = null;
 // Issue #150: password | both | steam_signup, from GET /config.
 let _loginMethod = "password";
+// Issue 213: whether the Steam re-auth popup can work here (Steam on, APP_BASE_URL set), from GET /config.
+let _steamReauthAvailable = false;
 let _tokenName        = "Tokens";
 let _tokenBalance     = null;
 let _teamBoosterCost  = 3;
@@ -43,6 +45,7 @@ async function loadConfig() {
       _tourAutostart = cfg.tour_autostart === true;
       if (Number.isInteger(cfg.twitch_connect_bonus_tokens)) _twitchConnectBonusTokens = cfg.twitch_connect_bonus_tokens;
       _loginMethod = cfg.login_method || "password";
+      _steamReauthAvailable = cfg.steam_reauth_available === true;
       if (typeof applyLoginMode === "function") applyLoginMode();
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;

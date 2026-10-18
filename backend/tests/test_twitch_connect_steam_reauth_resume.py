@@ -34,7 +34,8 @@ def test_twitch_reauth_prompt_names_connect_twitch_as_resumable():
 def test_steam_reauth_stores_the_pending_action_before_leaving():
     admin = _read("app-admin.js")
     assert "_reauthResume = resume || null" in _function(admin, "_promptReauth")
-    start = _function(admin, "startSteamReauth")
+    # Issue 213: the full-page round trip is the popup's fallback (Continue on this page).
+    start = _function(admin, "startSteamReauthFullPage")
     assert 'sessionStorage.setItem("reauthResume", _reauthResume)' in start
     # Stored before navigating away, and cleared when no action is pending.
     assert start.index("sessionStorage.setItem") < start.index("window.location.href")

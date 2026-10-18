@@ -256,7 +256,7 @@ const document = {
   querySelectorAll: sel => __all[sel] || [],
   querySelector: () => null,
 };
-const window = { matchMedia: () => ({ matches: true }) };
+const window = { matchMedia: () => ({ matches: true }), addEventListener: () => {} };
 const localStorage = {
   getItem: k => { if (__storageThrows) throw new Error("blocked"); return k in __store ? __store[k] : null; },
   setItem: (k, v) => { if (__storageThrows) throw new Error("blocked"); __store[k] = String(v); },

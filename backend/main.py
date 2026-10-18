@@ -891,6 +891,9 @@ def get_config(db=Depends(get_db)):
         "tour_autostart": os.getenv("GUIDED_TOUR_AUTOSTART", "false").strip().lower() == "true",
         # Issue #150 — password | both | steam_signup; the login page and Profile follow it.
         "login_method": login_mode.current(),
+        # Issue 213 — the re-auth modal opens the Steam popup only when it can work
+        # (Steam enabled and APP_BASE_URL set); otherwise it says Steam is unavailable.
+        "steam_reauth_available": login_mode.steam_enabled() and login_mode.app_base_url() is not None,
         # Issue #187 — named in Profile's "You received N Twitch starter tokens."
         "twitch_connect_bonus_tokens": twitch_oauth.connect_bonus_tokens(),
     }

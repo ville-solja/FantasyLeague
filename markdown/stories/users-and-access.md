@@ -707,7 +707,7 @@ As the operator, I want the old typed-in links removed on upgrade, so that the d
 
 ## Steam Re-auth Without Leaving the Page (issue #213)
 
-*(Not yet implemented)* Plan: `markdown/plans/plan-issue-213-steam-reauth-without-leaving-the-page.md`. Steam-only admins can already confirm sensitive actions (#150); this keeps the page and retries the action.
+Plan: `markdown/plans/plan-issue-213-steam-reauth-without-leaving-the-page.md`. Feature doc: `markdown/features/reference/steam-reauth-popup.md`. Steam-only admins can already confirm sensitive actions (#150); this keeps the page and retries the action.
 
 ### Steam-Only Admins Confirm Without Losing Their Work
 **User story**
@@ -737,4 +737,4 @@ As an admin with both a password and a linked Steam account, I want to choose ei
 **Acceptance criteria**
 - **Both offered:** the re-auth modal shows the password field and **Confirm with Steam instead** when the account has a password and a linked Steam id (`activeSteamLinked`) and Steam is enabled.
 - **Password only:** without a linked Steam account, the modal shows only the password, as today.
-- **Steam unavailable:** if Steam answers 503 `steam_unavailable`, the modal says "Steam confirmation is unavailable on this server", and the password stays available where the account has one.
+- **Steam unavailable:** where `/auth/steam/start` would answer 503 `steam_unavailable` (no `APP_BASE_URL`; the page learns it from `GET /config` `steam_reauth_available`), the modal says "Steam confirmation is unavailable on this server" without opening a window, and the password stays available where the account has one.

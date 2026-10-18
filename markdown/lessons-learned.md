@@ -15,6 +15,10 @@ Format:
 ---
 
 ### 2026-10-18 — developer — testing
+**Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
+**Solution:** Before adding top-level code to a module, grep `backend/tests` for harnesses that load it whole (`_js(["app-admin.js"]`) and add the stub there (`addEventListener: () => {}`). For the re-auth popup flow, reuse `_ADMIN_HARNESS` / `_admin` in `test_issue_213_*` (fake `window.open`, `message` events, timers).
+
+### 2026-10-18 — developer — testing
 **Problem:** Tests load operator scripts with `spec_from_file_location` + `exec_module` without adding them to `sys.modules`, so a `@dataclass` in a script with `from __future__ import annotations` fails at import (`'NoneType' object has no attribute '__dict__'`).
 **Solution:** In `backend/scripts/*.py`, use a plain class with `__init__` (as `SeasonResult` in `backfill_played.py`) instead of `@dataclass`.
 
