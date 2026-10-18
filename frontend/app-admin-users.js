@@ -609,6 +609,7 @@ function _renderTwitchChannels(data) {
   const approved = [...(data.env || []), ...(data.approved || [])];
   const pending = data.pending || [];
   const rejected = data.rejected || [];
+  setTwitchPendingBadge(pending.length);
   document.getElementById("twitchChannels").innerHTML =
     `<div class="twitch-merges-title">Waiting for approval</div>` +
     _twitchChannelTable(pending, () => [["approve", "Approve", "secondary"], ["reject", "Reject", "danger"]],

@@ -47,7 +47,7 @@ As an admin, I want to mark champions and add or correct accolades from Player m
 - **Mark champions** is used about once a season, so it favours flexibility over automation. One form, with two ways to start:
   - **From this season:** pick the season (the current one) and division, then a team from the active season's teams. Its players for the season come pre-filled (`player_match_stats.team_id`), and the admin can change the list.
   - **Past season (backfill):** pick a past season ("Season 1" to the last ended season) and division, type the team name, and add players by OpenDota id. A past champion team may not exist in the current pool at all, or only some of its players may still play, so nothing depends on current teams or players.
-- **Roster editor:** both ways end in the same editable list, one row per player with OpenDota id, name and **Remove**. **+ Add player** adds a row; a paste box takes several lines of "`<id> <name>`".
+- **Roster editor:** both ways end in the same editable list, one row per player with OpenDota id, name and **Remove**. **+ Add player** adds a row. *(Superseded by #214: the paste box for "`<id> <name>`" lines was removed; see `admin.md`, Admin Enhancements.)*
   - **Names:** typing an id fills the name from the pool, else from that player's earlier accolade rows. Otherwise the admin types it. The name stays editable and is stored on the row as given.
   - **No fixed size:** five is usual. Stand-ins or a sixth player are allowed, with a note "6 players (usually 5)".
   - **Validation:** each id is a positive integer and appears once; every row needs a name.

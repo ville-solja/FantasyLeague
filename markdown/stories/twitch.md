@@ -498,7 +498,7 @@ As the operator of a hobby project, I want a bad merge to be reversible, the fea
   - clears the website account's `twitch_account_id`, `twitch_user_id` and `merged_soft_account_at`, so the legitimate owner can connect and merge again,
   - sets `reversed_at` and audits `twitch_merge_reversed`.
   
-  Admin › Users shows recent merges (`GET /admin/twitch/merges`, admin and recent password check, with a `reversible` flag) with a **Reverse** button.
+  Admin › Twitch shows recent merges (`GET /admin/twitch/merges`, admin and recent password check, with a `reversible` flag) with a **Reverse** button.
 - **Reversal failure paths:** a log row older than 30 days, already reversed, or crossing a season reset (its cards no longer exist) returns 409 with a clear message, and nothing changes.
 - **Kill switches, documented:**
   - unsetting any `TWITCH_OAUTH_*` variable turns Connect Twitch off (hidden on Profile, 503 on start) without affecting existing connections or the panel,
@@ -895,15 +895,15 @@ As the operator submitting the extension, I want the submission guide to describ
   - the production env vars (`TWITCH_EXTENSION_CLIENT_ID`, `TWITCH_EXTENSION_SECRET`, `TWITCH_EXTENSION_VERSION=1.3.0`);
   - **Asset Hosting** paths and **Panel Height 500**;
   - **Allowlist for URL Fetching Domains**;
-  - **Allowlist for Image Domains** (the `https://` Steam CDN hosts from `backend/logo_hosts.py` `DEFAULT_LOGO_HOSTS`, or the values Admin › Users › Twitch status lists);
+  - **Allowlist for Image Domains** (the `https://` Steam CDN hosts from `backend/logo_hosts.py` `DEFAULT_LOGO_HOSTS`, or the values Admin › Twitch › Twitch status lists);
   - the capabilities **Chat** and **Request Identity Link**, with Configuration Service;
   - approving the review channel as a streamer;
   - the configuration page's **Connection check** passing;
   - Hosted Test on the review channel;
   - Submit.
 - The guide notes that capability fields can be edited only in Local Test
-- Admin › Users › Twitch status shows every check green on production before Submit; the guide says so as a go/no-go line
-- `package.sh` prints a reminder after the Panel Height line: "Allowlist for Image Domains: see Admin › Users › Twitch status"
+- Admin › Twitch › Twitch status shows every check green on production before Submit; the guide says so as a go/no-go line
+- `package.sh` prints a reminder after the Panel Height line: "Allowlist for Image Domains: see Admin › Twitch › Twitch status"
 
 ### Listing Copy Says Only What the Extension Does
 **User story**

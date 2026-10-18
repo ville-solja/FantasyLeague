@@ -288,7 +288,8 @@
       <h2 style="margin:0;">ADD PLAYER</h2>
       <button class="ghost" onclick="closeAddPlayerPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <input id="addPlayerIdInput" type="number" placeholder="OpenDota account ID" style="width:100%;margin-bottom:12px;" />
+    <input id="addPlayerIdInput" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="OpenDota account ID" aria-describedby="addPlayerPreview" class="admin-id-input" onblur="previewAddPlayer()" onkeydown="if(event.key==='Enter'){event.preventDefault();previewAddPlayer();}" />
+    <p class="id-preview" id="addPlayerPreview" aria-live="polite"></p>
     <div style="display:flex;gap:8px;">
       <button id="addPlayerConfirmBtn" style="flex:1;" onclick="addPlayer()">Confirm</button>
       <button id="addPlayerCloseBtn" class="secondary" onclick="closeAddPlayerPopup()">Cancel</button>
@@ -319,10 +320,6 @@
       <button type="button" class="secondary" onclick="champAddRow()">+ Add player</button>
       <span class="champ-count-note" id="champCountNote"></span>
     </div>
-    <label class="champ-paste">Paste players, one "&lt;id&gt; &lt;name&gt;" per line
-      <textarea id="champPaste" rows="3" placeholder="123456789 Glete"></textarea>
-    </label>
-    <button type="button" class="secondary" onclick="champApplyPaste()">Add pasted players</button>
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button id="champSaveBtn" style="flex:1;" onclick="saveChampions()">Save champions</button>
       <button class="secondary" onclick="closeMarkChampions()">Cancel</button>
@@ -349,10 +346,10 @@
           <option value="played">Played (one or more players)</option>
         </select>
       </label>
-      <label id="accPlayerWrap">OpenDota id <input id="accPlayerId" type="number" min="1" oninput="accFillName()" /></label>
+      <label id="accPlayerWrap">OpenDota id <input id="accPlayerId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="accFillName()" /></label>
       <label id="accNameWrap">Player name <input id="accPlayerName" type="text" maxlength="100" /></label>
       <label id="accUserWrap" hidden>Username <input id="accUsername" type="text" maxlength="100" /></label>
-      <label id="accValueWrap">Value (optional) <input id="accValue" type="number" step="0.1" /></label>
+      <label id="accValueWrap">Value (optional) <input id="accValue" type="text" inputmode="decimal" autocomplete="off" /></label>
       <label id="accBulkWrap" hidden>Players, one "&lt;id&gt; &lt;name&gt;" per line
         <textarea id="accBulk" rows="5" placeholder="123456789 Glete"></textarea>
       </label>
@@ -381,12 +378,12 @@
       <div class="end-season-div" data-division="div1">
         <label>Div 1 winner <select id="endSeasonTeam_div1" onchange="endSeasonPickTeam('div1')"></select></label>
         <div class="end-season-players" id="endSeasonPlayers_div1"></div>
-        <div class="end-season-add"><input id="endSeasonAdd_div1" type="number" min="1" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div1')">Add</button></div>
+        <div class="end-season-add"><input id="endSeasonAdd_div1" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div1')">Add</button></div>
       </div>
       <div class="end-season-div" data-division="div2">
         <label>Div 2 winner <select id="endSeasonTeam_div2" onchange="endSeasonPickTeam('div2')"></select></label>
         <div class="end-season-players" id="endSeasonPlayers_div2"></div>
-        <div class="end-season-add"><input id="endSeasonAdd_div2" type="number" min="1" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div2')">Add</button></div>
+        <div class="end-season-add"><input id="endSeasonAdd_div2" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div2')">Add</button></div>
       </div>
     </div>
     <p class="end-season-warning" id="endSeasonChampWarning" hidden>No champions recorded; add them in Player management</p>
@@ -400,15 +397,17 @@
 
 <!-- Player Management: Bulk Add Modal -->
 <div class="modal-overlay hidden" id="bulkAddPlayersModal" role="dialog" aria-modal="true" data-close="closeBulkAddPlayersPopup" onclick="closeBulkAddPlayersPopup()">
-  <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+  <div class="modal bulk-add-modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <h2 style="margin:0;">BULK ADD PLAYERS</h2>
       <button class="ghost" onclick="closeBulkAddPlayersPopup()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
-    <p style="font-size:0.8rem;color:#888;margin-bottom:10px;">Paste a comma-separated list of OpenDota account IDs.</p>
-    <input id="bulkAddIdsInput" type="text" placeholder="12345,67890,..." style="width:100%;margin-bottom:12px;" />
+    <p style="font-size:0.8rem;color:#888;margin-bottom:10px;">Paste OpenDota account IDs, separated by commas, spaces or new lines. Preview shows who they are; only players not yet in the pool are added.</p>
+    <input id="bulkAddIdsInput" type="text" inputmode="numeric" autocomplete="off" placeholder="12345,67890,..." class="admin-id-input" oninput="bulkAddIdsChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();previewBulkAdd();}" />
+    <ul class="bulk-preview-list" id="bulkAddPreviewList" aria-live="polite" hidden></ul>
     <div style="display:flex;gap:8px;">
-      <button id="bulkAddConfirmBtn" style="flex:1;" onclick="bulkAddPlayers()">Confirm</button>
+      <button id="bulkAddPreviewBtn" class="secondary" onclick="previewBulkAdd()">Preview</button>
+      <button id="bulkAddConfirmBtn" style="flex:1;" onclick="bulkAddPlayers()" disabled>Add players</button>
       <button class="secondary" onclick="closeBulkAddPlayersPopup()">Cancel</button>
     </div>
     <div class="status" id="bulkAddPlayersStatus"></div>
@@ -444,7 +443,7 @@
       <button class="ghost" onclick="closeAddLeagueModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
     <label>OpenDota League ID<br>
-      <input type="number" id="addLeagueIdInput" placeholder="e.g. 19368" style="width:100%;margin-top:6px;margin-bottom:12px;">
+      <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" id="addLeagueIdInput" placeholder="e.g. 19368" style="width:100%;margin-top:6px;margin-bottom:12px;">
     </label>
     <div style="display:flex;gap:8px;">
       <button style="flex:1;" onclick="submitAddLeague()">Add</button>
@@ -515,7 +514,7 @@
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
   <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
-  <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin</button>
+  <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin<span class="admin-pending-badge" id="adminTabPendingBadge" role="img" hidden></span></button>
 </div>
 
 <!-- TAB: PROFILE -->
@@ -1090,6 +1089,7 @@
   <!-- Admin tab bar -->
   <div id="admin-tab-bar" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:8px;flex-wrap:wrap;">
     <button class="admin-tab-btn" data-tab="user-management">User Management</button>
+    <button class="admin-tab-btn" data-tab="twitch">Twitch<span class="admin-pending-badge" id="adminTwitchPendingBadge" role="img" hidden></span></button>
     <button class="admin-tab-btn" data-tab="week-management">Week Management</button>
     <button class="admin-tab-btn" data-tab="player-management">Player Management</button>
     <button class="admin-tab-btn" data-tab="matches">Matches</button>
@@ -1117,30 +1117,6 @@
       </table>
       <div class="status" id="usersStatus"></div>
 
-      <!-- Issue #160: recent Twitch collection merges with Reverse (admin password re-check). -->
-      <div class="twitch-merges-title">Twitch collection merges</div>
-      <p class="twitch-merges-note">Merges of a Twitch panel collection into a website account in the last 30 days. Reverse recreates the Twitch viewer account and moves its cards, tokens and locked-week rosters back. Showing or reversing merges needs your password.</p>
-      <button class="secondary" onclick="loadTwitchMerges()">Show recent merges</button>
-      <table id="twitchMergesTable" style="display:none;margin-top:8px;">
-        <thead><tr><th>Website account</th><th>Merged</th><th>Moved</th><th>Actions</th></tr></thead>
-        <tbody id="twitchMergesBody"></tbody>
-      </table>
-      <div class="status" id="twitchMergesStatus"></div>
-
-      <!-- Issue #180: Twitch status — server settings and panel traffic behind a broken extension. -->
-      <div class="twitch-merges-title">Twitch status</div>
-      <p class="twitch-merges-note">This server's Twitch settings and the panel traffic it has seen since the last restart. Fix every Problem row first; the Twitch console block lists what only the developer console can show.</p>
-      <button class="secondary" onclick="loadTwitchStatus()">Refresh</button>
-      <div id="adminTwitchStatus" style="margin-top:8px;"></div>
-      <div class="status" id="twitchStatusStatus"></div>
-
-      <!-- Issue #175: approved streamers — channels that may set match MVPs. -->
-      <div class="twitch-merges-title">Approved streamers</div>
-      <p class="twitch-merges-note">Twitch channels that may set match MVPs, which also moves fantasy points and drops tokens. A channel appears under Waiting for approval when its broadcaster opens the MVP tool. Approve, Reject and Remove need your password.</p>
-      <button class="secondary" onclick="loadTwitchChannels()">Refresh</button>
-      <div id="twitchChannels" style="margin-top:8px;"></div>
-      <div class="status" id="twitchChannelsStatus"></div>
-
       <!-- Issue #150: self-reported player ids cleared when a verified Steam account took the id. -->
       <div class="twitch-merges-title">Superseded player id claims</div>
       <p class="twitch-merges-note">Accounts whose self-reported player id was cleared because a Steam-verified account has that id.</p>
@@ -1149,6 +1125,51 @@
         <tbody id="playerIdClaimsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
       </table>
       <div class="status" id="playerIdClaimsStatus"></div>
+    </div>
+  </div>
+
+  <!-- Twitch tab (issue 214): streamer approvals first, then status, then collection merges -->
+  <div data-admin-tab="twitch" style="display:none">
+    <!-- Issue #175: approved streamers — channels that may set match MVPs. -->
+    <div class="panel admin-panel">
+      <div class="admin-panel-head">
+        <div class="admin-panel-heading">
+          <h3 class="admin-panel-title">Approved streamers</h3>
+          <p class="admin-panel-desc">Twitch channels that may set match MVPs, which also moves fantasy points and drops tokens. A channel appears under Waiting for approval when its broadcaster opens the MVP tool. Approve, Reject and Remove need your password.</p>
+        </div>
+        <div class="admin-panel-actions"><button class="secondary" onclick="loadTwitchChannels()">Refresh</button></div>
+      </div>
+      <div id="twitchChannels"></div>
+      <div class="status" id="twitchChannelsStatus"></div>
+    </div>
+
+    <!-- Issue #180: Twitch status — server settings and panel traffic behind a broken extension. -->
+    <div class="panel admin-panel">
+      <div class="admin-panel-head">
+        <div class="admin-panel-heading">
+          <h3 class="admin-panel-title">Twitch status</h3>
+          <p class="admin-panel-desc">This server's Twitch settings and the panel traffic it has seen since the last restart. Fix every Problem row first; the Twitch console block lists what only the developer console can show.</p>
+        </div>
+        <div class="admin-panel-actions"><button class="secondary" onclick="loadTwitchStatus()">Refresh</button></div>
+      </div>
+      <div id="adminTwitchStatus"></div>
+      <div class="status" id="twitchStatusStatus"></div>
+    </div>
+
+    <!-- Issue #160: recent Twitch collection merges with Reverse (admin password re-check). -->
+    <div class="panel admin-panel">
+      <div class="admin-panel-head">
+        <div class="admin-panel-heading">
+          <h3 class="admin-panel-title">Twitch collection merges</h3>
+          <p class="admin-panel-desc">Merges of a Twitch panel collection into a website account in the last 30 days. Reverse recreates the Twitch viewer account and moves its cards, tokens and locked-week rosters back. Showing or reversing merges needs your password.</p>
+        </div>
+        <div class="admin-panel-actions"><button class="secondary" onclick="loadTwitchMerges()">Show recent merges</button></div>
+      </div>
+      <table id="twitchMergesTable" style="display:none;">
+        <thead><tr><th>Website account</th><th>Merged</th><th>Moved</th><th>Actions</th></tr></thead>
+        <tbody id="twitchMergesBody"></tbody>
+      </table>
+      <div class="status" id="twitchMergesStatus"></div>
     </div>
   </div>
 
@@ -1227,44 +1248,118 @@
     </div>
   </div>
 
-  <!-- Settings tab -->
+  <!-- Settings tab (issue 214): six sections with a section nav -->
   <div data-admin-tab="settings" style="display:none">
-    <div class="grid">
-      <div class="tab-col">
-        <div class="panel" id="leagueManagementPanel">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h2 style="margin:0;">League Management</h2>
-            <div style="display:flex;gap:8px;">
-              <button onclick="openAddLeagueModal()">Add</button>
-              <button class="secondary" onclick="loadLeagues()">Refresh</button>
+    <div class="settings-layout">
+    <nav class="settings-nav" id="settingsNav" aria-label="Settings sections">
+      <button type="button" class="settings-nav-btn" data-settings-target="season" onclick="selectSettingsSection('season')">Season</button>
+      <button type="button" class="settings-nav-btn" data-settings-target="scoring" onclick="selectSettingsSection('scoring')">Scoring</button>
+      <button type="button" class="settings-nav-btn" data-settings-target="tokens" onclick="selectSettingsSection('tokens')">Tokens and rewards</button>
+      <button type="button" class="settings-nav-btn" data-settings-target="announcements" onclick="selectSettingsSection('announcements')">Announcements</button>
+      <button type="button" class="settings-nav-btn" data-settings-target="players" onclick="selectSettingsSection('players')">Players and tags</button>
+      <button type="button" class="settings-nav-btn" data-settings-target="maintenance" onclick="selectSettingsSection('maintenance')">Maintenance</button>
+    </nav>
+    <div class="settings-sections">
+
+      <section class="settings-section" id="settings-section-season" data-settings-section="season" aria-labelledby="settings-title-season">
+        <h2 class="settings-section-title" id="settings-title-season">Season</h2>
+
+        <div class="panel admin-panel" id="leagueManagementPanel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">League Management</h3>
+              <p class="admin-panel-desc">OpenDota leagues the app ingests matches from; monitored leagues are polled for new matches.</p>
             </div>
+          <div class="admin-panel-actions"><button onclick="openAddLeagueModal()">Add</button><button class="secondary" onclick="loadLeagues()">Refresh</button></div>
           </div>
+          <div class="admin-table-wrap">
           <table id="leagueTable">
             <thead><tr><th>ID</th><th>Name</th><th>Matches</th><th>Monitored</th><th>Actions</th></tr></thead>
             <tbody id="leagueTableBody"></tbody>
           </table>
+          </div>
           <div class="status" id="leaguesStatus"></div>
         </div>
 
-        <div class="panel">
-          <h2>Tag Definitions</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Define tag types. Grant them to users via User Management above.</p>
-          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
-            <input id="tagKeyInput" type="text" placeholder="Key (slug, e.g. caster)" style="max-width:160px;" />
-            <input id="tagLabelInput" type="text" placeholder="Display label" style="max-width:160px;" />
-            <button onclick="createTag()">Create</button>
-            <button class="secondary" onclick="loadTags()">Refresh</button>
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Refresh Schedule Cache</h3>
+              <p class="admin-panel-desc">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
+            </div>
+          <div class="admin-panel-actions"><button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button></div>
           </div>
-          <table>
-            <thead><tr><th>Key</th><th>Label</th><th></th></tr></thead>
-            <tbody id="tagsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
-          </table>
-          <div class="status" id="tagsStatus"></div>
+          <div class="status" id="scheduleRefreshStatus"></div>
         </div>
 
-        <div class="panel">
-          <h2>Promo Codes</h2>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Season Lifecycle</h3>
+              <p class="admin-panel-desc">Archive final standings before resetting for the next season.</p>
+            </div>
+          <div class="admin-panel-actions"><button onclick="endSeason()">End Season (Archive)</button></div>
+          </div>
+          <p class="admin-panel-note">Standings are computed live and are destroyed by reset — always run End Season first.</p>
+          <div class="admin-panel-row">
+            <input id="endSeasonLabel" type="text" placeholder="Season label (default: the current season)" style="min-width:200px;" />
+          </div>
+          <div class="admin-table-wrap">
+          <table>
+            <thead><tr><th>Season</th><th>Archived</th><th>Users</th></tr></thead>
+            <tbody id="seasonArchivesBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+          </table>
+          </div>
+          <div class="admin-danger-row">
+            <button class="danger" onclick="openSeasonResetConfirm()">Reset Season…</button>
+            <span class="admin-panel-note">Deletes matches, weeks, stats, the Player Pool, and all cards — retains users, tags, archives</span>
+          </div>
+          <div class="status" id="seasonLifecycleStatus"></div>
+        </div>
+      </section>
+
+      <section class="settings-section" id="settings-section-scoring" data-settings-section="scoring" aria-labelledby="settings-title-scoring">
+        <h2 class="settings-section-title" id="settings-title-scoring">Scoring</h2>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Scoring Weights</h3>
+              <p class="admin-panel-desc">Points per stat that scoring applies to every match.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadWeights()">Refresh</button></div>
+          </div>
+          <table>
+            <thead><tr><th>Stat</th><th>Weight</th></tr></thead>
+            <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+          </table>
+          <div class="status" id="weightsStatus"></div>
+        </div>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Recalculate Fantasy Points</h3>
+              <p class="admin-panel-desc">Applies current weights to all stored match stats.</p>
+            </div>
+          <div class="admin-panel-actions"><button id="recalculateBtn" class="danger" onclick="recalculate()">Recalculate</button></div>
+          </div>
+          <div class="status" id="recalcStatus"></div>
+        </div>
+      </section>
+
+      <section class="settings-section" id="settings-section-tokens" data-settings-section="tokens" aria-labelledby="settings-title-tokens">
+        <h2 class="settings-section-title" id="settings-title-tokens">Tokens and rewards</h2>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Promo Codes</h3>
+              <p class="admin-panel-desc">Codes users redeem for tokens, with optional use and time limits.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadCodes()">Refresh</button></div>
+          </div>
+          <div class="admin-panel-row">
             <input id="newCodeInput" type="text" placeholder="Code name" style="text-transform:uppercase;" />
             <input id="newCodeAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
             <input id="newCodeMaxUses" type="number" placeholder="Max uses (optional)" style="max-width:150px;" min="1" />
@@ -1272,7 +1367,6 @@
               <input id="newCodeExpires" type="datetime-local" />
             </label>
             <button onclick="createCode()">Create</button>
-            <button class="secondary" onclick="loadCodes()">Refresh</button>
           </div>
           <table>
             <thead><tr><th>Code</th><th>Tokens</th><th>Uses</th><th>Limits</th><th></th></tr></thead>
@@ -1281,27 +1375,45 @@
           <div class="status" id="codesStatus"></div>
         </div>
 
-        <div class="panel">
-          <h2>Scoring Weights</h2>
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Token Grant Events</h3>
+              <p class="admin-panel-desc">All logged-in players claim tokens automatically during the active window.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadTokenGrantEvents()">Refresh</button></div>
+          </div>
+          <div class="admin-panel-row">
+            <input id="grantAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
+            <input id="grantStart" type="datetime-local" title="Start time" />
+            <input id="grantEnd"   type="datetime-local" title="End time" />
+            <button onclick="createTokenGrantEvent()">Create</button>
+          </div>
           <table>
-            <thead><tr><th>Stat</th><th>Weight</th></tr></thead>
-            <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+            <thead><tr><th>Tokens</th><th>Start</th><th>End</th><th>Claims</th><th></th></tr></thead>
+            <tbody id="tokenGrantBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
           </table>
-          <div class="status" id="weightsStatus"></div>
+          <div class="status" id="tokenGrantStatus"></div>
         </div>
-      </div>
+      </section>
 
-      <div class="tab-col">
-        <div class="panel">
-          <h2>Notifications</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Broadcast a one-time message to all logged-in players during the active window.</p>
+      <section class="settings-section" id="settings-section-announcements" data-settings-section="announcements" aria-labelledby="settings-title-announcements">
+        <h2 class="settings-section-title" id="settings-title-announcements">Announcements</h2>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Notifications</h3>
+              <p class="admin-panel-desc">Broadcast a one-time message to all logged-in players during the active window.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadNotifications()">Refresh</button></div>
+          </div>
           <div style="margin-bottom:12px;">
             <textarea id="notifMsgInput" placeholder="Message (max 500 characters)" rows="3" style="width:100%;margin-bottom:8px;resize:vertical;" maxlength="500"></textarea>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+            <div class="admin-panel-row">
               <input id="notifStart" type="datetime-local" title="Start time" />
               <input id="notifEnd"   type="datetime-local" title="End time" />
               <button onclick="createNotification()">Create</button>
-              <button class="secondary" onclick="loadNotifications()">Refresh</button>
             </div>
           </div>
           <table>
@@ -1310,79 +1422,55 @@
           </table>
           <div class="status" id="notifAdminStatus"></div>
         </div>
+      </section>
 
-        <div class="panel">
-          <h2>Token Grant Events</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">All logged-in players claim tokens automatically during the active window.</p>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-            <input id="grantAmount" type="number" placeholder="Tokens" style="max-width:80px;" min="1" max="10000" />
-            <input id="grantStart" type="datetime-local" title="Start time" />
-            <input id="grantEnd"   type="datetime-local" title="End time" />
-            <button onclick="createTokenGrantEvent()">Create</button>
-            <button class="secondary" onclick="loadTokenGrantEvents()">Refresh</button>
+      <section class="settings-section" id="settings-section-players" data-settings-section="players" aria-labelledby="settings-title-players">
+        <h2 class="settings-section-title" id="settings-title-players">Players and tags</h2>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Tag Definitions</h3>
+              <p class="admin-panel-desc">Define tag types. Grant them to users in User Management.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadTags()">Refresh</button></div>
+          </div>
+          <div class="admin-panel-row">
+            <input id="tagKeyInput" type="text" placeholder="Key (slug, e.g. caster)" style="max-width:160px;" />
+            <input id="tagLabelInput" type="text" placeholder="Display label" style="max-width:160px;" />
+            <button onclick="createTag()">Create</button>
           </div>
           <table>
-            <thead><tr><th>Tokens</th><th>Start</th><th>End</th><th>Claims</th><th></th></tr></thead>
-            <tbody id="tokenGrantBody"><tr><td colspan="5" style="color:#444">—</td></tr></tbody>
+            <thead><tr><th>Key</th><th>Label</th><th></th></tr></thead>
+            <tbody id="tagsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
           </table>
-          <div class="status" id="tokenGrantStatus"></div>
+          <div class="status" id="tagsStatus"></div>
         </div>
 
-        <div class="panel">
-          <h2>Refresh Schedule Cache</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Busts the in-memory cache and re-fetches from the Google Sheet.</p>
-          <button id="scheduleRefreshBtn" onclick="refreshSchedule()">Refresh</button>
-          <div class="status" id="scheduleRefreshStatus"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Recalculate Fantasy Points</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Applies current weights to all stored match stats.</p>
-          <button id="recalculateBtn" onclick="recalculate()">Recalculate</button>
-          <div class="status" id="recalcStatus"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Re-enrich Player Profiles</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
-          <button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button>
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Re-enrich Player Profiles</h3>
+              <p class="admin-panel-desc">Fetches hero stats and ban data for all players, then regenerates AI bios if ANTHROPIC_API_KEY is set.</p>
+            </div>
+          <div class="admin-panel-actions"><button id="enrichBtn" onclick="enrichProfiles()">Re-enrich profiles</button></div>
+          </div>
           <div class="status" id="enrichStatus"></div>
         </div>
+      </section>
 
-        <div class="panel">
-          <h2>Season Lifecycle</h2>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">
-            Archive final standings before resetting for the next season. Standings are
-            computed live and are destroyed by reset — always run End Season first.
-          </p>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center;">
-            <input id="endSeasonLabel" type="text" placeholder="Season label (default: the current season)" style="min-width:200px;" />
-            <button onclick="endSeason()">End Season (Archive)</button>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
-            <button class="danger" onclick="openSeasonResetConfirm()">Reset Season…</button>
-            <span style="font-size:0.8rem;color:#888;">Deletes matches, weeks, stats, the Player Pool, and all cards — retains users, tags, archives</span>
-          </div>
-          <table>
-            <thead><tr><th>Season</th><th>Archived</th><th>Users</th></tr></thead>
-            <tbody id="seasonArchivesBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
-          </table>
-          <div class="status" id="seasonLifecycleStatus"></div>
-        </div>
+      <section class="settings-section" id="settings-section-maintenance" data-settings-section="maintenance" aria-labelledby="settings-title-maintenance">
+        <h2 class="settings-section-title" id="settings-title-maintenance">Maintenance</h2>
 
-        <div class="panel">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <h2 style="margin:0;">Database Backups</h2>
-            <button class="secondary" onclick="loadBackups()">Refresh</button>
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Database Backups</h3>
+              <p class="admin-panel-desc">Backups are stored on the server and deleted automatically after <span id="dbBackupsRetention">N</span> days. Download a copy before deploying if you need to keep it.</p>
+            </div>
+          <div class="admin-panel-actions"><button id="createBackupBtn" onclick="createBackup()">Create backup now</button><button class="secondary" onclick="loadBackups()">Refresh</button></div>
           </div>
-          <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">
-            Backups are stored on the server and deleted automatically after <span id="dbBackupsRetention">N</span> days.
-            Download a copy before deploying if you need to keep it.
-          </p>
-          <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;">
-            <button id="createBackupBtn" onclick="createBackup()">Create backup now</button>
-          </div>
-          <div style="overflow-x:auto;">
+          <div class="admin-table-wrap">
             <table>
               <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
               <tbody id="dbBackupsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
@@ -1395,25 +1483,36 @@
              only when GET /config reports demo_mode: true — entirely absent from
              the DOM otherwise, not merely hidden via CSS. -->
         <div id="demoModePanelContainer"></div>
-      </div>
+      </section>
+
+    </div>
     </div>
   </div>
 
-  <!-- Matches tab -->
+  <!-- Matches tab (issue 214): grouped by series around the MVP job -->
   <div data-admin-tab="matches" style="display:none">
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="margin:0;">Matches</h2>
-        <div style="display:flex;gap:12px;align-items:center;">
-          <label style="display:flex;gap:4px;align-items:center;font-size:0.85rem;cursor:pointer;"><input type="checkbox" id="adminMatchesUnparseableOnly" onchange="renderAdminMatches()">Unparseable only</label>
-          <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
-        </div>
+        <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+      </div>
+      <div class="admin-matches-filters" role="group" aria-label="Filter matches">
+        <label class="admin-matches-filter"><input type="checkbox" id="adminMatchesMvpMissing" onchange="renderAdminMatches()">MVP missing</label>
+        <label class="admin-matches-filter">League
+          <select id="adminMatchesLeague" onchange="renderAdminMatches()">
+            <option value="">All</option>
+            <option value="div1">Div 1</option>
+            <option value="div2">Div 2</option>
+          </select>
+        </label>
+        <label class="admin-matches-filter"><input type="checkbox" id="adminMatchesUnparseableOnly" onchange="renderAdminMatches()">Unparseable only</label>
+        <span class="admin-matches-count" id="adminMatchesCount" aria-live="polite"></span>
       </div>
       <div id="adminMatchesOutOfWeek" style="display:none;margin-bottom:12px;padding:8px 10px;border:1px solid var(--accent, #f60);"></div>
       <div style="overflow-x:auto;">
         <table id="admin-matches-table">
-          <thead><tr><th>Match</th><th>League</th><th>Team 1</th><th>Team 2</th><th>Start Time</th><th>Live seen</th><th>Stats in</th><th>MVP picked</th><th>Parse</th><th>Scoring</th><th>Week</th><th>MVP</th><th>VOD</th><th>Action</th></tr></thead>
-          <tbody id="adminMatchesBody"><tr><td colspan="14" style="color:#444">—</td></tr></tbody>
+          <thead><tr><th>Match</th><th>Teams</th><th>League</th><th>Start</th><th>MVP</th><th>Stream</th><th>Week</th><th>Scoring</th><th>Parse</th><th>Live seen</th><th>Stats in</th><th>MVP picked</th><th>More</th></tr></thead>
+          <tbody id="adminMatchesBody"><tr><td colspan="13" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
       <div class="status" id="adminMatchesStatus"></div>

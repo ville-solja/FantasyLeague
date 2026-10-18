@@ -16,6 +16,8 @@ function applyAuthState() {
 
   // Admin-only: renders (and requests the clock) only for an admin in demo mode.
   if (typeof renderDemoModePanel === "function") renderDemoModePanel();
+  // Issue 214: pending streamer approvals badge on the Admin tab (admins only).
+  if (typeof refreshTwitchPendingBadge === "function") refreshTwitchPendingBadge();
 
   if (!loggedIn) switchTab("leaderboard");
 }

@@ -1,16 +1,22 @@
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 import card_points
+import schedule
+from accolades import league_division
 from database import get_db
 from deps import require_admin, _audit
 import ingest
-from models import Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Week, Weight
+from models import League, Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Week, Weight
 from schedule import bust_cache, out_of_week_series
 from weeks import scoring_week_for, week_containing
 from twitch import _apply_mvp_bonus, bust_panel_cache, upsert_mvp
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -32,10 +38,42 @@ class MatchScoringBody(BaseModel):
     excluded_from_scoring: bool | None = None
 
 
+def _feed_series_by_match(db) -> dict:
+    """match_id -> {series_key, team1_id, team2_id, division, stream_url} for every game
+    the schedule feed's series have claimed, from one get_schedule pass (issue 214).
+    Empty when the feed can't be read, so the Matches table still loads."""
+    try:
+        data = schedule.get_schedule(db) or {}
+    except Exception:
+        logger.exception("Schedule lookup for the admin Matches table failed")
+        return {}
+    by_match = {}
+    for w_idx, week in enumerate(data.get("weeks") or []):
+        for division in ("div1", "div2"):
+            for s_idx, series in enumerate(week.get(division) or []):
+                result = series.get("series_result") or {}
+                info = {
+                    "series_key": f"w{w_idx}-{division}-{s_idx}",
+                    "team1_id": series.get("team1_id"),
+                    "team2_id": series.get("team2_id"),
+                    "division": division,
+                    "stream_url": series.get("stream_url"),
+                }
+                for mid in result.get("match_ids") or []:
+                    by_match.setdefault(mid, info)
+    return by_match
+
+
 @router.get("/admin/matches")
 def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
     matches = db.query(Match).order_by(Match.start_time.desc()).all()
     match_ids = [m.match_id for m in matches]
+
+    series_by_match = _feed_series_by_match(db)
+    league_ids = {m.league_id for m in matches if m.league_id}
+    league_names = {
+        lg.id: lg.name for lg in db.query(League).filter(League.id.in_(league_ids)).all()
+    } if league_ids else {}
 
     mvps_by_match = {
         mv.match_id: mv
@@ -68,6 +106,8 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         timing = timings_by_match.get(m.match_id)
         scoring_week, scoring_source = scoring_week_for(db, m, all_weeks)
         time_week = week_containing(db, m.start_time, all_weeks)
+        series = series_by_match.get(m.match_id)
+        league_name = league_names.get(m.league_id)
         result.append({
             "match_id": m.match_id,
             "league_id": m.league_id,
@@ -90,6 +130,13 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
             "scoring_week_source": scoring_source,
             "time_week_id": time_week.id if time_week else None,
             "time_week_label": time_week.label if time_week else None,
+            "series_key": series["series_key"] if series else None,
+            "series_team1_id": series["team1_id"] if series else None,
+            "series_team2_id": series["team2_id"] if series else None,
+            "division": series["division"] if series else (
+                league_division(league_name) if league_name is not None else None),
+            "league_name": league_name,
+            "stream_url": series["stream_url"] if series else None,
         })
     return result
 

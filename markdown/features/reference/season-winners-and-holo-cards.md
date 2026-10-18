@@ -43,7 +43,7 @@ The label is used for the live Played season, the Holo rule ("a season other tha
 - **Mark champions:** two ways to start, one editable roster:
   - **From this season:** the live season, a division and a team from the preview (the division's teams listed first); its players fill the roster.
   - **Past season:** "Season 1" to the last ended season (plus any season already in the record), a typed team name and players by OpenDota id. Nothing depends on current teams or players.
-  - **Roster editor:** one row per player (OpenDota id, name, Remove), **+ Add player**, and a paste box for "`<id> <name>`" lines. Typing an id fills an empty name from the pool, else from earlier accolade rows. A note shows "6 players (usually 5)" when the count isn't 5. Each id must be a positive whole number and appear once; each row needs a name (`validateChampionRoster`, checked again by the server).
+  - **Roster editor:** one row per player (OpenDota id, name, Remove), and **+ Add player** (the paste box for "`<id> <name>`" lines was removed in #214; the name field takes the remaining width of the row). Typing an id fills an empty name from the pool, else from earlier accolade rows. A note shows "6 players (usually 5)" when the count isn't 5. Each id must be a positive whole number and appear once; each row needs a name (`validateChampionRoster`, checked again by the server).
   - **Saving** calls `PUT /admin/season-champions`, which makes that season and division's champions exactly the list shown.
 - **Add accolade:** season, kind (Most Points, Best Average, Best Single Match, Fantasy Winner, Played), a player (OpenDota id and name, filled from the pool) or a username for Fantasy Winner, and an optional value. Played takes several "`<id> <name>`" lines at once.
 

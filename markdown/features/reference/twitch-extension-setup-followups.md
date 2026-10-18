@@ -28,7 +28,7 @@ Only the code, checked against `[a-z_]{1,64}` (otherwise `unknown`), is shown; T
 - **OAuth Redirect URL**: "Extension Settings › Twitch API Client Configuration › OAuth Redirect URL has this exact entry (click Add, then Save Changes)", `expected` = `TWITCH_OAUTH_REDIRECT_URI`. Listed only when all three `TWITCH_OAUTH_*` are set.
 - **Allowlist for Image Domains**: "Version › Capabilities › Allowlist for Image Domains contains the team logo hosts", `expected` = the `https://` origins of `logo_hosts.logo_hosts()`, sorted and comma-separated.
 
-The `connect_twitch` check's detail (ok, and the partly-set warning) names the client secret's source: the **Twitch API Client Secret** of the application or extension whose Client ID is `TWITCH_OAUTH_CLIENT_ID`, never the Extension Secret. No secret, token or secret length is added. The admin UI lists `console` generically, so the new rows appear in Admin › Users › Twitch status without a frontend change.
+The `connect_twitch` check's detail (ok, and the partly-set warning) names the client secret's source: the **Twitch API Client Secret** of the application or extension whose Client ID is `TWITCH_OAUTH_CLIENT_ID`, never the Extension Secret. No secret, token or secret length is added. The admin UI lists `console` generically, so the new rows appear in Admin › Twitch › Twitch status without a frontend change.
 
 ## Panel live data cache
 

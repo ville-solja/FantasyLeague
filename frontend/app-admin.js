@@ -49,7 +49,74 @@ function switchAdminTab(tabName) {
 
   // Lazily load data for the matches tab on first activation
   if (tabName === 'matches') loadAdminMatches();
-  if (tabName === 'settings') loadBackups();
+  if (tabName === 'twitch') loadTwitchChannels();
+  if (tabName === 'settings') { loadBackups(); restoreSettingsSection(); }
+}
+
+// ---------------------------------------------------------------------------
+// Pending streamer approvals badge (issue 214)
+//
+// The Twitch sub-tab button and the top-level Admin tab show how many channels
+// wait for approval, from GET /admin/twitch/channels. Fetched when an admin
+// loads the page (applyAuthState) and re-rendered whenever the Approved
+// streamers list loads, which Approve and Reject trigger. Hidden at zero.
+// ---------------------------------------------------------------------------
+
+const _PENDING_BADGE_IDS = ['adminTwitchPendingBadge', 'adminTabPendingBadge'];
+
+function pendingBadgeLabel(n) {
+  return `${n} ${n === 1 ? 'streamer' : 'streamers'} waiting for approval`;
+}
+
+function setTwitchPendingBadge(n) {
+  const count = Number.isInteger(n) && n > 0 ? n : 0;
+  _PENDING_BADGE_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.hidden = count === 0;
+    el.textContent = count ? String(count) : '';
+    if (count) el.setAttribute('aria-label', pendingBadgeLabel(count));
+    else el.removeAttribute('aria-label');
+  });
+}
+
+async function refreshTwitchPendingBadge() {
+  if (!activeUserId || !activeIsAdmin) return setTwitchPendingBadge(0);
+  try {
+    const res = await fetch(`${API}/admin/twitch/channels`);
+    if (!res.ok) return setTwitchPendingBadge(0);
+    const data = await res.json();
+    setTwitchPendingBadge((data.pending || []).length);
+  } catch (e) {
+    setTwitchPendingBadge(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settings section nav (issue 214): selecting a section scrolls to it and is
+// remembered per browser; storage may be blocked, so every access is guarded.
+// ---------------------------------------------------------------------------
+
+const SETTINGS_SECTION_KEY = 'adminSettingsSection';
+
+function selectSettingsSection(name, scroll = true) {
+  const section = document.getElementById(`settings-section-${name}`);
+  if (!section) return;
+  document.querySelectorAll('.settings-nav-btn').forEach(btn => {
+    const on = btn.dataset.settingsTarget === name;
+    btn.classList.toggle('active', on);
+    if (on) btn.setAttribute('aria-current', 'true');
+    else btn.removeAttribute('aria-current');
+  });
+  if (scroll) section.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+  try { localStorage.setItem(SETTINGS_SECTION_KEY, name); } catch (e) { /* storage blocked */ }
+}
+
+function restoreSettingsSection() {
+  let saved = null;
+  try { saved = localStorage.getItem(SETTINGS_SECTION_KEY); } catch (e) { /* storage blocked */ }
+  const name = saved && document.getElementById(`settings-section-${saved}`) ? saved : 'season';
+  selectSettingsSection(name, name !== 'season');
 }
 
 // ---------------------------------------------------------------------------

@@ -61,6 +61,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Extension Resubmission](reference/twitch-extension-resubmission.md) | Issue #195: version 1.3.0 for review after the policy 4.5 rejection; submission guide brought in line with the build (listing, baked backend origins, endpoint and image disclosure, testing steps), tests keeping the disclosure in step with the packaged code |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
+| [Admin Enhancements](reference/admin-enhancements.md) | Twitch sub-tab with approval badge, typed ids with name preview, MVP-first matches grouped by series, Settings grouped by purpose; `GET /admin/players/lookup` and series fields on `GET /admin/matches` (#214) |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
 | [Week Boundary Formula Fix](reference/week-boundary-formula-fix.md) | Applies the grace-period offset to both week-boundary ends so a normal Monday-start/Sunday-end week never overlaps the next by default |
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |

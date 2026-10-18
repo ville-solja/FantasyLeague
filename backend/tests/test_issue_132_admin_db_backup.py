@@ -156,7 +156,8 @@ class TestCreateBackup:
         """Admin Settings tab has a 'Database Backups' panel with a 'Create backup now' button."""
         html = _INDEX_HTML_PATH.read_text(encoding="utf-8")
         settings = html[html.index('data-admin-tab="settings"'):html.index('data-admin-tab="matches"')]
-        assert "<h2 style=\"margin:0;\">Database Backups</h2>" in settings
+        # Issue 214: Settings panels share one header (title, one-line purpose, actions).
+        assert '<h3 class="admin-panel-title">Database Backups</h3>' in settings
         assert "Create backup now" in settings
         assert 'onclick="createBackup()"' in settings
         assert '<script src="/app-admin-backups.js"></script>' in html
