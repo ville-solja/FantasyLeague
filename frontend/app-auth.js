@@ -16,6 +16,8 @@ function applyAuthState() {
 
   // Admin-only: renders (and requests the clock) only for an admin in demo mode.
   if (typeof renderDemoModePanel === "function") renderDemoModePanel();
+  // Issue 214: pending streamer approvals badge on the Admin tab (admins only).
+  if (typeof refreshTwitchPendingBadge === "function") refreshTwitchPendingBadge();
 
   if (!loggedIn) switchTab("leaderboard");
 }
@@ -24,7 +26,9 @@ function applyAuthState() {
 // Steam sign-in (issue #150). Sign in, Link and re-auth are full-page navigations
 // to GET /auth/steam/start, which sends the browser to steamcommunity.com; Steam
 // returns to /auth/steam/callback, which redirects back here with
-// /#<tab>?steam=<key> (handleSteamReturn). Never a pop-up or an embedded frame.
+// /#<tab>?steam=<key> (handleSteamReturn). Sign-in and Link are never a pop-up or an
+// embedded frame; only re-auth uses a popup first (issue 213, app-admin.js), with this
+// full-page round trip as its fallback.
 // ---------------------------------------------------------------------------
 
 /** Pure: which Steam elements show for a login method and the /me flags (null when

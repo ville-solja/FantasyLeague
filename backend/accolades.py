@@ -13,7 +13,7 @@ import random
 import re
 import time
 
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 import player_links
@@ -43,6 +43,8 @@ SOURCE_SEASON_END = "season_end"
 SOURCE_ADMIN = "admin"
 DEFAULT_HOLO_CHANCE = 20.0
 WINNER_TAG_KEY = "season_winner"
+# The first season with an OpenDota record (issue 212): seasons-played counts start here.
+FIRST_COUNTED_SEASON = 4
 
 _SEASON_RE = re.compile(r"\s*(?:season|s)\s*(\d+)\s*", re.I)
 # "Season N" anywhere in an OpenDota league name ("Kanaliiga Season 16 Lower").
@@ -453,6 +455,44 @@ def accolades_for(db, player_ids=None, include_live: bool = True,
     for lst in result.values():
         lst.sort(key=_newest_first_key)
     return result
+
+
+ADMIN_TAG = {"key": "admin", "label": "Admin"}
+CASTER_TAG_KEY = "caster"
+
+
+def tags_by_player(db) -> dict[int, list[dict]]:
+    """{player_id: [{key, label}, ...]} for the tag pips on cards (issue #217): the
+    tags of each account verifiably linked to a player (player_links), with an
+    `admin` pseudo-tag first for site admins, then caster, then other tags in
+    tag-definition order. season_winner is left out (the Fantasy Winner accolade
+    shows it). Only keys and labels: no user ids or usernames."""
+    links = player_links.verified_links(db)
+    if links:
+        # Tester accounts never show publicly (the leaderboards leave them out), so
+        # they contribute no tag pips either.
+        testers = {uid for (uid,) in db.query(User.id).filter(
+            User.id.in_(list(links)), func.coalesce(User.is_tester, False) == True).all()}  # noqa: E712
+        links = {uid: pid for uid, pid in links.items() if uid not in testers}
+    if not links:
+        return {}
+    admins = {uid for (uid,) in db.query(User.id).filter(User.id.in_(list(links)),
+                                                          User.is_admin == True).all()}  # noqa: E712
+    rows = (db.query(UserTag.user_id, TagDefinition.id, TagDefinition.key, TagDefinition.label)
+            .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+            .filter(UserTag.user_id.in_(list(links)), TagDefinition.key != WINNER_TAG_KEY)
+            .all())
+    found: dict[int, dict[str, tuple]] = {}
+    for uid in admins:
+        found.setdefault(links[uid], {})["admin"] = ((0, 0), ADMIN_TAG["label"])
+    for uid, tag_id, key, label in rows:
+        if key == ADMIN_TAG["key"]:
+            continue  # the pseudo-key comes from is_admin only
+        order = (1, 0) if key == CASTER_TAG_KEY else (2, tag_id)
+        found.setdefault(links[uid], {}).setdefault(key, (order, label))
+    return {pid: [{"key": k, "label": lbl}
+                  for k, (_, lbl) in sorted(tags.items(), key=lambda kv: kv[1][0])]
+            for pid, tags in found.items() if tags}
 
 
 _KIND_ORDER = {k["key"]: i for i, k in enumerate(ACCOLADE_KINDS)}

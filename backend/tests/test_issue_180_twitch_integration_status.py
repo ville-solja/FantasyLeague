@@ -871,11 +871,13 @@ class TestAdminTwitchStatus:
         assert all("APP_BASE_URL" in c["expected"] or "origin" in c["expected"] for c in console)
 
     def test_admin_ui_has_twitch_status_section_above_approved_streamers(self):
-        """frontend/index.html has a Twitch status section with a Refresh button above Approved streamers."""
+        """frontend/index.html has a Twitch status section with a Refresh button.
+        Issue 214 moved it to the Twitch sub-tab, below Approved streamers (approvals come first)
+        and above Twitch collection merges."""
         html = _read(FRONTEND_DIR / "index.html")
-        status_at = html.index('<div class="twitch-merges-title">Twitch status</div>')
-        assert status_at < html.index('<div class="twitch-merges-title">Approved streamers</div>')
-        section = html[status_at:html.index("Approved streamers")]
+        status_at = html.index('<h3 class="admin-panel-title">Twitch status</h3>')
+        assert html.index('<h3 class="admin-panel-title">Approved streamers</h3>') < status_at
+        section = html[status_at:html.index('<h3 class="admin-panel-title">Twitch collection merges</h3>')]
         assert 'onclick="loadTwitchStatus()"' in section and ">Refresh</button>" in section
         assert 'id="adminTwitchStatus"' in section
         js = _read(FRONTEND_DIR / "app-admin-users.js")

@@ -687,11 +687,11 @@ As the operator, I want one rule for "this account is this player", used everywh
 **Acceptance criteria**
 - **One helper:** a shared helper (`player_links.py`) gives the verified player of a user, and the users verified for a player: `steam_id` and `player_id` set, on a full, non-demo account (the existing `own_card.is_candidate` rule).
 - **Every reader uses it:**
-  - the card image tag stickers (`routers/cards.py`);
+  - the card image tag stickers (`routers/cards.py`; since #217 the card tag symbols, `tags` in `GET /accolades`);
   - `GET /profile/{user_id}` (`player_name`, `player_avatar_url`, `player_team_name`, and `player_id` for the owner and admins);
   - `own_card.is_candidate`;
   - `accolades._linked_users`.
-- **Tag stickers:** a card's tag stickers come only from a user with a verified link to that player. An account holding a stale `player_id` without Steam adds none.
+- **Tag stickers:** a card's tag stickers (tag symbols since #217) come only from a user with a verified link to that player. An account holding a stale `player_id` without Steam adds none.
 - **Guard test:** a test fails when backend code outside the helper reads `users.player_id` or `User.player_id` without `steam_id`. The allow-list is the helper, Steam linking (`steam_openid.py`), the migration and `admin_users.py`'s claims history.
 
 ### Typed-in Links Are Cleared Once
@@ -704,3 +704,37 @@ As the operator, I want the old typed-in links removed on upgrade, so that the d
 - **Idempotent:** a second run changes nothing and writes no entry.
 - **Verified links stay:** accounts with Steam keep their `player_id`.
 - **Deploy note:** the PR and the migration doc say to run `scripts/backup-db.sh` first, because the cleared values can't be restored otherwise.
+
+## Steam Re-auth Without Leaving the Page (issue #213)
+
+Plan: `markdown/plans/plan-issue-213-steam-reauth-without-leaving-the-page.md`. Feature doc: `markdown/features/reference/steam-reauth-popup.md`. Steam-only admins can already confirm sensitive actions (#150); this keeps the page and retries the action.
+
+### Steam-Only Admins Confirm Without Losing Their Work
+**User story**
+As an admin who signs in only with Steam, I want to confirm a sensitive action with Steam without leaving the page, so that the form I filled in is kept and the action completes on its own.
+
+**Acceptance criteria**
+- **Popup:** when a protected admin action answers 403 `reauth_required` for an account without a password, **Confirm with Steam** opens the Steam check in a popup window. The Admin page and any open dialog stay as they are.
+- **Success:**
+  - The popup ends on `/steam-reauth-done.html`, posts `{type: "steam-reauth", result: "ok"}` to the opener and closes.
+  - `adminFetch` then retries the original request once; it accepts the message only from the site's own origin.
+  - The dialog's input is not lost.
+- **Failure:**
+  - A different Steam account ends the popup with `result: "reauth_failed"`. The modal shows "That Steam account is not the one linked to this account. Nothing was confirmed", and nothing is retried.
+  - Closing the popup early counts as not confirmed.
+- **Blocked popup:** the modal shows "Your browser blocked the Steam window" with **Continue on this page**, which runs today's full-page path. The full-page path's behaviour and messages are unchanged.
+- **Server:**
+  - `GET /auth/steam/start?purpose=reauth&return_tab=popup` is accepted.
+  - The callback redirects a `popup` attempt to `/steam-reauth-done.html?steam=<key>`, where the key comes from the existing fixed set.
+  - Login and link never accept `popup`.
+  - The identity check, the one-time state and the `admin_reauth` / `player_reauth` audit are unchanged.
+- **Same path for players:** Unlink Steam and the Twitch connection actions use the same popup.
+
+### Admins With a Password Can Use Steam Too
+**User story**
+As an admin with both a password and a linked Steam account, I want to choose either method when asked to confirm, so that I can use whichever is at hand.
+
+**Acceptance criteria**
+- **Both offered:** the re-auth modal shows the password field and **Confirm with Steam instead** when the account has a password and a linked Steam id (`activeSteamLinked`) and Steam is enabled.
+- **Password only:** without a linked Steam account, the modal shows only the password, as today.
+- **Steam unavailable:** where `/auth/steam/start` would answer 503 `steam_unavailable` (no `APP_BASE_URL`; the page learns it from `GET /config` `steam_reauth_available`), the modal says "Steam confirmation is unavailable on this server" without opening a window, and the password stays available where the account has one.

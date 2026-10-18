@@ -32,8 +32,11 @@ The check is the `require_recent_reauth` dependency (`backend/deps.py`), added a
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
 `adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
 `reauth_required`, calls `POST /reauth`, and retries the action once. An admin without a password
-(created through Steam) gets **Confirm with Steam** instead, a Steam round trip
-(`GET /auth/steam/start?purpose=reauth&return_tab=admin`) after which the action is repeated. All
+(created through Steam) gets **Confirm with Steam** instead: a Steam check in a popup
+(`GET /auth/steam/start?purpose=reauth&return_tab=popup`, #213) after which the action retries by itself
+and open dialogs are kept. If the popup is blocked, **Continue on this page** uses the full-page round trip
+(`return_tab=admin`), after which the action is repeated. Admins with both a password and Steam can choose
+**Confirm with Steam instead**. All
 other admin endpoints work without re-authentication.
 
 ### Typed confirmation
@@ -120,6 +123,9 @@ id (issue #150), newest first: `timestamp`, `player_id`, `superseded_user_id`,
 `player_id_claim_superseded` audit rows. Shown under User Management as **Superseded player id
 claims**. See `reference/steam-login.md`.
 
+### Twitch sub-tab and pending approvals badge (issue 214)
+Approved streamers, Twitch status and Twitch collection merges live in their own **Twitch** admin sub-tab, approvals first. The sub-tab button and the top-level Admin tab show the number of channels waiting for approval (`pending` from `GET /admin/twitch/channels`), fetched when an admin loads the page and after Approve or Reject; no badge at zero. See `reference/admin-enhancements.md`.
+
 ---
 
 ## Token Distribution: Redeemable Codes
@@ -172,6 +178,9 @@ Recalculates fantasy points for every `PlayerMatchStats` row using the current w
 ---
 
 ## Match & Week Management
+
+### `GET /admin/matches` (series fields, issue 214)
+Each row also carries `series_key`, `series_team1_id`, `series_team2_id` (the schedule-feed series the match belongs to and its teams in feed order), `division` (`div1`/`div2` from the feed, else from the league name), `league_name` and `stream_url` (the series' stream link). The series fields are null for matches outside the feed or when the feed can't be read; one `schedule.get_schedule` pass serves the whole list. The Matches tab groups games by series with them. See `reference/admin-enhancements.md`.
 
 ### `GET /admin/matches` (scoring week fields)
 Besides the match, MVP, timing and parse fields, each row carries `week_override_id`, `scoring_week_id`, `scoring_week_label` and `scoring_week_source` (`override` or `time`; all null when no week contains the match; an override pointing to a deleted week gives source `override` with a null id and label), and `time_week_id` / `time_week_label` (the week containing `start_time`, shown by the picker's "By time" option). See [Weeks › Week Override](weeks.md#week-override).
@@ -404,6 +413,7 @@ These features have dedicated reference documents:
 | Feature | Endpoints | Reference |
 |---|---|---|
 | Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
+| Player Name Lookup | `GET /admin/players/lookup?ids=…` (name preview for typed ids: pool, then OpenDota, cached 10 minutes; at most 50 ids) | `reference/admin-enhancements.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
 | League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |

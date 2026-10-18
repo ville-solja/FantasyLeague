@@ -47,7 +47,7 @@ As an admin, I want to mark champions and add or correct accolades from Player m
 - **Mark champions** is used about once a season, so it favours flexibility over automation. One form, with two ways to start:
   - **From this season:** pick the season (the current one) and division, then a team from the active season's teams. Its players for the season come pre-filled (`player_match_stats.team_id`), and the admin can change the list.
   - **Past season (backfill):** pick a past season ("Season 1" to the last ended season) and division, type the team name, and add players by OpenDota id. A past champion team may not exist in the current pool at all, or only some of its players may still play, so nothing depends on current teams or players.
-- **Roster editor:** both ways end in the same editable list, one row per player with OpenDota id, name and **Remove**. **+ Add player** adds a row; a paste box takes several lines of "`<id> <name>`".
+- **Roster editor:** both ways end in the same editable list, one row per player with OpenDota id, name and **Remove**. **+ Add player** adds a row. *(Superseded by #214: the paste box for "`<id> <name>`" lines was removed; see `admin.md`, Admin Enhancements.)*
   - **Names:** typing an id fills the name from the pool, else from that player's earlier accolade rows. Otherwise the admin types it. The name stays editable and is stored on the row as given.
   - **No fixed size:** five is usual. Stand-ins or a sixth player are allowed, with a note "6 players (usually 5)".
   - **Validation:** each id is a positive integer and appears once; every row needs a name.
@@ -56,7 +56,7 @@ As an admin, I want to mark champions and add or correct accolades from Player m
 - **Endpoint:** `PUT /admin/season-champions` with `{season_label, division, team_name, players: [{account_id, name}]}`; admin plus `require_recent_reauth`; one `admin_champions_set` audit entry with the season, division and added and removed counts. An empty `players` list removes that division's champions.
 - **Holo follows the record:** a past-season champion is Holo-eligible from the moment they're recorded, if they are in the pool. A player removed from the list loses eligibility for future draws; cards already drawn as Holo stay Holo.
 - **Add accolade:** the form asks for season, kind, and a player (from the pool, or by OpenDota id and name) or a user (for `fantasy_winner`), plus an optional value. For `played` it also accepts several OpenDota ids, one per line, with names.
-- **Backfill Played for S1–S15:** the league has 15 completed seasons before this feature. `backend/scripts/backfill_played.py` records them from OpenDota (see *Seasons Played Are Backfilled*); the bulk paste covers any season the script can't reach.
+- **Backfill Played for past seasons:** the league has 15 completed seasons before this feature. `backend/scripts/backfill_played.py` records S4–S15 from OpenDota (see *Seasons Played Are Backfilled* and #212's `--all`); the bulk paste covers S1–S3 and any season the script can't reach.
 - **Endpoints:**
   - `POST /admin/season-accolades`: one row or a list; admin plus `require_recent_reauth`; validates kind, division and player or user; 409 when a single row is a duplicate (a pasted list skips rows already recorded and reports how many); `admin_accolade_added` audit entry.
   - `GET /admin/season-accolades`: filterable by season and kind.
@@ -65,6 +65,8 @@ As an admin, I want to mark champions and add or correct accolades from Player m
 - **Table:** a "Champions and accolades" table under the pool, with columns Season, Title (chip), Winner, Value, Source, and **Edit** and **Remove**. Champion rows group a season and division into one row ("[Team] · 5 players"), whose **Edit** opens Mark champions filled in, and whose **Remove** removes the whole set after a confirmation.
 
 ### Seasons Played Are Backfilled
+*(Extended by #212: league ids now live in `backend/scripts/kanaliiga_leagues.json`, Season 4 is covered through it, and `--all` / `--max-calls` run every past season in one command. See* Season Participation Backfill *below.)*
+
 **User story**
 As the operator, I want the 15 seasons played before this feature recorded once, so that the seasons count is right from day one instead of starting at 1 for everyone.
 
@@ -133,7 +135,7 @@ As a visitor or collector, I want every accolade to have its own symbol, with a 
   - the pips stack down the card's right edge from the top-right corner, beside the art and clear of the name and rarity, read top to bottom like a mana cost (a row across the top would collide with long names);
   - they are sized in em, so they scale with the card, like the card back in issue 205;
   - they are an HTML overlay, not part of the card image, so they stay hoverable, and an accolade added later shows without rebuilding cached images;
-  - caster tag stickers stay baked into the image as today.
+  - caster tag stickers stay baked into the image as today (superseded by #217: tags are symbols on the card's left edge).
 - **Data:** `GET /accolades` (public) returns, per player:
   - their champion and award accolades: kind, division, short and full season label, team name and value;
   - `fantasy_winner` seasons, only for a player whose winning user has a Steam-verified link now, without the user id or username;
@@ -172,3 +174,30 @@ As a visitor, I want to see at a glance who has played many seasons and who has 
   - **Hall of fame** sidebar: players ranked by titles (champion plus awards, not Played), each with their pips and counts (Played left out).
   - Empty state: "No season history yet."
 - **Design system:** every new screen follows it (#202): badges, the self row, data-row grids and tabular numbers.
+
+## Season Participation Backfill (issue #212)
+
+Plan: `markdown/plans/plan-issue-212-season-participation-backfill.md`. Feature doc: `markdown/features/reference/season-participation-backfill.md`.
+
+### Past Seasons' Participation Is Backfilled in One Run
+**User story**
+As the operator, I want one command that records who played in every past Kanaliiga season found on OpenDota, so that seasons-played counts are right without ingesting old matches.
+
+**Acceptance criteria**
+- **League file:** `backend/scripts/kanaliiga_leagues.json` lists seasons 4–16 with their league ids and a note per season (empty Lower leagues, the unnumbered S4 league). A test checks it is valid: unique ids, seasons ascending, each league an int.
+- **`--all`:** runs every listed season except the live one (`accolades.current_season_label`), oldest first, using the same per-season code as `--season`. Each season writes its own `admin_accolade_added` audit entry (`played=N source=backfill`).
+  - `--dry-run --all` writes nothing.
+  - A second run adds nothing.
+- **`--max-calls N` (default 900):** caps OpenDota calls per run. When it's reached, the run stops after the current match, keeps the cache, records what it finished, and exits 2 with "Budget used: resume to continue from Season N". A resumed run spends no calls on cached matches.
+- **Unreadable matches:** a match that can't be fetched after the client's retries is counted in the report and retried on the next run. The season's rows are still written for the matches that were read.
+- **Report:** the run prints a per-season line (players, new rows, already recorded, unreadable matches), the totals, and the seasons-per-player distribution.
+- **Existing modes unchanged:** `--season` and `--league` work as before. S4 resolves through the file even though its OpenDota name has no number.
+
+### Counts Say Where They Start
+**User story**
+As a visitor, I want the seasons count to say it starts at Season 4, so that a long-time player's number isn't mistaken for their whole history.
+
+**Acceptance criteria**
+- **Players tab:** the Seasons legend reads "Seasons played since Season 4 (earlier seasons have no OpenDota record)".
+- **Hover text:** the count's hover text lists the seasons and ends with "Counted from Season 4".
+- **One constant:** the first counted season is a single constant used by the backend (`/players` response field `seasons_counted_from`) and the frontend. The text isn't hard-coded in two places.

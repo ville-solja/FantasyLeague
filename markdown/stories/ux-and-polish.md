@@ -301,13 +301,13 @@ As a new user, I want a "Users" subtab that explains how the fantasy app works a
 
 ### Players Subtab
 **User story**
-As a Kanaliiga player, I want a "Players" subtab that explains how to link my Dota 2 profile to my Fantasy account so that tags and stickers granted to me appear correctly on my cards and the leaderboard.
+As a Kanaliiga player, I want a "Players" subtab that explains how to link my Dota 2 profile to my Fantasy account so that tags granted to me appear correctly on my cards and the leaderboard.
 
 **Acceptance criteria**
 - Explains that a Kanaliiga player who also wants a Fantasy account can link the two via Profile tab → enter Dota 2 (OpenDota) player ID
-- Explains what linking unlocks: admin-granted tags appear as card stickers and leaderboard chips (per `reference/player-linking-and-tag-visibility.md`)
+- Explains what linking unlocks: admin-granted tags appear as tag symbols on cards (card stickers before #217) and leaderboard chips (per `reference/player-linking-and-tag-visibility.md`)
 - Explains that linking is optional and can be changed later from the Profile tab
-- Clarifies that a player does not need a Fantasy account for their real match performance to count toward other users' rosters — only linking affects their own tags/stickers
+- Clarifies that a player does not need a Fantasy account for their real match performance to count toward other users' rosters — only linking affects how their own tags show
 
 ---
 
@@ -866,7 +866,7 @@ As a player, I want role and status badges to look consistent and tell me what t
 
   This applies wherever they appear: the season and weekly standings (`_lbStandingsRow`; ADMIN also on the past season standings), Profile (`#profileAdminBadge`, `.profile-tags`, replacing `.tag-chip`) and Admin › User Management (`_renderUsers`, where a synced Caster tag still reads "Caster (auto)" with its #201 explanation). The Weekly Report shows no user tags or ADMIN badge; its roster status chips (`.weekly-summary-tag`) stay as they are.
 - **Status badges:** TESTER, LIVE (`.live-tag`), "League week N" (`.league-week-tag`), ID SHARED and the Steam/Twitch link badges (#201) use the neutral status style (`statusBadgeHtml` / `.status-badge`; the two schedule classes share its rule).
-- **Unchanged:** card stickers on card art, rarity badges and the version and demo-mode badges.
+- **Unchanged:** card stickers on card art (since retired, #217), rarity badges and the version and demo-mode badges.
 - **No inline styles:** no badge markup in `app-*.js` has an inline `style` attribute. Labels and titles are escaped (`_escHtml`).
 
 ### Your Own Row Stands Out Wherever You Appear

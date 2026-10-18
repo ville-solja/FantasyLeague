@@ -36,8 +36,10 @@ nothing is committed (500). The audit detail adds `accolades=N champions=M`. The
 a preview first (`GET /admin/season/accolades-preview`), with the label prefilled from the
 current season: "Season N" parsed from the monitored leagues' OpenDota names ("Kanaliiga Season
 16", "Kanaliiga Season 16 Lower"), which stay monitored until Reset; without such a name it is
-inferred from the archives and accolades. Past seasons' Played rows are backfilled with
-`backend/scripts/backfill_played.py --season "Season N"`, which finds the leagues by name. See
+inferred from the archives and accolades. Past seasons' Played rows (S4–S15) are backfilled with
+`backend/scripts/backfill_played.py --all`, using the league ids in `backend/scripts/kanaliiga_leagues.json`
+(#212; S1–S3 have no OpenDota league and use the Played paste). See
+[Season Participation Backfill](season-participation-backfill.md) and
 [Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md).
 
 ### `POST /admin/season/reset`

@@ -12,7 +12,23 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-18 — ship — testing
+**Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.
+**Solution:** Call route functions with the `db` fixture (or override `get_db`) instead of the real app's database. When disabling rate limits, disable the instance the router imported (`<router_module>.limiter.enabled = False`) and restore it on teardown. Never use regexes to parse HTML in tests (CodeQL `py/bad-tag-filter`); use `html.parser`.
+
 ---
+
+### 2026-10-18 — developer — testing
+**Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
+**Solution:** Before adding top-level code to a module, grep `backend/tests` for harnesses that load it whole (`_js(["app-admin.js"]`) and add the stub there (`addEventListener: () => {}`). For the re-auth popup flow, reuse `_ADMIN_HARNESS` / `_admin` in `test_issue_213_*` (fake `window.open`, `message` events, timers).
+
+### 2026-10-18 — developer — testing
+**Problem:** Tests load operator scripts with `spec_from_file_location` + `exec_module` without adding them to `sys.modules`, so a `@dataclass` in a script with `from __future__ import annotations` fails at import (`'NoneType' object has no attribute '__dict__'`).
+**Solution:** In `backend/scripts/*.py`, use a plain class with `__init__` (as `SeasonResult` in `backfill_played.py`) instead of `@dataclass`.
+
+### 2026-10-18 — developer — testing
+**Problem:** A TestClient on a bare router can't sign in by setting a `session` cookie to a raw sid (the cookie is a signed Starlette session, and without `SessionMiddleware` `get_current_user` raises), and in Node harnesses a stub defined before a module is silently replaced by the module's own function of the same name.
+**Solution:** Add `SessionMiddleware` and override `deps.get_current_user` with the user's identity dict; `require_admin` still checks `is_admin` in the database (`_signed_in` in `test_issue_214_admin_enhancements.py`). In harnesses, stub only globals the loaded modules don't define, and assert on the call you mean (filter `fetch` calls by method) rather than the last one.
 
 ### 2026-10-17 — developer — endpoints
 **Problem:** After removing `PUT /profile/player-id`, a request answered 405, not 404, even in an app with only the profile router: `GET /profile/{user_id}` matches the path for any method, so Starlette reports a method mismatch.

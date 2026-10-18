@@ -135,7 +135,7 @@ echo "  Config Path:        config.html"
 echo "  Live Config Path:   live_config.html"
 echo "Dev console → Version → Asset Hosting → Panel Height: 500"
 echo "  (the largest Twitch allows; the panel scrolls at any smaller height)"
-echo "Dev console → Version → Capabilities → Allowlist for Image Domains: see Admin › Users › Twitch status"
+echo "Dev console → Version → Capabilities → Allowlist for Image Domains: see Admin › Twitch › Twitch status"
 echo "  (the team logo hosts; without them the team draw shows monograms instead of logos)"
 echo "Panel calls only these backend origins (ebs-origins.js):"
 for o in "${EBS_ORIGINS[@]}"; do echo "  $o"; done

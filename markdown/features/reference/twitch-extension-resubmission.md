@@ -19,12 +19,12 @@ Reviewers compare the listing, the disclosure and the testing steps with what th
 | EBS disclosure | "The backend URL is not hardcoded" | Allowed origins are fixed in the package at build time (`ebs-origins.js`, `EBS_ALLOWED_ORIGINS`, written by `package.sh`, #164); the configured `ebs_url` is used only when its origin is one of them |
 | Endpoint table | No `/twitch/check` or `/twitch/ping` | Every `/twitch/...` path the packaged files call, including the configuration page's Connection check |
 | Images | Not disclosed | Team logos load only from `https://` URLs on the Steam CDN hosts (`logo_hosts.DEFAULT_LOGO_HOSTS`) |
-| Checklist | No production deploy, Panel Height, Image Domains or go/no-go | Ordered: production deploy (backup, then migration 038), env vars, drop age 0 for the review window, Extension Settings (Configuration Service, empty Developer Writable Channel Segment Version), the version upload, the global `ebs_url`, Asset Hosting and Panel Height 500, URL Fetching and Image Domains allowlists, Chat and Request Identity Link, approved review channel, Connection check, Hosted Test, Admin › Users › Twitch status green (Connect Twitch and Steam warnings explained), Submit, then the drop age set back |
+| Checklist | No production deploy, Panel Height, Image Domains or go/no-go | Ordered: production deploy (backup, then migration 038), env vars, drop age 0 for the review window, Extension Settings (Configuration Service, empty Developer Writable Channel Segment Version), the version upload, the global `ebs_url`, Asset Hosting and Panel Height 500, URL Fetching and Image Domains allowlists, Chat and Request Identity Link, approved review channel, Connection check, Hosted Test, Admin › Twitch › Twitch status green (Connect Twitch and Steam warnings explained), Submit, then the drop age set back |
 | Testing instructions | Flows 1–4 written for 1.2.0 | Flows 1–5 in the panel's current wording, a note on scrolling and `E-…` codes, and a Connection check flow |
 | Reviewer test setup | No drop-age note | A new account joins MVP drops `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` (default 24) after joining (#171), so the checklist sets it to 0 for the review window and back after the review |
 | Screenshots | Generic list | The five views to retake for 1.3.0 |
 
-`package.sh` now also prints `Dev console → Version → Capabilities → Allowlist for Image Domains: see Admin › Users › Twitch status` after the Panel Height reminder, on success only.
+`package.sh` now also prints `Dev console → Version → Capabilities → Allowlist for Image Domains: see Admin › Twitch › Twitch status` after the Panel Height reminder, on success only.
 
 ## Drift tests
 

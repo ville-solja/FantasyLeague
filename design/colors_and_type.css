@@ -102,6 +102,12 @@
   --accolade-fantasy: var(--k-orange-100);
   --accolade-played:  var(--fg-muted);
 
+  /* Tag symbols (issue 217): the same colours as the role badges, so a caster or admin
+     reads the same on a card as on the leaderboard. Each kind has its own icon too. */
+  --tag-admin:   var(--badge-admin);
+  --tag-caster:  var(--badge-caster);
+  --tag-generic: var(--badge-tag);
+
   /* Chart series (issue 208): a categorical set validated for the dark card surface,
      used only for the fills of stacked bars and their legend swatches. Text never
      wears these colours; single-series bars and strips use --fg-muted / --accent. */

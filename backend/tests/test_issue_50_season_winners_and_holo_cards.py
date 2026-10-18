@@ -941,13 +941,14 @@ def test_admin_players_mark_champions_and_add_accolade_buttons():
 
 
 def test_admin_players_mark_champions_two_modes_and_roster_editor():
-    """Source-reading (app-admin-players.js): Mark champions offers 'From this season' (team prefill) and 'Past season' (typed team, ids), ending in one roster editor with + Add player, Remove, paste box and the 'N players (usually 5)' note; saving calls PUT /admin/season-champions."""
+    """Source-reading (app-admin-players.js): Mark champions offers 'From this season' (team prefill) and 'Past season' (typed team, ids), ending in one roster editor with + Add player, Remove and the 'N players (usually 5)' note; saving calls PUT /admin/season-champions.
+    Issue 214 removed the paste box (champPaste); + Add player stays."""
     html = _fe("index.html")
     js = _fe("app-admin-players.js")
     modal = html[html.index('id="markChampionsModal"'):html.index("<!-- Player Management: Add accolade")]
     assert "From this season" in modal and "Past season" in modal
     assert 'id="champTeamPick"' in modal and 'id="champTeamName"' in modal
-    assert "+ Add player" in modal and 'id="champPaste"' in modal
+    assert "+ Add player" in modal and 'id="champPaste"' not in modal
     row = _fn_body(js, "_champRowHtml")
     assert "Remove" in row and "champ-id" in row and "champ-name" in row
     assert "(usually 5)" in _fn_body(js, "_updateChampCount")
@@ -1282,11 +1283,11 @@ def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch, caplog):
 
 
 def test_image_does_not_draw_accolades():
-    """Source-reading (image.py): accolades are not composited into the card image (caster stickers still are)."""
+    """Source-reading (image.py): accolades are not composited into the card image (nor, since issue #217, tag stickers)."""
     src = _read("backend", "image.py")
-    assert "accolade" not in src.replace("Accolades are not drawn", "")
+    assert "accolade" not in src.replace("Accolades and user tags are", "")
     assert "season_accolades" not in src and "SeasonAccolade" not in src
-    assert "_apply_stickers(base, tag_keys)" in src  # caster stickers are still baked in
+    assert "_apply_stickers" not in src  # issue #217: tags are HTML tag pips now
     cards_src = _read("backend", "routers", "cards.py")
     img_fn = cards_src[cards_src.index("def get_card_image("):cards_src.index("def get_card_image_route(")]
     assert "accolade" not in img_fn

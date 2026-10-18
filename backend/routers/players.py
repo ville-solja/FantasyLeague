@@ -61,6 +61,7 @@ def list_players(db=Depends(get_db)):
     per_player = accolades.accolades_for(db, [r["id"] for r in rows], current=current)
     for r in rows:
         r.update(accolades.player_seasons(per_player.get(r["id"], [])))
+        r["seasons_counted_from"] = accolades.FIRST_COUNTED_SEASON  # issue 212
     return rows
 
 

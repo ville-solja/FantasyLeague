@@ -63,6 +63,67 @@ function openAddPlayerPopup() {
   document.getElementById("addPlayerModal").classList.remove("hidden");
   setStatus("addPlayerStatus", "");
   document.getElementById("addPlayerIdInput").value = "";
+  _setAddPlayerPreview("", "");
+}
+
+// ---------------------------------------------------------------------------
+// Typed ids and name preview (issue 214): ids are text inputs, checked here, and
+// GET /admin/players/lookup names them before anything is saved.
+// ---------------------------------------------------------------------------
+
+const ID_DIGITS_MESSAGE = "OpenDota ids are digits only";
+
+/** The message for a typed id that isn't a positive whole number; null when it is one. */
+function idInputProblem(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s) return "Enter an OpenDota account ID";
+  if (!/^\d+$/.test(s) || !Number.isSafeInteger(Number(s)) || Number(s) <= 0) return ID_DIGITS_MESSAGE;
+  return null;
+}
+
+/** [{id, name, source, in_pool}] for the given ids, or null when the lookup failed. */
+async function lookupPlayerIds(ids) {
+  try {
+    const res = await fetch(`${API}/admin/players/lookup?ids=${ids.join(",")}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+/** "Glete · not in the pool", "Glete · already in the pool" or "No OpenDota player with this id". */
+function addPlayerPreviewText(entry) {
+  if (!entry || entry.name == null) return "No OpenDota player with this id";
+  return `${entry.name} · ${entry.in_pool ? "already in the pool" : "not in the pool"}`;
+}
+
+function _setAddPlayerPreview(text, state) {
+  const el = document.getElementById("addPlayerPreview");
+  if (!el) return;
+  el.textContent = text;
+  el.className = "id-preview" + (state ? ` id-preview-${state}` : "");
+}
+
+let _addPlayerPreviewFor = "";
+
+/** On blur or Enter: shows who the typed id is. Saving doesn't depend on it. */
+async function previewAddPlayer() {
+  const raw = document.getElementById("addPlayerIdInput").value.trim();
+  if (!raw) { _addPlayerPreviewFor = ""; return _setAddPlayerPreview("", ""); }
+  const problem = idInputProblem(raw);
+  if (problem) { _addPlayerPreviewFor = ""; return _setAddPlayerPreview(problem, "err"); }
+  if (raw === _addPlayerPreviewFor) return;
+  _addPlayerPreviewFor = raw;
+  _setAddPlayerPreview("Looking up…", "");
+  const found = await lookupPlayerIds([raw]);
+  if (raw !== document.getElementById("addPlayerIdInput").value.trim()) return;
+  if (!found || !found.length) {
+    _addPlayerPreviewFor = "";
+    return _setAddPlayerPreview("Name lookup failed; you can still add the id", "err");
+  }
+  const entry = found[0];
+  _setAddPlayerPreview(addPlayerPreviewText(entry), entry.name == null ? "err" : (entry.in_pool ? "warn" : "ok"));
 }
 
 function closeAddPlayerPopup() {
@@ -71,9 +132,9 @@ function closeAddPlayerPopup() {
 
 async function addPlayer() {
   const idVal = document.getElementById("addPlayerIdInput").value.trim();
-  if (!idVal) return setStatus("addPlayerStatus", "Enter an OpenDota account ID", false);
+  const problem = idInputProblem(idVal);
+  if (problem) return setStatus("addPlayerStatus", problem, false);
   const player_id = parseInt(idVal, 10);
-  if (isNaN(player_id)) return setStatus("addPlayerStatus", "ID must be an integer", false);
   const confirmBtn = document.getElementById("addPlayerConfirmBtn");
   const closeBtn = document.getElementById("addPlayerCloseBtn");
   const input = document.getElementById("addPlayerIdInput");
@@ -89,6 +150,8 @@ async function addPlayer() {
     if (!res.ok) return setStatus("addPlayerStatus", data.detail, false);
     setStatus("addPlayerStatus", `Added: ${data.name} (${data.id})`);
     document.getElementById("addPlayerIdInput").value = "";
+    _addPlayerPreviewFor = "";
+    _setAddPlayerPreview("", "");
     loadPlayerPool();
   } catch (e) {
     setStatus("addPlayerStatus", e.message, false);
@@ -104,6 +167,7 @@ function openBulkAddPlayersPopup() {
   setStatus("bulkAddPlayersStatus", "");
   document.getElementById("bulkAddIdsInput").value = "";
   _resetBulkAddProgress();
+  _setBulkAddPreview(null);
 }
 
 function closeBulkAddPlayersPopup() {
@@ -138,9 +202,69 @@ function renderBulkAddProgress(evt) {
   if (counter) counter.textContent = `${evt.index} of ${evt.total} processed`;
 }
 
+// --- Bulk add preview (issue 214) --------------------------------------------
+
+const BULK_PREVIEW_MAX = 50;   // GET /admin/players/lookup's cap
+const _BULK_PREVIEW_LABELS = { new: "new", in_pool: "already in pool", not_found: "not found" };
+let _bulkAddPreview = null;    // [{id, name, status}] for the ids last previewed
+
+/** Typed ids, split on commas, spaces or new lines, each once, in order. */
+function parseBulkIds(text) {
+  const seen = new Set();
+  return String(text || "").split(/[\s,]+/).map(s => s.trim()).filter(s => s && !seen.has(s) && seen.add(s));
+}
+
+function bulkPreviewStatus(entry) {
+  if (entry.in_pool) return "in_pool";
+  return entry.name == null ? "not_found" : "new";
+}
+
+function _setBulkAddPreview(entries) {
+  _bulkAddPreview = entries;
+  const list = document.getElementById("bulkAddPreviewList");
+  const btn = document.getElementById("bulkAddConfirmBtn");
+  const newIds = (entries || []).filter(e => e.status === "new");
+  if (list) {
+    list.hidden = !entries;
+    list.innerHTML = (entries || []).map(e =>
+      `<li class="bulk-preview-row bulk-preview-${e.status}"><span class="bulk-preview-id">${_escHtml(String(e.id))}</span>` +
+      `<span class="bulk-preview-name">${_escHtml(e.name || "—")}</span>` +
+      `<span class="bulk-preview-status">${_BULK_PREVIEW_LABELS[e.status]}</span></li>`).join("");
+  }
+  if (btn) {
+    const n = newIds.length;
+    btn.textContent = entries ? `Add ${n} player${n === 1 ? "" : "s"}` : "Add players";
+    btn.disabled = n === 0;
+  }
+}
+
+/** Editing the ids drops the old preview, so Add never sends ids nobody saw. */
+function bulkAddIdsChanged() {
+  if (_bulkAddPreview) _setBulkAddPreview(null);
+}
+
+async function previewBulkAdd() {
+  const ids = parseBulkIds(document.getElementById("bulkAddIdsInput").value);
+  if (!ids.length) return setStatus("bulkAddPlayersStatus", "Enter at least one ID", false);
+  const bad = ids.find(id => idInputProblem(id));
+  if (bad) return setStatus("bulkAddPlayersStatus", `${ID_DIGITS_MESSAGE}: "${bad}"`, false);
+  if (ids.length > BULK_PREVIEW_MAX) {
+    return setStatus("bulkAddPlayersStatus", `At most ${BULK_PREVIEW_MAX} ids at a time`, false);
+  }
+  setStatus("bulkAddPlayersStatus", "Looking up names…");
+  const found = await lookupPlayerIds(ids);
+  if (!found) return setStatus("bulkAddPlayersStatus", "Name lookup failed; try again", false);
+  const entries = found.map(e => ({ id: e.id, name: e.name, status: bulkPreviewStatus(e) }));
+  _setBulkAddPreview(entries);
+  const n = entries.filter(e => e.status === "new").length;
+  setStatus("bulkAddPlayersStatus", n ? "" : "No new players to add", n > 0);
+}
+
 async function bulkAddPlayers() {
-  const csv = document.getElementById("bulkAddIdsInput").value.trim();
-  if (!csv) return setStatus("bulkAddPlayersStatus", "Enter at least one ID", false);
+  if (!_bulkAddPreview) return previewBulkAdd();
+  const newIds = _bulkAddPreview.filter(e => e.status === "new").map(e => e.id);
+  if (!newIds.length) return setStatus("bulkAddPlayersStatus", "No new players to add", false);
+  const csv = newIds.join(",");
   const confirmBtn = document.getElementById("bulkAddConfirmBtn");
   const input = document.getElementById("bulkAddIdsInput");
   // Guards against a second overlapping stream writing into the same progress
@@ -184,8 +308,8 @@ async function bulkAddPlayers() {
   } catch (e) {
     setStatus("bulkAddPlayersStatus", e.message, false);
   } finally {
-    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = "Confirm"; }
     if (input) input.disabled = false;
+    _setBulkAddPreview(null);
   }
 }
 
@@ -499,7 +623,7 @@ function champIdTyped(input) {
   if (!nameEl.value.trim()) nameEl.value = _knownPlayerName(input.value.trim());
 }
 
-/** "<id> <name>" per line into roster rows. */
+/** "<id> <name>" per line into roster rows (Add accolade's bulk Played box). */
 function _parsePlayerLines(text) {
   return String(text || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
     const m = /^(\S+)\s*(.*)$/.exec(l);
@@ -507,18 +631,10 @@ function _parsePlayerLines(text) {
   });
 }
 
-function champApplyPaste() {
-  const el = document.getElementById("champPaste");
-  const rows = _champRosterRows().filter(r => String(r.account_id).trim() || String(r.name).trim());
-  _setChampRoster(rows.concat(_parsePlayerLines(el.value)));
-  el.value = "";
-}
-
 /** Opens the form; preset = {season_label, division, team_name, players} edits a saved set. */
 async function openMarkChampions(preset) {
   document.getElementById("markChampionsModal").classList.remove("hidden");
   setStatus("champStatus", "");
-  document.getElementById("champPaste").value = "";
   await _loadChampPreview();
   const current = _champPreview ? _champPreview.season_label : "";
   const past = preset && preset.season_label !== current;
@@ -623,6 +739,8 @@ async function saveAccolade() {
     body = { season_label, kind, username, value };
   } else {
     const row = { account_id: document.getElementById("accPlayerId").value, name: document.getElementById("accPlayerName").value };
+    const idProblem = idInputProblem(row.account_id);
+    if (idProblem) return setStatus("accStatus", idProblem, false);
     const problem = validateChampionRoster([row]);
     if (problem) return setStatus("accStatus", problem, false);
     body = { season_label, kind, player_account_id: Number(row.account_id), player_name: row.name.trim(), value };

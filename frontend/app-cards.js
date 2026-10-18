@@ -107,19 +107,25 @@ function _rarityLabel(card) {
 /**
  * Issue 50: the player's accolade pips as an HTML overlay down the card's right edge
  * (accoladePipsHtml), and in the card viewer their chips below the card
- * (accoladeChipsHtml). Not part of the card image, so they stay hoverable.
+ * (accoladeChipsHtml). Issue 217: the linked user's tag pips down the left edge
+ * (tagPipsHtml). Not part of the card image, so they stay hoverable.
  */
 function _renderCardAccolades(card, drawFx) {
   const pipsEl = document.getElementById("revealPips");
   const chipsEl = document.getElementById("revealAccolades");
   const list = card && card.player_id && typeof playerAccolades === "function" ? playerAccolades(card.player_id) : [];
   const pips = list.length && typeof accoladePipsHtml === "function" ? accoladePipsHtml(list) : "";
+  const tags = card && card.player_id && typeof playerTags === "function" ? playerTags(card.player_id) : [];
+  const tagPips = tags.length && typeof tagPipsHtml === "function" ? tagPipsHtml(tags) : "";
   const titles = list.filter(a => a.kind !== "played");
-  if (pipsEl) pipsEl.innerHTML = pips ? `<div class="card-pips">${pips}</div>` : "";
+  if (pipsEl) {
+    pipsEl.innerHTML = (tagPips ? `<div class="card-tag-pips">${tagPips}</div>` : "")
+      + (pips ? `<div class="card-pips">${pips}</div>` : "");
+  }
   if (chipsEl) {
     chipsEl.innerHTML = !drawFx && titles.length && typeof accoladeChipsHtml === "function" ? accoladeChipsHtml(titles) : "";
   }
-  if (typeof refreshAccoladeIcons === "function" && (pips || titles.length)) refreshAccoladeIcons();
+  if (typeof refreshAccoladeIcons === "function" && (pips || tagPips || titles.length)) refreshAccoladeIcons();
 }
 
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */

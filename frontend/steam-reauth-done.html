@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>Steam confirmation</title>
+<link rel="stylesheet" href="/colors_and_type.css" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<!-- Issue 213: the Steam re-auth popup ends here. steam-reauth-done.js posts the
+     result to the opener (this site's own origin only) and closes the window. -->
+<main class="steam-reauth-done">
+  <p id="steamReauthDoneText">Finishing the Steam confirmation…</p>
+</main>
+<script src="/steam-reauth-done.js"></script>
+</body>
+</html>

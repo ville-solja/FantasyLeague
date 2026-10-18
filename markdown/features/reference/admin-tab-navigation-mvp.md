@@ -8,16 +8,17 @@ a Twitch broadcaster session.
 
 ## Tab Navigation
 
-The admin panel is divided into five tabs:
+The admin panel is divided into seven tabs:
 
 | Tab | Contents |
 |---|---|
-| **User Management** | User list, token grants, tester flag toggle — default tab |
+| **User Management** | User list, token grants, tester flag toggle, superseded player id claims — default tab |
+| **Twitch** | Approved streamers (waiting approvals first), Twitch status, Twitch collection merges; the tab and the Admin tab show a count badge of waiting approvals (issue 214) |
 | **Week Management** | Week CRUD (create, edit, delete unlocked weeks) |
 | **Player Management** | Player management (add, bulk-add, remove with refund) |
-| **Matches** | Ingested match table with MVP selection |
+| **Matches** | Ingested matches grouped by schedule-feed series (teams in feed order, "Not in the schedule" for the rest), with filters MVP missing, League and Unparseable, and MVP selection (issue 214) |
 | **Audit Log** | Chronological audit log of all admin and user actions |
-| **Settings** | League monitoring, Token Grant Events, Notifications, Promo Codes, Scoring Weights, User Tags, Token Balances |
+| **Settings** | Six sections with a section nav (issue 214): Season (League Management, Refresh Schedule Cache, Season Lifecycle), Scoring (Scoring Weights, Recalculate), Tokens and rewards (Promo Codes, Token Grant Events), Announcements (Notifications), Players and tags (Tag Definitions, Re-enrich), Maintenance (Database Backups, Demo Mode) |
 
 Tab state is stored in `sessionStorage` so the last-selected tab is restored when the user
 navigates away and returns.
@@ -49,7 +50,7 @@ Returns all ingested matches ordered by start time descending. Admin-only.
 ]
 ```
 
-The sample shows the core fields only; the timing (`live_first_seen_at`, `ingested_at`, `mvp_confirmed_at`) and scoring-week fields are listed in `core/admin.md`.
+The sample shows the core fields only; the timing (`live_first_seen_at`, `ingested_at`, `mvp_confirmed_at`), scoring-week and series (`series_key`, `series_team1_id`, `series_team2_id`, `division`, `league_name`, `stream_url`; issue 214, see `reference/admin-enhancements.md`) fields are listed in `core/admin.md`.
 
 `team1` and `team2` are resolved from the `teams` table by `radiant_team_id`/`dire_team_id` — `null` if the team is not in the local DB. `mvp_player_name` and `mvp_player_id` are `null` when no MVP has been set. `vod_url` is `null` until an admin sets one via `PATCH /admin/matches/{match_id}/vod` (see below) — it is also surfaced to every user in the Weekly Report, see `core/weekly-summary.md`. `parse_status` (`parsed` / `unparsed` / `unparseable` / `null`) and `excluded_from_scoring` drive the Parse and Scoring columns, see `reference/unparseable-match-handling.md`.
 

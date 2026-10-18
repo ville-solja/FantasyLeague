@@ -16,12 +16,14 @@ function renderDemoModePanel() {
   if (document.getElementById("demoModePanel")) return; // already rendered
 
   container.innerHTML = `
-    <div class="panel" id="demoModePanel">
-      <h2>Demo Mode</h2>
-      <p style="font-size:0.8rem;color:#555;margin-bottom:12px;">
-        Override the app's simulated "now" to walk through pre-lock, lock, and post-week
-        scoring on demand, and seed disposable accounts pre-loaded with random cards.
-      </p>
+    <div class="panel admin-panel" id="demoModePanel">
+      <div class="admin-panel-head">
+        <div class="admin-panel-heading">
+          <h3 class="admin-panel-title">Demo Mode</h3>
+          <p class="admin-panel-desc">Override the app's simulated "now" to walk through pre-lock, lock, and post-week
+            scoring on demand, and seed disposable accounts pre-loaded with random cards.</p>
+        </div>
+      </div>
 
       <h3 style="margin-bottom:8px;">Clock</h3>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center;">

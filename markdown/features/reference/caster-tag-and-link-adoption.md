@@ -6,7 +6,7 @@ Approved streamers who have connected Twitch to their website account get the `c
 
 ## Automatic Caster tag
 
-A Twitch channel id is the broadcaster's Twitch user id. A website account (`account_type = "full"`) whose `users.twitch_account_id` equals an approved channel id (`twitch_channels.approved_channels`: `TWITCH_MVP_CHANNEL_IDS` plus portal-approved channels, #175) gets the `caster` tag with `user_tags.source = "caster_sync"` and `granted_by = NULL`. The tag then shows wherever tags show: leaderboard role badges, card stickers and the Profile identity panel.
+A Twitch channel id is the broadcaster's Twitch user id. A website account (`account_type = "full"`) whose `users.twitch_account_id` equals an approved channel id (`twitch_channels.approved_channels`: `TWITCH_MVP_CHANNEL_IDS` plus portal-approved channels, #175) gets the `caster` tag with `user_tags.source = "caster_sync"` and `granted_by = NULL`. The tag then shows wherever tags show: leaderboard role badges, the mic symbol on cards (issue #217) and the Profile identity panel.
 
 `caster_tags.sync(db, reason=None) -> (granted, revoked)` (`backend/caster_tags.py`) does the matching in two queries, grants missing rows, removes `caster_sync` rows that no longer match, and audits each change. The caller commits. `caster_tags.sync_safely` wraps it in a savepoint: a failure is logged by exception type only and rolled back, so the user's action still succeeds.
 

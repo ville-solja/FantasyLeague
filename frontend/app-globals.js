@@ -14,6 +14,8 @@ let activeUsernameChangeAvailableAt = null;
 let activeOwnCardGrant = null;
 // Issue #150: password | both | steam_signup, from GET /config.
 let _loginMethod = "password";
+// Issue 213: whether the Steam re-auth popup can work here (Steam on, APP_BASE_URL set), from GET /config.
+let _steamReauthAvailable = false;
 let _tokenName        = "Tokens";
 let _tokenBalance     = null;
 let _teamBoosterCost  = 3;
@@ -43,6 +45,7 @@ async function loadConfig() {
       _tourAutostart = cfg.tour_autostart === true;
       if (Number.isInteger(cfg.twitch_connect_bonus_tokens)) _twitchConnectBonusTokens = cfg.twitch_connect_bonus_tokens;
       _loginMethod = cfg.login_method || "password";
+      _steamReauthAvailable = cfg.steam_reauth_available === true;
       if (typeof applyLoginMode === "function") applyLoginMode();
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
@@ -599,6 +602,8 @@ function refreshAccoladeIcons() {
 let _accoladesByPlayer = {};
 let _accoladesCurrentSeason = "";
 let _accoladesLoading = null;
+// Issue 217: GET /accolades `tags`, {player id: [{key, label}]}.
+let _tagsByPlayer = {};
 
 function loadAccolades(force = false) {
   if (_accoladesLoading && !force) return _accoladesLoading;
@@ -607,6 +612,7 @@ function loadAccolades(force = false) {
     .then(data => {
       if (!data) return;
       _accoladesByPlayer = data.players || {};
+      _tagsByPlayer = data.tags || {};
       _accoladesCurrentSeason = data.current_season || "";
       if (typeof _rerenderRosterPips === "function") _rerenderRosterPips();
     })
@@ -625,4 +631,46 @@ function cardPipsHtml(playerId) {
   const pips = accoladePipsHtml(playerAccolades(playerId));
   return pips ? `<div class="card-pips">${pips}</div>` : "";
 }
+
+// TAG SYMBOLS (issue 217)
+// A linked user's tags as pips down a card's left edge, mirroring the accolade pips on
+// the right. Admin first, then caster, then any other tag (its label as the tooltip).
+// season_winner is never a tag pip: the Fantasy Winner accolade already shows it.
+const TAG_SYMBOLS = {
+  admin:  { icon: "shield", tip: "Kana Cards admin", token: "--tag-admin", order: 0 },
+  caster: { icon: "mic", tip: "Caster", token: "--tag-caster", order: 1 },
+};
+const TAG_SYMBOL_GENERIC = { icon: "tag", tip: null, token: "--tag-generic", order: 2 };
+const TAG_SYMBOLS_HIDDEN = ["season_winner"];
+
+/** One player's tags from GET /accolades ([] when none or not loaded). */
+function playerTags(playerId) {
+  const list = _ownValue(_tagsByPlayer, String(playerId));
+  return Array.isArray(list) ? list : [];
+}
+
+/**
+ * One focusable pip per tag (data-tip tooltip, same text as aria-label), ordered admin,
+ * caster, then other tags in their given order. Empty input gives "".
+ */
+function tagPipsHtml(tags) {
+  const list = (Array.isArray(tags) ? tags : [])
+    .map((t, i) => {
+      const key = String((t && t.key) ?? "");
+      const known = _ownValue(TAG_SYMBOLS, key);
+      const sym = known || TAG_SYMBOL_GENERIC;
+      const tip = known ? known.tip : String((t && t.label) ?? key);
+      return { key, sym, tip, known: Boolean(known), i };
+    })
+    .filter(t => t.key && !TAG_SYMBOLS_HIDDEN.includes(t.key))
+    .sort((a, b) => (a.sym.order - b.sym.order) || (a.i - b.i));
+  if (!list.length) return "";
+  _initAccoladeTips();
+  const pips = list.map(t => {
+    const variant = t.known ? t.key : "generic";
+    return `<span class="card-tag-pip card-tag-pip--${variant}" role="listitem" tabindex="0" aria-label="${_escHtml(t.tip)}" data-tip="${_escHtml(t.tip)}"><i data-lucide="${t.sym.icon}" aria-hidden="true"></i></span>`;
+  });
+  return `<span class="tag-pips" role="list" aria-label="Tags">${pips.join("")}</span>`;
+}
+// END TAG SYMBOLS (issue 217)
 // END ACCOLADES (issue 50)

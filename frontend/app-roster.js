@@ -298,17 +298,20 @@ function toggleCardZone(cardId) {
 // ---------------------------------------------------------------------------
 
 /** The inner markup of a card slot: image, the player's accolade pips over the card's
- * right edge (issue 50), weekly points (and a substitution label). */
+ * right edge (issue 50) and tag pips over its left edge (issue 217), weekly points
+ * (and a substitution label). */
 function _cardSlotHTML(c) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
   const pips = typeof accoladePipsHtml === "function" && typeof playerAccolades === "function"
     ? accoladePipsHtml(playerAccolades(c.player_id)) : "";
+  const tagPips = typeof tagPipsHtml === "function" && typeof playerTags === "function"
+    ? tagPipsHtml(playerTags(c.player_id)) : "";
   return `
       <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
            data-player-name="${_escHtml(c.player_name)}"
            draggable="false" tabindex="0" role="button"
-           onerror="_cardImgFallback(this)" />${pips ? `<div class="card-pips">${pips}</div>` : ""}
+           onerror="_cardImgFallback(this)" />${pips ? `<div class="card-pips">${pips}</div>` : ""}${tagPips ? `<div class="card-tag-pips">${tagPips}</div>` : ""}
       <div class="card-slot-pts">${pts} pts</div>${_subLabelHTML(c)}`;
 }
 

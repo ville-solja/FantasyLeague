@@ -16,7 +16,7 @@ What to do if something goes wrong with the Twitch sign-in, the Twitch developer
 
 - **Twitch sign-in:** unset any of `TWITCH_OAUTH_CLIENT_ID`, `TWITCH_OAUTH_CLIENT_SECRET` or `TWITCH_OAUTH_REDIRECT_URI` and restart. Profile shows "Connecting Twitch is not available right now." and `GET /auth/twitch/start` returns 503. Existing connections, merges and the panel keep working; the admin Approved streamers list shows numeric channel ids instead of Twitch names (#175).
 - **Drops:** set `TWITCH_DROPS_ENABLED=false` and restart. MVP confirmations stop granting tokens.
-- **One channel setting MVPs** (moves fantasy points and drops tokens): Admin › Users › **Approved streamers** › **Remove** (password check; audited as `twitch_channel_removed`), effective on its next confirmation. A channel listed in `TWITCH_MVP_CHANNEL_IDS` can't be removed there: take it out of the env var and restart. See `approved-streamers-admin.md`.
+- **One channel setting MVPs** (moves fantasy points and drops tokens): Admin › Twitch › **Approved streamers** › **Remove** (password check; audited as `twitch_channel_removed`), effective on its next confirmation. A channel listed in `TWITCH_MVP_CHANNEL_IDS` can't be removed there: take it out of the env var and restart. See `approved-streamers-admin.md`.
 - **Everything Twitch-related** (for example a suspected extension secret leak): also unset `TWITCH_EXTENSION_SECRET`. Panel requests then fail with 500 and the website is unaffected.
 
 ## 2. Rotate secrets
@@ -42,7 +42,7 @@ Server logs show failed sign-ins as `Twitch sign-in failed for user N: <reason>`
 
 ## 4. Repair
 
-- **Bad merges:** within 30 days, Admin › User Management › **Twitch collection merges** › **Show recent merges** (password check) › **Reverse**, or `POST /admin/twitch/merges/{log_id}/reverse`. The Twitch viewer account is recreated with its cards, tokens and locked-week rosters; the website account is disconnected and can connect and merge again. Tokens already spent are reported as a shortfall. Reversal is refused after 30 days, if already reversed, or after a season reset.
+- **Bad merges:** within 30 days, Admin › Twitch › **Twitch collection merges** › **Show recent merges** (password check) › **Reverse**, or `POST /admin/twitch/merges/{log_id}/reverse`. The Twitch viewer account is recreated with its cards, tokens and locked-week rosters; the website account is disconnected and can connect and merge again. Tokens already spent are reported as a shortfall. Reversal is refused after 30 days, if already reversed, or after a season reset.
 - **A wrongly connected account:** the player (or an admin acting for them) presses **Disconnect** on Profile.
 - **Wider damage:** restore the latest good backup made by `scripts/backup-db.sh` or the automatic backup loop (see `db-sustainability.md`).
 

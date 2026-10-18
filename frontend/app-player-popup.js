@@ -557,11 +557,15 @@ function renderPlayerAccolades(p) {
   const pipsEl = document.getElementById("playerModalPips");
   const section = document.getElementById("playerModalAccolades");
   const list = p && Array.isArray(p.accolades) ? p.accolades : [];
-  if (pipsEl) pipsEl.innerHTML = accoladePipsHtml(list);
+  // Issue 217: the linked user's tag pips come before the accolade pips.
+  const tags = p && p.id != null && typeof playerTags === "function" ? playerTags(p.id) : [];
+  const tagPips = typeof tagPipsHtml === "function" ? tagPipsHtml(tags) : "";
+  if (pipsEl) pipsEl.innerHTML = tagPips + accoladePipsHtml(list);
   if (!section) return;
   if (!list.length) {
     section.hidden = true;
     section.innerHTML = "";
+    if (tagPips) refreshAccoladeIcons();
     return;
   }
   const champions = list.filter(a => a.kind === "champion").length;

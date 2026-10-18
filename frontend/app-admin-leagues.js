@@ -42,7 +42,8 @@ function openAddLeagueModal() { document.getElementById('addLeagueModal').style.
 function closeAddLeagueModal() { document.getElementById('addLeagueModal').style.display = 'none'; }
 
 async function submitAddLeague() {
-  const id = parseInt(document.getElementById('addLeagueIdInput').value);
+  const raw = document.getElementById('addLeagueIdInput').value.trim();
+  const id = /^\d+$/.test(raw) ? parseInt(raw, 10) : 0;
   if (!id) return setStatus('leaguesStatus', 'Enter a valid league ID', false);
   const res = await fetch(`${API}/admin/leagues/${id}/monitor`, { method: 'POST' });
   const data = await res.json();

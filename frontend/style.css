@@ -2663,6 +2663,24 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   gap: 0.3em;
 }
 .card-pips .accolade-pip { pointer-events: auto; }
+/* Tag pips on a card (issue 217): the same overlay down the card's left edge, opposite
+   the accolade pips, so the two columns never overlap. */
+.card-slot .card-tag-pips,
+.reveal-pips .card-tag-pips {
+  position: absolute;
+  top: 3.4em;
+  left: 0.35em;
+  z-index: 3;
+  font-size: 11px;
+  pointer-events: none;
+}
+.reveal-pips .card-tag-pips { font-size: 12px; }
+.card-tag-pips .tag-pips {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 0.3em;
+}
+.card-tag-pips .card-tag-pip { pointer-events: auto; }
 .reveal-accolades { margin: -4px 0 12px; }
 .reveal-accolades .accolade-chips { justify-content: center; }
 
@@ -2721,6 +2739,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .season-bar--champion { background: var(--accolade-div1); border-color: var(--accolade-div1); }
 .season-bar--empty    { background: transparent; }
 .players-titles { white-space: nowrap; font-size: var(--fs-sm); }
+/* Issue 212: where the seasons count starts. */
+.players-seasons-legend { margin: var(--s-2) 0 0; font-size: var(--fs-xs); color: var(--fg-muted); }
+.players-seasons-legend[hidden] { display: none; }
 
 /* Player popup: the Accolades section (pips in the header, counts, timeline). */
 .player-modal-pips { margin-top: 4px; font-size: var(--fs-sm); }
@@ -2800,16 +2821,16 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .accolade-admin-wrap { overflow-x: auto; }
 .accolade-admin-actions { white-space: nowrap; text-align: right; }
 .accolade-admin-id { color: var(--fg-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
-.champ-modal { max-width: 560px; }
+/* Issue 214: wide enough that the roster row's name field gets the remaining width. */
+.champ-modal { width: min(720px, calc(100vw - 32px)); max-width: none; }
 .champ-mode { display: flex; gap: var(--s-4); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
 .champ-fields { display: grid; gap: var(--s-2); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
 .champ-fields label { display: grid; gap: 2px; }
 .champ-fields label[hidden] { display: none; }
 .champ-roster { display: grid; gap: var(--s-1); margin-bottom: var(--s-2); }
-.champ-row { display: grid; grid-template-columns: 10em minmax(0, 1fr) auto; gap: var(--s-1); }
+.champ-row { display: grid; grid-template-columns: 12ch minmax(12ch, 1fr) auto; gap: var(--s-1); align-items: center; }
 .champ-roster-actions { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); }
 .champ-count-note { color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
-.champ-paste { display: grid; gap: 2px; margin-bottom: var(--s-2); font-size: var(--fs-sm); }
 .end-season-sub { margin: var(--s-3) 0 var(--s-2); }
 .end-season-award-row { grid-template-columns: 10em minmax(0, 1fr) 5em; font-size: var(--fs-sm); }
 .end-season-played { color: var(--fg-muted); font-size: var(--fs-sm); }
@@ -2818,8 +2839,10 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .end-season-players { display: grid; gap: 2px; margin: var(--s-2) 0; font-size: var(--fs-sm); }
 .end-season-add { display: flex; gap: var(--s-1); }
 .end-season-warning { margin-top: var(--s-3); color: var(--k-warn); font-size: var(--fs-sm); }
-@media (max-width: 480px) {
-  .champ-row { grid-template-columns: 1fr; }
+@media (max-width: 640px) {
+  .champ-modal { padding: var(--s-5); }
+  .champ-row { grid-template-columns: 1fr; padding-bottom: var(--s-2); border-bottom: var(--bw-hair) solid var(--border-soft); }
+  .champ-row .ghost { justify-self: start; }
 }
 
 /* ============================================================
@@ -2843,7 +2866,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .schedule-hide-toggle[aria-pressed="true"]:hover,
 .schedule-hide-toggle[aria-pressed="true"]:focus-visible,
 .players-filter-chip.active:hover,
-.players-filter-chip.active:focus-visible {
+.players-filter-chip.active:focus-visible,
+.settings-nav-btn.active:hover,
+.settings-nav-btn.active:focus-visible {
   background: var(--state-selected-hover-bg);
   color: var(--state-selected-hover-fg);
 }
@@ -2865,7 +2890,8 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .schedule-div-chip.active:focus-visible,
 .schedule-week-chip.selected:focus-visible,
 .schedule-hide-toggle[aria-pressed="true"]:focus-visible,
-.players-filter-chip.active:focus-visible {
+.players-filter-chip.active:focus-visible,
+.settings-nav-btn.active:focus-visible {
   outline: var(--bw-thick) solid var(--accent);
   outline-offset: 2px;
 }
@@ -3026,6 +3052,38 @@ td .accolade-chip { border-color: transparent; }
 @media (max-width: 600px) {
   .accolade-swap .accolade-chips { display: none; }
   .accolade-swap .accolade-pips { display: inline-flex; }
+}
+/* Tag symbols (issue 217): a linked user's tags as pips, built only by tagPipsHtml
+   (TAG_SYMBOLS in app-globals.js). The accolade pip's shape, with one colour token and
+   Lucide icon per kind: admin shield, caster mic, any other tag a tag icon. */
+.tag-pips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25em;
+  vertical-align: middle;
+}
+.player-modal-pips .tag-pips { margin-right: 0.25em; }
+.card-tag-pip { --pip-color: var(--tag-generic); }
+.card-tag-pip--admin  { --pip-color: var(--tag-admin); }
+.card-tag-pip--caster { --pip-color: var(--tag-caster); }
+.card-tag-pip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em;
+  height: 1.7em;
+  box-sizing: border-box;
+  border: var(--bw-thin) solid var(--pip-color);
+  border-radius: var(--r-sm);
+  background: var(--bg-card);
+  color: var(--pip-color);
+  cursor: help;
+}
+.card-tag-pip svg { width: 1.05em; height: 1.05em; stroke-width: 2.25; }
+.card-tag-pip:focus-visible {
+  outline: var(--bw-thick) solid var(--accent);
+  outline-offset: 2px;
 }
 /* The pip tooltip: name and seasons, on hover, focus or tap. */
 .accolade-tip {
@@ -3407,6 +3465,224 @@ td .accolade-chip { border-color: transparent; }
   .player-history tr.history-details-row { display: block; }
   .player-history tr.history-details-row[hidden] { display: none; }
   .player-history tr.history-details-row td { display: block; padding: 0; }
+}
+
+/* ============================================================
+   ADMIN ENHANCEMENTS (issue 214) — pending approvals badge, shared admin
+   panel header, Settings sections and nav, Matches by series, id previews
+   ============================================================ */
+.admin-pending-badge {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 6px;
+  padding: 0 5px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: var(--r-xs);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.admin-pending-badge[hidden] { display: none; }
+.tab.active:hover .admin-pending-badge,
+.tab.active:focus-visible .admin-pending-badge,
+.admin-tab-btn.active:hover .admin-pending-badge,
+.admin-tab-btn.active:focus-visible .admin-pending-badge {
+  background: var(--state-selected-hover-fg);
+  color: var(--state-selected-hover-bg);
+}
+
+/* One header for every admin panel: title and one-line purpose left, primary action right. */
+.admin-panel + .admin-panel { margin-top: var(--s-4); }
+.settings-section .admin-panel + .admin-panel { margin-top: 0; }
+.admin-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-3);
+}
+.admin-panel-heading { flex: 1 1 240px; min-width: 0; }
+.admin-panel-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--fg);
+  margin: 0 0 2px;
+}
+.admin-panel-desc { margin: 0; font-size: var(--fs-sm); line-height: var(--lh-body); color: var(--fg-muted); }
+.admin-panel-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+#twitchChannels,
+#adminTwitchStatus { overflow-x: auto; }
+.admin-panel-note { font-size: var(--fs-xs); color: var(--fg-dim); margin-bottom: var(--s-2); }
+.admin-panel-row { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-bottom: var(--s-3); }
+.admin-table-wrap { overflow-x: auto; margin-bottom: var(--s-2); }
+.admin-danger-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: var(--bw-hair) solid var(--border-soft);
+}
+.admin-danger-row .admin-panel-note { margin: 0; }
+
+/* Settings: sticky section nav beside six sections; a chip row at phone width. */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
+}
+.settings-nav {
+  position: sticky;
+  top: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.settings-nav-btn {
+  background: none;
+  color: var(--fg-muted);
+  border: var(--bw-thin) solid transparent;
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  text-align: left;
+}
+.settings-nav-btn:hover { background: none; color: var(--fg); }
+.settings-nav-btn.active { color: var(--accent); border-color: var(--accent); }
+.settings-sections { display: grid; gap: var(--s-8); min-width: 0; }
+.settings-section { display: grid; gap: var(--s-4); scroll-margin-top: var(--s-4); min-width: 0; }
+.settings-section-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--tr-widest);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: 0;
+  padding-bottom: var(--s-1);
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+#demoModePanelContainer:empty { display: none; }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-4); }
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: var(--s-1);
+  }
+  .settings-nav-btn { flex: none; border-color: var(--border); }
+  .settings-nav-btn.active { border-color: var(--accent); }
+}
+
+/* Matches: one filter row, series header rows, aligned scoring grid, More details. */
+.admin-matches-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-5);
+  align-items: center;
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-sm);
+}
+.admin-matches-filter { display: inline-flex; gap: var(--s-2); align-items: center; cursor: pointer; }
+.admin-matches-filter input,
+.admin-matches-filter select { flex: none; }
+.admin-matches-count { margin-left: auto; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+#admin-matches-table td { vertical-align: middle; font-size: var(--fs-sm); }
+.admin-series-row th {
+  background: var(--bg-card-hi);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  text-align: left;
+  padding: 6px 8px;
+}
+.admin-series-row .stream-link { text-transform: none; }
+.admin-match-teams,
+.admin-match-mvp,
+.admin-match-div { white-space: nowrap; }
+.admin-match-vs,
+.admin-match-div { color: var(--fg-muted); }
+.admin-match-start { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.admin-match-mvp .mvp-cell { margin-right: var(--s-2); }
+.admin-set-mvp,
+.admin-more-btn { padding: 2px 7px; }
+.admin-scoring-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  align-items: center;
+  gap: 2px var(--s-1);
+  white-space: nowrap;
+}
+.admin-scoring-toggle { display: contents; cursor: pointer; }
+.admin-scoring-toggle input { flex: none; margin: 0; }
+.admin-match-more[hidden] { display: none; }
+.admin-match-details {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s-1) var(--s-3);
+  align-items: center;
+  padding: var(--s-2) 0;
+}
+.admin-match-details-label { color: var(--fg-muted); }
+.admin-match-details input { max-width: 420px; }
+.admin-match-row .stream-link { white-space: nowrap; }
+.admin-matches-empty { color: var(--fg-dim); }
+
+/* Typed ids: name preview under Add player, preview list in Bulk add. */
+.admin-id-input { width: 100%; margin-bottom: var(--s-2); }
+.id-preview { min-height: 1.4em; margin-bottom: var(--s-3); font-size: var(--fs-sm); color: var(--fg-muted); }
+.id-preview-ok { color: var(--k-ok); }
+.id-preview-warn { color: var(--k-warn); }
+.id-preview-err { color: var(--k-err); }
+.bulk-add-modal { width: min(520px, calc(100vw - 32px)); }
+.bulk-preview-list {
+  list-style: none;
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: var(--bw-hair) solid var(--border-soft);
+  border-radius: var(--r-sm);
+}
+.bulk-preview-list[hidden] { display: none; }
+.bulk-preview-row {
+  display: grid;
+  grid-template-columns: 11ch minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  padding: 4px 8px;
+  font-size: var(--fs-sm);
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.bulk-preview-row:last-child { border-bottom: none; }
+.bulk-preview-id { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-muted); }
+.bulk-preview-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bulk-preview-new .bulk-preview-status { color: var(--k-ok); }
+.bulk-preview-in_pool .bulk-preview-status { color: var(--fg-muted); }
+.bulk-preview-not_found .bulk-preview-status { color: var(--k-err); }
+
+/* Re-auth modal: Steam popup options (issue 213) */
+.reauth-steam-instead { width: 100%; margin-top: var(--s-2); }
+.reauth-notice { margin-top: var(--s-3); }
+.steam-reauth-done {
+  max-width: 420px;
+  margin: var(--s-5) auto;
+  padding: 0 var(--s-4);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
 }
 
 /* ============================================================

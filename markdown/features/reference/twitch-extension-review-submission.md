@@ -41,7 +41,7 @@ resubmission.
 - [ ] **Backend URL (`ebs_url`)** — the global configuration's `ebs_url` is
       `https://kana-cards.com`. It is set once, and stays across versions; if it is missing or
       wrong, run `bash twitch-extension/set-ebs-url.sh https://kana-cards.com` (the extension must
-      be in Local Test or higher). Admin › Users › Twitch status shows the expected value
+      be in Local Test or higher). Admin › Twitch › Twitch status shows the expected value
 - [ ] **Asset Hosting paths and Panel Height 500** — Version → Asset Hosting: Panel Viewer Path
       `panel.html`, Config Path `config.html`, Live Config Path `live_config.html`, Panel Height
       **500**. No leading `/` and no folder prefix such as `twitch-extension/`: a wrong path
@@ -53,21 +53,21 @@ resubmission.
       `https://steamcdn-a.akamaihd.net`, `https://steamusercontent-a.akamaihd.net`,
       `https://cdn.steamusercontent.com`, `https://cdn.cloudflare.steamstatic.com` and
       `https://shared.cloudflare.steamstatic.com` (`backend/logo_hosts.py` `DEFAULT_LOGO_HOSTS`);
-      Admin › Users › Twitch status lists the exact values. Without them the team draw shows a
+      Admin › Twitch › Twitch status lists the exact values. Without them the team draw shows a
       monogram (the first two letters of the team name) instead of each logo
 - [ ] **Capabilities** — Version → Capabilities: **Chat** and **Request Identity Link** enabled
       (the configure method stays **Extension Configuration Service**, set under Extension
       Settings above). Chat use is disclosed in the **Twitch Chat** paragraph of the listing
       description (below); Join asks for Twitch's identity share
 - [ ] **Approve the review channel** — open the MVP tool once on the review channel, then approve
-      it under Admin › Users › **Approved streamers** (or add its ID to `TWITCH_MVP_CHANNEL_IDS`)
+      it under Admin › Twitch › **Approved streamers** (or add its ID to `TWITCH_MVP_CHANNEL_IDS`)
 - [ ] **Connection check** — on the review channel, open the extension's configuration page:
       every row of the Connection check shows OK (Flow 5 below)
 - [ ] **Hosted Test** — move the version to **Hosted Test**, then load the panel, config and live
       config views on the review channel with browser dev tools open. Confirm no 404, no CSP
       violation, and that the panel opens on the Live tab (never a login prompt and never "not
       available"). Walk Flows 1–5 below
-- [ ] **Go/no-go** — Admin › Users › Twitch status on production shows every check green, or a
+- [ ] **Go/no-go** — Admin › Twitch › Twitch status on production shows every check green, or a
       warning only where it is explained: Connect Twitch (`TWITCH_OAUTH_*`) is a website feature
       the extension doesn't use, and without `STEAM_API_KEY` the MVP tool lists a match only once
       its stats arrive. No check may show a problem. Do not submit until then
@@ -262,7 +262,7 @@ be live during the time of review"*:
 - **Approved review channel:** approve the review channel before the review, or Flow 3 (MVP
   selection) shows "This channel is waiting for the league's approval to set match MVPs." and
   `POST /twitch/mvp` returns 403: open the MVP tool once on the review channel, then approve it
-  under Admin › Users › **Approved streamers** (issue #175), or add its ID to
+  under Admin › Twitch › **Approved streamers** (issue #175), or add its ID to
   `TWITCH_MVP_CHANNEL_IDS`. In production one of the two is required (issue #165)
 - **Version and Chat:** `TWITCH_EXTENSION_VERSION=1.3.0` on the EBS host, and **Chat** enabled
   for version 1.3.0 in the console. Without either, the MVP chat announcement is skipped

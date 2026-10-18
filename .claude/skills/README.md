@@ -141,6 +141,7 @@ How a control shows it is selected, what role and status badges look like, how t
 - **Self (the signed-in user):** `.row-self`, a full-row `--row-self-bg` tint (`--accent-ghost`) and bold text, plus a "(You)" status badge. No left bar and no inline colours. Used in the season, weekly and past season standings; a row's expandable detail row gets the same tint. Logged out, no row is marked.
 - **Emphasis inside data:** the winning side is a bold `--mark-winner` name (`.mark-winner`) under a "Winner" label; the MVP is a `--mark-mvp` "MVP" label (`.mark-mvp`) before the name; surfaces put these classes in their markup rather than copying the colours, and the name itself stays plain. The two never share a colour or a form. No rings or outlines around floating elements: borders belong to controls and cards only. Exemption: transient motion highlights, such as the recap's glow on an MVP game chip (`.weekly-summary-game-mvp.hl`), may glow or fill while the animation plays; they are gone when it ends.
 - **Selection:** images (`img`) and controls (`button`) are `user-select: none`, and images are not draggable (`-webkit-user-drag: none`, and `draggable="false"` on every `<img>` the frontend modules generate). Names, dates, numbers and prose stay selectable.
+- **Ids are text, not numbers:** OpenDota ids and other identifiers are text inputs (`type="text" inputmode="numeric"`, with `pattern="[0-9]*"` where it helps), never number spinners: +1/−1 makes no sense for a 6–10 digit id. The code checks digits itself and says "OpenDota ids are digits only". Decimal values such as an accolade value use `inputmode="decimal"`, also without a spinner.
 - **Data rows:** repeated rows (game lists, standings, tables) use a fixed-column grid with `tabular-nums` on numbers, and every cell is always emitted (empty when it doesn't apply), so columns line up across rows and cards. Inline chips must not change row height: no vertical padding or border on a chip inside a row.
 
 ### Accolade symbols
@@ -160,6 +161,19 @@ Season accolades (issue 50) read like a mana cost: every kind has its own Lucide
 - **Chips** (`.accolade-chip`, built only by `accoladeChipsHtml`): one per accolade with the full name ("S16 Div 1 Champion"), newest season first, champions first within a season. Used in Player management, the popup timeline and History; at phone width those views show the pips instead (`.accolade-swap`).
 - The registry is `ACCOLADE_KINDS` in `frontend/app-globals.js`, mirrored in `backend/accolades.py`. No view builds its own symbol markup.
 - **Holo**: the iridescent sheen of a Holo card is allowed only on the card art (the card image and its one-time reveal sweep), never on chrome.
+
+### Tag symbols
+User tags (issue 217) show on a player's cards as pips down the card's **left** edge, opposite the accolade pips, for the user verifiably linked to that player. They share the accolade pip's shape, tooltip and focus behaviour; every kind has its own Lucide icon, so colour is never the only difference.
+
+| Tag | Tooltip | Icon | Colour token |
+|---|---|---|---|
+| Admin (the linked user is a site admin) | Kana Cards admin | `shield` | `--tag-admin` (= `--badge-admin`) |
+| Caster | Caster | `mic` | `--tag-caster` (= `--badge-caster`) |
+| Any other tag | the tag's label | `tag` | `--tag-generic` (= `--badge-tag`) |
+
+- **Pips** (`.card-tag-pip`, built only by `tagPipsHtml`): top to bottom admin, caster, then other tags in tag-definition order. Used on cards (`.card-tag-pips`, beside `.card-pips`) and in the player popup header, before the accolade pips.
+- **Season winner** is never a tag pip: the Fantasy Winner accolade pip already shows it.
+- The registry is `TAG_SYMBOLS` in `frontend/app-globals.js`; the data is `tags` in `GET /accolades` (keys and labels only). Card images carry no tag stickers.
 
 ### Transparency / blur
 - **85% black overlay** behind all modals.
