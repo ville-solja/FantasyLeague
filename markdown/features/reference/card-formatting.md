@@ -6,7 +6,7 @@ A new card layout that gives accolades (user tags such as Caster and Season Winn
 
 ## Layout
 
-*(planned)* The chosen layout replaces today's composition in `backend/image.py` (see [Card Image Generation](card-image-generation.md)). The canvas size stays 597 × 845 for a portrait layout; a landscape layout (845 × 597) also changes the frontend card sizes. Rarity is shown by a label, stars or a gem as well as colour.
+*(planned)* The chosen layout replaces today's composition in `backend/image.py` (see [Card Image Generation](card-image-generation.md)). The canvas size stays 597 × 845 for a portrait layout; a landscape layout (845 × 597) also changes the frontend card sizes. Rarity is shown by a label, stars or a gem as well as colour. Team logos (cached at 250 × 150) sit on a 5:3 plate instead of a squashed circle; the 184 × 184 avatar is enlarged at most about 2×, with a blurred backdrop for larger areas.
 
 ## Accolades
 

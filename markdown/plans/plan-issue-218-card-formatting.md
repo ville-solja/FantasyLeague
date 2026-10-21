@@ -24,7 +24,12 @@ Assumptions:
 - **Overflow.** A layout shows up to its own maximum (3 in A, D and E; 4 in B, C and F). When there are more, the last place shows "+N".
 - **Small sizes.** The roster slot (180 × 255) and the Twitch panel (about 110 px wide) show the same PNG scaled down. The name and the rarity must stay readable at 180 px. Accolades may become icons only.
 - **Landscape (G, H, I).** A landscape card is 845 × 597 instead of 597 × 845. Choosing one changes more than `image.py`: the roster slots (180 × 255), the reveal modal, the draw animation (#205), the Weekly Report and the Twitch panel all assume a portrait card and need their sizes and grids changed. A landscape layout as a second format (for example for one rarity or a special card) would need a per-card format and is a larger change.
-- **Avatar quality.** OpenDota avatars are 184 × 184 (`avatarfull`). Layouts with a large portrait (B, C, F) upscale them, which can look soft. The design accepts this, or adds a blurred backdrop behind a sharper, smaller portrait.
+- **Image sizes.**
+  - Team logos: all cached Dotabuff logos (`assets/dotabuff_league_logos/`) are 250 × 150 (5:3), and most have an opaque white or coloured background. Today `_load_team_logo_for_card` resizes them to a 104 × 104 square and `_circle_crop` cuts a circle, which squashes the wordmark and clips its ends.
+  - Every layout uses a 5:3 plate with small corners, at most 250 px wide on the card, so a cached logo is never enlarged.
+  - A logo fetched from `logo_url` (the fallback; size unknown) is fitted inside the plate without stretching.
+  - Player avatars: the Steam `avatarfull` from OpenDota is 184 × 184. Today's portrait circle is 350 px, about 1.9× enlarged.
+  - The layouts keep the portrait a square of at most about 2× (about 370 px on the card). Larger picture areas show a blurred, darkened copy of the avatar behind the sharp square, instead of a stretched crop. The canvas board "Image sizes" shows the comparison.
 - **League-agnostic.** No league name or logo on the card.
 - **Same data.** No change to cards, modifiers, rarities, tags or their endpoints.
 
@@ -63,6 +68,8 @@ As a player, I want a card to stay readable in my roster and in the Twitch panel
 - At 180 px wide, the player name, rarity and modifier values are readable
 - At 110 px wide, the rarity and the portrait are clear; text may be too small to read
 - Rarity is told by more than colour: a label, stars or a gem shape differs between rarities
+- Team logos keep their 5:3 shape: never squashed into a square or cut into a circle that clips the wordmark
+- The player avatar is never enlarged more than about 2×; a larger picture area uses a blurred backdrop behind the sharp avatar
 - Common, rare, epic and legendary cards use the same layout, with 0 to 3 modifiers
 
 ### See Accolade Names in the Card Viewer
@@ -110,6 +117,11 @@ As a player, I want accolades such as match MVP picks to show how many times the
 - Draw the rarity marker (label, stars or gem) so rarity does not depend on colour alone.
 - Keep the 597 × 845 canvas size for a portrait layout, so the frontend's aspect ratios and the draw animation (#205) stay valid. A landscape layout also changes the frontend card sizes (see Assumptions).
 
+### Step 2b — Logo and avatar sizes
+- Replace the square `diameter` resizing for team logos with a fit into the layout's 5:3 plate (`ImageOps.contain`, then centred on the plate). No circle crop. This also fixes today's squashed logos.
+- Draw the avatar at its layout size (at most about 370 px). Where the picture area is larger, fill it with a blurred, darkened copy (`ImageFilter.GaussianBlur`) and paste the sharp avatar on top.
+- Never stretch a logo or avatar out of its aspect ratio.
+
 ### Step 3 — Accolade area
 - Replace `_apply_stickers(img, tag_keys)` with `_draw_accolades(img, accolades, layout)`, where `accolades` is a list of `{key, label}`.
 - Each accolade is drawn in its badge shape, with the sticker PNG as its icon. A missing sticker gets a generic badge with the label's first letter.
@@ -128,6 +140,8 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - overflow draws "+N";
   - a missing sticker falls back to the letter badge;
   - a sticker path outside the sticker folder is ignored;
+  - a 250 × 150 logo keeps its 5:3 ratio on the card, and a square or tall fallback logo fits inside the plate;
+  - a 184 × 184 avatar is not enlarged past the layout's portrait size;
   - the viewer lists accolade labels;
   - no league name in the renderer.
 
