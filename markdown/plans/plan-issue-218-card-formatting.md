@@ -7,29 +7,29 @@ A design canvas shows six portrait layouts and three landscape ones, each with a
 
 | Layout | Idea | Accolades |
 |---|---|---|
-| A · Classic TCG | Name bar, art box, type line, rules box | Small discs in the type line; names on a line under the modifiers |
-| B · Full art | Portrait fills the card; name and modifier chips over a dark fade | Medallions down the left edge |
-| C · Sports card | Light border, angled rarity band with the name, three stat boxes | Tilted foil stamps on the photo |
-| D · Stat block | Modifiers as move rows with a big +10% | Three fixed slots at the bottom; empty slots show dashed |
-| E · Medals | Arched portrait, rarity stars under the name | Medals on ribbons hanging over the portrait's edge |
-| F · Side rail | A left column holds the team logo, rarity gem, accolades and the rarity name | Square tiles stacked in the rail |
-| G · Landscape panorama | Portrait on the left with a rarity band; name, team, modifier rows on the right | Chips with icon and label, the only layout with room for labels on the card |
-| H · Landscape widescreen | Wide portrait over a bottom bar with name and modifiers | Medallions in a row at the top right |
-| I · Landscape ticket | A coloured stub with a perforated edge; round portrait; modifiers as scoreboard boxes | Discs stacked in the stub; names under the team |
+| A · Classic TCG | Name bar, portrait between two pillars, type line with the logo, cream rules box | Discs in the right pillar (rarity gems in the left); names under the modifiers |
+| B · Centrepiece | Ringed round portrait on a sunburst, full-size logo at the top, name and modifier chips below | Medallions down the left edge |
+| C · Sports card | Light border, square photo with a side column, angled name band holding the logo, three stat boxes | Foil stamps in the column beside the photo |
+| D · Stat block | 1.5× portrait beside a full-size logo, modifiers as move rows with a big +10% | Three fixed slots at the bottom; empty slots show dashed |
+| E · Medals | Arched portrait, rarity stars, corner ornaments, logo on the arch | Medals on ribbons hanging from the arch |
+| F · Side rail | A rail as wide as the portrait leaves holds the logo, rarity gem, accolades and the rarity name | Square tiles with short labels stacked in the rail |
+| G · Landscape panorama | Portrait and rarity band on the left; full-size logo, name, modifier rows on the right | Chips with icon and label |
+| H · Landscape broadcast | Portrait and full-size logo over a stream-style lower-third bar with name and modifiers | Medallions in a row beside the portrait |
+| I · Landscape ticket | A coloured stub with a perforated edge; round 1.5× portrait; logo; modifiers as scoreboard boxes | Discs stacked in the stub; names under the team |
 
 Assumptions:
 - **The layout is chosen first.** The product owner picks one layout, or a mix, on the canvas before `/develop`. This plan's steps stay valid for any of the six. The chosen layout is recorded under "Chosen layout" below.
-- **The server still renders one PNG.** `GET /cards/{id}/image` stays the only card picture. It is used by the website, the Twitch panel and the reports. Pillow draws the chosen layout. The four rarity template PNGs are replaced by new templates or by frames drawn in code; the design decides which.
+- **The server still renders one PNG.** `GET /cards/{id}/image` stays the only card picture. It is used by the website, the Twitch panel and the reports. New template PNGs, one per rarity, are drawn from scratch for the chosen layout around fixed slots (below); Pillow pastes the avatar, logo, text and accolades into those slots. Every layout also has a card number (the card id) and a foil sheen on legendary cards.
 - **Accolades are today's user tags.** The card shows the tags of the user linked to the card's player, as today (`tag_keys`). Each tag's icon is `assets/stickers/{key}.png`; the card draws it inside the layout's badge shape. The tag's label appears where the layout has room (A, C) and in the card viewer. Counted accolades such as "MVP ×3" are a later story.
 - **Overflow.** A layout shows up to its own maximum (3 in A, D and E; 4 in B, C and F). When there are more, the last place shows "+N".
 - **Small sizes.** The roster slot (180 × 255) and the Twitch panel (about 110 px wide) show the same PNG scaled down. The name and the rarity must stay readable at 180 px. Accolades may become icons only.
 - **Landscape (G, H, I).** A landscape card is 845 × 597 instead of 597 × 845. Choosing one changes more than `image.py`: the roster slots (180 × 255), the reveal modal, the draw animation (#205), the Weekly Report and the Twitch panel all assume a portrait card and need their sizes and grids changed. A landscape layout as a second format (for example for one rarity or a special card) would need a per-card format and is a larger change.
 - **Image sizes.**
   - Team logos: all cached Dotabuff logos (`assets/dotabuff_league_logos/`) are 250 × 150 (5:3), and most have an opaque white or coloured background. Today `_load_team_logo_for_card` resizes them to a 104 × 104 square and `_circle_crop` cuts a circle, which squashes the wordmark and clips its ends.
-  - Every layout uses a 5:3 plate with small corners, at most 250 px wide on the card, so a cached logo is never enlarged.
+  - Every template has a logo slot of exactly 250 × 150, 150 × 90 or 100 × 60 (1×, 0.6× or 0.4×), so a cached logo fills it with no crop and is never enlarged.
   - A logo fetched from `logo_url` (the fallback; size unknown) is fitted inside the plate without stretching.
   - Player avatars: the Steam `avatarfull` from OpenDota is 184 × 184. Today's portrait circle is 350 px, about 1.9× enlarged.
-  - The layouts keep the portrait a square of at most about 2× (about 370 px on the card). Larger picture areas show a blurred, darkened copy of the avatar behind the sharp square, instead of a stretched crop. The canvas board "Image sizes" shows the comparison.
+  - Every template has a portrait slot of exactly 368 × 368 (2×) or 276 × 276 (1.5×), so the avatar fills it with no crop, no stretch and no filler. The frame is drawn around the slot. The canvas board "Image sizes" shows the slot sizes.
 - **League-agnostic.** No league name or logo on the card.
 - **Same data.** No change to cards, modifiers, rarities, tags or their endpoints.
 
@@ -69,7 +69,7 @@ As a player, I want a card to stay readable in my roster and in the Twitch panel
 - At 110 px wide, the rarity and the portrait are clear; text may be too small to read
 - Rarity is told by more than colour: a label, stars or a gem shape differs between rarities
 - Team logos keep their 5:3 shape: never squashed into a square or cut into a circle that clips the wordmark
-- The player avatar is never enlarged more than about 2×; a larger picture area uses a blurred backdrop behind the sharp avatar
+- The portrait and logo slots have the exact proportions of their sources (1:1 and 5:3) at a whole or simple scale (avatar 1.5× or 2×; logo 1×, 0.6× or 0.4×), so nothing is cropped, stretched or filled
 - Common, rare, epic and legendary cards use the same layout, with 0 to 3 modifiers
 
 ### See Accolade Names in the Card Viewer
@@ -107,7 +107,7 @@ As a player, I want accolades such as match MVP picks to show how many times the
 ### Step 1 — Choose the layout
 - The product owner picks a layout on the canvas and writes it under "Chosen layout" in the Context.
 - Settle the open design points:
-  - template PNGs or frames drawn in code;
+  - the slot scales (portrait 1.5× or 2×, logo 1×, 0.6× or 0.4×);
   - the accolade maximum;
   - the empty state;
   - the portrait size, given the 184 px avatars.
@@ -118,8 +118,9 @@ As a player, I want accolades such as match MVP picks to show how many times the
 - Keep the 597 × 845 canvas size for a portrait layout, so the frontend's aspect ratios and the draw animation (#205) stay valid. A landscape layout also changes the frontend card sizes (see Assumptions).
 
 ### Step 2b — Logo and avatar sizes
-- Replace the square `diameter` resizing for team logos with a fit into the layout's 5:3 plate (`ImageOps.contain`, then centred on the plate). No circle crop. This also fixes today's squashed logos.
-- Draw the avatar at its layout size (at most about 370 px). Where the picture area is larger, fill it with a blurred, darkened copy (`ImageFilter.GaussianBlur`) and paste the sharp avatar on top.
+- Draw the new rarity templates (597 × 845, RGBA) for the chosen layout from scratch, with transparent cutouts at the exact slot rectangles. Record each slot rectangle in `image.py` (`_PORTRAIT_SLOT`, `_LOGO_SLOT`).
+- Team logos: resize the 250 × 150 source to the logo slot (an exact scale). A fallback logo of another shape is fitted inside the slot (`ImageOps.contain`, centred) on the slot's plate colour. No circle crop. This also fixes today's squashed logos.
+- Avatars: resize the 184 × 184 source to the portrait slot (276 or 368). A round or arched slot uses a mask of that shape.
 - Never stretch a logo or avatar out of its aspect ratio.
 
 ### Step 3 — Accolade area
@@ -140,8 +141,8 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - overflow draws "+N";
   - a missing sticker falls back to the letter badge;
   - a sticker path outside the sticker folder is ignored;
-  - a 250 × 150 logo keeps its 5:3 ratio on the card, and a square or tall fallback logo fits inside the plate;
-  - a 184 × 184 avatar is not enlarged past the layout's portrait size;
+  - a square or tall fallback logo fits inside the logo slot without stretching;
+  - a 184 × 184 avatar fills the portrait slot exactly, and a 250 × 150 logo fills the logo slot exactly;
   - the viewer lists accolade labels;
   - no league name in the renderer.
 
