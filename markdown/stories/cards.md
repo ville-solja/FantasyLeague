@@ -463,3 +463,56 @@ As a player, I want the back of a card to show its stats or accolades so that I 
 **Acceptance criteria**
 - The back shows either per-card stats (matches scored, points with this card, average, best match, modifiers) or accolades (MVP picks, weekly bests), as on the canvas's "Later" designs
 - Needs the flip from the story above; the data comes from stored per-match card points
+
+---
+
+## Card Formatting (issue #218)
+
+### Choose a New Card Layout
+**User story**
+As the product owner, I want to compare radically different card layouts so that I can choose one that fits accolades and still reads as a trading card.
+
+**Acceptance criteria**
+- A design canvas shows at least five different layouts, each with a legendary card (3 modifiers, 3 accolades) and a rare card (1 modifier, no accolades)
+- Each layout is also shown at roster-slot size (180 px wide) and Twitch-panel size (110 px wide)
+- The canvas shows the current card for comparison and the accolade badge styles
+- The chosen layout is written into this plan before implementation starts
+
+### Accolades Have Their Own Place on the Card
+**User story**
+As a player, I want a card's accolades to sit in a dedicated place on the card so that I can see what the player has achieved without the badges covering the frame.
+
+**Acceptance criteria**
+- Every tag of the player's linked user is drawn in the layout's accolade area, in the tag's own icon and colour, never on top of the name, portrait, team logo or frame
+- The accolade area holds up to the layout's maximum; more accolades show "+N" in the last place
+- A card with no accolades shows the layout's empty state (no area, or empty slots in layout D) and no gap that looks broken
+- A new tag with a sticker file appears on cards without a code change, as today
+- A tag without a sticker file still shows, with a generic badge and its first letter
+
+### Card Reads at Every Size
+**User story**
+As a player, I want a card to stay readable in my roster and in the Twitch panel so that the smaller views are as useful as the full card.
+
+**Acceptance criteria**
+- At 180 px wide, the player name, rarity and modifier values are readable
+- At 110 px wide, the rarity and the portrait are clear; text may be too small to read
+- Rarity is told by more than colour: a label, stars or a gem shape differs between rarities
+- Common, rare, epic and legendary cards use the same layout, with 0 to 3 modifiers
+
+### See Accolade Names in the Card Viewer
+**User story**
+As a player, I want to see the names of a card's accolades when I open the card so that I know what each badge means.
+
+**Acceptance criteria**
+- The card viewer (the reveal modal, opened from a draw, My Team, the Weekly Report or the own-player notice) lists the accolades under the card image: icon and label
+- The list is empty, and takes no space, when the card has no accolades
+- The labels come from the tag definitions (`TagDefinition.label`)
+
+### Counted Accolades *(not yet implemented)*
+**User story**
+As a player, I want accolades such as match MVP picks to show how many times they were earned so that a standout player's card shows it.
+
+**Acceptance criteria**
+- An accolade can carry a count, shown as "×N" next to its icon (for example "MVP ×3")
+- The count comes from stored data (for example Twitch MVP picks per player)
+- Needs a decision on which counted accolades exist and where their data comes from
