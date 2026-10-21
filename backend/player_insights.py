@@ -211,10 +211,12 @@ def league_comparison(player_id, population: dict):
     return {"population": len(population), "stats": stats}
 
 
-def points_sources(scored_breakdowns: list[dict], league_sources: dict) -> list[dict]:
+def points_sources(scored_breakdowns: list[dict], league_sources: dict, per=None) -> list[dict]:
     """Per source: average points per scored match, share of the player's average
-    (percent) and the league average. Every source is listed, zero when unused."""
-    n = len(scored_breakdowns)
+    (percent) and the league average. Every source is listed, zero when unused.
+    `per` divides the sums instead of the row count (issue 211: a team's rows are
+    summed per team game)."""
+    n = len(scored_breakdowns) if per is None else per
     avgs = {k: (sum(b[k] for b in scored_breakdowns) / n if n else 0.0) for k in SOURCE_KEYS}
     total = sum(avgs.values())
     return [{
@@ -226,13 +228,14 @@ def points_sources(scored_breakdowns: list[dict], league_sources: dict) -> list[
     } for key, label, _ in SOURCE_GROUPS]
 
 
-def modifier_values(scored_stats: list[dict], weights: dict) -> dict:
+def modifier_values(scored_stats: list[dict], weights: dict, per=None) -> dict:
     """What a card modifier on each stat is worth per scored match:
     modifier_bonus_pct % of that stat's average points. Per stat, highest first.
     `base` is the stat's average points, so a card modifier with its own bonus_pct
-    is worth base × bonus_pct / 100."""
+    is worth base × bonus_pct / 100. `per` divides the sums instead of the row count
+    (issue 211: per team game)."""
     pct = weights.get("modifier_bonus_pct", 10.0)
-    n = len(scored_stats)
+    n = len(scored_stats) if per is None else per
     sums = {k: 0.0 for k in _STAT_COLS}
     for s in scored_stats:
         for k, v in stat_points(s, weights).items():
@@ -244,7 +247,23 @@ def modifier_values(scored_stats: list[dict], weights: dict) -> dict:
                      "base": display_points(base, 3),
                      "value": display_points(base * pct / 100, 2)})
     rows.sort(key=lambda r: r["value"], reverse=True)
-    return {"bonus_pct": pct, "stats": rows if n else []}
+    return {"bonus_pct": pct, "stats": rows if n and scored_stats else []}
+
+
+# The popup's Core / Support chip (the same rule as app-player-popup.js).
+SUPPORT_MIN_WARDS = 3
+SUPPORT_MAX_GPM = 450
+
+
+def role(scored_stats: list[dict]):
+    """"Support" when the average observer wards are SUPPORT_MIN_WARDS or more and the
+    average GPM is under SUPPORT_MAX_GPM, else "Core"; None without scored matches."""
+    n = len(scored_stats)
+    if not n:
+        return None
+    wards = sum(_stats(s)["obs_placed"] for s in scored_stats) / n
+    gpm = sum(_stats(s)["gold_per_min"] for s in scored_stats) / n
+    return "Support" if wards >= SUPPORT_MIN_WARDS and gpm < SUPPORT_MAX_GPM else "Core"
 
 
 def hero_rows(history: list[dict], icons: dict, names: dict | None = None) -> list[dict]:

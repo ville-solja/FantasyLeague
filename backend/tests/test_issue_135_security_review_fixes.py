@@ -440,7 +440,8 @@ def test_twitch_start_eleventh_request_returns_429(db, monkeypatch):
 # Story 2 — External Text Is Always Escaped (static checks on frontend/*.js)
 # ---------------------------------------------------------------------------
 
-_SAFE_BUILDERS = ("_escHtml", "playerLink", "teamLink", "heroSection")
+# _teamLogoHtml (issue 211) escapes the name and URL it is given.
+_SAFE_BUILDERS = ("_escHtml", "playerLink", "teamLink", "heroSection", "_teamLogoHtml")
 
 
 def _template_expressions(src):
@@ -487,9 +488,11 @@ def _raw_interpolations(src, field_patterns):
 
 
 def _players_js():
-    # The player popup moved to app-player-popup.js (issue 208); both files are checked.
+    # The player popup moved to app-player-popup.js (issue 208) and the team popup to
+    # app-team-popup.js (issue 211); all three files are checked.
     return (_read(os.path.join(_FRONTEND_DIR, "app-players.js")) + "\n"
-            + _read(os.path.join(_FRONTEND_DIR, "app-player-popup.js")))
+            + _read(os.path.join(_FRONTEND_DIR, "app-player-popup.js")) + "\n"
+            + _read(os.path.join(_FRONTEND_DIR, "app-team-popup.js")))
 
 
 def _function_source(src, name):
@@ -536,7 +539,10 @@ def test_players_table_player_and_team_names_escaped():
     fields = [r"\bp\.name\b", r"\bp\.team_name\b", r"\bt\.name\b",
               r"\bm\.opponent_team_name\b", r"\bg\.mvp_player_name\b"]
     assert _raw_interpolations(src, fields) == []
-    team_modal = _function_source(src, "openTeamModal")
+    # Issue 211: openTeamModal is in app-team-popup.js; its roster rows escape names.
+    team_src = _read(os.path.join(_FRONTEND_DIR, "app-team-popup.js"))
+    assert _function_source(team_src, "openTeamModal")
+    team_modal = _function_source(team_src, "_teamRosterRowHtml")
     assert "_escHtml(p.name)" in team_modal
 
 

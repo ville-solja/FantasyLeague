@@ -8,12 +8,13 @@ from sqlalchemy import text
 import accolades
 import player_insights
 import schedule
+import team_insights
 from card_points import _current_weights
 from database import get_db
 from deps import require_admin
 from enrich import run_profile_enrichment
 from match_scoring import scored_match_sql, scored_stat_sql
-from models import Player, PlayerProfile, Week
+from models import Player, PlayerProfile, Team, Week
 from scoring import display_points
 from weeks import scoring_week_for
 
@@ -194,44 +195,16 @@ def get_player_profile(player_id: int, db=Depends(get_db)):
 
 @router.get("/teams")
 def list_teams(db=Depends(get_db)):
-    results = db.execute(text("""
-        SELECT t.id, t.name,
-               COUNT(DISTINCT s.match_id) as matches,
-               COUNT(DISTINCT s.player_id) as player_count
-        FROM teams t
-        LEFT JOIN player_match_stats s ON s.team_id = t.id
-        GROUP BY t.id, t.name
-        ORDER BY matches DESC, t.name
-    """)).fetchall()
-    return [dict(r._mapping) for r in results]
+    # Issue 211: logo (allowlisted hosts only), division, series and games records,
+    # points per game and titles. Excluded matches count in no figure.
+    # Cached in-process until the data, the weights or the feed change (60 s at most).
+    return team_insights.cached_team_list(db, _current_weights(db))
 
 
 @router.get("/teams/{team_id}")
 def get_team(team_id: int, db=Depends(get_db)):
-    from models import Team
     team = db.get(Team, team_id)
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
-
-    scored_pts = f"CASE WHEN {scored_stat_sql()} THEN s.fantasy_points END"
-    players = db.execute(text(f"""
-        SELECT p.id, p.name, p.avatar_url,
-               COUNT(s.id) as matches,
-               COALESCE(AVG({scored_pts}), 0) as avg_points,
-               COALESCE(SUM({scored_pts}), 0) as total_points
-        FROM players p
-        JOIN player_match_stats s ON s.player_id = p.id AND s.team_id = :team_id
-        GROUP BY p.id, p.name, p.avatar_url
-        ORDER BY total_points DESC
-    """), {"team_id": team_id}).fetchall()
-
-    match_count = db.execute(text("""
-        SELECT COUNT(DISTINCT match_id) as cnt FROM player_match_stats WHERE team_id = :team_id
-    """), {"team_id": team_id}).scalar()
-
-    return {
-        "id": team.id,
-        "name": team.name,
-        "matches": match_count or 0,
-        "players": [_rounded_points(r._mapping) for r in players],
-    }
+    # Issue 211: the team popup's header, tiles, series, roster, sources and heroes.
+    return team_insights.team_detail(db, team, _current_weights(db))

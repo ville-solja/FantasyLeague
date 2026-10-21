@@ -162,41 +162,73 @@ See `markdown/features/reference/player-profile-enrichment.md` for how profiles 
 
 ## Teams
 
+Both team endpoints are built by `backend/team_insights.py` (issue 211). Matches an admin excluded from scoring count in no figure; partial-stat matches count. Every `logo_url` passes through `logo_hosts.safe_logo_url` (allowlisted https hosts only, else `null`). The schedule feed is read failure-safe: when it is down, series figures are empty or zero and the endpoints still answer 200. Ownership is an aggregate percentage; no user ids or usernames appear in either response.
+
 ### `GET /teams`
 
-Returns all ingested teams sorted by match count descending.
+Returns every ingested team, Div 1 first, then Div 2, then unknown; within a division by series wins, then game wins.
 
 ```json
 [
-  { "id": 42, "name": "SomeTeam", "matches": 18, "player_count": 5 }
+  {
+    "id": 42, "name": "SomeTeam",
+    "logo_url": "https://steamcdn-a.akamaihd.net/.../42.png",
+    "division": "div1",
+    "series_wins": 3, "series_losses": 1, "series_draws": 0,
+    "wins": 8, "losses": 5, "matches": 13,
+    "points_per_game": 61.2,
+    "player_count": 6,
+    "titles": [{"kind": "champion", "division": "div1", "season": "Season 16",
+                "season_short": "S16", "team_name": "SomeTeam", "label": "S16 Div 1 Champion"}]
+  }
 ]
 ```
+
+- `division`: from the leagues of the team's matches (`accolades.league_division`: "Lower" in the name is Div 2), the division of most of them; `null` when no league is known.
+- `series_*`: played series in the schedule feed that involve the team (by `team1_id`/`team2_id`, or `schedule.find_team_id` on the names).
+- `wins`, `losses`, `matches`: scored matches the team played.
+- `points_per_game`: the team's players' summed scored points divided by `matches`.
+- `titles`: champion accolades from every season whose `team_name` matches the team's name, ignoring case and extra whitespace; one per season and division, newest first.
 
 ---
 
 ### `GET /teams/{team_id}`
 
-Returns a team's details and the roster of players who have appeared in a match for that team, ordered by total fantasy points.
+The team popup's data.
 
 ```json
 {
-  "id": 42,
-  "name": "SomeTeam",
-  "matches": 18,
-  "players": [
-    {
-      "id": 123456789,
-      "name": "SomePlayer",
-      "avatar_url": "https://...",
-      "matches": 18,
-      "avg_points": 28.4,
-      "total_points": 511.2
-    }
-  ]
+  "id": 42, "name": "SomeTeam", "logo_url": null, "division": "div1", "season": "Season 17",
+  "titles": [ ...as in GET /teams... ],
+  "matches": 13,
+  "summary": {"series_wins": 3, "series_losses": 1, "series_draws": 0, "games": 13, "wins": 8,
+              "losses": 5, "points_per_game": 61.2, "avg_game_length": 1925, "mvps": 4},
+  "series": [{"week": "Week 1", "week_short": "W1", "division": "div1",
+              "opponent": {"id": 7, "name": "Other", "logo_url": null},
+              "datetime_iso": "2026-09-10T19:00:00", "wins": 2, "losses": 1, "result": "W",
+              "start_time": 1757530800, "match_ids": [1, 2, 3]}],
+  "upcoming": [{"week": "Week 5", "week_short": "W5", "division": "div1",
+                "opponent": {"id": 9, "name": "Next", "logo_url": null},
+                "datetime_iso": "2026-10-22T19:00:00", "date": null, "time": null, "scheduled": true,
+                "stream_url": "https://www.twitch.tv/...", "stream_label": null}],
+  "players": [{"id": 123456789, "name": "SomePlayer", "avatar_url": "https://...", "role": "Core",
+               "games": 12, "matches": 12, "team_games": 13, "avg_points": 20.5, "total_points": 246.0,
+               "mvps": 2, "share": 34.6, "owned_pct": 25, "also_played": false,
+               "accolades": [ ...GET /accolades shape... ], "tags": [{"key": "caster", "label": "Caster"}]}],
+  "points_sources": [{"key": "kills", "label": "Kills", "avg": 14.0, "share": 22.9, "league_avg": 12.6}],
+  "modifier_values": {"bonus_pct": 10.0, "stats": [{"stat": "kills", "label": "Kills", "base": 14.0, "value": 1.4}]},
+  "heroes": [{"hero_id": 2, "hero_name": "Axe", "icon_url": "https://...", "games": 4, "wins": 3,
+              "losses": 1, "avg_points": 20.0, "players": [{"id": 123456789, "name": "SomePlayer", "games": 3}]}]
 }
 ```
 
-Each player's `matches` counts every match. `avg_points` and `total_points` skip matches an admin
-excluded from scoring.
+- `season`: `accolades.current_season_label`.
+- `summary.avg_game_length`: seconds, `null` without durations. `mvps`: MVPs earned by the team's players.
+- `series`: played feed series, oldest first; `result` is `W`, `L` or `D` (a drawn series). The score is the feed's, as on the Schedule tab. `upcoming`: unplayed series whose time has not passed, soonest first.
+- `players`: one row per player with a scored match for the team, by total points. `role` follows the player popup's rule (Support when average wards are 3 or more and GPM is under 450). `share` is the percentage of the team's points. `also_played` is true below 30 % of `team_games`. `owned_pct` is the whole percentage of managers (full, non-tester, non-demo accounts with at least one active card) who hold an active card of the player; it is `null` for every player, with `"ownership_hidden": true` on the response, while fewer than 10 managers have cards.
+- `points_sources` and `modifier_values`: `player_insights.points_sources` / `modifier_values` over the team's stat rows, divided per team game. `league_avg` is the average team's value per team game (cached, see below).
+- `heroes`: the six most picked heroes (`player_insights.hero_rows`), with the players who played each.
 
-Returns 404 if the team has not been ingested.
+The `GET /teams` list is cached in-process (`team_insights.cached_team_list`) until the stats, matches, teams, champion accolades, weights or the feed's `cached_at` change, at most 60 s. League figures (average team sources and ownership counts) are cached in-process by `team_insights.cached_league_numbers`, keyed on the weights, the stats fingerprint (`player_insights._data_version`) and the active cards; `team_insights.clear_league_cache()` empties it.
+
+Returns 404 `"Team not found"` if the team has not been ingested.

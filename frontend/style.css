@@ -3686,6 +3686,175 @@ td .accolade-chip { border-color: transparent; }
 }
 
 /* ============================================================
+   TEAM POPUP AND TEAMS TAB (issue 211) — header with logo and title chips,
+   result chips (text and shape, never colour alone), series rows, roster with
+   share bars, and the Teams table that stacks at phone width. Reuses the
+   issue 208 tiles, sources bar and hero tiles. Tokens only.
+   ============================================================ */
+.team-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.team-popup-identity { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.team-popup-titles { margin-top: var(--s-1); }
+.team-popup-titles:empty { display: none; }
+.team-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+}
+.team-logo--lg { width: 56px; height: 56px; }
+.team-logo--sm { width: 20px; height: 20px; }
+.team-logo--mono {
+  background: var(--bg-card-hi);
+  color: var(--k-amber-500);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wider);
+}
+.team-logo--sm.team-logo--mono { font-size: var(--fs-xs); letter-spacing: 0; }
+
+/* Result chips: W filled, L hollow, D dashed; the letter is always shown. */
+.team-form { display: flex; flex-wrap: wrap; gap: var(--s-1); margin-bottom: var(--s-2); }
+.team-result {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  border: var(--bw-thin) solid transparent;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  line-height: 1;
+}
+.team-result--win { background: var(--k-ok); border-color: var(--k-ok); color: var(--k-ink-950); }
+.team-result--loss { background: transparent; border-color: var(--k-err); color: var(--k-err); }
+.team-result--draw { background: transparent; border-style: dashed; border-color: var(--fg-muted); color: var(--fg-muted); }
+.team-series-list { list-style: none; margin: 0 0 var(--s-2); padding: 0; }
+.team-series-row {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr) 7em 5em;
+  gap: var(--s-2);
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.team-series-week { color: var(--fg-muted); }
+.team-series-opp { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.team-series-score,
+.team-series-when { text-align: right; color: var(--fg); }
+.team-series-when { color: var(--fg-muted); }
+.team-series-result { text-align: right; }
+.team-series-row .team-result { width: 20px; height: 20px; }
+
+/* Roster: share bar plus percentage; "Also played" heads the low-games group. */
+.team-roster-wrap { overflow-x: auto; }
+.team-roster td { font-variant-numeric: tabular-nums; vertical-align: middle; }
+.team-roster .tr-player { white-space: nowrap; }
+.team-roster-avatar { width: 24px; height: 24px; border-radius: var(--r-pill); vertical-align: middle; margin-right: var(--s-2); }
+.team-roster-pips { display: inline-flex; gap: 2px; margin-left: var(--s-2); vertical-align: middle; }
+.team-roster-pips .accolade-pips,
+.team-roster-pips .tag-pips { display: inline-flex; gap: 2px; }
+.team-roster-group th {
+  padding-top: var(--s-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-wider);
+}
+.team-share { display: inline-flex; align-items: center; gap: var(--s-2); }
+.team-share-track {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 8px;
+  background: var(--border-soft);
+  border-radius: var(--r-xs);
+}
+.team-share-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--w);
+  background: var(--series-1);
+  border-radius: var(--r-xs);
+}
+.team-share-pct { min-width: 3.5em; text-align: right; }
+.hero-tile-players {
+  grid-column: 2;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-tile:has(.hero-tile-players) { grid-template-rows: auto auto auto; }
+.hero-tile:has(.hero-tile-players) .hero-icon { grid-row: 1 / 4; }
+
+/* Teams tab table. */
+.teams-table td { font-variant-numeric: tabular-nums; vertical-align: middle; }
+.teams-team { display: inline-flex; align-items: center; gap: var(--s-2); }
+
+@media (max-width: 640px) {
+  .team-series-row { grid-template-columns: 2.5em minmax(0, 1fr) auto auto; }
+  .team-roster-wrap { overflow-x: visible; }
+  .team-roster thead { display: none; }
+  .team-roster,
+  .team-roster tbody { display: block; }
+  .team-roster tr.team-roster-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: var(--bw-hair) solid var(--border-soft);
+  }
+  .team-roster tr.team-roster-group { display: block; }
+  .team-roster tr.team-roster-group th { display: block; }
+  .team-roster td { display: block; padding: 0; border-bottom: none; }
+  .team-roster td.tr-player { grid-column: 1 / -1; white-space: normal; }
+  .team-roster td:not(.tr-player)::before {
+    content: attr(data-label) " ";
+    color: var(--fg-muted);
+    font-size: var(--fs-xs);
+  }
+  .team-roster td.tr-owned::before { content: none; }   /* the value already says "Owned by" */
+  /* Teams table: one stacked block per team, no sideways scroll. */
+  .teams-table,
+  .teams-table tbody { display: block; width: 100%; }
+  .teams-table thead { display: none; }
+  .teams-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px var(--s-3);
+    padding: var(--s-2) 0;
+    border-bottom: var(--bw-hair) solid var(--border-soft);
+  }
+  .teams-table td { display: block; padding: 0; border-bottom: none; min-width: 0; overflow-wrap: anywhere; }
+  .teams-table td.teams-col-team { grid-column: 1 / -1; }
+  .teams-table td:not(.teams-col-team)::before {
+    content: attr(data-label) " ";
+    color: var(--fg-muted);
+    font-size: var(--fs-xs);
+  }
+}
+
+/* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team
    ============================================================ */
 .tour-cta {

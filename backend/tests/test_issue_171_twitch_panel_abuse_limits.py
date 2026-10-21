@@ -30,9 +30,10 @@ Developer notes
       `collection_for_user`, `draw_card`, `booster_deck_for_user` -> GET
       /deck/booster and GET /twitch/teams, `draw_booster`, `get_card`);
       routers/weekly_summary.py `_team_logo_url` / `_team_dict`.
-    - routers/players.py GET /teams and GET /teams/{team_id} return NO logo field
-      (decision 1: none is added); the parametrized output tests only assert that
-      no unknown-host URL appears anywhere in those bodies.
+    - routers/players.py GET /teams and GET /teams/{team_id}: issue #171 added no
+      logo field (decision 1); issue #211 (team view enhancements) adds `logo_url`
+      to both, sanitised through `safe_logo_url`, so the parametrized output tests
+      now check those logos like every other response.
     - backend/image.py `_load_team_logo_for_card` fetches `team_logo_url`
       server-side for GET /cards/{id}/image. Decision 2: it also goes through
       `safe_logo_url`, so the server never fetches from an unknown host
@@ -566,10 +567,16 @@ def _logo_response(db, monkeypatch, tmp_path, response, user, card):
     if response == "get_card":
         body = cards.get_card(card.id, db=db, current_user=current)
         return body, [body["team_logo_url"]]
+    if response.startswith("players_"):
+        # Issue 211: the team views read the schedule feed; never the network here.
+        import schedule
+        monkeypatch.setattr(schedule, "get_schedule", lambda db: {"weeks": []})
     if response == "players_teams":
-        return players.list_teams(db=db), []
+        body = players.list_teams(db=db)
+        return body, [t["logo_url"] for t in body if t["id"] in (11, 12)]
     if response == "players_team_detail":
-        return players.get_team(11, db=db), []
+        body = players.get_team(11, db=db)
+        return body, [body["logo_url"]]
     if response == "weekly_report":
         monkeypatch.setattr(weekly_summary, "_LOGO_DIR", str(tmp_path / "no_local_logos"))
         body = weekly_summary._team_dict(db.get(Team, 11))
@@ -664,10 +671,9 @@ class TestTeamLogosOnlyFromKnownHosts:
         user, card = _logo_world(db, _EVIL_LOGO)
         body, logos = _logo_response(db, monkeypatch, tmp_path, response, user, card)
         assert "evil.example" not in json.dumps(body, default=str)
-        if not response.startswith("players_"):
-            assert logos and all(v is None for v in logos), logos
+        assert logos and all(v is None for v in logos), logos
 
-    @pytest.mark.parametrize("response", [r for r in _LOGO_RESPONSES if not r.startswith("players_")])
+    @pytest.mark.parametrize("response", _LOGO_RESPONSES)
     def test_response_keeps_allowlisted_logo(self, db, monkeypatch, tmp_path, response):
         """AC: a stored Steam CDN logo_url is returned unchanged by every logo-carrying response."""
         monkeypatch.delenv("LOGO_HOST_ALLOWLIST", raising=False)
