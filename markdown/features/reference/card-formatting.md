@@ -1,6 +1,6 @@
 # Card Formatting
 
-A new card layout that gives accolades (user tags such as Caster and Season Winner) their own place on the card PNG, with labels in the card viewer (issue #218). Plan: `markdown/plans/plan-issue-218-card-formatting.md`. Design canvas with six layouts and an accolade kit: https://claude.ai/artifact/7EZ3WKh3GrN63FipYATfG8.
+A new card layout that gives accolades (user tags such as Caster and Season Winner) their own place on the card PNG, with labels in the card viewer (issue #218). Plan: `markdown/plans/plan-issue-218-card-formatting.md`. Design canvas with six portrait and three landscape layouts and an accolade kit: https://claude.ai/artifact/7EZ3WKh3GrN63FipYATfG8.
 
 ---
 

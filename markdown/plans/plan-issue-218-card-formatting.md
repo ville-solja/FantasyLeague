@@ -3,7 +3,7 @@
 ## Context
 The card PNG (`backend/image.py`) was designed before accolades existed. Tag stickers (Caster, Season Winner) are pasted as 60 px discs in the top-left corner, on top of the frame ornament. They have no labels, and there is no room for a third or fourth accolade. Issue #218 asks for different card layouts, including radically different ones and ideas from trading card games, so the product owner can choose a direction.
 
-A design canvas shows six layouts, each with a legendary card (3 modifiers, 3 accolades), a rare card (1 modifier, no accolades), and the legendary card at roster-slot size (180 px) and Twitch-panel size (110 px). It also has an accolade kit (disc, medal, stamp, chip, empty slot): https://claude.ai/artifact/7EZ3WKh3GrN63FipYATfG8 (private until shared).
+A design canvas shows six portrait layouts and three landscape ones, each with a legendary card (3 modifiers, 3 accolades), a rare card (1 modifier, no accolades), and the legendary card at roster-slot size (180 px) and Twitch-panel size (110 px). It also has an accolade kit (disc, medal, stamp, chip, empty slot): https://claude.ai/artifact/7EZ3WKh3GrN63FipYATfG8 (private until shared).
 
 | Layout | Idea | Accolades |
 |---|---|---|
@@ -13,6 +13,9 @@ A design canvas shows six layouts, each with a legendary card (3 modifiers, 3 ac
 | D · Stat block | Modifiers as move rows with a big +10% | Three fixed slots at the bottom; empty slots show dashed |
 | E · Medals | Arched portrait, rarity stars under the name | Medals on ribbons hanging over the portrait's edge |
 | F · Side rail | A left column holds the team logo, rarity gem, accolades and the rarity name | Square tiles stacked in the rail |
+| G · Landscape panorama | Portrait on the left with a rarity band; name, team, modifier rows on the right | Chips with icon and label, the only layout with room for labels on the card |
+| H · Landscape widescreen | Wide portrait over a bottom bar with name and modifiers | Medallions in a row at the top right |
+| I · Landscape ticket | A coloured stub with a perforated edge; round portrait; modifiers as scoreboard boxes | Discs stacked in the stub; names under the team |
 
 Assumptions:
 - **The layout is chosen first.** The product owner picks one layout, or a mix, on the canvas before `/develop`. This plan's steps stay valid for any of the six. The chosen layout is recorded under "Chosen layout" below.
@@ -20,6 +23,7 @@ Assumptions:
 - **Accolades are today's user tags.** The card shows the tags of the user linked to the card's player, as today (`tag_keys`). Each tag's icon is `assets/stickers/{key}.png`; the card draws it inside the layout's badge shape. The tag's label appears where the layout has room (A, C) and in the card viewer. Counted accolades such as "MVP ×3" are a later story.
 - **Overflow.** A layout shows up to its own maximum (3 in A, D and E; 4 in B, C and F). When there are more, the last place shows "+N".
 - **Small sizes.** The roster slot (180 × 255) and the Twitch panel (about 110 px wide) show the same PNG scaled down. The name and the rarity must stay readable at 180 px. Accolades may become icons only.
+- **Landscape (G, H, I).** A landscape card is 845 × 597 instead of 597 × 845. Choosing one changes more than `image.py`: the roster slots (180 × 255), the reveal modal, the draw animation (#205), the Weekly Report and the Twitch panel all assume a portrait card and need their sizes and grids changed. A landscape layout as a second format (for example for one rarity or a special card) would need a per-card format and is a larger change.
 - **Avatar quality.** OpenDota avatars are 184 × 184 (`avatarfull`). Layouts with a large portrait (B, C, F) upscale them, which can look soft. The design accepts this, or adds a blurred backdrop behind a sharper, smaller portrait.
 - **League-agnostic.** No league name or logo on the card.
 - **Same data.** No change to cards, modifiers, rarities, tags or their endpoints.
@@ -104,7 +108,7 @@ As a player, I want accolades such as match MVP picks to show how many times the
 ### Step 2 — Layout in `image.py`
 - Replace the layout constants (`_BIG_CIRCLE`, `_SMALL_CIRCLE`, `_PLAYER_NAME_Y`, `_MODIFIERS_START_Y` and the rest) with the chosen layout's. Keep one layout table per rarity only where the frames differ.
 - Draw the rarity marker (label, stars or gem) so rarity does not depend on colour alone.
-- Keep the 597 × 845 canvas size, so the frontend's aspect ratios and the draw animation (#205) stay valid.
+- Keep the 597 × 845 canvas size for a portrait layout, so the frontend's aspect ratios and the draw animation (#205) stay valid. A landscape layout also changes the frontend card sizes (see Assumptions).
 
 ### Step 3 — Accolade area
 - Replace `_apply_stickers(img, tag_keys)` with `_draw_accolades(img, accolades, layout)`, where `accolades` is a list of `{key, label}`.
