@@ -209,3 +209,61 @@ As a fantasy manager, I want the full stats of any match a click away, so that t
 - **Details:** each row has a **Details** toggle (`aria-expanded`) that opens a panel with every stat, including the never-shown ones (last hits, denies, towers, Roshan, teamfight, camps, runes, first blood, stuns, sentry wards, duration). The panel also shows that match's points breakdown by source, with the MVP bonus.
 - **Badges stay:** Partial stats and Not scored badges and tooltips are unchanged.
 - **Phone width:** the table becomes one stacked row per match (date, opponent, result, hero, points), with the same Details toggle. Nothing scrolls sideways.
+
+## Team View Enhancements (issue #211)
+
+Plan: `markdown/plans/plan-issue-211-team-view-enhancements.md`. Design canvas: https://claude.ai/artifact/4H1nAuQQPxoSMMpMT441KN.
+
+### A Team's Season at a Glance
+**User story**
+As a fantasy manager, I want a team's record, results and upcoming games in its popup, so that I can judge how strong a team is and when its players play next.
+
+**Acceptance criteria**
+- **Header:** logo, name, division and season ("Div 1 · Season 17"), and the champion title chips from all seasons' accolades, matched by team name.
+- **Summary tiles:**
+  - Series W–L;
+  - Games W–L;
+  - Fantasy pts per game: the team's players' combined scored points per game;
+  - average game length (mm:ss);
+  - MVPs earned by the team's players.
+- **Season results:**
+  - one row per series from the schedule feed, newest last: week, opponent (logo, link to its popup), score, and W or L as text;
+  - a form strip of result chips above the list, with shape and text so it isn't colour alone;
+  - upcoming series show the date and time, and a stream link when the feed has one.
+- **Exclusions:** excluded matches count in no figure. Partial-stat matches count.
+- **Empty state:** "No matches yet this season." The header and titles still show.
+
+### The Roster Explained
+**User story**
+As a fantasy manager, I want to see who carries a team and how popular its players are, so that I can pick the right players from it.
+
+**Acceptance criteria**
+- **Rows:** one row per player who played for the team this season, with:
+  - avatar, name (link to the player popup), role chip (Core or Support, same rule as #208);
+  - accolade pips and tag pips;
+  - games played as "12 / 13";
+  - average and total points;
+  - a share-of-team-points bar with the percentage;
+  - "Owned by N %".
+- **Order:** by total points by default; every column sorts.
+- **Also played:** players with under 30 % of the team's games are listed under this heading.
+- **Ownership:** N is the percentage of managers (full, non-tester, non-demo accounts with at least one active card) holding an active card of the player. No user identities in the response.
+
+### Where the Team's Points Come From
+**User story**
+As a fantasy manager, I want to see what kind of fantasy points a team produces, so that I know which card modifiers suit its players.
+
+**Acceptance criteria**
+- **Stacked bar:** sources (the same groups as #208) summed over the team's players per game, with a tick for the average team per source.
+- **Modifier value:** "A +10 % modifier pays most on this team's players: Kills, GPM, Assists", from the team totals.
+- **Heroes:** the top six heroes by games, with W–L and the players who played them.
+- **One formula:** values come from the server, using `player_insights`. No scoring maths in the browser.
+
+### Teams Tab Ranks Teams
+**User story**
+As a visitor, I want the Teams list to show divisions, records and titles, so that I can compare teams without opening each one.
+
+**Acceptance criteria**
+- **Columns:** Team (logo, name), Division, Series W–L, Games W–L, Fantasy pts per game, Players, Titles (chips; pips at phone width).
+- **Filters and sorting:** filter chips All, Div 1 and Div 2, and every column sorts. The default sort is by division, then series wins.
+- **Phone width:** the table becomes stacked rows with no sideways scroll.

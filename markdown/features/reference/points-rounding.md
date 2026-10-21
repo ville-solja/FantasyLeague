@@ -21,7 +21,7 @@ Every points number the app shows is rounded once, on the server, by one rule, s
 | `GET /leaderboard/weekly`, `GET /leaderboard/season`, End Season archive (`routers/leaderboard.py` `_leaderboard_rows`) | user total (from the exact card sums), card chip `points` | 1 |
 | `GET /top`, `GET /leaderboard` | `fantasy_points`, `avg_points` | 1 |
 | `GET /leaderboard/seasons/{season_id}`, `GET /profile/{user_id}` `past_seasons` | archived `points` | 1 |
-| `GET /players`, `GET /players/{id}`, `GET /teams/{id}` | `avg_points`, `total_points` (from exact values), match-history and best-match `fantasy_points` | 1 |
+| `GET /players`, `GET /players/{id}`, `GET /teams/{id}` | `avg_points`, `total_points` (from exact values), match-history and best-match `fantasy_points`; on the team endpoints also `points_per_game`, `share`, `points_sources` and `modifier_values` (#211) | 1 |
 | `GET /weekly-summary/{week_id}` (`routers/weekly_summary.py`) | per-match player `points` (excluded matches stay `null`) | 1 |
 | `GET /twitch/matches/current` (`twitch.py`) | player `fantasy_points` | 1 |
 | `POST /simulate/{match_id}` | player `fantasy_points` | 2, since the simulator compares weights |

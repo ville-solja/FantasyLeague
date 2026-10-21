@@ -63,7 +63,7 @@ function _playerMatchesFilter(p) {
 
 function setPlayersFilter(name) {
   _playersFilter = ["champions", "new"].includes(name) ? name : "all";
-  document.querySelectorAll(".players-filter-chip").forEach(btn => {
+  document.querySelectorAll(".players-filter-chip[data-filter]").forEach(btn => {
     const on = btn.dataset.filter === _playersFilter;
     btn.classList.toggle("active", on);
     btn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -174,27 +174,115 @@ function renderPlayers(rows) {
   if (wrote) refreshAccoladeIcons();
 }
 
+// Teams tab (issue 211): division filter chips and sortable columns. The sort and
+// filter stay across refreshes (issue #159), so an unchanged refresh changes nothing.
+let _teamsData = [];
+let _teamsSort = { col: null, dir: "desc" };   // null: division, then series wins
+let _teamsFilter = "all";
+const _TEAMS_DIV_ORDER = { div1: 0, div2: 1 };
+
 async function loadTeams() {
   try {
     const res = await fetch(`${API}/teams`);
     const rows = await res.json();
     if (!res.ok) throw new Error(rows.detail || "Failed to load");
+    rows.forEach(t => { t.titles_count = Array.isArray(t.titles) ? t.titles.length : 0; });
+    _teamsData = rows;
     const tbody = document.getElementById("teamsBody");
     if (!rows.length) {
-      renderIfChanged(tbody, "<tr><td colspan='3' style='color:#444'>No teams found</td></tr>");
+      renderIfChanged(tbody, "<tr><td colspan='7' class='table-empty'>No teams found</td></tr>");
       setStatus("teamsStatus", "");
       return;
     }
-    renderIfChanged(tbody, rows.map(t => `
-      <tr>
-        <td>${teamLink(t.id, t.name)}</td>
-        <td>${t.matches}</td>
-        <td>${t.player_count}</td>
-      </tr>`).join(""));
+    _initTeamSortHeaders();
+    renderTeams(_getFilteredTeams());
     setStatus("teamsStatus", `${rows.length} teams`);
   } catch (e) {
     setStatus("teamsStatus", e.message, false);
   }
+}
+
+function _getFilteredTeams() {
+  return _teamsData.filter(t => _teamsFilter === "all" || t.division === _teamsFilter);
+}
+
+function setTeamsFilter(div) {
+  _teamsFilter = ["div1", "div2"].includes(div) ? div : "all";
+  document.querySelectorAll(".players-filter-chip[data-teams-filter]").forEach(btn => {
+    const on = btn.getAttribute("data-teams-filter") === _teamsFilter;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  renderTeams(_getFilteredTeams());
+}
+
+/** Default: Div 1 before Div 2 (unknown last), then series wins, game wins and name. */
+function _teamsDefaultCmp(a, b) {
+  const da = _TEAMS_DIV_ORDER[a.division] ?? 2, db = _TEAMS_DIV_ORDER[b.division] ?? 2;
+  return (da - db) || ((b.series_wins || 0) - (a.series_wins || 0))
+    || ((b.wins || 0) - (a.wins || 0)) || String(a.name || "").localeCompare(String(b.name || ""));
+}
+
+function _sortTeams(rows) {
+  if (!_teamsSort.col) return [...rows].sort(_teamsDefaultCmp);
+  const col = _teamsSort.col;
+  const asc = _teamsSort.dir === "asc";
+  return [...rows].sort((a, b) => {
+    const av = a[col], bv = b[col];
+    if (av == null && bv == null) return _teamsDefaultCmp(a, b);
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+    return (asc ? cmp : -cmp) || _teamsDefaultCmp(a, b);
+  });
+}
+
+function _initTeamSortHeaders() {
+  const head = document.getElementById("teamsTableHead");
+  if (!head) return;
+  head.querySelectorAll("th[data-col]").forEach(th => {
+    th.classList.add("sortable");
+    th.classList.remove("sort-asc", "sort-desc");
+    if (_teamsSort.col === th.getAttribute("data-col")) {
+      th.classList.add(_teamsSort.dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+    th.onclick = () => {
+      const col = th.getAttribute("data-col");
+      if (_teamsSort.col === col) {
+        _teamsSort.dir = _teamsSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        _teamsSort.col = col;
+        _teamsSort.dir = th.getAttribute("data-default-dir") || "desc";
+      }
+      head.querySelectorAll("th").forEach(h => h.classList.remove("sort-asc", "sort-desc"));
+      th.classList.add(_teamsSort.dir === "asc" ? "sort-asc" : "sort-desc");
+      renderTeams(_getFilteredTeams());
+    };
+  });
+}
+
+function _teamsRecord(w, l, d) {
+  return `${Number(w) || 0}–${Number(l) || 0}${Number(d) ? `–${Number(d)}` : ""}`;
+}
+
+function renderTeams(rows) {
+  const sorted = _sortTeams(rows);
+  const tbody = document.getElementById("teamsBody");
+  if (!sorted.length) {
+    renderIfChanged(tbody, "<tr><td colspan='7' class='table-empty'>No teams in this division</td></tr>");
+    return;
+  }
+  const wrote = renderIfChanged(tbody, sorted.map(t => `
+    <tr>
+      <td class="teams-col-team" data-label="Team"><span class="teams-team">${_teamLogoHtml(t.name, t.logo_url, "team-logo--sm")}${teamLink(t.id, t.name)}</span></td>
+      <td data-label="Division">${_escHtml(_teamDivisionLabel(t.division)) || "—"}</td>
+      <td data-label="Series W–L">${_teamsRecord(t.series_wins, t.series_losses, t.series_draws)}</td>
+      <td data-label="Games W–L">${_teamsRecord(t.wins, t.losses)}</td>
+      <td data-label="Pts per game">${Number(t.points_per_game || 0).toFixed(1)}</td>
+      <td data-label="Players">${Number(t.player_count) || 0}</td>
+      <td class="teams-titles" data-label="Titles"><span class="accolade-swap">${accoladeChipsHtml(t.titles || [])}${accoladePipsHtml(t.titles || [])}</span></td>
+    </tr>`).join(""));
+  if (wrote) refreshAccoladeIcons();
 }
 
 // The player popup (openPlayerModal and its sections) is in app-player-popup.js (issue 208).
@@ -202,46 +290,7 @@ async function loadTeams() {
 // "Not scored" badge tooltip, shared by the Schedule and the player popup.
 const _NOT_SCORED_TOOLTIP = "An admin excluded this match from scoring. It adds no fantasy points.";
 
-async function openTeamModal(teamId) {
-  const modal = document.getElementById("teamModal");
-  modal.classList.remove("hidden");
-  document.getElementById("teamModalName").textContent = "Loading...";
-  document.getElementById("teamModalMeta").textContent = "";
-  document.getElementById("teamModalPlayers").innerHTML = "";
-  document.getElementById("teamModalStatus").textContent = "";
-
-  try {
-    const res = await fetch(`${API}/teams/${teamId}`);
-    const t = await res.json();
-    if (!res.ok) {
-      document.getElementById("teamModalName").textContent = "";
-      setStatus("teamModalStatus", t.detail || "Failed to load", false);
-      return;
-    }
-
-    document.getElementById("teamModalName").textContent = t.name;
-    document.getElementById("teamModalMeta").textContent = `${t.matches} matches`;
-
-    if (!t.players.length) {
-      document.getElementById("teamModalPlayers").innerHTML =
-        "<tr><td colspan='4' style='color:#444'>No players found</td></tr>";
-    } else {
-      document.getElementById("teamModalPlayers").innerHTML = t.players.map(p => `
-        <tr>
-          <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" /><span class="entity-link" tabindex="0" role="button" onclick="closeTeamModal();openPlayerModal(${p.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closeTeamModal();openPlayerModal(${p.id})}">${_escHtml(p.name)}</span></td>
-          <td>${p.matches}</td>
-          <td>${Number(p.avg_points).toFixed(1)}</td>
-          <td>${Number(p.total_points).toFixed(1)}</td>
-        </tr>`).join("");
-    }
-  } catch (e) {
-    setStatus("teamModalStatus", e.message, false);
-  }
-}
-
-function closeTeamModal() {
-  document.getElementById("teamModal").classList.add("hidden");
-}
+// The team popup (openTeamModal, closeTeamModal) is in app-team-popup.js (issue 211).
 
 function _formatGameDuration(seconds) {
   if (seconds == null) return "—";

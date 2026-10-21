@@ -24,3 +24,6 @@ demos/
 # Played backfill match cache (backend/scripts/backfill_played.py, issue #50)
 backfill_played_cache.json
 backfill_played_cache.json.tmp
+
+# Local model agent reports (markdown/features/reference/local-model-agents.md)
+reports/local/
