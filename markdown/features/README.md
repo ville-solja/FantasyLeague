@@ -36,6 +36,7 @@ Implementation details, integrations, and operator tooling.
 | [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
+| [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown in the player popup, card viewer and (with #218) on the card *(planned)* |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Automated Testing](reference/automated-testing.md) | Playwright UI suite and GitHub Actions CI setup |
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |

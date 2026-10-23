@@ -272,3 +272,39 @@ As an admin, I want matches that stay unparsed after repeated parse requests to 
 - Auto-marking never sets `excluded_from_scoring`. That stays an admin decision
 - The auto-mark is written to the audit log as `match_marked_unparseable` with the match ID
 - The admin Matches table can filter to unparseable matches
+
+---
+
+## Player Rank Medals (issue #221)
+
+### Store Each Player's Rank Medal
+**User story**
+As an operator, I want each player's Dota 2 rank medal fetched from OpenDota and kept up to date so that the app can show it without extra calls when someone opens a player.
+
+**Acceptance criteria**
+- `players` gains `rank_tier`, `leaderboard_rank` and `rank_fetched_at` (all nullable), with a migration
+- Adding a player (single or bulk) stores `rank_tier` and `leaderboard_rank` from the OpenDota player response it already fetches
+- The background profile enrichment refreshes the rank for every pool player whose `rank_fetched_at` is null or older than the enrichment cooldown (`PROFILE_ENRICHMENT_COOLDOWN_HOURS`, default 24), including players with no ingested matches
+- A null rank from OpenDota is stored as null (the medal is hidden); a failed request keeps the previous rank
+- A `rank_tier` outside 10–80 is stored as null
+
+### See a Player's Medal in the Player Popup
+**User story**
+As a user, I want to see a player's rank medal in the player popup so that I can judge how strong they are.
+
+**Acceptance criteria**
+- `GET /players/{id}` returns `rank_tier`, `leaderboard_rank` and `rank_fetched_at`
+- The popup header shows the medal badge and its name with stars (for example "Legend 4"), or "Immortal" with "#N" when there is a leaderboard place
+- The text says the rank is approximate: a tooltip or note "Last known rank from OpenDota" with the date it was fetched
+- A player with no rank shows no medal and no empty space
+- The medal has a text equivalent for screen readers (`aria-label` or visible text)
+
+### See the Medal on a Card
+**User story**
+As a player, I want to see the player's medal on a card so that I can compare my cards at a glance.
+
+**Acceptance criteria**
+- The card data used by My Team, the draw reveal and the card viewer includes the player's `rank_tier` and `leaderboard_rank`
+- The card viewer shows the medal badge and name under the card image, next to the accolades (#218)
+- The new card templates in #218 have a rank slot; the PNG draws the medal there and leaves it out when the rank is null
+- No league name, and no image loaded from a Dota CDN

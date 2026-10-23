@@ -31,6 +31,7 @@ Assumptions:
   - Player avatars: the Steam `avatarfull` from OpenDota is 184 × 184. Today's portrait circle is 350 px, about 1.9× enlarged.
   - Every template has a portrait slot of exactly 368 × 368 (2×) or 276 × 276 (1.5×), so the avatar fills it with no crop, no stretch and no filler. The frame is drawn around the slot. The canvas board "Image sizes" shows the slot sizes.
 - **League-agnostic.** No league name or logo on the card.
+- **Rank medal (#221).** Every template has a rank slot for the player's medal badge (medal shape and colour with stars, or "Immortal #N"), drawn by `_draw_rank_medal` from `players.rank_tier` and `leaderboard_rank`; the slot is left empty when the rank is null. See `plan-issue-221-player-rank-medals.md`.
 - **Same data.** No change to cards, modifiers, rarities, tags or their endpoints.
 
 Chosen layout: *to be decided on the canvas.*
@@ -71,6 +72,7 @@ As a player, I want a card to stay readable in my roster and in the Twitch panel
 - Team logos keep their 5:3 shape: never squashed into a square or cut into a circle that clips the wordmark
 - The portrait and logo slots have the exact proportions of their sources (1:1 and 5:3) at a whole or simple scale (avatar 1.5× or 2×; logo 1×, 0.6× or 0.4×), so nothing is cropped, stretched or filled
 - Common, rare, epic and legendary cards use the same layout, with 0 to 3 modifiers
+- The player's rank medal (#221) is drawn in the template's rank slot, and left out when the player has no rank
 
 ### See Accolade Names in the Card Viewer
 **User story**
