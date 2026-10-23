@@ -9,6 +9,7 @@ from database import SessionLocal
 from match_scoring import scored_match_sql
 from models import Player, PlayerMatchStats, MatchBan, PlayerProfile
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+from player_rank import apply_rank
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def enrich_players(batch_size=50):
                 if not data:
                     player.name = str(account_id)
                     continue
+                apply_rank(player, data, int(time.time()))
                 profile = data.get("profile", {})
 
                 name = (
@@ -283,18 +285,51 @@ def generate_player_bio(player_name: str, facts: dict) -> str | None:
         return None
 
 
+def _refresh_ranks(db, cutoff: int, batch_size: int) -> int:
+    """Issue #221: refresh the rank medal of active pool players whose rank is missing
+    or older than the cooldown, matches or not. A failed request leaves the old rank
+    and rank_fetched_at, so the player is retried next cycle. Returns the count stored."""
+    players = (
+        db.query(Player)
+        .filter(Player.is_active.is_(True))
+        .filter(Player.rank_fetched_at.is_(None) | (Player.rank_fetched_at < cutoff))
+        .order_by(Player.rank_fetched_at, Player.id)
+        .limit(batch_size)
+        .all()
+    )
+    updated = 0
+    for player in players:
+        try:
+            data = opendota_get_json(f"{OPEN_DOTA_URL}/players/{player.id}",
+                                     label=f"player {player.id} rank")
+            # A real player response always carries a profile; an empty or error body
+            # is a failed request, not "unranked", so the old rank stays.
+            if not isinstance(data, dict) or not data.get("profile"):
+                logger.warning("Rank refresh: no response for player %d, keeping old rank", player.id)
+                continue
+            apply_rank(player, data, int(time.time()))
+            db.commit()
+            updated += 1
+        except Exception:
+            logger.exception("Rank refresh failed for player %d", player.id)
+            db.rollback()
+    return updated
+
+
 def run_profile_enrichment(batch_size: int | None = None) -> dict:
     if batch_size is None:
         batch_size = _BATCH_SIZE
 
     db = SessionLocal()
-    enriched = skipped = errors = 0
+    enriched = skipped = errors = rank_updated = 0
 
     try:
-        hero_name_map = _fetch_hero_name_map()
-
         cooldown_secs = int(_COOLDOWN_HOURS * 3600)
         cutoff = int(time.time()) - cooldown_secs
+
+        rank_updated = _refresh_ranks(db, cutoff, batch_size)
+
+        hero_name_map = _fetch_hero_name_map()
 
         rows = db.execute(text("""
             SELECT DISTINCT p.id FROM players p
@@ -309,7 +344,7 @@ def run_profile_enrichment(batch_size: int | None = None) -> dict:
         player_ids = [r.id for r in rows]
 
         if not player_ids:
-            return {"enriched": 0, "skipped": 0, "errors": 0}
+            return {"enriched": 0, "skipped": 0, "errors": 0, "rank_updated": rank_updated}
 
         for player_id in player_ids:
             player = db.get(Player, player_id)
@@ -350,7 +385,7 @@ def run_profile_enrichment(batch_size: int | None = None) -> dict:
     finally:
         db.close()
 
-    return {"enriched": enriched, "skipped": skipped, "errors": errors}
+    return {"enriched": enriched, "skipped": skipped, "errors": errors, "rank_updated": rank_updated}
 
 
 if __name__ == "__main__":

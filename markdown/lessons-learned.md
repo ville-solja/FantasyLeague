@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-23 — developer — frontend
+**Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
+**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).
+
 ### 2026-10-15 — developer — testing
 **Problem:** In cloud sessions, three `test_test_background_task_isolation.py` lifespan tests fail (or hang when run alone) because their subprocess starts the real loops, which call `api.opendota.com` through an egress proxy that refuses it; pytest-xdist may also be missing.
 **Solution:** Treat those three as environmental when the proxy log shows refused `api.opendota.com` connections; install `requirements-dev.txt` for `-n auto`. For draw/reveal behaviour in `app-cards.js`, reuse `_HARNESS` / `_run` in `test_issue_205_card_draw_animations.py` (fake `Image`, `fetch`, timers and `Element.animate`).

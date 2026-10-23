@@ -22,7 +22,10 @@ Table of all players who have participated in any ingested league. Sortable colu
 
 Opened by clicking any player name (in this tab or elsewhere). Shows:
 
-- Player avatar, name, and current team.
+- Player avatar, name, and current team, followed by the player's **rank medal** when known
+  (issue #221): a small medal shape in the medal colour, the name ("Legend 4", "Immortal #12")
+  and ★ stars. Its tooltip reads "Last known rank from OpenDota, <date>". No medal and no gap
+  for an unranked player.
 - Summary stats (total matches, average points, total points).
 - **Match history table** — one row per match, columns (in order): MVP star (first column,
   populated only when `is_mvp` is true), Date, Fantasy pts, K/A/D, GPM, Wards, Tower dmg,

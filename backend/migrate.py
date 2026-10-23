@@ -748,6 +748,18 @@ def _m039_user_tags_source(conn):
     logger.info("Migration: user_tags — added source column")
 
 
+def _m040_players_rank(conn):
+    """Issue #221: players.rank_tier, leaderboard_rank and rank_fetched_at (all nullable)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()}
+    if not cols:
+        return
+    for col in ("rank_tier", "leaderboard_rank", "rank_fetched_at"):
+        if col not in cols:
+            conn.execute(text(f"ALTER TABLE players ADD COLUMN {col} INTEGER"))
+            logger.info("Migration: players — added %s column", col)
+    conn.commit()
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -811,6 +823,7 @@ MIGRATIONS = [
     ("037_cards_active_player_unique", _m037_cards_active_player_unique),
     ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
     ("039_user_tags_source",         _m039_user_tags_source),
+    ("040_players_rank",             _m040_players_rank),
 ]
 
 

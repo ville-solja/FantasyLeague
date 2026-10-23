@@ -160,7 +160,7 @@ def _profile_enrichment_loop():
                 _future = _executor.submit(run_profile_enrichment, batch_size=_ENRICHMENT_BATCH_SIZE)
                 try:
                     result = _future.result(timeout=300)  # 5-minute timeout
-                    if result["enriched"] or result["errors"]:
+                    if result["enriched"] or result["errors"] or result.get("rank_updated"):
                         logger.info("Profile enrichment: %s", result)
                 except FuturesTimeoutError:
                     logging.warning("Profile enrichment timed out after 300s")
