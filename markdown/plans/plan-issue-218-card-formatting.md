@@ -9,23 +9,23 @@ A first build of layout A drew accolades on the PNG. It was reverted (commit `88
 - **Holo legendaries (#105):** `_load_template(ct, is_holo)` uses `Card_Template_Holo.png` when it exists, or the Legendary template with a generated iridescent sheen.
 - **Rank medal (#221):** shipped as HTML in the popup and card viewer. The plan for #221 left the medal on the PNG to #218.
 
-This plan rebuilds layout A on that design. The PNG draws the frame, the exact portrait and logo slots, the rarity gems, the rank medal and the card number. Its two pillars are where main's HTML pips sit: tags on the left, accolades on the right. Nothing about accolades or tags is drawn into the image.
+This plan rebuilds layout A on that design. The PNG draws the frame (its edge colour is the rarity), the exact portrait and logo slots, the rank medal, and a light shine on legendaries (much stronger on Holo). Its two pillars are where main's HTML pips sit: tags on the left, accolades on the right. Nothing about accolades or tags is drawn into the image. Product-owner review (24 Oct, plan doc below) removed the card number, the rarity gems and word, and the medal stars.
 
 Layout A on the 597 × 845 card. The size is unchanged, so the roster, the reveal and the #205 draw animation keep their sizes.
 - **Frame:** a rarity-coloured border with rounded corners, and a cross-hatch in the rarity colour.
-- **Name bar:** the player name, the rarity gems (1 for common, 2 rare, 3 epic, 4 legendary) and on the right the card number (`#` + card id). A long name shrinks, then is cut with "…", to leave room for the gems.
+- **Name bar:** the player name only.
 - **Portrait row:** a portrait slot of 368 × 368 (the avatar at exactly 2×) with a 6 px rarity-coloured border, between two pillars about 80 px wide.
-  - **Left pillar:** the tag pips at the top (HTML overlay). At the bottom, drawn on the PNG: the rank medal (#221). The gems moved to the name bar: the 380 px pillar can't hold the tag pips, four gems and the medal.
+  - **Left pillar:** the tag pips at the top (HTML overlay). At the bottom, drawn on the PNG: the rank medal (#221).
   - **Right pillar:** the accolade pips (HTML overlay). The PNG draws only the empty pillar.
-- **Type line:** the team-logo slot of 100 × 60 (the cached 250 × 150 logo at exactly 0.4×; no circle crop), the team name and the rarity name ("Legendary · Holo" stays a frontend label).
+- **Type line:** the team-logo slot of 100 × 60 (the cached 250 × 150 logo at exactly 0.4×; no circle crop) and the team name. Rarity is told by the frame edge colour (common grey, rare blue, epic purple, legendary gold); the card viewer keeps the rarity word in text ("Legendary · Holo").
 - **Rules box:** the cream box with up to 3 modifier lines, or "No stat modifiers".
 
 Assumptions:
 - **Reuse the reverted build.** Commit `46cb136` holds a working layout-A renderer and `backend/scripts/make_card_templates.py`. Start from them and remove the accolade drawing (`_draw_accolades`, the accolade names line, the `accolades` card data). Keep the slot constants, gems, rank medal, card number, logo fit and avatar 2×.
-- **Holo.** Holo keeps working through `_load_template`: the generated sheen multiplies with the template's alpha, so it covers the new frame. The generator may also write `Card_Template_Holo.png` (the legendary frame with a fixed iridescent band) so production doesn't rely on the fallback warning. The first build's "foil sheen on every legendary" is dropped, so Holo stays the special one.
+- **Holo and shine.** An ordinary legendary gets a light diagonal shine. Holo is drastically shinier: the generator writes `Card_Template_Holo.png` with a strong rainbow over the frame and pillars and only a faint tint on the text panels; the medal keeps a dark plate so it stays readable. Main's `_load_template` and the generated-sheen fallback stay.
 - **Pips follow the pillars.** Today the pips are sized in px (`font-size: 11px`, `top: 3.4em`), so their place on the card drifts with the card's size. They become proportional to the card (container query units on the card wrapper), so they sit inside the pillars at roster size (180 px), in the reveal and in the Weekly Report. The pip markup and helpers don't change.
-- **Twitch panel.** The panel shows the PNG, which gains the medal, gems and number. It has no pips today, so its pillars stay empty there. Pips in the panel would be a separate issue.
-- **Small sizes.** At 180 px wide the name, rarity and modifier values must stay readable. At 110 px, the portrait and rarity gems must stay clear.
+- **Twitch panel.** The panel shows the PNG, which gains the medal. It has no pips today, so its pillars stay empty there. Pips in the panel would be a separate issue.
+- **Small sizes.** At 180 px wide the name and modifier values must stay readable. At 110 px, the portrait, edge colour and medal must stay clear.
 
 Plan review doc with renders and the decisions to confirm: https://claude.ai/artifact/CKdDktuuHHNuGJ8C72pdpU. `/develop` follows its "Decisions to confirm" table.
 
@@ -49,9 +49,9 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 - The card PNG is 597 × 845 and uses layout A for every rarity, with 0 to 3 modifiers
 - The 184 × 184 avatar fills a 368 × 368 slot exactly (2×), with no crop, stretch or filler
 - A 250 × 150 cached logo fills a 100 × 60 slot exactly (0.4×); a fallback logo of another shape is fitted inside the slot without stretching; no circle crop
-- Rarity is shown by colour, by 1 to 4 gems in the name bar and by the rarity name, not by colour alone
-- The name bar shows the card number (`#` + card id)
-- A Holo legendary renders with the Holo template or the generated sheen over the new frame; an ordinary legendary has no sheen
+- Rarity is shown by the frame edge colour only: common grey, rare blue, epic purple, legendary gold; no gems, rarity word or card number on the image
+- The card viewer still names the rarity in text, so the edge colour is not the only signal
+- An ordinary legendary has a light shine; a Holo legendary has a much stronger rainbow shine on the frame and pillars, with the text panels and medal still readable
 - The templates are drawn by `backend/scripts/make_card_templates.py`, and the committed PNGs match its output
 - No league name and no image from a Dota CDN on the card
 
@@ -60,7 +60,8 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 As a player, I want to see the player's rank medal on the card itself so that it shows wherever the card image is used, including the Twitch panel.
 
 **Acceptance criteria**
-- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: medal shape and colour, name and stars, or "Immortal #N"
+- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: our own drawing of that Dota 2 medal in its primary colour (Herald bronze, Guardian green, Crusader teal, Archon yellow-green, Legend red, Ancient purple, Divine blue, Immortal gold) with the medal name; no stars, no leaderboard place
+- The website badge (popup, card viewer) switches to the same emblems and colours and drops its stars and place
 - An unranked player's card leaves the medal place empty, with no placeholder
 - The medal uses the same medal colours as the website badge
 
@@ -89,8 +90,9 @@ As a player, I want accolades such as match MVP picks to show how many times the
 |---|---|
 | `backend/scripts/make_card_templates.py` | New (from commit `46cb136`, minus accolade discs): draws the four rarity templates and optionally `Card_Template_Holo.png`, with transparent portrait and logo cutouts |
 | `assets/Card_Template_*.png` | Regenerated by the script |
-| `backend/image.py` | Layout A: slot constants, portrait at 2×, logo fit into 100 × 60, rarity gems, `_draw_rank_medal`, card number, rules box; keeps `_load_template` and the Holo path; draws no accolades or tags |
+| `backend/image.py` | Layout A: slot constants, portrait at 2×, logo fit into 100 × 60, medal emblems (`_draw_rank_medal`), rules box, light legendary shine; keeps `_load_template` and the Holo path; draws no accolades, tags, gems or card number |
 | `backend/routers/cards.py` | The image route passes `card_id`, `rank_tier` and `leaderboard_rank` to `generate_card_image` |
+| `frontend/app-globals.js`, `frontend/colors_and_type.css` (+ `design/` copy) | Medal badge: the same emblems and colours as the PNG, no stars or place (#221 follow-up) |
 | `frontend/style.css` | `.card-pips` and `.card-tag-pips` positioned and sized in container units over the right and left pillars; the card wrappers (`.card-slot`, the reveal image wrap, Weekly Report cards) get `container-type: inline-size` |
 | `markdown/features/reference/card-image-generation.md`, `card-formatting.md`, `player-rank-medals.md`, `tag-symbols-on-cards.md`, `season-winners-and-holo-cards.md` | Docs |
 | `backend/tests/test_issue_218_card_formatting.py` | Tests (rebuilt from the reverted file) |
@@ -101,12 +103,12 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - the accolade discs and "+N" (`_draw_accolades`, `_load_sticker`);
   - the accolade names line in the rules box;
   - the `accolades` parameter.
-- Keep main's `_load_template(ct, is_holo)`, `_holo_sheen` and `warn_if_holo_template_missing`. Drop the first build's sheen on ordinary legendaries.
-- The gems are drawn in the name bar beside the card number, and the name is fitted to the room left. The left pillar's lower part holds the rank medal; its upper part is left plain for the tag pips.
+- Keep main's `_load_template(ct, is_holo)`, `_holo_sheen` and `warn_if_holo_template_missing`. The generator also writes `Card_Template_Holo.png` (strong rainbow, faint on the text panels, medal on a dark plate). Ordinary legendaries keep a light shine.
+- Remove the rarity gems, the rarity word and the card number. The left pillar's lower part holds the rank medal; its upper part is left plain for the tag pips.
 - The right pillar is plain.
 
 ### Step 2 — Image route
-- `get_card_image_route` reads `p.rank_tier` and `p.leaderboard_rank` (already selected by #221's card queries) and the card id, and passes them on.
+- `get_card_image_route` reads `p.rank_tier` (already selected by #221's card queries) and passes it on.
 - Nothing else in the card data changes; accolades and tags stay on `GET /accolades`.
 
 ### Step 3 — Pips over the pillars
@@ -115,7 +117,7 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - left and right offsets at the pillar centres;
   - `top` at the portrait row;
   - pip size about 10 cqw (60 px on the 597 px card);
-  - gap and max-height to the pillar's bottom (tags: above the gems).
+  - gap and max-height to the pillar's bottom (tags: above the medal).
 - Keep a px fallback for browsers without container queries.
 - Check the roster slot, the reveal, the draw animation's landing clone (#205) and the Weekly Report.
 
@@ -129,9 +131,9 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - every rarity with 0 to 3 modifiers renders at 597 × 845;
   - the avatar and the 250 × 150 logo fill their slots exactly, and a square or tall fallback logo fits without stretching;
   - templates have transparent cutouts and match the generator;
-  - gem count by rarity; the card number is drawn;
+  - the edge colour by rarity; no gems, rarity word or card number on the image; each of the eight medals draws in its colour without stars;
   - the medal is drawn for a ranked player and absent for an unranked one;
-  - Holo renders with and without `Card_Template_Holo.png`, and an ordinary legendary has no sheen;
+  - Holo renders with and without `Card_Template_Holo.png`, is much shinier than an ordinary legendary, and an ordinary legendary has a light shine;
   - `generate_card_image` takes no accolades or tags (#217 stays true);
   - the pip CSS uses container units and the wrappers declare `container-type`;
   - no league name in the renderer.

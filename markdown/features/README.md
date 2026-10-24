@@ -32,7 +32,7 @@ Implementation details, integrations, and operator tooling.
 | [OpenDota Query Prioritization](reference/opendota-query-prioritization.md) | Live-match-aware gating: skips low-priority enrichment and tightens the poll interval while a monitored league has a match in progress |
 | [Card Image Generation](reference/card-image-generation.md) | Pillow-based PNG card rendering pipeline |
 | [Card Draw Animations](reference/card-draw-animations.md) | The drawn card flies from a deck in the Draw panel, flips face up before the reveal fades in, and lands in its roster or bench slot; a card back is postponed |
-| [Card Formatting](reference/card-formatting.md) | Card layout A: exact portrait and logo slots, rarity gems in the name bar, rank medal and card number on the PNG, with the tag and accolade pips over its side pillars; works with Holo *(planned)* |
+| [Card Formatting](reference/card-formatting.md) | Card layout A: exact portrait and logo slots, rarity by edge colour and the rank medal on the PNG, with the tag and accolade pips over its side pillars; works with Holo *(planned)* |
 | [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |

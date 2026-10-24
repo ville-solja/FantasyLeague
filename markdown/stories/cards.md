@@ -485,9 +485,9 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 - The card PNG is 597 × 845 and uses layout A for every rarity, with 0 to 3 modifiers
 - The 184 × 184 avatar fills a 368 × 368 slot exactly (2×), with no crop, stretch or filler
 - A 250 × 150 cached logo fills a 100 × 60 slot exactly (0.4×); a fallback logo of another shape is fitted inside the slot without stretching; no circle crop
-- Rarity is shown by colour, by 1 to 4 gems in the name bar and by the rarity name, not by colour alone
-- The name bar shows the card number (`#` + card id)
-- A Holo legendary renders with the Holo template or the generated sheen over the new frame; an ordinary legendary has no sheen
+- Rarity is shown by the frame edge colour only: common grey, rare blue, epic purple, legendary gold; no gems, rarity word or card number on the image
+- The card viewer still names the rarity in text, so the edge colour is not the only signal
+- An ordinary legendary has a light shine; a Holo legendary has a much stronger rainbow shine on the frame and pillars, with the text panels and medal still readable
 - The templates are drawn by `backend/scripts/make_card_templates.py`, and the committed PNGs match its output
 - No league name and no image from a Dota CDN on the card
 
@@ -496,7 +496,8 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 As a player, I want to see the player's rank medal on the card itself so that it shows wherever the card image is used, including the Twitch panel.
 
 **Acceptance criteria**
-- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: medal shape and colour, name and stars, or "Immortal #N"
+- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: our own drawing of that Dota 2 medal in its primary colour (Herald bronze, Guardian green, Crusader teal, Archon yellow-green, Legend red, Ancient purple, Divine blue, Immortal gold) with the medal name; no stars, no leaderboard place
+- The website badge (popup, card viewer) switches to the same emblems and colours and drops its stars and place
 - An unranked player's card leaves the medal place empty, with no placeholder
 - The medal uses the same medal colours as the website badge
 
