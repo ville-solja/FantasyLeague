@@ -23,6 +23,21 @@ Assumptions:
 
 Feasibility timeline: https://claude.ai/artifact/WofLAWSmtKkTrF4p79R2bt (private until shared). Paste the fixtures feed's JSON into it and it draws both divisions' playoff series against the fantasy weeks. It proposes stages, one per division and round, that can be edited, and it lists problems: a series that starts before its stage locks, a stage that locks before the previous round of the same division is over, a stage that ends too soon after its last series, unscheduled series, and token and report counts. It opens with example data, because the feed couldn't be reached from the planning environment.
 
+### Season 16 fixtures (feed of 24 Oct 2026)
+- **Lower division:** 6 teams, league weeks 1–5; regular season finished Sun 18 Oct.
+- **Upper division:** 8 teams, league weeks 1–7; 7 series still to play, 5 of them without a date; its week 7 is 26 Oct – 1 Nov.
+- **What this means:** the lower playoffs can start while the upper regular season is still running. That's the "different pace" in the issue.
+- **No playoff fixtures in the feed yet.** Until the organiser adds them, the app's schedule, series results and out-of-week check can't see playoff series. Admins must assign them by hand whatever option is chosen.
+- **Off-week series:** three regular-season series were already played outside their league week. Week overrides (#193) handle them.
+
+### Feasibility (timeline artifact)
+The projection is the top four by maps won, semifinals 1 v 4 and 2 v 3, and a final the week after. On that projection:
+- every playoff round fits inside a single Monday–Sunday fantasy week, so option 2 (ordinary weeks, no code) works this season;
+- the lower semifinals (projected to lock Tue 27 Oct) come before option 3 could realistically be live (about Fri 30 Oct, after develop, review, deploy and a rehearsal on test);
+- a mix is therefore feasible: the lower semifinals as an ordinary week, then stages from the upper semifinals (projected around 3 Nov).
+
+Replace the projected dates in the artifact with the organiser's real ones before deciding.
+
 Resolves GitHub issue #222.
 
 ## User Stories
