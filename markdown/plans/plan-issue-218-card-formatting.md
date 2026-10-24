@@ -13,9 +13,9 @@ This plan rebuilds layout A on that design. The PNG draws the frame, the exact p
 
 Layout A on the 597 × 845 card. The size is unchanged, so the roster, the reveal and the #205 draw animation keep their sizes.
 - **Frame:** a rarity-coloured border with rounded corners, and a cross-hatch in the rarity colour.
-- **Name bar:** the player name, and on the right the card number (`#` + card id).
+- **Name bar:** the player name, the rarity gems (1 for common, 2 rare, 3 epic, 4 legendary) and on the right the card number (`#` + card id). A long name shrinks, then is cut with "…", to leave room for the gems.
 - **Portrait row:** a portrait slot of 368 × 368 (the avatar at exactly 2×) with a 6 px rarity-coloured border, between two pillars about 80 px wide.
-  - **Left pillar:** the tag pips at the top (HTML overlay). Near the bottom, drawn on the PNG: the rarity gems (1 for common, 2 rare, 3 epic, 4 legendary) and under them the rank medal (#221).
+  - **Left pillar:** the tag pips at the top (HTML overlay). At the bottom, drawn on the PNG: the rank medal (#221). The gems moved to the name bar: the 380 px pillar can't hold the tag pips, four gems and the medal.
   - **Right pillar:** the accolade pips (HTML overlay). The PNG draws only the empty pillar.
 - **Type line:** the team-logo slot of 100 × 60 (the cached 250 × 150 logo at exactly 0.4×; no circle crop), the team name and the rarity name ("Legendary · Holo" stays a frontend label).
 - **Rules box:** the cream box with up to 3 modifier lines, or "No stat modifiers".
@@ -26,6 +26,8 @@ Assumptions:
 - **Pips follow the pillars.** Today the pips are sized in px (`font-size: 11px`, `top: 3.4em`), so their place on the card drifts with the card's size. They become proportional to the card (container query units on the card wrapper), so they sit inside the pillars at roster size (180 px), in the reveal and in the Weekly Report. The pip markup and helpers don't change.
 - **Twitch panel.** The panel shows the PNG, which gains the medal, gems and number. It has no pips today, so its pillars stay empty there. Pips in the panel would be a separate issue.
 - **Small sizes.** At 180 px wide the name, rarity and modifier values must stay readable. At 110 px, the portrait and rarity gems must stay clear.
+
+Plan review doc with renders and the decisions to confirm: https://claude.ai/artifact/CKdDktuuHHNuGJ8C72pdpU. `/develop` follows its "Decisions to confirm" table.
 
 Resolves GitHub issue #218.
 
@@ -47,7 +49,7 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 - The card PNG is 597 × 845 and uses layout A for every rarity, with 0 to 3 modifiers
 - The 184 × 184 avatar fills a 368 × 368 slot exactly (2×), with no crop, stretch or filler
 - A 250 × 150 cached logo fills a 100 × 60 slot exactly (0.4×); a fallback logo of another shape is fitted inside the slot without stretching; no circle crop
-- Rarity is shown by colour, by 1 to 4 gems and by the rarity name, not by colour alone
+- Rarity is shown by colour, by 1 to 4 gems in the name bar and by the rarity name, not by colour alone
 - The name bar shows the card number (`#` + card id)
 - A Holo legendary renders with the Holo template or the generated sheen over the new frame; an ordinary legendary has no sheen
 - The templates are drawn by `backend/scripts/make_card_templates.py`, and the committed PNGs match its output
@@ -58,7 +60,7 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 As a player, I want to see the player's rank medal on the card itself so that it shows wherever the card image is used, including the Twitch panel.
 
 **Acceptance criteria**
-- `GET /cards/{id}/image` draws the player's medal (#221) in the left pillar under the rarity gems: medal shape and colour, name and stars, or "Immortal #N"
+- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: medal shape and colour, name and stars, or "Immortal #N"
 - An unranked player's card leaves the medal place empty, with no placeholder
 - The medal uses the same medal colours as the website badge
 
@@ -69,7 +71,7 @@ As a player, I want the tag and accolade symbols to sit neatly in the card's sid
 **Acceptance criteria**
 - Tag pips (#217) stack from the top of the left pillar and accolade pips (#50) from the top of the right pillar, on the roster card (180 px), the card viewer and draw reveal, and the Weekly Report cards
 - The pips scale with the card, so they stay inside the pillars at every card size
-- The tag pips end above the rarity gems; with more pips than fit, the column stops at the pillar's bottom (no overlap with the gems or the type line)
+- The tag pips end above the rank medal; with more pips than fit, the column stops there (no overlap with the medal or the type line)
 - The pips keep their tooltips, keyboard focus and `aria-label`s; the PNG itself draws no tags or accolades
 
 ### Counted Accolades *(not yet implemented)*
@@ -100,7 +102,7 @@ As a player, I want accolades such as match MVP picks to show how many times the
   - the accolade names line in the rules box;
   - the `accolades` parameter.
 - Keep main's `_load_template(ct, is_holo)`, `_holo_sheen` and `warn_if_holo_template_missing`. Drop the first build's sheen on ordinary legendaries.
-- The left pillar's lower part holds the gems and, under them, the rank medal. Its upper part is left plain for the tag pips.
+- The gems are drawn in the name bar beside the card number, and the name is fitted to the room left. The left pillar's lower part holds the rank medal; its upper part is left plain for the tag pips.
 - The right pillar is plain.
 
 ### Step 2 — Image route

@@ -17,7 +17,7 @@ Rarity is shown by colour, by 1 to 4 gems and by name. Holo legendaries keep mai
 ## Pillars
 
 *(planned)*
-- **Left pillar:** the tag pips (#217, HTML) at the top. Near the bottom, drawn on the PNG: the rarity gems and the rank medal (#221).
+- **Left pillar:** the tag pips (#217, HTML) at the top; at the bottom, drawn on the PNG, the rank medal (#221). The rarity gems sit in the name bar.
 - **Right pillar:** the accolade pips (#50, HTML).
 
 The pips are sized in container units, so they stay inside the pillars at roster size, in the card viewer and in the Weekly Report. The PNG draws no tags or accolades.
