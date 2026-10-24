@@ -395,7 +395,7 @@ class TestMyRosterPanel:
         assert [c["card_id"] for c in cards] == [c["id"] for c in _build_roster_response(db, 1, 1)["active"]]
         assert [c["card_id"] for c in cards] == [1, 2]
         for c in cards:
-            assert set(c) == _CARD_KEYS | {"breakdown", "accolades"}  # breakdown: issue #152; accolades: #218
+            assert set(c) == _CARD_KEYS | {"breakdown"}  # breakdown added by issue #152
             assert c["counted"] is True
 
     def test_build_roster_response_returns_team_id_per_card(self, db):

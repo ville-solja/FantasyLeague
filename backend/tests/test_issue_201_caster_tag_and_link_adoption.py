@@ -329,7 +329,7 @@ def test_caster_auto_tag_shows_on_leaderboard_card_sticker_and_profile(db, monke
     seen = {}
 
     def fake_generate(**kwargs):
-        seen["tag_keys"] = [a["key"] for a in kwargs["accolades"]]
+        seen["tag_keys"] = kwargs["tag_keys"]
         from PIL import Image
         return Image.new("RGB", (2, 2))
 

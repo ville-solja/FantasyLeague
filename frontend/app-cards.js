@@ -99,47 +99,6 @@ function _renderRevealRank(card) {
   el.innerHTML = rankMedalHtml(card.rank_tier, card.leaderboard_rank);
 }
 
-// Issue #218: the card's accolades (the linked user's tags) under the image: sticker
-// icon (a letter chip when there is no sticker file) and label. Hidden when empty.
-function _accoladeChip(acc) {
-  const chip = document.createElement("span");
-  chip.className = "reveal-accolade-icon reveal-accolade-icon--letter";
-  chip.setAttribute("aria-hidden", "true");
-  chip.textContent = String(acc.label || acc.key || "?").trim().charAt(0).toUpperCase() || "?";
-  return chip;
-}
-
-function _renderRevealAccolades(card) {
-  const el = document.getElementById("revealAccolades");
-  if (!el) return;
-  const list = Array.isArray(card.accolades) ? card.accolades.filter(a => a && (a.key || a.label)) : [];
-  const items = list.map(acc => {
-    const item = document.createElement("li");
-    item.className = "reveal-accolade";
-    const key = String(acc.key || "");
-    let icon;
-    if (/^[a-z0-9_-]+$/i.test(key)) {
-      icon = document.createElement("img");
-      icon.className = "reveal-accolade-icon";
-      icon.alt = "";
-      icon.width = 20;
-      icon.height = 20;
-      icon.onerror = () => { if (icon.parentNode) icon.parentNode.replaceChild(_accoladeChip(acc), icon); };
-      icon.src = `/assets/stickers/${encodeURIComponent(key)}.png`;
-    } else {
-      icon = _accoladeChip(acc);
-    }
-    const label = document.createElement("span");
-    label.className = "reveal-accolade-label";
-    label.textContent = String(acc.label || key);
-    item.appendChild(icon);
-    item.appendChild(label);
-    return item;
-  });
-  el.replaceChildren(...items);
-  el.hidden = items.length === 0;
-}
-
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
@@ -175,7 +134,6 @@ function showCard(card, footer, opts = {}) {
   }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
   _renderRevealRank(card);
-  _renderRevealAccolades(card);
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
 

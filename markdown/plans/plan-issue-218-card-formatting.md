@@ -34,15 +34,7 @@ Assumptions:
 - **Rank medal (#221).** Every template has a rank slot for the player's medal badge (medal shape and colour with stars, or "Immortal #N"), drawn by `_draw_rank_medal` from `players.rank_tier` and `leaderboard_rank`; the slot is left empty when the rank is null. See `plan-issue-221-player-rank-medals.md`.
 - **Same data.** No change to cards, modifiers, rarities, tags or their endpoints.
 
-Chosen layout: **A · Classic TCG** (product owner, 2026-10-24). On the 597 × 845 card (about 2× the canvas drawing, `LayoutA` on the canvas):
-- **Frame:** rarity-coloured border with rounded corners; cross-hatch pattern in the rarity colour; foil sheen on legendary.
-- **Name bar:** the player name, with the card number (`#` + card id) on the right.
-- **Portrait row:** the portrait slot of 368 × 368 (2×), with a 6 px rarity-coloured border, between two pillars about 80 px wide.
-  - The left pillar holds the rarity gems: 1 for common, 2 for rare, 3 for epic and 4 for legendary. Under them is the rank medal slot (#221).
-  - The right pillar holds the accolade discs, at most 4. When there are more, the fourth place shows "+N".
-- **Type line:** the team logo slot of 100 × 60 (0.4×), the team name, and the rarity name.
-- **Rules box:** the cream box holds the modifier lines (up to 3), with the accolade names on a line at its foot.
-- **Templates:** drawn from scratch by a generator script in the repo, so they can be rebuilt. The file names stay `Card_Template_<Rarity>.png`, so asset resolution doesn't change.
+Chosen layout: *to be decided on the canvas.*
 
 Resolves GitHub issue #218.
 
@@ -65,7 +57,7 @@ As a player, I want a card's accolades to sit in a dedicated place on the card s
 **Acceptance criteria**
 - Every tag of the player's linked user is drawn in the layout's accolade area, in the tag's own icon and colour, never on top of the name, portrait, team logo or frame
 - The accolade area holds up to the layout's maximum; more accolades show "+N" in the last place
-- A card with no accolades shows the layout's empty state (an empty accolade pillar) and no gap that looks broken
+- A card with no accolades shows the layout's empty state (no area, or empty slots in layout D) and no gap that looks broken
 - A new tag with a sticker file appears on cards without a code change, as today
 - A tag without a sticker file still shows, with a generic badge and its first letter
 
@@ -115,7 +107,7 @@ As a player, I want accolades such as match MVP picks to show how many times the
 | `backend/tests/test_issue_218_card_formatting.py` | Layout and accolade tests |
 
 ### Step 1 — Choose the layout
-- Done: layout A (see "Chosen layout" in the Context). The answers to the open points below are recorded there.
+- The product owner picks a layout on the canvas and writes it under "Chosen layout" in the Context.
 - Settle the open design points:
   - the slot scales (portrait 1.5× or 2×, logo 1×, 0.6× or 0.4×);
   - the accolade maximum;

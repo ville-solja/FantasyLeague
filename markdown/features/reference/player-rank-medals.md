@@ -1,6 +1,6 @@
 # Player Rank Medals
 
-Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup, the card viewer and on the card PNG (issue #221). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
+Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup and the card viewer, and later on the card PNG (issue #221). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
 
 ---
 
@@ -33,7 +33,7 @@ Colours are tokens `--medal-herald` … `--medal-immortal` in `frontend/colors_a
 It appears:
 - in the player popup header, after the team name;
 - under the card image in the card viewer and the draw reveal (`#revealRank`, hidden when empty);
-- on the card PNG, in the rank slot under the rarity gems (#218). `image._draw_rank_medal` draws the same medal shape and colour with Pillow, the medal name and the stars, or "#N" for an Immortal with a leaderboard place. The slot is empty when the rank is null. See [Card Image Generation](card-image-generation.md).
+- *(planned, #218)* on the card PNG, in a rank slot of the new templates. The current templates and `image.py` don't draw it.
 
 ## Endpoints
 
@@ -41,7 +41,7 @@ It appears:
 Returns `rank_tier`, `leaderboard_rank` and `rank_fetched_at`.
 
 ### Card data (`routers/cards.py`)
-`rank_tier` and `leaderboard_rank` are in each card of `GET /roster/{user_id}` (My Team, both the open-week and locked-week queries), in the `POST /draw` and `POST /draw/booster/{team_id}` responses, and in `GET /cards/{card_id}`. The Twitch panel's collection does not include them (it shows the card PNG, which draws the medal).
+`rank_tier` and `leaderboard_rank` are in each card of `GET /roster/{user_id}` (My Team, both the open-week and locked-week queries), in the `POST /draw` and `POST /draw/booster/{team_id}` responses, and in `GET /cards/{card_id}`. The Twitch panel's collection does not include them (it shows the card PNG; the medal comes with #218).
 
 ### `POST /admin/enrich-profiles`
 Returns `rank_updated`, the number of ranks stored in that run.

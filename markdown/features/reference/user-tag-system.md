@@ -17,8 +17,8 @@ Two new tables power the system:
 
 Tags are granted to **users** (app accounts). When rendering a card image, the system
 resolves the player's linked user (`User.player_id == card.player_id`) and composites the
-user's tags onto the card as accolades: discs in the card's right-hand accolade pillar, with the
-names at the foot of the rules box (issue #218; see `card-formatting.md`).
+relevant sticker PNGs onto the card. Multiple tags produce multiple stickers stacked
+horizontally in the top-left corner.
 
 Initial seed tags: `caster` ("Caster") and `season_winner` ("Season Winner").
 
@@ -68,13 +68,11 @@ streamers instead" for an automatic (`caster_sync`) row, which stays. Logged as
 
 ## Card image stickers
 
-Sticker images live at `assets/stickers/{tag_key}.png`, RGBA (60 × 60 px recommended; the
-icon is fitted into 50 × 50). Since issue #218, `_draw_accolades` in `backend/image.py` draws
-each tag as a 60 px disc in the right pillar of the card, at most 4 (the fourth shows "+N" when
-there are more), with the sticker as its icon. A missing sticker file, or a key whose path
-resolves outside `STICKER_DIR` (for example a legacy key containing `../`), gets the label's
-first letter instead; the file is never opened. Layout details:
-[Card Image Generation](card-image-generation.md).
+Sticker images live at `assets/stickers/{tag_key}.png`, 60 × 60 px, RGBA. The image
+pipeline in `backend/image.py` composites each sticker starting at `(10, 10)`, spaced
+64 px apart horizontally. Missing sticker files are silently skipped, and so is any key whose
+path resolves outside `STICKER_DIR` (for example a legacy key containing `../`) — the file is
+never opened.
 
 Placeholder assets for `caster.png` and `season_winner.png` are included for CI/testing
 and replaced by real artwork before deploy.

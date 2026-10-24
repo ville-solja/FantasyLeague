@@ -82,7 +82,6 @@ def _roster_card(c: dict) -> dict:
         "counted": bool(c["is_active"]), "subbed_in": c["subbed_in"],
         "subbed_out": c["subbed_out"], "subbed_in_for": c["subbed_in_for"],
         "modifiers": c["modifiers"], "week_points": c["total_points"],
-        "accolades": c.get("accolades", []),
     }
 
 

@@ -21,7 +21,7 @@ from database import get_db, spend_tokens
 from match_scoring import counted_roster_entry_sql, scored_match_sql
 from deps import get_current_user, is_admin_fresh, session_user_or_none, _audit
 from logo_hosts import safe_logo_url
-from models import Card, Player, PlayerMatchStats, TagDefinition, Team, User, UserTag, Week, Weight
+from models import Card, Player, PlayerMatchStats, Team, User, Week, Weight
 from rate_limit import (limiter, key_by_user_or_ip, RATE_LIMIT_CARD_ACTION,
                         RATE_LIMIT_CARD_ACTION_IP)
 from scoring import display_points
@@ -104,30 +104,6 @@ _WEEK_WINDOW_SQL = ("(m.week_override_id = :week_id OR "
 
 def _slot_key(c: dict):
     return (c.get("slot_index") is None, c.get("slot_index") or 0, c["id"])
-
-
-def _accolades_for_players(db, player_ids) -> dict:
-    """{player_id: [{"key", "label"}, ...]}: the tags of the user linked to each
-    player (the lowest user id when several link it), in the order they were
-    granted (issue #218). Players with no linked user or no tags are absent."""
-    ids = {pid for pid in player_ids if pid is not None}
-    if not ids:
-        return {}
-    links = (db.query(User.player_id, User.id)
-               .filter(User.player_id.in_(ids)).order_by(User.id).all())
-    user_of: dict = {}
-    for pid, uid in links:
-        user_of.setdefault(pid, uid)
-    if not user_of:
-        return {}
-    rows = (db.query(UserTag.user_id, TagDefinition.key, TagDefinition.label)
-              .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
-              .filter(UserTag.user_id.in_(set(user_of.values())))
-              .order_by(UserTag.id).all())
-    by_user: dict = {}
-    for uid, key, label in rows:
-        by_user.setdefault(uid, []).append({"key": key, "label": label})
-    return {pid: by_user[uid] for pid, uid in user_of.items() if uid in by_user}
 
 
 def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
@@ -219,10 +195,8 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     # Week total from exact card sums, then every value rounded once (issue #149).
     combined_value = sum(float(c["total_points"] or 0.0) for c in active)
     modifiers_map = _card_modifiers_map(db, [c["id"] for c in cards])
-    accolades_map = _accolades_for_players(db, [c["player_id"] for c in cards])
     for c in cards:
         c["modifiers"] = _format_modifiers(modifiers_map.get(c["id"], {}))
-        c["accolades"] = accolades_map.get(c["player_id"], [])
         c["total_points"] = display_points(c["total_points"])
         c["team_logo_url"] = safe_logo_url(c["team_logo_url"])
 
@@ -373,7 +347,6 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "is_active": is_active,
         "tokens": tokens_remaining,
         "modifiers": _format_modifiers(mods),
-        "accolades": _accolades_for_players(db, [player.id]).get(player.id, []),
     }
 
 
@@ -503,7 +476,6 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "is_active": is_active,
         "tokens": user.tokens,
         "modifiers": _format_modifiers(mods),
-        "accolades": _accolades_for_players(db, [player.id]).get(player.id, []),
     }
 
 
@@ -548,17 +520,17 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "modifiers": _format_modifiers(mods),
-        "accolades": _accolades_for_players(db, [card.player_id]).get(card.player_id, []),
     }
 
 
 def get_card_image(card_id: int, db=Depends(get_db)):
     from image import generate_card_image, PIL_AVAILABLE
+    from models import UserTag, TagDefinition
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
     result = db.execute(text("""
         SELECT c.card_type, p.name as player_name, p.avatar_url,
-               p.id as player_id, p.rank_tier, p.leaderboard_rank,
+               p.id as player_id,
                t.name as team_name, t.logo_url as team_logo_url
         FROM cards c
         JOIN players p ON p.id = c.player_id
@@ -568,7 +540,19 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
-    accolades = _accolades_for_players(db, [result.player_id]).get(result.player_id, [])
+    # Resolve tag keys for the player's linked user (if any)
+    tag_keys: list = []
+    linked_user = db.execute(text(
+        "SELECT id FROM users WHERE player_id = :pid LIMIT 1"
+    ), {"pid": result.player_id}).first()
+    if linked_user:
+        ut_rows = (
+            db.query(UserTag, TagDefinition)
+            .join(TagDefinition, TagDefinition.id == UserTag.tag_id)
+            .filter(UserTag.user_id == linked_user.id)
+            .all()
+        )
+        tag_keys = [td.key for _, td in ut_rows]
     img = generate_card_image(
         card_type=result.card_type,
         player_name=result.player_name,
@@ -576,10 +560,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
         team_name=result.team_name,
         team_logo_url=result.team_logo_url,
         card_modifiers=mods,
-        accolades=accolades,
-        card_id=card_id,
-        rank_tier=result.rank_tier,
-        leaderboard_rank=result.leaderboard_rank,
+        tag_keys=tag_keys,
     )
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=False, compress_level=5)
