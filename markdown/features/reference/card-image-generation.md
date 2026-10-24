@@ -1,12 +1,12 @@
 # Card Image Generation
 
-Each card in the deck is represented as a dynamically composited PNG served by `GET /cards/{card_id}/image`. The image is generated on demand by `backend/image.py` using the Pillow library.
+Each card is a PNG composited on demand by `backend/image.py` (Pillow) and served by `GET /cards/{card_id}/image`. The layout is **A · Classic TCG** (issue #218; see [Card Formatting](card-formatting.md)).
 
 ---
 
 ## Template files
 
-Four rarity-specific PNG templates must be present in the assets directory:
+Four rarity templates sit in the assets directory, all **597 × 845 px RGBA**:
 
 | Rarity | File |
 |---|---|
@@ -15,98 +15,77 @@ Four rarity-specific PNG templates must be present in the assets directory:
 | Epic | `Card_Template_Epic.png` |
 | Legendary | `Card_Template_Legendary.png` |
 
-All templates share the same canvas size: **597 × 845 px**.
+They are drawn from scratch by `backend/scripts/make_card_templates.py`, which reads the slot rectangles and colours from `image.py`. To change the frame, edit the script or the constants and rebuild:
 
-The template PNG is a fully-designed frame — rarity border, decorative elements, name plate, and background art — with transparent cutouts where the player avatar and team logo are composited underneath. The frame is layered on top of the player content so it always reads cleanly.
+```
+python backend/scripts/make_card_templates.py
+```
 
-The assets directory is resolved at startup by searching several candidates (`assets/`, `Assets/`, `/app/Assets/`, etc.) for a folder containing all four template files. Linux containers use `/app/Assets` by convention; local development typically uses `assets/` or `Assets/` at the repo root.
+A template holds the rounded frame in the rarity colour, the cross-hatch pattern, the name bar, both pillars, the portrait border, the type-line plate and the cream rules box. The portrait and logo slots are transparent cutouts. `test_card_template_generator_script_exists` checks that the committed PNGs match the script's output.
 
----
-
-## Compositing pipeline
-
-The image is built in five layers, in order:
-
-1. **Dark base** — a solid `(35, 37, 40)` RGBA fill at full card size. Provides the background colour for areas the template does not cover.
-
-2. **Player avatar** — the player's OpenDota avatar image is downloaded, resized to a 350 × 350 px square (radius 175), circle-cropped with an alpha mask, and pasted onto the base centred at `(298, 375)`. If the avatar URL is unavailable or the download fails, the slot is left as the dark base colour.
-
-3. **Team logo** — the team logo is loaded from the local Dotabuff PNG cache first (`assets/dotabuff_league_logos/<team-name>.png`), falling back to the HTTP `logo_url` stored on the team record, which is fetched only when `safe_logo_url` passes it (https on a `LOGO_HOST_ALLOWLIST` host, Steam's CDNs by default; see [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md)). It is resized to 104 × 104 px (radius 52), circle-cropped, and pasted at `(444, 258)`. If neither source resolves, a solid black circular placeholder (`_blank_logo_placeholder`) is pasted in its place instead, so the badge slot is never left unpainted.
-
-4. **Template overlay** — the rarity template PNG is alpha-composited on top of the base, covering the avatar/logo layers with its frame. This is what provides the rarity border, name plates, and decorative chrome.
-
-5. **Text and modifiers** — player name, team name, and stat modifier lines are drawn over the composite using `ImageDraw`.
+The assets directory is found at startup by looking for a folder with all four files (`assets/`, `Assets/`, `/app/Assets/` and so on).
 
 ---
 
-## Layout coordinates
+## Slots
 
-All positions are in pixels relative to the 597 × 845 canvas. Epic and Legendary templates have their content plates positioned slightly lower than Common and Rare; a `+8 px` Y offset (`_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY`) is applied to all dynamic content (avatar, team logo, text, modifiers) for those rarities so that text and images align with the template plates correctly.
+Boxes are `(left, top, right, bottom)` on the 597 × 845 canvas, with right and bottom exclusive (as PIL crop boxes).
 
-| Element | Position |
-|---|---|
-| Player avatar centre | `(298, 375)` — radius 175 |
-| Team logo centre | `(444, 258)` — radius 52 |
-| Player name baseline Y | `90` (+ rarity offset) |
-| Team name baseline Y | `155` (+ rarity offset) |
-| First modifier line Y | `620` (+ rarity offset) |
-| Modifier line spacing | `50 px` |
-
----
-
-## Text rendering
-
-Text is drawn centered horizontally on the card. All names are uppercased. A drop shadow is drawn 2 px offset before the main text to maintain legibility over varied template colours.
-
-| Element | Font size | Fill colour | Max width before truncation |
-|---|---|---|---|
-| Player name | 32 pt | `(35, 35, 35)` dark | 480 px |
-| Team name | 22 pt | `(35, 35, 35)` dark | — |
-| Modifier lines | 30 pt | `(200, 230, 210)` green-tint | 500 px |
-
-The name plate areas on the template are light-coloured, so dark text is used there. The modifier band sits below the portrait on a dark area of the template, so the modifier text uses a light green tint.
-
-The font fallback chain (tried in order):
-1. `LiberationSans-Bold.ttf`
-2. `FreeSansBold.ttf`
-3. `DejaVuSans-Bold.ttf`
-4. PIL built-in default (bitmap, low quality — indicates a missing font package)
+| Constant | Box | Holds |
+|---|---|---|
+| `_NAME_BAR` | `(24, 24, 573, 92)` | Player name (left), card number `#<card id>` (right, rarity colour) |
+| `_LEFT_PILLAR` | `(24, 104, 104, 484)` | Rarity gems (`_GEM_AREA`) and the rank medal (`_RANK_SLOT`) |
+| `_GEM_AREA` | `(24, 112, 104, 316)` | 1 / 2 / 3 / 4 diamond gems for common / rare / epic / legendary |
+| `_RANK_SLOT` | `(28, 324, 100, 480)` | Rank medal (#221); empty when the rank is null |
+| `_PORTRAIT_FRAME` | `(108, 104, 488, 484)` | 6 px rarity border around the portrait |
+| `_PORTRAIT_SLOT` | `(114, 110, 482, 478)` | Avatar, **368 × 368** (the 184 × 184 Steam avatar at 2×) |
+| `_RIGHT_PILLAR` | `(492, 104, 572, 484)` | Up to 4 accolade discs |
+| `_TYPE_LINE` | `(24, 496, 573, 560)` | Logo, team name, rarity name (rarity colour) |
+| `_LOGO_SLOT` | `(26, 498, 126, 558)` | Team logo, **100 × 60** (the 250 × 150 cached logo at 0.4×) |
+| `_RULES_BOX` | `(24, 572, 573, 821)` | Up to 3 modifier lines; accolade names at the foot |
 
 ---
 
-## Stat modifier labels
+## Compositing
 
-Modifier lines are rendered in the lower band of the card (below the portrait area). Each line shows the stat name and bonus percentage, e.g. `KILLS +10%`. Stat keys are mapped to human-readable labels from `scoring.STAT_LABELS` (shared with the Weekly Report points breakdown, issue #152), shown upper-case:
+1. **Base:** `(35, 37, 40)` fill. It shows through an empty portrait slot.
+2. **Avatar:** downloaded and resized to the portrait slot. A square avatar scales exactly; a non-square one is centre-fitted (`ImageOps.fit`), never stretched. No avatar leaves the slot as the base colour.
+3. **Team logo:** the cached `assets/dotabuff_league_logos/<team>.png` first, then `team.logo_url` when `safe_logo_url` allows its host (issue #171). A 5:3 logo is resized to exactly 100 × 60. Any other shape is fitted with `ImageOps.contain`, centred on the dark plate. No circle crop. With no logo, `_blank_logo_placeholder` fills the slot with black (issue #107).
+4. **Template** on top.
+5. **Text and badges:** name and card number, team and rarity name, modifier lines (`_draw_rules_box`), gems (`_draw_rarity_gems`), rank medal (`_draw_rank_medal`), accolades (`_draw_accolades`).
+6. **Foil sheen** (legendary only): a soft diagonal light band over the whole card (`_apply_foil_sheen`).
+7. The rounded card shape is applied to the alpha channel, so the corners are transparent.
 
-| Stat key | Card label |
-|---|---|
-| `kills` | KILLS |
-| `assists` | ASSISTS |
-| `deaths` | DEATHS |
-| `gold_per_min` | GPM |
-| `obs_placed` | OBSERVER WARDS |
-| `last_hits` | LAST HITS |
-| `denies` | DENIES |
-| `towers_killed` | TOWERS |
-| `roshan_kills` | ROSHAN |
-| `teamfight_participation` | TEAMFIGHT |
-| `camps_stacked` | CAMPS STACKED |
-| `rune_pickups` | RUNES |
-| `firstblood_claimed` | FIRST BLOOD |
-| `stuns` | STUNS |
-
-Lines are sorted alphabetically by stat key and stacked from `y=620` downward. If there are no modifiers (e.g. a Common card), the lower band is left empty.
+No league name or logo is drawn.
 
 ---
 
-## Team logo sources
+## Text
 
-The generator prefers locally cached Dotabuff logos over live HTTP fetches for reliability and speed:
+All text uses the font chain `LiberationSans-Bold` → `FreeSansBold` → `DejaVuSans-Bold` → PIL default. Long text shrinks to a minimum size, then ends with "…".
 
-1. **Local file** — `assets/dotabuff_league_logos/<team-name>.png` (downloaded during ingest; see `ingest.md`)
-2. **HTTP fallback** — `team.logo_url` stored in the database (an OpenDota team logo URL on a Steam CDN), fetched only when `safe_logo_url` passes it (`LOGO_HOST_ALLOWLIST`, issue #171; see [Twitch Panel Abuse Limits](twitch-panel-abuse-limits.md)). A URL on any other host is never requested
+| Element | Size | Colour |
+|---|---|---|
+| Player name | 40, down to 30 | `#f3ead8` |
+| Card number | 24 | rarity colour |
+| Team name | 26, down to 20 | `#d8d0c0` |
+| Rarity name | 28 | rarity colour |
+| Modifier lines | 34 | `#2a2620`, label left and `+N%` right, dotted rule below |
+| Accolade names | 22 | `#4a4336` |
 
-Both are circle-cropped before compositing. If neither source is available (e.g. pre-season, before a team's first match has been ingested and its logo scraped/set), `_blank_logo_placeholder()` supplies a solid black circle of the same size instead, so the slot looks intentional rather than broken. Since the card image is generated fresh on every request with no server-side caching, the placeholder is automatically replaced by the real logo on the very next request once one becomes resolvable — no cache to invalidate.
+At the roster size (180 px wide, ×0.30) the name is 12 px, the modifier lines 10 px and the rarity 8.4 px. A card with no modifiers shows "No stat modifiers" in the rules box.
+
+Modifier labels come from `scoring.STAT_LABELS` in upper case, sorted by stat key, at most 3 lines.
+
+---
+
+## Accolades
+
+`_draw_accolades(img, accolades)` takes `[{key, label}, ...]` in the user's tag order. Each accolade is a 60 px disc in the right pillar, centred vertically as a group, with a ring in the tag's colour (`_ACCOLADE_COLORS`, a neutral grey for other tags). The icon is `assets/stickers/{key}.png`. The sticker path must resolve inside the sticker folder (`is_relative_to`); otherwise, or when the file is missing, the disc shows the label's first letter. With more than 4 accolades, the fourth disc shows "+N". The names are listed at the foot of the rules box.
+
+## Rank medal
+
+`_draw_rank_medal(img, tier, lb, slot)` draws the medal shape (the CSS shapes of `.rank-medal-icon`) in its `--medal-*` colour, the medal name, and the stars, or "#N" for an Immortal with a leaderboard place. It draws nothing and returns `False` when the tier is null.
 
 ---
 
@@ -114,25 +93,10 @@ Both are circle-cropped before compositing. If neither source is available (e.g.
 
 ### `GET /cards/{card_id}/image`
 
-Returns the composited card PNG for any card regardless of ownership. Response headers: `Content-Type: image/png`, `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`.
+Returns the PNG for any card, regardless of owner. Headers: `Content-Type: image/png`, `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`. The route passes the card id, the modifiers, the player's `rank_tier` and `leaderboard_rank`, and the accolades of the user linked to the player (`_accolades_for_players` in `routers/cards.py`).
 
-- Returns **404** if the card does not exist.
-- Returns **503** if the Pillow library is not installed in the runtime environment.
-- Returns **429** after 60 requests a minute from one IP (`RATE_LIMIT_CARD_IMAGE`), since every call renders a new image.
+- **404** if the card does not exist.
+- **503** if Pillow is not installed.
+- **429** after 60 requests a minute from one IP (`RATE_LIMIT_CARD_IMAGE`).
 
-The image is generated fresh on every request (no server-side caching). The frontend adds a cache-bust query parameter after a reroll so the browser does not serve a stale image from its own cache.
-
----
-
-## Adding or updating card templates
-
-To change the card visual design, replace the four template PNGs in the assets directory. The templates must:
-
-- Be exactly **597 × 845 px**
-- Use **RGBA** mode (transparency where player content should show through)
-- Place the name plate area around **y ≈ 75–170** (where player name and team name are drawn)
-- Leave the lower area around **y ≈ 620–750** clear for modifier text
-- Position the portrait cutout centred near **(298, 375)**
-- Position the team badge cutout centred near **(444, 258)**
-
-If the plate positions shift significantly between rarities, adjust `_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY` in `backend/image.py` or introduce per-rarity offsets.
+The image is rendered on every request (no server cache), so a new logo, tag or rank shows on the next request. The frontend adds a cache-bust parameter after a reroll.

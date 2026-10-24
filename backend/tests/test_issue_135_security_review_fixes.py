@@ -63,7 +63,7 @@ Testing approach per story (copy the fixtures from the named precedent files):
   Story 5 — Deployment and File Hardening
     - SRI: static parse of `frontend/index.html`; never fetch the CDN.
     - Tags: `TagBody` validation (precedent: test_user_tag_system.py).
-    - Stickers: `image._apply_stickers` with `image.STICKER_DIR`
+    - Stickers: `image._draw_accolades` (was `_apply_stickers`, issue #218) with `image.STICKER_DIR`
       monkeypatched to a tmp_path directory.
     - Backups: `monkeypatch.setattr(database, "DATABASE_URL",
       f"sqlite:///{tmp_path / 'fantasy.db'}")` as in
@@ -1208,25 +1208,29 @@ def _sticker_setup(tmp_path, monkeypatch):
         return real_open(path, *a, **kw)
 
     monkeypatch.setattr(image.Image, "open", _spy_open)
-    base = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
+    base = Image.new("RGBA", image._CARD_SIZE, (0, 0, 0, 0))
     return image, base, opened
 
 
+def _disc_centre(image, n=1):
+    return image._accolade_centres(n)[0]
+
+
 def test_apply_stickers_applies_sticker_inside_sticker_dir(tmp_path, monkeypatch):
-    """_apply_stickers still applies a sticker whose file is inside STICKER_DIR."""
+    """_draw_accolades (issue #218, was _apply_stickers) still applies a sticker whose file is inside STICKER_DIR."""
     image, base, opened = _sticker_setup(tmp_path, monkeypatch)
-    out = image._apply_stickers(base, ["good", "missing"])
-    assert out.getpixel((image.STICKER_START_X + 5, image.STICKER_Y + 5)) == (255, 0, 0, 255)
+    out = image._draw_accolades(base, [{"key": "good", "label": "Good"}, {"key": "missing", "label": "Missing"}])
+    assert out.getpixel(_disc_centre(image, 2)) == (255, 0, 0, 255)
     assert opened == [str(tmp_path / "stickers" / "good.png")]
 
 
 def test_apply_stickers_skips_path_outside_sticker_dir(tmp_path, monkeypatch):
-    """_apply_stickers skips a key whose path resolves outside STICKER_DIR (e.g. '../x') without opening it."""
+    """_draw_accolades skips a key whose path resolves outside STICKER_DIR (e.g. '../x') without opening it."""
     image, base, opened = _sticker_setup(tmp_path, monkeypatch)
     assert (tmp_path / "stickers" / ".." / "evil.png").exists()
-    out = image._apply_stickers(base, ["../evil"])
+    out = image._draw_accolades(base, [{"key": "../evil", "label": "Evil"}])
     assert opened == []
-    assert out.getpixel((image.STICKER_START_X + 5, image.STICKER_Y + 5)) == (0, 0, 0, 0)
+    assert out.getpixel(_disc_centre(image)) != (0, 0, 255, 255)
 
 
 def _seed_season(db):

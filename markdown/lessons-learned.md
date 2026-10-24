@@ -14,6 +14,10 @@ Format:
 
 ---
 
+### 2026-10-24 — developer — testing
+**Problem:** `ImageChops.difference(a, b).getbbox()` on RGBA images returns None whenever the alpha channels match (Pillow's `getbbox` looks at alpha only by default), so "images are identical" assertions pass when the colours differ.
+**Solution:** Use `.getbbox(alpha_only=False)` (or compare `convert("RGB")`) when diffing card PNGs. Card layout slots are `image._PORTRAIT_SLOT`, `_LOGO_SLOT`, etc.; templates are rebuilt with `backend/scripts/make_card_templates.py`.
+
 ### 2026-10-23 — developer — frontend
 **Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
 **Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).

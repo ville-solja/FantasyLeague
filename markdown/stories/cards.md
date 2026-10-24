@@ -57,10 +57,10 @@ As a user, I want to browse my roster and bench.
 As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance.
 
 **Acceptance criteria**
-- Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
-- Team name is printed below the player name on the card image
-- Player avatar (from OpenDota) is composited as a circular portrait on the card image
-- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
+- Player name is printed on the card image in the name bar (shrunk, then truncated with "…" if too long; as entered, not uppercased since issue #218)
+- Team name is printed on the card image (in the type line under the portrait since issue #218)
+- Player avatar (from OpenDota) is composited as a square 368 × 368 portrait on the card image (issue #218; circular before)
+- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a 100 × 60 badge in the type line on the card image (issue #218; circular before)
 - If the avatar is unavailable, the card still renders correctly with that slot left empty
   (team logo unavailability is covered separately below)
 - During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
@@ -75,9 +75,9 @@ still looks polished pre-season.
 
 **Acceptance criteria**
 - When neither the local Dotabuff PNG cache nor the team's HTTP `logo_url` resolves to a usable
-  image, the team logo slot is filled with a solid black circular placeholder instead of being
-  left unpainted
-- The placeholder uses the same circular crop, size, and position as a real team logo, so the
+  image, the team logo slot is filled with a solid black placeholder instead of being
+  left unpainted (a 100 × 60 rectangle since issue #218; a circle before)
+- The placeholder uses the same size and position as a real team logo, so the
   card layout is identical either way
 - Once a team logo becomes available (local cache populated via ingest, or `logo_url` set), it
   replaces the placeholder on the next card image request — no cache to invalidate, since the
@@ -102,9 +102,9 @@ As a user, I want each rarity tier to have a visually distinct card frame so I c
 As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
 
 **Acceptance criteria**
-- Each active modifier is shown in the lower band of the card as `STAT +X%`
+- Each active modifier is shown in the card's rules box as `STAT` and `+X%` (issue #218: up to 3 lines)
 - After a reroll, the card image updates immediately to reflect the new modifiers
-- Cards with no modifiers (e.g. Common) show no modifier text in that area
+- Cards with no modifiers (e.g. Common) show "No stat modifiers" in that area (issue #218)
 
 ---
 
@@ -485,7 +485,7 @@ As a player, I want a card's accolades to sit in a dedicated place on the card s
 **Acceptance criteria**
 - Every tag of the player's linked user is drawn in the layout's accolade area, in the tag's own icon and colour, never on top of the name, portrait, team logo or frame
 - The accolade area holds up to the layout's maximum; more accolades show "+N" in the last place
-- A card with no accolades shows the layout's empty state (no area, or empty slots in layout D) and no gap that looks broken
+- A card with no accolades shows the layout's empty state (an empty accolade pillar) and no gap that looks broken
 - A new tag with a sticker file appears on cards without a code change, as today
 - A tag without a sticker file still shows, with a generic badge and its first letter
 

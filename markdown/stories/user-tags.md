@@ -11,7 +11,7 @@ casters, season winners) so that I can recognise notable personalities in my ros
 - Any card whose underlying player is linked to a user with one or more tags displays
   each tag's sticker image composited onto the card PNG
 - Users with no tags have no stickers on their cards
-- Sticker positions do not overlap the player avatar or name plate
+- Sticker positions do not overlap the player avatar or name plate (issue #218: they sit in the card's accolade pillar; see `markdown/features/reference/card-formatting.md`)
 - The card PNG returned by `GET /cards/{card_id}/image` reflects the current tag state
 
 ### See Tags in the Leaderboard
