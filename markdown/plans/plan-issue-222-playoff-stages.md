@@ -21,6 +21,8 @@ Assumptions:
 - **Tokens:** every lock grants +1 token as today, so a stage lock does too. The admin plans how many stages to create with that in mind.
 - **More games, more points:** the upper division plays more games, so its players can score more. That's normal fantasy behaviour (deeper runs are worth more), and the plan doesn't normalise it.
 
+Feasibility timeline: https://claude.ai/artifact/WofLAWSmtKkTrF4p79R2bt (private until shared). Paste the fixtures feed's JSON into it and it draws both divisions' playoff series against the fantasy weeks. It proposes stages, one per division and round, that can be edited, and it lists problems: a series that starts before its stage locks, a stage that locks before the previous round of the same division is over, a stage that ends too soon after its last series, unscheduled series, and token and report counts. It opens with example data, because the feed couldn't be reached from the planning environment.
+
 Resolves GitHub issue #222.
 
 ## User Stories
