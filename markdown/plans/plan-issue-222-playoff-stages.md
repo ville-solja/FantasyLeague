@@ -40,7 +40,9 @@ Organiser input (24 Oct): the first lower semifinal is Sun 25 Oct and the other 
   - a series played outside its week needs an override (#193);
   - the playoff matches must be ingested: if the organiser runs them under a different OpenDota league, that league must be added to Monitored leagues.
 
-Upper dates are still guesses. Replace them in the artifact when known.
+The upper final is a LAN event on Sat 14 Nov. It falls in the week of 9 Nov, so ordinary weeks score it as any other series; the week design already allows for LAN finals (`admin-week-management.md`). It adds one check: the LAN games must be played as league lobbies, so OpenDota records them under the monitored league. LAN replays may also parse late; unparsed games show as partial (unparseable match handling).
+
+The upper semifinal dates are still guesses. Replace them in the artifact when known.
 
 **Revised recommendation (24 Oct): option 2 for season 16, no code.** Keep weekly fantasy weeks running through the playoffs, and check the three operational points above. Option 3 stays a plan for a later season. Building it is only worth it if a future bracket packs rounds into a few days, so that separate locks per round matter. If it is built, one stage per series (not per round) avoids long locks when a round is spread out.
 
