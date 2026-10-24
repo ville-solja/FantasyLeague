@@ -135,6 +135,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
                    COALESCE(wre.subbed_in, 0) as subbed_in,
                    COALESCE(wre.subbed_out, 0) as subbed_out,
                    p.id as player_id, p.name as player_name, p.avatar_url,
+                   p.rank_tier, p.leaderboard_rank,
                    t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
             FROM weekly_roster_entries wre
@@ -143,7 +144,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE wre.week_id = :week_id AND wre.user_id = :user_id
-            GROUP BY wre.id, c.id, c.card_type, c.is_holo, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
+            GROUP BY wre.id, c.id, c.card_type, c.is_holo, c.slot_index, p.id, p.name, p.avatar_url, p.rank_tier, p.leaderboard_rank, t.id, t.name, t.logo_url
         """), {"week_id": week.id, "ws": week.start_time, "we": week.end_time,
                "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -172,6 +173,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, c.is_holo, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,
+                   p.rank_tier, p.leaderboard_rank,
                    t.id as team_id, t.name as team_name, t.logo_url as team_logo_url,
                    {week_sums}
             FROM cards c
@@ -179,7 +181,7 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
             {week_join}
             {_LATEST_TEAM_SUBQUERY}
             WHERE c.owner_id = :user_id AND p.is_active = 1
-            GROUP BY c.id, c.card_type, c.is_holo, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, t.id, t.name, t.logo_url
+            GROUP BY c.id, c.card_type, c.is_holo, c.is_active, c.slot_index, p.id, p.name, p.avatar_url, p.rank_tier, p.leaderboard_rank, t.id, t.name, t.logo_url
             ORDER BY c.is_active DESC
         """), {"ws": ws, "we": we, "week_id": week.id if week else -1, "user_id": user_id}).fetchall()
         cards = [dict(r._mapping) for r in results]
@@ -342,6 +344,8 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "player_id": player.id,
         "player_name": player.name,
         "avatar_url": player.avatar_url,
+        "rank_tier": player.rank_tier,
+        "leaderboard_rank": player.leaderboard_rank,
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "is_active": is_active,
@@ -471,6 +475,8 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "player_id": player.id,
         "player_name": player.name,
         "avatar_url": player.avatar_url,
+        "rank_tier": player.rank_tier,
+        "leaderboard_rank": player.leaderboard_rank,
         "team_name": team_row.name if team_row else team.name,
         "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
         "is_active": is_active,
@@ -518,6 +524,8 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
         "player_id": card.player_id,
         "player_name": player.name if player else None,
         "avatar_url": player.avatar_url if player else None,
+        "rank_tier": player.rank_tier if player else None,
+        "leaderboard_rank": player.leaderboard_rank if player else None,
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "modifiers": _format_modifiers(mods),

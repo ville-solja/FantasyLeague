@@ -2956,6 +2956,54 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 }
 .lb-row-expandable { cursor: pointer; }
 
+/* ============================================================
+   RANK MEDAL (issue #221) — last known Dota 2 rank, drawn with CSS
+   ============================================================ */
+.rank-medal {
+  --medal: var(--fg-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: var(--s-2);
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--medal);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.rank-medal--herald   { --medal: var(--medal-herald); }
+.rank-medal--guardian { --medal: var(--medal-guardian); }
+.rank-medal--crusader { --medal: var(--medal-crusader); }
+.rank-medal--archon   { --medal: var(--medal-archon); }
+.rank-medal--legend   { --medal: var(--medal-legend); }
+.rank-medal--ancient  { --medal: var(--medal-ancient); }
+.rank-medal--divine   { --medal: var(--medal-divine); }
+.rank-medal--immortal { --medal: var(--medal-immortal); }
+.rank-medal-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: var(--medal);
+  clip-path: circle(50%);
+}
+.rank-medal--guardian .rank-medal-icon { clip-path: polygon(50% 0, 100% 20%, 85% 100%, 15% 100%, 0 20%); }
+.rank-medal--crusader .rank-medal-icon { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.rank-medal--archon .rank-medal-icon   { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); }
+.rank-medal--legend .rank-medal-icon   { clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%); }
+.rank-medal--ancient .rank-medal-icon  { clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%); }
+.rank-medal--divine .rank-medal-icon   { clip-path: polygon(50% 0, 62% 38%, 100% 38%, 69% 62%, 81% 100%, 50% 76%, 19% 100%, 31% 62%, 0 38%, 38% 38%); }
+.rank-medal--immortal .rank-medal-icon { clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.rank-medal-stars {
+  font-size: var(--fs-xs);
+  letter-spacing: 0;
+}
+.reveal-rank { margin: -6px 0 12px; }
+.reveal-rank:empty { display: none; }
+.reveal-rank .rank-medal { margin-left: 0; }
+
 /* Selection: images and controls are not selectable or draggable; text stays selectable. */
 img {
   -webkit-user-select: none;

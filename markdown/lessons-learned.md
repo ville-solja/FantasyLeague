@@ -18,6 +18,10 @@ Format:
 
 ---
 
+### 2026-10-23 — developer — frontend
+**Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
+**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).
+
 ### 2026-10-18 — developer — testing
 **Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
 **Solution:** Before adding top-level code to a module, grep `backend/tests` for harnesses that load it whole (`_js(["app-admin.js"]`) and add the stub there (`addEventListener: () => {}`). For the re-auth popup flow, reuse `_ADMIN_HARNESS` / `_admin` in `test_issue_213_*` (fake `window.open`, `message` events, timers).

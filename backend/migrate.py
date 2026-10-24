@@ -777,6 +777,18 @@ def _m041_clear_unverified_player_links(conn):
     logger.info("Migration 041: cleared %d unverified player link(s)", cleared)
 
 
+def _m042_players_rank(conn):
+    """Issue #221: players.rank_tier, leaderboard_rank and rank_fetched_at (all nullable)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()}
+    if not cols:
+        return
+    for col in ("rank_tier", "leaderboard_rank", "rank_fetched_at"):
+        if col not in cols:
+            conn.execute(text(f"ALTER TABLE players ADD COLUMN {col} INTEGER"))
+            logger.info("Migration: players — added %s column", col)
+    conn.commit()
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -842,6 +854,7 @@ MIGRATIONS = [
     ("039_user_tags_source",         _m039_user_tags_source),
     ("040_cards_is_holo",            _m040_cards_is_holo),
     ("041_clear_unverified_player_links", _m041_clear_unverified_player_links),
+    ("042_players_rank",             _m042_players_rank),
 ]
 
 

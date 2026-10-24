@@ -13,6 +13,7 @@ from database import credit_tokens, get_db
 from deps import require_admin, _audit
 from models import Card, Player, User
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json
+from player_rank import apply_rank
 
 router = APIRouter()
 
@@ -188,6 +189,7 @@ def add_player(body: AddPlayerBody, db=Depends(get_db), admin=Depends(require_ad
             is_active=True,
         )
         db.add(p)
+    apply_rank(p, result, int(time.time()))
     _audit(db, "admin_player_added", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=f"player_id={body.player_id}")
     db.commit()
@@ -229,12 +231,14 @@ def _bulk_add_stream(raw_ids, db, admin):
                                "reason": "not found on OpenDota", "index": i, "total": total}) + "\n"
             continue
         data = result["profile"]
-        db.add(Player(
+        player = Player(
             id=pid,
             name=data.get("personaname", str(pid)),
             avatar_url=data.get("avatarfull", ""),
             is_active=True,
-        ))
+        )
+        apply_rank(player, result, int(time.time()))
+        db.add(player)
         db.commit()
         added.append(pid)
         yield json.dumps({"id": pid, "status": "added", "index": i, "total": total}) + "\n"

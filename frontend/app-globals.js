@@ -273,6 +273,35 @@ function statusBadgeHtml(label, title) {
   return `<span class="status-badge"${tip}>${_escHtml(label)}</span>`;
 }
 
+// Issue #221: Dota 2 rank medal badge. rank_tier's tens digit is the medal, the ones
+// digit the stars (1-5; Immortal has none). Drawn with CSS only, no Dota images.
+const _RANK_MEDALS = { 1: "Herald", 2: "Guardian", 3: "Crusader", 4: "Archon",
+                       5: "Legend", 6: "Ancient", 7: "Divine", 8: "Immortal" };
+
+function rankMedalHtml(tier, lb, fetchedAt) {
+  const t = Number(tier);
+  if (tier == null || !Number.isInteger(t) || t < 10 || t > 80) return "";
+  const medal = _RANK_MEDALS[Math.floor(t / 10)];
+  if (!medal) return "";
+  const stars = t % 10;
+  const place = Number(lb);
+  let name = medal;
+  if (medal === "Immortal") {
+    if (Number.isInteger(place) && place > 0) name = `Immortal #${place}`;
+  } else if (stars >= 1 && stars <= 5) {
+    name = `${medal} ${stars}`;
+  }
+  const date = fetchedAt ? new Date(Number(fetchedAt) * 1000) : null;
+  const when = date && !isNaN(date) ? `, ${date.toLocaleDateString()}` : "";
+  const title = `Last known rank from OpenDota${when}`;
+  const starMarks = medal !== "Immortal" && stars >= 1 && stars <= 5
+    ? `<span class="rank-medal-stars" aria-hidden="true">${"★".repeat(stars)}</span>` : "";
+  const key = medal.toLowerCase();
+  return `<span class="rank-medal rank-medal--${_escHtml(key)}" role="img" title="${_escHtml(title)}" aria-label="${_escHtml(`Rank: ${name}`)}">`
+    + `<span class="rank-medal-icon" aria-hidden="true"></span>`
+    + `<span class="rank-medal-name">${_escHtml(name)}</span>${starMarks}</span>`;
+}
+
 function _escHtml(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
