@@ -112,7 +112,8 @@ on failure (`failed: …`): `admin_reauth` for admins, `player_reauth` for every
 An account without a password (created through Steam, issue #150) gets 409 `"use_steam_reauth"`,
 which does not count as a failed login; it confirms with a Steam round trip
 (`GET /auth/steam/start?purpose=reauth`), which sets the same `reauth_at` through
-`sessions.mark_reauth`.
+`sessions.mark_reauth`. Since #213 the round trip runs in a popup and the action retries by itself; see
+[Steam Re-auth Without Leaving the Page](../reference/steam-reauth-popup.md).
 
 ### `GET /sessions`
 
@@ -191,7 +192,7 @@ login requirement; see `reference/profile-requires-login.md`). Returns 401 if un
 
 `twitch_linked` is `true` when the panel recognises the account (`users.twitch_user_id` is set). Profile's Twitch section reads `GET /twitch/connection` instead (see **Twitch Connection** below).
 
-`player_name` and `player_avatar_url` are `null` if the user has not linked a Dota 2 account, or if the linked `player_id` does not exist in the local database.
+`player_name` and `player_avatar_url` are `null` if the user has no Steam-verified player link (#209), or if the linked `player_id` does not exist in the local database.
 
 Issue #169: `player_id` (a Steam32 id) is returned only when the viewer is the profile's owner or
 an admin (checked against the database). For anyone else the key is absent, and
@@ -232,24 +233,11 @@ Changes the authenticated user's display name. Requires login.
 
 ## Player Identity (linking a league player)
 
-Profile's **Player identity** panel links the account to its league player: through Link Steam
-in `both` and `steam_signup` modes, or by typing an OpenDota account id in `password` mode
-(issue #188).
-
-### `PUT /profile/player-id`
-
-Links the authenticated user's account to an OpenDota player ID, self-reported. Requires login.
-Only for `LOGIN_METHOD=password`: in `both` and `steam_signup` modes it answers **410** "Link
-Steam to verify your player id" and changes nothing.
-
-```json
-{ "player_id": 123456789 }
-```
-
-Set `player_id` to `null` to unlink. The response includes `player_name` and `player_avatar_url` resolved from the local database (null if the player has not been ingested yet).
-
-In `password` mode it returns 409 for an account that still has a linked Steam id (issue #150):
-its `player_id` is the verified Steam32 id, set at link or sign-up time.
+Profile's **Player identity** panel links the account to its league player, only through Link
+Steam or Steam sign-up in `both` and `steam_signup` modes (issues #188, #209). With
+`LOGIN_METHOD=password` there is no player linking. `PUT /profile/player-id` was removed in #209
+(404); unlinking Steam clears the player link. See
+`reference/player-linking-and-tag-visibility.md`.
 
 ---
 
@@ -442,8 +430,9 @@ steamcommunity.com and `GET /auth/steam/callback` verifies the answer (every che
 server-side `check_authentication` POST) before starting a session with a new session id. A new
 Steam ID picks a display name (`POST /auth/steam/signup`) and gets an account with no password or
 email and `player_id` = its Steam32 id. Logged-in password accounts can **Link Steam** on Profile
-(recent re-auth), which replaces the self-reported `player_id` with the verified one;
-`POST /profile/steam/unlink` removes the link for accounts that also have a password. Password
+(recent re-auth), which sets the verified `player_id`;
+`POST /profile/steam/unlink` removes the link, and the player id with it (#209), for accounts
+that also have a password. Password
 sign-in, password reset, `PUT /profile/password` and `POST /reauth` keep working for password
 accounts in every mode. Unknown `LOGIN_METHOD` values are logged and treated as `password`; `steam`
 (#172, not built yet) is treated as `steam_signup`. Checks, redirect keys, admin seeding by Steam ID

@@ -88,7 +88,7 @@ No entry holds a secret, its length or a token.
 
 ## Admin UI
 
-Admin › Users › **Twitch status**, above Approved streamers. See `markdown/ui_description/admin.md`.
+Admin › Twitch › **Twitch status**, below Approved streamers (the Twitch sub-tab, issue 214). See `markdown/ui_description/admin.md`.
 
 ## Troubleshooting
 

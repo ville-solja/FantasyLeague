@@ -16,6 +16,7 @@ import time
 from sqlalchemy import or_, text
 
 import card_points
+import player_links
 from card_utils import _assign_modifiers
 from deps import _audit
 from models import Card, OwnPlayerCardGrant, Player, User, Weight
@@ -33,24 +34,25 @@ _GRANT_SQL = text(
 
 
 def is_candidate(user: User | None) -> bool:
-    """Steam-verified player id on a full, non-demo account. Self-reported ids (no
-    steam_id) never qualify."""
-    return bool(user is not None and user.steam_id and user.player_id
-                and not user.is_demo and not user.is_soft)
+    """A verified player link (player_links.verified_player_id, issue #209)."""
+    return player_links.verified_player_id(user) is not None
 
 
 def has_grant_row(db, user: User) -> bool:
-    return db.query(OwnPlayerCardGrant.id).filter(
-        or_(OwnPlayerCardGrant.user_id == user.id,
-            OwnPlayerCardGrant.player_id == user.player_id)).first() is not None
+    cond = OwnPlayerCardGrant.user_id == user.id
+    player_id = player_links.verified_player_id(user)
+    if player_id is not None:
+        cond = or_(cond, OwnPlayerCardGrant.player_id == player_id)
+    return db.query(OwnPlayerCardGrant.id).filter(cond).first() is not None
 
 
 def grant_own_player_card(db, user: User) -> OwnPlayerCardGrant | None:
     """Give the account its own player card when it qualifies; return the new grant
     row, or None when nothing was recorded. Does not commit."""
-    if not is_candidate(user):
+    player_id = player_links.verified_player_id(user)
+    if player_id is None:
         return None
-    player = db.get(Player, user.player_id)
+    player = db.get(Player, player_id)
     if player is None or not player.is_active:
         return None
     if has_grant_row(db, user):

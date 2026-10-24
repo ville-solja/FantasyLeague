@@ -1,12 +1,17 @@
 let _playersData = [];
 let _playerSort = { col: null, dir: "desc" };
+// Issue 50: All | champions | new (first season is the live one). There is no status
+// for long careers: the seasons count already shows it.
+let _playersFilter = "all";
 
 async function loadPlayers() {
   try {
     const res = await fetch(`${API}/players`);
     const rows = await res.json();
     if (!res.ok) throw new Error(rows.detail || "Failed to load");
+    rows.forEach(p => { p.titles_count = Array.isArray(p.titles) ? p.titles.length : 0; });
     _playersData = rows;
+    _renderSeasonsLegend(rows);
     // The player's sort stays across refreshes (issue #159), so an unchanged
     // refresh leaves the table as it is.
     _initPlayerSortHeaders();
@@ -40,8 +45,67 @@ function _renderMvpLeaderboard() {
 function _getFilteredPlayers() {
   const q = document.getElementById("playersSearch").value.toLowerCase();
   return _playersData.filter(p =>
-    p.name.toLowerCase().includes(q) || (p.team_name || "").toLowerCase().includes(q)
+    (p.name.toLowerCase().includes(q) || (p.team_name || "").toLowerCase().includes(q))
+    && _playerMatchesFilter(p)
   );
+}
+
+/** Champions: a champion title in any season. New this season: the live season is
+ * their first (one season played, and it has a scored match now). */
+function _playerMatchesFilter(p) {
+  if (_playersFilter === "champions") return (p.titles || []).some(t => t.kind === "champion");
+  if (_playersFilter === "new") {
+    const seasons = p.seasons || [];
+    return seasons.length === 1 && (!_accoladesCurrentSeason || seasons[0] === _accoladesCurrentSeason);
+  }
+  return true;
+}
+
+function setPlayersFilter(name) {
+  _playersFilter = ["champions", "new"].includes(name) ? name : "all";
+  document.querySelectorAll(".players-filter-chip").forEach(btn => {
+    const on = btn.dataset.filter === _playersFilter;
+    btn.classList.toggle("active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  renderPlayers(_getFilteredPlayers());
+}
+
+/** Issue 212: seasons are counted from the first season with an OpenDota record;
+ * the backend sends that season on every row (seasons_counted_from). */
+function _seasonsCountedFrom(rows) {
+  const n = (rows || []).map(p => p.seasons_counted_from).find(v => Number.isInteger(v));
+  return n === undefined ? null : n;
+}
+
+function _renderSeasonsLegend(rows) {
+  const el = document.getElementById("playersSeasonsLegend");
+  if (!el) return;
+  const from = _seasonsCountedFrom(rows);
+  el.textContent = from === null ? "" : `Seasons played since Season ${from} (earlier seasons have no OpenDota record)`;
+  el.hidden = from === null;
+}
+
+/** The last six seasons any player is known to have played, oldest first. */
+function _knownSeasons(rows) {
+  const all = new Set();
+  rows.forEach(p => (p.seasons || []).forEach(s => all.add(s)));
+  return [...all].sort((a, b) => (_seasonNumber(a) ?? -1) - (_seasonNumber(b) ?? -1)).slice(-6);
+}
+
+/** Seasons column: the count (tabular), one bar per recent season (grey played,
+ * amber champion season, empty not played); hovering the count lists the seasons. */
+function _playerSeasonsCellHtml(p, recent) {
+  const seasons = p.seasons || [];
+  const champ = new Set((p.titles || []).filter(t => t.kind === "champion").map(t => t.season));
+  const from = Number.isInteger(p.seasons_counted_from) ? p.seasons_counted_from : null;
+  const list = (seasons.map(s => _seasonShort({ season: s })).join(", ") || "No seasons yet")
+    + (from === null ? "" : `. Counted from Season ${from}`);
+  const bars = recent.map(s => {
+    const state = champ.has(s) ? "champion" : (seasons.includes(s) ? "played" : "empty");
+    return `<span class="season-bar season-bar--${state}"></span>`;
+  }).join("");
+  return `<span class="seasons-cell"><span class="seasons-count" tabindex="0" title="${_escHtml(list)}" aria-label="${_escHtml(`${seasons.length} seasons: ${list}`)}">${seasons.length}</span><span class="season-bars" aria-hidden="true">${bars}</span></span>`;
 }
 
 function filterPlayers() {
@@ -92,18 +156,22 @@ function renderPlayers(rows) {
   const sorted = _sortPlayers(rows);
   const tbody = document.getElementById("playersBody");
   if (!sorted.length) {
-    renderIfChanged(tbody, "<tr><td colspan='6' style='color:#444'>No players found</td></tr>");
+    renderIfChanged(tbody, "<tr><td colspan='8' style='color:#444'>No players found</td></tr>");
     return;
   }
-  renderIfChanged(tbody, sorted.map(p => `
+  const recent = _knownSeasons(_playersData);
+  const wrote = renderIfChanged(tbody, sorted.map(p => `
     <tr>
       <td><img draggable="false" src="${_escHtml(_safeUrl(p.avatar_url))}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(p.id, p.name)}</td>
       <td>${p.team_id ? teamLink(p.team_id, p.team_name) : (_escHtml(p.team_name) || "—")}</td>
+      <td>${_playerSeasonsCellHtml(p, recent)}</td>
+      <td class="players-titles">${accoladePipsHtml(p.titles || [])}</td>
       <td>${p.matches}</td>
       <td>${Number(p.avg_points).toFixed(1)}</td>
       <td>${Number(p.total_points).toFixed(1)}</td>
       <td>${p.mvp_count}</td>
     </tr>`).join(""));
+  if (wrote) refreshAccoladeIcons();
 }
 
 async function loadTeams() {
@@ -129,141 +197,10 @@ async function loadTeams() {
   }
 }
 
-async function openPlayerModal(playerId) {
-  const modal = document.getElementById("playerModal");
-  modal.classList.remove("hidden");
-  document.getElementById("playerModalName").textContent = "Loading...";
-  document.getElementById("playerModalTeam").innerHTML = "";
-  document.getElementById("playerModalAvatar").style.display = "none";
-  document.getElementById("playerModalStats").innerHTML = "";
-  document.getElementById("playerModalHistory").innerHTML = "";
-  document.getElementById("playerModalStatus").textContent = "";
-  const profileEl = document.getElementById("playerProfile");
-  if (profileEl) { profileEl.style.display = "none"; profileEl.innerHTML = ""; }
+// The player popup (openPlayerModal and its sections) is in app-player-popup.js (issue 208).
 
-  try {
-    const res = await fetch(`${API}/players/${playerId}`);
-    const p = await res.json();
-    if (!res.ok) {
-      document.getElementById("playerModalName").textContent = "";
-      setStatus("playerModalStatus", p.detail || "Failed to load", false);
-      return;
-    }
-
-    const avatar = document.getElementById("playerModalAvatar");
-    const avatarUrl = _safeUrl(p.avatar_url);
-    if (avatarUrl) { avatar.src = avatarUrl; avatar.style.display = ""; }
-
-    document.getElementById("playerModalName").textContent = p.name;
-    document.getElementById("playerModalTeam").innerHTML = p.team_id
-      ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${_escHtml(p.team_name)}</span>`
-      : _escHtml(p.team_name || "");
-    document.getElementById("playerModalTeam").insertAdjacentHTML("beforeend",
-      rankMedalHtml(p.rank_tier, p.leaderboard_rank, p.rank_fetched_at));
-
-    document.getElementById("playerModalStats").innerHTML = `
-      <div class="player-modal-stat-grid">
-        <div class="player-modal-stat"><div class="val">${p.matches}</div><div class="lbl">Matches</div></div>
-        <div class="player-modal-stat"><div class="val">${Number(p.avg_points).toFixed(1)}</div><div class="lbl">Avg pts</div></div>
-        <div class="player-modal-stat"><div class="val">${Number(p.total_points).toFixed(1)}</div><div class="lbl">Total pts</div></div>
-        ${p.best_match ? `<div class="player-modal-stat"><div class="val">${Number(p.best_match.fantasy_points).toFixed(1)}</div><div class="lbl">Best match</div></div>` : ""}
-      </div>`;
-
-    if (!p.match_history.length) {
-      document.getElementById("playerModalHistory").innerHTML =
-        "<tr><td colspan='9' style='color:#444'>No matches yet</td></tr>";
-    } else {
-      document.getElementById("playerModalHistory").innerHTML = p.match_history.map(m => {
-        const date = m.start_time
-          ? new Date(m.start_time * 1000).toLocaleDateString("fi-FI", {day: "numeric", month: "numeric", year: "2-digit"})
-          : "—";
-        const mvpStar = m.is_mvp ? '<span style="font-size:0.85rem;color:#f5c842;">★</span>' : '';
-        const opponent = m.opponent_team_id ? teamLink(m.opponent_team_id, m.opponent_team_name) : (_escHtml(m.opponent_team_name) || "—");
-        return `<tr>
-          <td>${mvpStar}</td>
-          <td>${date}</td>
-          <td>${_matchPointsCellHtml(m)}</td>
-          <td>${m.kills}/${m.assists}/${m.deaths}</td>
-          <td>${Math.round(m.gold_per_min)}</td>
-          <td>${m.obs_placed ?? 0}</td>
-          <td>${m.tower_damage ?? 0}</td>
-          <td>${opponent}</td>
-          <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">↗</a></td>
-        </tr>`;
-      }).join("");
-    }
-
-    // Non-blocking profile fetch — modal shows immediately even if profile unavailable
-    fetch(`${API}/players/${playerId}/profile`).then(async r => {
-      if (!r.ok) return;
-      renderPlayerProfile(await r.json());
-    }).catch(() => {});
-  } catch (e) {
-    setStatus("playerModalStatus", e.message, false);
-  }
-}
-
-const _PARTIAL_STATS_TOOLTIP =
-  "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.";
+// "Not scored" badge tooltip, shared by the Schedule and the player popup.
 const _NOT_SCORED_TOOLTIP = "An admin excluded this match from scoring. It adds no fantasy points.";
-
-// Fantasy pts cell for one match-history row: the points plus a "Partial stats"
-// marker for unparsed matches, or a dash plus "Not scored" for excluded ones.
-function _matchPointsCellHtml(m) {
-  if (m.excluded_from_scoring) {
-    return `— <span class="badge common" title="${_escHtml(_NOT_SCORED_TOOLTIP)}">Not scored</span>`;
-  }
-  const pts = _escHtml(Number(m.fantasy_points).toFixed(1));
-  if (m.parse_status === "unparsed" || m.parse_status === "unparseable") {
-    return `${pts} <span class="badge common" title="${_escHtml(_PARTIAL_STATS_TOOLTIP)}">Partial stats</span>`;
-  }
-  return pts;
-}
-
-function renderPlayerProfile(profile) {
-  const facts = profile && profile.facts;
-  if (!facts) return;
-  const el = document.getElementById("playerProfile");
-  if (!el) return;
-
-  const statGrid = `
-    <div class="player-modal-stat-grid" style="margin-top:8px;">
-      <div class="player-modal-stat"><div class="val">${_escHtml(facts.kanaliiga_seasons)}</div><div class="lbl">Seasons</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_kills).toFixed(1))}</div><div class="lbl">Avg K</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_deaths).toFixed(1))}</div><div class="lbl">Avg D</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_assists).toFixed(1))}</div><div class="lbl">Avg A</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(Math.round(facts.avg_gpm))}</div><div class="lbl">Avg GPM</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(Number(facts.avg_wards).toFixed(1))}</div><div class="lbl">Avg wards</div></div>
-      <div class="player-modal-stat"><div class="val">${_escHtml(facts.role_tendency)}</div><div class="lbl">Role</div></div>
-    </div>`;
-
-  function heroLine(h) {
-    return h.win_rate !== undefined
-      ? `<span style="color:#aaa">${_escHtml(h.hero_name)}</span> <span style="color:#555;font-size:0.78rem;">(${_escHtml(h.games)}g, ${_escHtml(Math.round(h.win_rate*100))}%wr)</span>`
-      : `<span style="color:#aaa">${_escHtml(h.hero_name)}</span> <span style="color:#555;font-size:0.78rem;">(${_escHtml(h.games)}g)</span>`;
-  }
-  function heroSection(label, heroes, limit) {
-    const items = (heroes || []).slice(0, limit).map(heroLine).join(", ") || "—";
-    return `<div style="margin-bottom:6px;"><span class="player-bio-eyebrow">${label}</span><br><span style="font-size:var(--fs-sm);">${items}</span></div>`;
-  }
-
-  const heroes = `<div style="margin-top:14px;">
-    ${heroSection("Career heroes", facts.top_heroes_alltime, 5)}
-    ${heroSection("Tournament heroes", facts.tournament_heroes, 5)}
-    ${heroSection("Recent pub heroes", facts.recent_pub_heroes, 5)}
-  </div>`;
-
-  const bioSection = profile.bio_text
-    ? `<div style="margin-top:14px;padding:10px 14px;background:#0f1a0f;border:1px solid #1a3a1a;border-radius:6px;font-size:0.85rem;color:#aaa;line-height:1.6;white-space:pre-wrap;">${_escHtml(profile.bio_text)}</div>`
-    : "";
-
-  el.innerHTML = statGrid + heroes + bioSection;
-  el.style.display = "block";
-}
-
-function closePlayerModal() {
-  document.getElementById("playerModal").classList.add("hidden");
-}
 
 async function openTeamModal(teamId) {
   const modal = document.getElementById("teamModal");

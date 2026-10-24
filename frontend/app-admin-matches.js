@@ -17,6 +17,7 @@ async function loadAdminMatches() {
     _adminMatchesRows = rows;
     _adminMatchesWeeks = weeksRes.ok ? await weeksRes.json() : [];
     _adminOutOfWeek = oowRes.ok ? await oowRes.json() : [];
+    _applyMvpMissingDefault(rows);
     renderAdminMatches();
     renderOutOfWeekBanner();
     setStatus('adminMatchesStatus', '');
@@ -25,48 +26,205 @@ async function loadAdminMatches() {
   }
 }
 
-function renderAdminMatches() {
-  const tbody = document.getElementById('adminMatchesBody');
-  const filterEl = document.getElementById('adminMatchesUnparseableOnly');
-  const unparseableOnly = !!(filterEl && filterEl.checked);
-  const rows = unparseableOnly
-    ? _adminMatchesRows.filter(m => m.parse_status === 'unparseable')
-    : _adminMatchesRows;
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan='14' style='color:#444'>${unparseableOnly ? 'No unparseable matches' : 'No matches'}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = '';
+// ---------------------------------------------------------------------------
+// Filters and series grouping (issue 214)
+// ---------------------------------------------------------------------------
+
+const _DIVISION_LABELS = { div1: 'Div 1', div2: 'Div 2' };
+let _adminMatchesFilterInit = false;
+
+// "MVP missing" starts checked when any match lacks an MVP; set once per page so
+// a reload after an edit keeps the admin's own choice.
+function _applyMvpMissingDefault(rows) {
+  if (_adminMatchesFilterInit) return;
+  _adminMatchesFilterInit = true;
+  const el = document.getElementById('adminMatchesMvpMissing');
+  if (el) el.checked = rows.some(m => !m.mvp_player_id);
+}
+
+function adminMatchesFilters() {
+  const mvp = document.getElementById('adminMatchesMvpMissing');
+  const league = document.getElementById('adminMatchesLeague');
+  const unparseable = document.getElementById('adminMatchesUnparseableOnly');
+  return {
+    mvpMissing: !!(mvp && mvp.checked),
+    league: league && _DIVISION_LABELS[league.value] ? league.value : '',
+    unparseable: !!(unparseable && unparseable.checked),
+  };
+}
+
+// Filters combine: a match shows only when it passes every active one.
+function filterAdminMatches(rows, f) {
+  return rows.filter(m =>
+    (!f.mvpMissing || !m.mvp_player_id) &&
+    (!f.league || m.division === f.league) &&
+    (!f.unparseable || m.parse_status === 'unparseable'));
+}
+
+function adminMatchesEmptyText(f) {
+  const active = [];
+  if (f.mvpMissing) active.push('MVP missing');
+  if (f.league) active.push(_DIVISION_LABELS[f.league]);
+  if (f.unparseable) active.push('Unparseable');
+  return active.length ? `No matches for the filters: ${active.join(', ')}` : 'No matches';
+}
+
+// Feed series newest first, each with its games in play order; matches the feed
+// doesn't know form one last "Not in the schedule" group, newest first.
+function groupAdminMatches(rows) {
+  const groups = [];
+  const byKey = new Map();
+  const unscheduled = { key: null, rows: [] };
   rows.forEach(m => {
-    const tr = document.createElement('tr');
-    const start = m.start_time ? new Date(m.start_time * 1000).toLocaleString() : '—';
-    tr.innerHTML = `
+    if (!m.series_key) { unscheduled.rows.push(m); return; }
+    let g = byKey.get(m.series_key);
+    if (!g) {
+      g = { key: m.series_key, rows: [] };
+      byKey.set(m.series_key, g);
+      groups.push(g);
+    }
+    g.rows.push(m);
+  });
+  const latest = g => Math.max(...g.rows.map(m => m.start_time || 0));
+  groups.forEach(g => g.rows.sort((a, b) => (a.start_time || 0) - (b.start_time || 0)));
+  groups.sort((a, b) => latest(b) - latest(a));
+  unscheduled.rows.sort((a, b) => (b.start_time || 0) - (a.start_time || 0));
+  if (unscheduled.rows.length) groups.push(unscheduled);
+  return groups;
+}
+
+// The series' team 1 and team 2 in feed order, so they don't swap between games;
+// radiant/dire for matches outside the feed.
+function _seriesTeams(m) {
+  const nameOf = id => id === m.radiant_team_id ? m.team1 : (id === m.dire_team_id ? m.team2 : null);
+  if (m.series_team1_id && m.series_team2_id) {
+    return [
+      { id: m.series_team1_id, name: nameOf(m.series_team1_id) },
+      { id: m.series_team2_id, name: nameOf(m.series_team2_id) },
+    ];
+  }
+  return [{ id: m.radiant_team_id, name: m.team1 }, { id: m.dire_team_id, name: m.team2 }];
+}
+
+function _streamLinkHtml(url) {
+  const safe = _safeUrl(url);
+  if (!safe) return '—';
+  return `<a class="stream-link" href="${_escHtml(safe)}" target="_blank" rel="noopener noreferrer">Stream ↗</a>`;
+}
+
+function _leagueText(m) {
+  const name = _escHtml(m.league_name || (m.league_id ? String(m.league_id) : '')) || '—';
+  const div = _DIVISION_LABELS[m.division];
+  return div ? `${name} <span class="admin-match-div">· ${div}</span>` : name;
+}
+
+// Series header: "Team A vs Team B · Div 1 · Week 4 · Stream ↗"; "Not in the schedule" for the rest.
+function _seriesHeaderHtml(group) {
+  if (!group.key) return `<th colspan="13" scope="colgroup">Not in the schedule</th>`;
+  const first = group.rows[0];
+  const [t1, t2] = _seriesTeams(first);
+  const parts = [`${_escHtml(t1.name || '?')} vs ${_escHtml(t2.name || '?')}`];
+  if (_DIVISION_LABELS[first.division]) parts.push(_DIVISION_LABELS[first.division]);
+  if (first.scoring_week_label) parts.push(_escHtml(first.scoring_week_label));
+  if (_safeUrl(first.stream_url)) parts.push(_streamLinkHtml(first.stream_url));
+  return `<th colspan="13" scope="colgroup">${parts.join(' · ')}</th>`;
+}
+
+// One game row; the empty cells take Set MVP, Week, Scoring, Parse and More controls.
+function _adminMatchRowHtml(m) {
+  const [t1, t2] = _seriesTeams(m);
+  const start = m.start_time ? new Date(m.start_time * 1000).toLocaleString() : '—';
+  return `
       <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">${m.match_id} ↗</a></td>
-      <td>${m.league_id || '—'}</td>
-      <td style="font-size:0.85rem;">${teamLink(m.radiant_team_id, m.team1)}</td>
-      <td style="font-size:0.85rem;">${teamLink(m.dire_team_id, m.team2)}</td>
-      <td style="font-size:0.8rem;">${start}</td>
+      <td class="admin-match-teams">${teamLink(t1.id, t1.name)} <span class="admin-match-vs">vs</span> ${teamLink(t2.id, t2.name)}</td>
+      <td class="admin-match-league">${_leagueText(m)}</td>
+      <td class="admin-match-start">${_escHtml(start)}</td>
+      <td class="admin-match-mvp"><span class="mvp-cell">${_escHtml(m.mvp_player_name) || '—'}</span></td>
+      <td>${_streamLinkHtml(m.stream_url)}</td>
+      <td></td>
+      <td></td>
+      <td></td>
       ${_timingCell(m.live_first_seen_at, m.start_time)}
       ${_timingCell(m.ingested_at, m.start_time)}
       ${_timingCell(m.mvp_confirmed_at, m.start_time)}
-      <td></td>
-      <td></td>
-      <td></td>
-      <td class="mvp-cell">${_escHtml(m.mvp_player_name) || '—'}</td>
-      <td></td>
       <td></td>`;
-    const setMvpBtn = document.createElement('button');
-    setMvpBtn.className = 'secondary';
-    setMvpBtn.style.cssText = 'padding:2px 7px;';
-    setMvpBtn.textContent = 'Set MVP';
-    setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
-    tr.cells[8].appendChild(_buildParseCell(m));
-    tr.cells[9].appendChild(_buildScoringCell(m));
-    tr.cells[10].appendChild(_buildWeekCell(m));
-    tr.cells[12].appendChild(_buildVodCell(m.match_id, m.vod_url));
-    tr.cells[13].appendChild(setMvpBtn);
-    tbody.appendChild(tr);
+}
+
+function _renderAdminMatchesCount(shown) {
+  const el = document.getElementById('adminMatchesCount');
+  if (!el) return;
+  const total = _adminMatchesRows.length;
+  el.textContent = shown === total ? `${total} matches` : `${shown} of ${total} matches`;
+}
+
+function renderAdminMatches() {
+  const tbody = document.getElementById('adminMatchesBody');
+  const filters = adminMatchesFilters();
+  const rows = filterAdminMatches(_adminMatchesRows, filters);
+  _renderAdminMatchesCount(rows.length);
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan='13' class='admin-matches-empty'>${_escHtml(adminMatchesEmptyText(filters))}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = '';
+  groupAdminMatches(rows).forEach(group => {
+    const head = document.createElement('tr');
+    head.className = 'admin-series-row';
+    head.innerHTML = _seriesHeaderHtml(group);
+    tbody.appendChild(head);
+    group.rows.forEach(m => {
+      const tr = document.createElement('tr');
+      tr.className = 'admin-match-row';
+      tr.innerHTML = _adminMatchRowHtml(m);
+      const more = document.createElement('tr');
+      more.className = 'admin-match-more';
+      more.hidden = true;
+      more.innerHTML = `<td colspan='13'></td>`;
+      const setMvpBtn = document.createElement('button');
+      setMvpBtn.className = 'secondary admin-set-mvp';
+      setMvpBtn.textContent = 'Set MVP';
+      setMvpBtn.addEventListener('click', () => openMvpModal(m.match_id, tr));
+      const moreBtn = document.createElement('button');
+      moreBtn.className = 'ghost admin-more-btn';
+      moreBtn.textContent = 'More';
+      moreBtn.setAttribute('aria-expanded', 'false');
+      moreBtn.addEventListener('click', () => {
+        more.hidden = !more.hidden;
+        moreBtn.setAttribute('aria-expanded', String(!more.hidden));
+      });
+      tr.cells[4].appendChild(setMvpBtn);
+      tr.cells[6].appendChild(_buildWeekCell(m));
+      tr.cells[7].appendChild(_buildScoringCell(m));
+      tr.cells[8].appendChild(_buildParseCell(m));
+      tr.cells[12].appendChild(moreBtn);
+      more.cells[0].appendChild(_buildMoreDetails(m));
+      tbody.appendChild(tr);
+      tbody.appendChild(more);
+    });
   });
+}
+
+// More details: the admin VOD link (shown in the Weekly Report) and the exact
+// timing times behind the "+N min" columns.
+function _buildMoreDetails(m) {
+  const wrap = document.createElement('div');
+  wrap.className = 'admin-match-details';
+  const vodLabel = document.createElement('span');
+  vodLabel.className = 'admin-match-details-label';
+  vodLabel.textContent = 'VOD link (Weekly Report)';
+  wrap.appendChild(vodLabel);
+  wrap.appendChild(_buildVodCell(m.match_id, m.vod_url));
+  [['Live seen', m.live_first_seen_at], ['Stats in', m.ingested_at], ['MVP picked', m.mvp_confirmed_at]]
+    .forEach(([label, at]) => {
+      const k = document.createElement('span');
+      k.className = 'admin-match-details-label';
+      k.textContent = label;
+      const v = document.createElement('span');
+      v.textContent = at ? new Date(at * 1000).toLocaleString() : '—';
+      wrap.appendChild(k);
+      wrap.appendChild(v);
+    });
+  return wrap;
 }
 
 // Minutes from the match start to a timing (issue #161), e.g. "+2 min"; "—" when unknown.
@@ -101,18 +259,21 @@ function _buildParseCell(m) {
   return wrap;
 }
 
+// Issue 214: checkbox and label columns of a fixed two-column grid, so rows line up.
 function _buildScoringCell(m) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;flex-direction:column;gap:2px;font-size:0.8rem;';
+  wrap.className = 'admin-scoring-grid';
   const makeToggle = (text, checked, field) => {
     const lbl = document.createElement('label');
-    lbl.style.cssText = 'display:flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer;';
+    lbl.className = 'admin-scoring-toggle';
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = !!checked;
     cb.addEventListener('change', () => saveMatchScoring(m.match_id, { [field]: cb.checked }, cb));
+    const span = document.createElement('span');
+    span.textContent = text;
     lbl.appendChild(cb);
-    lbl.appendChild(document.createTextNode(text));
+    lbl.appendChild(span);
     return lbl;
   };
   wrap.appendChild(makeToggle('Unparseable', m.parse_status === 'unparseable', 'unparseable'));
@@ -439,7 +600,10 @@ async function confirmSetMvp() {
       document.getElementById('mvpModalStatus').textContent = data.detail;
       return;
     }
-    // Update the MVP cell in the table row immediately
+    // Update the MVP cell in the table row immediately; the row stays until the next
+    // render, so the MVP missing filter doesn't pull it from under the admin.
+    const row = _adminMatchesRows.find(r => r.match_id === _mvpTargetMatchId);
+    if (row) { row.mvp_player_id = playerId; row.mvp_player_name = data.player_name; }
     if (_mvpTargetRow) {
       const mvpCell = _mvpTargetRow.querySelector('.mvp-cell');
       if (mvpCell) mvpCell.textContent = data.player_name;

@@ -18,7 +18,7 @@ Code: `backend/steam_openid.py` (routes, checks, clean-up), `backend/login_mode.
 
 - An unknown value is logged once and treated as `password`. An empty value is the same as unset.
 - `steam` is reserved for issue #172 (password sign-in ends). Until #172 ships it is logged as "not available yet" and treated as `steam_signup`, so setting it early never reopens registration.
-- `GET /config` returns `login_method`; the login page and Profile follow it.
+- `GET /config` returns `login_method` (the login page and Profile follow it) and `steam_reauth_available` (true only when Steam is enabled and `APP_BASE_URL` is set; the re-auth prompt uses it, #213).
 - In `both` and `steam_signup` without `APP_BASE_URL`, start-up logs a warning and `GET /auth/steam/start` answers 503 `steam_unavailable`.
 
 In `steam_signup` mode password sign-in, `POST /forgot-password`, `POST /reset-password`, `PUT /profile/password` and `POST /reauth` keep working for existing password accounts. Demo accounts (`DEMO_MODE` only) are still created by `POST /admin/demo/seed-accounts`.
@@ -56,6 +56,7 @@ When `APP_BASE_URL` starts with `http://localhost`, the state and sign-up cookie
 | `/#profile?steam=in_use` | "This Steam account is linked to another Kana Cards account" |
 | `/#profile?steam=unlink_first` / `not_allowed` / `no_session` / `login_required` | Another Steam account is linked; demo account; no website session |
 | `/#<tab>?steam=reauth_ok` / `reauth_failed` / `not_linked` | Steam re-auth result; `<tab>` is `profile` or `admin` |
+| `/steam-reauth-done.html?steam=<key>` | Re-auth in a popup (`return_tab=popup`, issue #213): every redirect of that attempt, with a key from this table |
 
 The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash from the address bar and shows the message.
 
@@ -63,15 +64,29 @@ The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash fro
 
 Profile's **Player identity** panel shows **Link Steam** in `both` and `steam_signup` modes for a logged-in account without a Steam link (never for demo accounts). `GET /auth/steam/start?purpose=link` needs a session and a recent identity check (`POST /reauth`); without one it redirects to `/#profile?steam=reauth_required`. The state row is bound to the user, and the callback accepts the link only when the session user is that user. Starting a link or re-auth drops the user's older unused attempts, so only the newest one is live. On an account that is already linked, start redirects straight to `/#profile?steam=linked` without going to Steam.
 
-On success `users.steam_id` is set and `player_id` becomes the verified Steam32 id, replacing any self-reported value; audited as `steam_linked`. Every other account that self-reported the same `player_id` has it cleared, audited as `player_id_claim_superseded` (`user_id=<cleared> verified_user_id=<linked> player_id=<id>`); sign-up does the same. A Steam ID already on another account is refused (`in_use`) and nothing changes; only an admin can move it.
+On success `users.steam_id` is set and `player_id` becomes the verified Steam32 id; audited as `steam_linked`. Every other account that still holds the same `player_id` has it cleared (since migration 041, #209, only leftovers can), audited as `player_id_claim_superseded` (`user_id=<cleared> verified_user_id=<linked> player_id=<id>`); sign-up does the same. A Steam ID already on another account is refused (`in_use`) and nothing changes; only an admin can move it.
 
-In `both` and `steam_signup` modes `PUT /profile/player-id` answers 410 "Link Steam to verify your player id" (issue #188): Steam is the only way to link a player. In `password` mode it answers 409 for a Steam-linked account, and accounts without Steam set a self-reported id as before.
+Steam is the only way to link a player (issue #209): `PUT /profile/player-id` is gone (404 in every mode), and with `LOGIN_METHOD=password` there is no player linking. A player link exists only while `steam_id` and `player_id` are both set; every reader uses `backend/player_links.py`. See `player-linking-and-tag-visibility.md`.
 
 From the start of S17 (`steam_signup`), Profile reminds password accounts without Steam: "Link Steam now. Password sign-in will end in a later update."
 
 ## Re-authentication through Steam
 
-Accounts created through Steam have no password. `POST /reauth` answers 409 `use_steam_reauth` for them, without counting a failed login. The re-auth prompt instead offers **Confirm with Steam**, which navigates to `GET /auth/steam/start?purpose=reauth&return_tab=<profile|admin>` (any other `return_tab` returns to Profile; never a free URL). The callback calls `sessions.mark_reauth` on the current session only when the verified Steam ID equals the session user's, so every check that reads it passes: destructive admin actions (`require_recent_reauth`), Connect Twitch, merge and Disconnect (`require_recent_player_reauth`, #160), and Link/Unlink Steam. The round trip leaves the page, so the player repeats the action afterwards, except Connect Twitch: `_promptReauth("connectTwitch")` stores it in `sessionStorage` (`reauthResume`) and `handleSteamReturn` resumes it on `reauth_ok` (only actions listed in `_REAUTH_RESUMABLE` in `app-auth.js`). Audited as `admin_reauth` / `player_reauth` with `method=steam`.
+Accounts created through Steam have no password. `POST /reauth` answers 409 `use_steam_reauth` for them, without counting a failed login. The re-auth prompt instead offers **Confirm with Steam**, which opens `GET /auth/steam/start?purpose=reauth&return_tab=popup` in a popup (#213, below); its full-page fallback navigates to `…&return_tab=<profile|admin>` (any other `return_tab` returns to Profile; never a free URL). The callback calls `sessions.mark_reauth` on the current session only when the verified Steam ID equals the session user's, so every check that reads it passes: destructive admin actions (`require_recent_reauth`), Connect Twitch, merge and Disconnect (`require_recent_player_reauth`, #160), and Link/Unlink Steam. Audited as `admin_reauth` / `player_reauth` with `method=steam`.
+
+**In a popup (issue #213, `reference/steam-reauth-popup.md`).** **Confirm with Steam** first opens `GET /auth/steam/start?purpose=reauth&return_tab=popup` in a small window, so the page and any open dialog stay as they are. `popup` is accepted for `purpose=reauth` only: login and link ignore it and behave as before. Every redirect of a popup attempt, including start's `login_required` and `not_linked`, the callback's failures and a replayed or expired popup state, goes to `/steam-reauth-done.html?steam=<key>`. That static page maps the key to a result and posts `{type: "steam-reauth", result}` to its opener with `location.origin` as the target, then closes:
+
+| `?steam=` | Posted `result` | Modal |
+|---|---|---|
+| `reauth_ok` | `ok` | closes; `adminFetch` retries the original request once |
+| `reauth_failed` | `reauth_failed` | "That Steam account is not the one linked to this account. Nothing was confirmed." |
+| `no_session` | `no_session` | "Log in to Kana Cards first, then try again." |
+| `not_linked` | `not_linked` | "This account has no Steam link to confirm with." |
+| anything else or missing | `failed` | "Steam sign-in did not complete. Nothing was changed. Try again." |
+
+Only `ok` retries; the other results keep the modal open with the message. An admin with a password and a linked Steam account sees **Confirm with Steam instead** under the password field.
+
+**Full-page fallback.** When the browser blocks the popup, **Continue on this page** (`startSteamReauthFullPage`) runs the original round trip: `return_tab=<profile|admin>`, back to `/#<tab>?steam=<key>`. That path leaves the page, so the player repeats the action afterwards, except Connect Twitch: `_promptReauth("connectTwitch")` stores it in `sessionStorage` (`reauthResume`) and `handleSteamReturn` resumes it on `reauth_ok` (only actions listed in `_REAUTH_RESUMABLE` in `app-auth.js`).
 
 ## Admins
 
@@ -112,7 +127,7 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 A Steam-verified account whose `player_id` is an active player in the pool (`Player.is_active`) gets one **common** card of that player, with the usual modifiers and stored points. It goes to the roster when there is room and no active card of that player (`_activate_new_card`), otherwise to the bench. Code: `backend/own_card.py`.
 
 - **When:** after Link Steam (`steam_openid.link_account`), after Steam sign-up (`steam_openid.signup`), both right after `_supersede_player_id_claims` in the same transaction, and on `GET /me` for an account that qualifies but has no grant row yet (players who linked before this feature, or who were added to the pool later). A failure on `GET /me` is logged and the page still loads.
-- **Who:** `steam_id` and `player_id` set, not a demo account, not a Twitch viewer soft account. A self-reported id (no `steam_id`) never qualifies.
+- **Who:** a verified player link (`player_links.verified_player_id`: `steam_id` and `player_id` set, a full, non-demo account).
 - **Once:** `own_player_card_grants` (new table, created by `create_all`; no migration) has a unique `user_id` and a unique `player_id`, plus `card_id` (NULL for `already_owned`), `outcome` (`granted` or `already_owned`), `granted_at` and `seen_at`. The row is written with `INSERT … ON CONFLICT DO NOTHING`, and the card is created only when that insert added the row, so two simultaneous requests create one card. Unlinking and relinking, or linking the same Steam account to another account, grants nothing more. A season reset deletes the rows along with the cards, so next season's league players get their card again.
 - **Already owned:** if the account owns any card of that player (any rarity, active or benched), no card is created and the row records `already_owned`. Draws treat the granted card as owned like any other card (they prefer unowned players until the user owns every active player, or every player of the team for a team draw).
 - **Failure:** the hooks run the grant in a savepoint (`own_card.grant_in_savepoint`). If creating the card fails, only the grant is rolled back and logged by exception type; the link, sign-up or page load still succeeds, and the next `GET /me` tries again.
@@ -125,8 +140,8 @@ A Steam-verified account whose `player_id` is an active player in the pool (`Pla
 
 All four answer 404 in `password` mode; `main.py` also routes any unknown `/auth/steam/*` path to 404 (instead of the static mount's 405). Start, callback and sign-up are limited per IP by `RATE_LIMIT_STEAM_CALLBACK`.
 
-### `GET /auth/steam/start?purpose=login|link|reauth[&return_tab=profile|admin]`
-Begins a Steam sign-in, link (session and recent check) or re-auth (session and a linked Steam ID). 303 to Steam with the state cookie; 400 for another purpose; 503 `steam_unavailable` without `APP_BASE_URL`.
+### `GET /auth/steam/start?purpose=login|link|reauth[&return_tab=profile|admin|popup]`
+Begins a Steam sign-in, link (session and recent check) or re-auth (session and a linked Steam ID). 303 to Steam with the state cookie; 400 for another purpose; 503 `steam_unavailable` without `APP_BASE_URL`. `return_tab=popup` counts for `purpose=reauth` only (issue #213).
 
 ### `GET /auth/steam/callback`
 Verifies Steam's answer, then signs in, starts a sign-up, links or marks the re-auth. Always redirects back to the site (see Redirect keys).
@@ -138,10 +153,10 @@ Body `{ "username" }`. Creates the account for the pending Steam ID and starts t
 Logged in (401 otherwise); limited per user by `RATE_LIMIT_USER_ACTION`. Dismisses the own player card popup: sets `seen_at` on the account's grant. Returns `{ "changed": true }`, or `false` when there was nothing to dismiss. Available in every login mode.
 
 ### `POST /profile/steam/unlink`
-Needs a recent identity check (403 `reauth_required`). Clears `steam_id`; `player_id` stays; audited as `steam_unlinked`. 409 for an account without a password, since it would lock the player out.
+Needs a recent identity check (403 `reauth_required`). Clears `steam_id` and, in the same transaction, `player_id` (issue #209); audited as `steam_unlinked`, with `player_id_cleared=1` in the detail when a player id was set. 409 for an account without a password, since it would lock the player out.
 
 ### `GET /admin/player-id-claims`
-Admin only. Superseded self-reported player ids, newest first: `[{ "timestamp", "player_id", "superseded_user_id", "superseded_username", "verified_user_id", "verified_username" }]`, read from the `player_id_claim_superseded` audit rows. Shown under Admin › User Management.
+Admin only. Superseded player id claims (self-reported ids from before #209), newest first: `[{ "timestamp", "player_id", "superseded_user_id", "superseded_username", "verified_user_id", "verified_username" }]`, read from the `player_id_claim_superseded` audit rows. Shown under Admin › User Management.
 
 `GET /me` adds `steam_linked`, `has_password` and `is_demo` (booleans only; the Steam ID is never returned anywhere).
 

@@ -13,7 +13,7 @@ The routes are thin wrappers (`draw_card_route`, `draw_booster_route`, `reroll_m
 ## Other player actions
 
 `RATE_LIMIT_USER_ACTION` (per user, each route counted on its own) covers:
-- `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password`
+- `PUT /profile/username`, `PUT /profile/password` (`PUT /profile/player-id` was removed in #209)
 - `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted`
 - `POST /claim-events`, `POST /notifications/{notification_id}/dismiss`
 - `DELETE /sessions/{session_id}`, `POST /logout-everywhere`

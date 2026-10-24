@@ -1,7 +1,8 @@
 """Card image generation — PIL compositing extracted from main.py."""
+import colorsys
 import io
+import logging
 import os
-from pathlib import Path
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -12,6 +13,8 @@ except ImportError:
 from dotabuff_league_logos import resolve_local_team_logo_path
 from logo_hosts import safe_logo_url
 from scoring import STAT_LABELS
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_assets_dir() -> str:
@@ -52,6 +55,12 @@ _CARD_TEMPLATES = {
     "legendary": "Card_Template_Legendary.png",
 }
 
+# Issue #53: Holo Legendaries. The template is optional; without it the Legendary
+# template gets a generated iridescent sheen (and one warning per process).
+_HOLO_TEMPLATE = "Card_Template_Holo.png"
+_HOLO_SHEEN_ALPHA = 70
+_holo_warned = False
+
 # Layout positions discovered by pixel analysis of the 597×845 templates
 _BIG_CIRCLE    = (298, 375, 175)   # (cx, cy, radius) — player avatar
 _SMALL_CIRCLE  = (444, 258,  52)   # (cx, cy, radius) — team logo
@@ -64,36 +73,6 @@ _MODIFIER_LINE_GAP = 50
 _MODIFIER_MAX_WIDTH = 500
 # Epic/Legendary templates' cutouts/plates sit slightly higher than common/rare — nudge content down.
 _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
-
-
-STICKER_DIR = os.path.join(_ASSETS_DIR, "stickers")
-STICKER_SIZE = (60, 60)
-STICKER_START_X = 10   # left edge, stack horizontally
-STICKER_Y = 10
-
-
-def _apply_stickers(img, tag_keys: list):
-    """Composite sticker PNGs for each tag key onto img (in-place alpha composite).
-
-    Missing sticker files are silently skipped.
-    Returns the modified image.
-    """
-    if not PIL_AVAILABLE or not tag_keys:
-        return img
-    sticker_root = Path(STICKER_DIR).resolve()
-    for i, key in enumerate(tag_keys):
-        path = (sticker_root / f"{key}.png").resolve()
-        if not path.is_relative_to(sticker_root):
-            continue
-        if not path.exists():
-            continue
-        try:
-            sticker = Image.open(path).convert("RGBA").resize(STICKER_SIZE, Image.LANCZOS)
-            x = STICKER_START_X + i * (STICKER_SIZE[0] + 4)
-            img.alpha_composite(sticker, (x, STICKER_Y))
-        except Exception:
-            pass
-    return img
 
 
 _FONT_PATHS = [
@@ -232,6 +211,53 @@ def _draw_card_modifiers(draw, mods: dict, y_offset: int = 0):
         cy += _MODIFIER_LINE_GAP
 
 
+def _holo_template_path() -> str | None:
+    path = os.path.join(_ASSETS_DIR, _HOLO_TEMPLATE)
+    return path if os.path.exists(path) else None
+
+
+def warn_if_holo_template_missing() -> bool:
+    """Log once per process that Holo cards use the fallback sheen. Called at startup;
+    the first Holo render calls it too. Returns True when it logged."""
+    global _holo_warned
+    if _holo_warned or _holo_template_path():
+        return False
+    _holo_warned = True
+    logger.warning("%s not found in %s: Holo cards use the Legendary template with a "
+                   "generated sheen", _HOLO_TEMPLATE, _ASSETS_DIR)
+    return True
+
+
+def _holo_sheen(template):
+    """A diagonal rainbow sheen, visible only where the frame template is opaque, so
+    the avatar and the team logo stay untouched."""
+    w, h = template.size
+    steps = 64
+    strip = Image.new("RGBA", (steps, 1))
+    strip.putdata([tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / steps, 0.45, 1.0))
+                   + (_HOLO_SHEEN_ALPHA,) for i in range(steps)])
+    side = int((w ** 2 + h ** 2) ** 0.5) + 2
+    sheen = strip.resize((side, side), Image.BILINEAR).rotate(35, resample=Image.BILINEAR)
+    left, top = (side - w) // 2, (side - h) // 2
+    sheen = sheen.crop((left, top, left + w, top + h))
+    from PIL import ImageChops
+    sheen.putalpha(ImageChops.multiply(sheen.getchannel("A"), template.getchannel("A")))
+    return sheen
+
+
+def _load_template(ct: str, is_holo: bool):
+    if is_holo and ct == "legendary":
+        holo = _holo_template_path()
+        if holo:
+            return Image.open(holo).convert("RGBA")
+        warn_if_holo_template_missing()
+        template = Image.open(os.path.join(_ASSETS_DIR, _CARD_TEMPLATES["legendary"])).convert("RGBA")
+        template.alpha_composite(_holo_sheen(template))
+        return template
+    template_file = _CARD_TEMPLATES.get(ct, _CARD_TEMPLATES["common"])
+    return Image.open(os.path.join(_ASSETS_DIR, template_file)).convert("RGBA")
+
+
 def generate_card_image(
     card_type: str,
     player_name: str | None,
@@ -239,12 +265,12 @@ def generate_card_image(
     team_name: str | None,
     team_logo_url: str | None,
     card_modifiers: dict | None = None,
-    tag_keys: list | None = None,
+    is_holo: bool = False,
 ):
-    """Composite a player card PNG and return a PIL Image."""
+    """Composite a player card PNG and return a PIL Image. Accolades and user tags are
+    not drawn: the frontend overlays them as HTML pips (issues #53 and #217)."""
     ct = (card_type or "common").lower()
-    template_file = _CARD_TEMPLATES.get(ct, _CARD_TEMPLATES["common"])
-    template = Image.open(os.path.join(_ASSETS_DIR, template_file)).convert("RGBA")
+    template = _load_template(ct, is_holo)
 
     y_off = _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY if ct in ("epic", "legendary") else 0
 
@@ -287,9 +313,5 @@ def generate_card_image(
                             team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
 
     _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
-
-    # ── Sticker badges ──────────────────────────────────────────────────────
-    if tag_keys:
-        _apply_stickers(base, tag_keys)
 
     return base

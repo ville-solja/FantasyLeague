@@ -12,11 +12,39 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-18 — ship — testing
+**Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.
+**Solution:** Call route functions with the `db` fixture (or override `get_db`) instead of the real app's database. When disabling rate limits, disable the instance the router imported (`<router_module>.limiter.enabled = False`) and restore it on teardown. Never use regexes to parse HTML in tests (CodeQL `py/bad-tag-filter`); use `html.parser`.
+
 ---
 
 ### 2026-10-23 — developer — frontend
 **Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
 **Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).
+
+### 2026-10-18 — developer — testing
+**Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
+**Solution:** Before adding top-level code to a module, grep `backend/tests` for harnesses that load it whole (`_js(["app-admin.js"]`) and add the stub there (`addEventListener: () => {}`). For the re-auth popup flow, reuse `_ADMIN_HARNESS` / `_admin` in `test_issue_213_*` (fake `window.open`, `message` events, timers).
+
+### 2026-10-18 — developer — testing
+**Problem:** Tests load operator scripts with `spec_from_file_location` + `exec_module` without adding them to `sys.modules`, so a `@dataclass` in a script with `from __future__ import annotations` fails at import (`'NoneType' object has no attribute '__dict__'`).
+**Solution:** In `backend/scripts/*.py`, use a plain class with `__init__` (as `SeasonResult` in `backfill_played.py`) instead of `@dataclass`.
+
+### 2026-10-18 — developer — testing
+**Problem:** A TestClient on a bare router can't sign in by setting a `session` cookie to a raw sid (the cookie is a signed Starlette session, and without `SessionMiddleware` `get_current_user` raises), and in Node harnesses a stub defined before a module is silently replaced by the module's own function of the same name.
+**Solution:** Add `SessionMiddleware` and override `deps.get_current_user` with the user's identity dict; `require_admin` still checks `is_admin` in the database (`_signed_in` in `test_issue_214_admin_enhancements.py`). In harnesses, stub only globals the loaded modules don't define, and assert on the call you mean (filter `fetch` calls by method) rather than the last one.
+
+### 2026-10-17 — developer — endpoints
+**Problem:** After removing `PUT /profile/player-id`, a request answered 405, not 404, even in an app with only the profile router: `GET /profile/{user_id}` matches the path for any method, so Starlette reports a method mismatch.
+**Solution:** Give path parameters a convertor (`/profile/{user_id:int}`) so a removed sibling path matches nothing and answers 404. FastAPI binds `user_id` as usual.
+
+### 2026-10-17 — developer — frontend
+**Problem:** Moving functions or constants out of a frontend module broke Node harnesses that load only that module (`test_issue_156` loads app-players.js and needed `_NOT_SCORED_TOOLTIP`), and a class that sets `display` (`.hero-grid { display: grid }`) overrides the `hidden` attribute, so "hidden" elements showed.
+**Solution:** Before moving code between modules, grep `backend/tests` for every identifier the remaining code still uses, and keep shared constants in the module loaded first. Add `.cls[hidden] { display: none; }` for any class with a `display` value that the code hides with `hidden`.
+
+### 2026-10-17 — developer — models
+**Problem:** A plan's "unique on (a, b, c)" with nullable columns doesn't hold in SQLite: NULLs are distinct in a unique index, so two rows with the same values and a NULL never collide and `ON CONFLICT DO NOTHING` inserts duplicates.
+**Solution:** Index the nullable parts through `COALESCE` (`Index(..., func.coalesce(col, ''), unique=True)`, as `ux_season_accolades_key` in `models.py`); `ON CONFLICT DO NOTHING` without a target then honours it. Test the NULL case explicitly.
 
 ### 2026-10-15 — developer — testing
 **Problem:** In cloud sessions, three `test_test_background_task_isolation.py` lifespan tests fail (or hang when run alone) because their subprocess starts the real loops, which call `api.opendota.com` through an egress proxy that refuses it; pytest-xdist may also be missing.

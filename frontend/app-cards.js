@@ -11,14 +11,19 @@ const DRAW_RARITY_KEYS = ["common", "rare", "epic", "legendary"];
 
 // Issue #205: draw from the deck, and the landing in My Team.
 const DRAW_PREPARE_MAX_MS = 3000;  // the deck stirs until the card image is decoded, at most this long
-const DRAW_LIFT_MS = 220;
+const DRAW_LIFT_MS = 220;          // the lift, as the first part of one continuous move
 const DRAW_TRAVEL_MS = 460;
 const DRAW_FLIP_MS = 520;
+const DRAW_FLIP_OVERLAP_MS = 120;  // the flip starts this long before the card arrives
+const DRAW_CARD_BACK_PX = 16;      // .card-back's base font-size; its pattern is sized in em
 const DRAW_DETAILS_MS = 400;
 const DRAW_LANDING_MS = 520;
 const DRAW_PHONE_MAX_PX = 768;     // below this the roster sits above the Draw panel
 const DRAW_NOTICE_MS = 5000;
 const DRAW_FLIGHT_EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+// Lift and travel are one animation: a gentle start from the deck, no stop between
+// them, and a soft arrival (#205).
+const DRAW_MOVE_EASE = "cubic-bezier(0.45, 0, 0.2, 1)";
 let _revealEntering = false;       // the reveal is open but its card is still flying in
 let _revealDrawn = null;           // the drawn card the reveal shows, for the landing
 let _drawRosterReload = null;      // the loadRoster() a draw started; the landing waits for it
@@ -66,7 +71,7 @@ function _stripRevealDrawFx(modal, imgWrap, placeholder, img) {
   _stripDrawBurstClasses(document.getElementById("revealDrawBurst"));
   _stripRevealImgWrapRarity(imgWrap);
   if (imgWrap) {
-    imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft");
+    imgWrap.classList.remove("reveal-img-wrap--draw", "reveal-img-wrap--draw-soft", "reveal-img-wrap--holo");
   }
   if (placeholder) {
     placeholder.classList.remove(
@@ -99,6 +104,37 @@ function _renderRevealRank(card) {
   el.innerHTML = rankMedalHtml(card.rank_tier, card.leaderboard_rank);
 }
 
+/** The rarity label: the card type ("legendary", shown in capitals), with " · Holo"
+ * for a Holo card, so it reads "Legendary · Holo" (issue 50). */
+function _rarityLabel(card) {
+  const t = String((card && card.card_type) || "");
+  return card && card.is_holo ? `${t} · Holo` : t;
+}
+
+/**
+ * Issue 50: the player's accolade pips as an HTML overlay down the card's right edge
+ * (accoladePipsHtml), and in the card viewer their chips below the card
+ * (accoladeChipsHtml). Issue 217: the linked user's tag pips down the left edge
+ * (tagPipsHtml). Not part of the card image, so they stay hoverable.
+ */
+function _renderCardAccolades(card, drawFx) {
+  const pipsEl = document.getElementById("revealPips");
+  const chipsEl = document.getElementById("revealAccolades");
+  const list = card && card.player_id && typeof playerAccolades === "function" ? playerAccolades(card.player_id) : [];
+  const pips = list.length && typeof accoladePipsHtml === "function" ? accoladePipsHtml(list) : "";
+  const tags = card && card.player_id && typeof playerTags === "function" ? playerTags(card.player_id) : [];
+  const tagPips = tags.length && typeof tagPipsHtml === "function" ? tagPipsHtml(tags) : "";
+  const titles = list.filter(a => a.kind !== "played");
+  if (pipsEl) {
+    pipsEl.innerHTML = (tagPips ? `<div class="card-tag-pips">${tagPips}</div>` : "")
+      + (pips ? `<div class="card-pips">${pips}</div>` : "");
+  }
+  if (chipsEl) {
+    chipsEl.innerHTML = !drawFx && titles.length && typeof accoladeChipsHtml === "function" ? accoladeChipsHtml(titles) : "";
+  }
+  if (typeof refreshAccoladeIcons === "function" && (pips || tagPips || titles.length)) refreshAccoladeIcons();
+}
+
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
@@ -116,8 +152,9 @@ function showCard(card, footer, opts = {}) {
 
   _openCardId = card.id || null;
   _revealDrawn = null;
-  cardEl.className = `reveal-card ${card.card_type}`;
-  document.getElementById("revealRarity").textContent = card.card_type;
+  cardEl.className = `reveal-card ${card.card_type}${card.is_holo ? " holo" : ""}`;
+  document.getElementById("revealRarity").textContent = _rarityLabel(card);
+  _renderCardAccolades(card, drawFx);
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
   const revealPlayerEl = document.getElementById("revealPlayer");
   if (card.player_id && !drawFx) {
@@ -168,7 +205,10 @@ function showCard(card, footer, opts = {}) {
         img.style.opacity = "1";
         img.style.visibility = "hidden";
         const afterBitmapReady = () => {
-          img.style.visibility = "visible";
+          // Clear the inline value rather than forcing "visible": the stylesheet then
+          // shows the image, except while a deck draw is still flying in and flipping
+          // (.reveal-overlay--entering hides it; an inline style would override that).
+          img.style.visibility = "";
           placeholder.style.display = "none";
           placeholder.classList.remove(
             "reveal-img-placeholder--drawing",
@@ -232,6 +272,8 @@ function showCard(card, footer, opts = {}) {
       requestAnimationFrame(() => {
         if (!opts.deferBurst) _playDrawBurst(card);
         if (reduceMotion) imgWrap.classList.add("reveal-img-wrap--draw-soft");
+        // Issue 50: a Holo card's art gets one iridescent sweep (none under reduced motion).
+        else if (card.is_holo) imgWrap.classList.add("reveal-img-wrap--holo");
       });
     });
   }
@@ -383,7 +425,7 @@ async function confirmReroll() {
             img.style.opacity = "1";
             img.style.visibility = "hidden";
             const afterBitmapReady = () => {
-              img.style.visibility = "visible";
+              img.style.visibility = "";
               placeholder.style.display = "none";
               placeholder.classList.remove("reveal-img-placeholder--drawing", "reveal-img-placeholder--static");
               placeholder.removeAttribute("aria-label");
@@ -560,6 +602,9 @@ async function _playDrawFlight(card, prep) {
     front.appendChild(_drawCardFace(card, prep));
     const back = document.createElement("div");
     back.className = "draw-flight-face draw-flight-face--back card-back";
+    // The clone is laid out at the reveal card's size and starts scaled down to the
+    // deck's: a larger em base makes its pattern match the deck's card exactly.
+    back.style.fontSize = `${(DRAW_CARD_BACK_PX * to.width / from.width).toFixed(2)}px`;
     inner.appendChild(front);
     inner.appendChild(back);
     flight.appendChild(inner);
@@ -568,20 +613,23 @@ async function _playDrawFlight(card, prep) {
     flight.style.transform = start;
     document.body.appendChild(flight);
 
-    await _animationDone(_drawAnimate(flight, [{ transform: start }, { transform: lifted }],
-      { duration: DRAW_LIFT_MS, easing: DRAW_FLIGHT_EASE }));
-    if (!_revealEntering) return;
+    const moveMs = DRAW_LIFT_MS + DRAW_TRAVEL_MS;
     modal.classList.add("reveal-overlay--dim");
-    await _animationDone(_drawAnimate(flight, [{ transform: lifted }, { transform: "none" }],
-      { duration: DRAW_TRAVEL_MS, easing: DRAW_FLIGHT_EASE }));
+    const move = _animationDone(_drawAnimate(flight, [
+      { transform: start, offset: 0 },
+      { transform: lifted, offset: DRAW_LIFT_MS / moveMs },
+      { transform: "none", offset: 1 },
+    ], { duration: moveMs, easing: DRAW_MOVE_EASE }));
+    await new Promise(resolve => setTimeout(resolve, moveMs - DRAW_FLIP_OVERLAP_MS));
     if (!_revealEntering) return;
     burst = true;
     _playDrawBurst(card);
-    await _animationDone(_drawAnimate(inner, [
+    const flip = _animationDone(_drawAnimate(inner, [
       { transform: "rotateY(180deg)" },
       { transform: "rotateY(-12deg) scale(1.06)", offset: 0.75 },
       { transform: "rotateY(0deg) scale(1)" },
     ], { duration: DRAW_FLIP_MS, easing: "ease-out" }));
+    await Promise.all([move, flip]);
   } catch (e) {
     // A failed animation must not hide the result: the reveal still shows below.
   } finally {

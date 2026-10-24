@@ -32,19 +32,17 @@ async function loadProfile() {
 
 // ---------------------------------------------------------------------------
 // Player identity (issue #188): one panel for the Steam link, the league player
-// and the tags. Linking Steam sets and verifies the player id (issue #150); where
-// Steam is available the id can't be typed in. Profile only ever learns linked
+// and the tags. Only Steam links an account to a player (issues #150, #209); with
+// LOGIN_METHOD=password there is no player linking. Profile only ever learns linked
 // yes/no, never the Steam id.
 // ---------------------------------------------------------------------------
 
-/** The panel's state: "password" (no Steam: the typed-in, self-reported id),
- *  "not_linked", "linked" (with a league player), "linked_no_match", or
- *  "self_reported" (a legacy typed-in id, read-only until Steam replaces it). */
+/** The panel's state: "steam_required" (LOGIN_METHOD=password: no player linking),
+ *  "not_linked", "linked" (with a league player) or "linked_no_match". */
 function playerIdentityState(loginMethod, me, profile) {
   const steam = loginMethod === "both" || loginMethod === "steam_signup";
-  if (!steam) return "password";
+  if (!steam) return "steam_required";
   if (me && me.steam_linked) return profile && profile.player_name ? "linked" : "linked_no_match";
-  if (profile && profile.player_id) return "self_reported";
   return "not_linked";
 }
 
@@ -56,8 +54,7 @@ function _renderPlayerIdentity(profile) {
   show("identitySteamLinked", state === "linked" || state === "linked_no_match");
   show("identityNotLinkedState", state === "not_linked");
   show("identityNoMatch", state === "linked_no_match");
-  show("identityLegacyHint", state === "self_reported");
-  show("playerIdForm", ui.playerIdField);
+  show("identitySteamRequired", state === "steam_required");
   show("btnLinkSteam", ui.linkSteam);
   show("btnUnlinkSteam", ui.unlinkSteam);
   show("identitySteamNote", ui.linkSteam);
@@ -65,23 +62,18 @@ function _renderPlayerIdentity(profile) {
   // A Steam-only account has no password to change.
   show("changePasswordForm", activeHasPassword);
   show("profileNoPasswordNote", !activeHasPassword);
-  document.getElementById("profilePlayerId").value =
-    state === "password" && profile.player_id ? profile.player_id : "";
-  if (profile.player_name && state !== "not_linked" && state !== "linked_no_match") {
-    _showLinkedPlayer(profile.player_name, profile.player_avatar_url,
-                      profile.player_verified === true, profile.player_team_name);
+  if (state === "linked") {
+    _showLinkedPlayer(profile.player_name, profile.player_avatar_url, profile.player_team_name);
   } else {
     document.getElementById("profilePlayerPreview").style.display = "none";
   }
 }
 
-// Issue #169: a claimed player shows its avatar only when the id is verified through
-// Steam; a typed-in id is labelled "Self-reported", as other players see it.
-function _showLinkedPlayer(name, avatarUrl, verified, teamName) {
-  showPlayerPreview(name, verified ? avatarUrl : null);
+function _showLinkedPlayer(name, avatarUrl, teamName) {
+  showPlayerPreview(name, avatarUrl);
   const label = document.getElementById("profilePlayerSource");
-  label.textContent = verified ? "Verified with Steam" : "Self-reported";
-  label.className = verified ? "player-source player-source-verified" : "player-source";
+  label.textContent = "Verified with Steam";
+  label.className = "player-source player-source-verified";
   document.getElementById("profilePlayerTeam").textContent = teamName || "";
 }
 
@@ -377,7 +369,7 @@ function linkSteam() {
 }
 
 async function unlinkSteam() {
-  if (!confirm("Unlink Steam from this account? Your verified player id stays. You can link Steam again later.")) return;
+  if (!confirm("Unlink Steam from this account? This also removes your player link. You can link Steam again later.")) return;
   try {
     const res = await adminFetch(`${API}/profile/steam/unlink`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
@@ -447,32 +439,6 @@ async function logoutEverywhere() {
     _clearLocalAuthState();
   } catch (e) {
     setStatus("logoutEverywhereStatus", e.message, false);
-  }
-}
-
-// LOGIN_METHOD=password only (issue #188): elsewhere PUT /profile/player-id answers 410.
-async function savePlayerId() {
-  const raw = document.getElementById("profilePlayerId").value.trim();
-  const player_id = raw ? parseInt(raw) : null;
-  try {
-    const res = await fetch(`${API}/profile/player-id`, {
-      method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({player_id})
-    });
-    const data = await res.json();
-    if (!res.ok) return setStatus("playerIdStatus", data.detail, false);
-    if (data.player_name) {
-      _showLinkedPlayer(data.player_name, data.player_avatar_url, false, null);
-      setStatus("playerIdStatus", "Player linked");
-    } else if (player_id) {
-      document.getElementById("profilePlayerPreview").style.display = "none";
-      setStatus("playerIdStatus", "ID saved — player not found in current league data yet");
-    } else {
-      document.getElementById("profilePlayerPreview").style.display = "none";
-      setStatus("playerIdStatus", "Player unlinked");
-    }
-  } catch (e) {
-    setStatus("playerIdStatus", e.message, false);
   }
 }
 

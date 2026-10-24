@@ -103,6 +103,11 @@ def _make_app(engine):
     # for the app under test here.
     import rate_limit
     rate_limit.limiter.enabled = False
+    # Other test files reload rate_limit, which leaves routers imported earlier (the
+    # profile router here) holding a different Limiter instance than rate_limit.limiter.
+    # Disable the instance the profile routes actually use too, so the result doesn't
+    # depend on which tests ran first in the same worker.
+    profile_router.limiter.enabled = False
 
     # routers/auth.py also carries a module-level, process-wide
     # `_last_forgot_password_request` dict backing the per-username
@@ -130,7 +135,9 @@ def engine():
 
 @pytest.fixture()
 def app(engine):
-    return _make_app(engine)
+    previous = profile_router.limiter.enabled
+    yield _make_app(engine)
+    profile_router.limiter.enabled = previous
 
 
 @pytest.fixture()

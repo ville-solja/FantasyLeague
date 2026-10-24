@@ -907,18 +907,19 @@ class TestSeeWhereTheDelayComesFrom:
             assert key in rows[9002]
 
     def test_admin_matches_js_renders_timing_columns_as_minutes_after_start(self):
-        """AC: the admin Matches table shows "Live seen", "Stats in", "MVP picked" as "+N min" after start_time, with the exact time in the title attribute."""
+        """AC: the admin Matches table shows "Live seen", "Stats in", "MVP picked" as "+N min" after start_time, with the exact time in the title attribute.
+        Issue 214 moved the three timing columns after Parse (the MVP job's columns come first) and builds each game row in _adminMatchRowHtml."""
         html = _read(_INDEX_HTML)
         head = re.search(r'<table id="admin-matches-table">\s*<thead><tr>(.*?)</tr></thead>', html).group(1)
         headers = re.findall(r"<th>(.*?)</th>", head)
-        assert headers[headers.index("Start Time") + 1:headers.index("Start Time") + 4] == \
+        assert headers[headers.index("Parse") + 1:headers.index("Parse") + 4] == \
             ["Live seen", "Stats in", "MVP picked"]
         assert f'colspan="{len(headers)}"' in html[html.index('id="adminMatchesBody"') - 30:][:200]
 
         js = _read(_ADMIN_MATCHES_JS)
-        render = _function_source(js, "renderAdminMatches")
-        assert render.index("m.live_first_seen_at") < render.index("m.ingested_at") < render.index("m.mvp_confirmed_at")
-        assert f"colspan='{len(headers)}'" in render
+        row = _function_source(js, "_adminMatchRowHtml")
+        assert row.index("m.live_first_seen_at") < row.index("m.ingested_at") < row.index("m.mvp_confirmed_at")
+        assert f"colspan='{len(headers)}'" in _function_source(js, "renderAdminMatches")
         cell = _function_source(js, "_timingCell")
         assert "title=" in cell and "_escHtml(" in cell
 

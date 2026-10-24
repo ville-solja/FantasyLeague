@@ -17,6 +17,10 @@ Four rarity-specific PNG templates must be present in the assets directory:
 
 All templates share the same canvas size: **597 × 845 px**.
 
+**Holo (issue #53):** a Holo Legendary (`cards.is_holo`) uses `Card_Template_Holo.png` (597 × 845, real transparency) when that file is in the assets directory. It is optional and not part of the four-template check. Without it, the Legendary template gets a generated iridescent sheen: a diagonal rainbow gradient at low opacity, masked by the template's own alpha so the avatar and team logo cutouts stay untouched (`_holo_sheen` in `backend/image.py`). The missing template is logged once per process, at startup (`warn_if_holo_template_missing`) or on the first Holo render. `generate_card_image(..., is_holo=False)` takes the flag as a trailing argument.
+
+**Accolades and user tags are not drawn on the image.** The player's accolade pips (right edge) and tag pips (left edge) are HTML overlays in the frontend, so they stay hoverable and update without rebuilding images. Tag stickers (`_apply_stickers`) were retired in issue #217; the route reads no tags and `generate_card_image` takes no `tag_keys`. See [Tag Symbols on Cards](tag-symbols-on-cards.md).
+
 The template PNG is a fully-designed frame — rarity border, decorative elements, name plate, and background art — with transparent cutouts where the player avatar and team logo are composited underneath. The frame is layered on top of the player content so it always reads cleanly.
 
 The assets directory is resolved at startup by searching several candidates (`assets/`, `Assets/`, `/app/Assets/`, etc.) for a folder containing all four template files. Linux containers use `/app/Assets` by convention; local development typically uses `assets/` or `Assets/` at the repo root.

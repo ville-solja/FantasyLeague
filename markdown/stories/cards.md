@@ -199,7 +199,8 @@ rule is enforced server-side regardless of how the request is made.
 ## Card Stickers (User Tags)
 
 Card sticker stories are in [user-tags.md](user-tags.md) — the tag system is generic
-and covers cards, leaderboard display, and admin management together.
+and covers cards, leaderboard display, and admin management together. Since issue #217
+tags show as symbols on the card, not stickers: see "Tag Symbols on Cards" below.
 
 ---
 
@@ -516,3 +517,38 @@ As a player, I want accolades such as match MVP picks to show how many times the
 - An accolade can carry a count, shown as "×N" next to its icon (for example "MVP ×3")
 - The count comes from stored data (for example Twitch MVP picks per player)
 - Needs a decision on which counted accolades exist and where their data comes from
+
+---
+
+## Tag Symbols on Cards (issue #217)
+
+Plan: `markdown/plans/plan-issue-217-tag-symbols-on-cards.md`. Feature doc: `markdown/features/reference/tag-symbols-on-cards.md`.
+
+### Tags Read as Symbols on Cards
+**User story**
+As a visitor looking at a card, I want a caster's or admin's tag shown as a clear symbol I can hover, so that I can see who they are without squinting at a tiny sticker.
+
+**Acceptance criteria**
+- **Left column:** a player whose Steam-verified linked user has tags shows tag pips down the card's left edge, starting at the top-left. Admin comes first (shield, "Kana Cards admin"), then caster (mic, "Caster"), then other tags (tag icon, their label as the tooltip).
+- **Where they show:** the pips appear in the card viewer, the draw reveal, My Team (roster and bench, which is the collection). They sit on the opposite edge from the accolade pips and never overlap them.
+- **Tooltips:** they use the shared `data-tip` tooltip (hover, focus, tap; Escape closes) and carry an `aria-label` with the same text.
+- **No season winner pip:** `season_winner` never renders as a tag pip; the Fantasy Winner accolade pip covers it.
+- **Who gets pips:** a player without a verified linked user, or whose user has no tags and isn't an admin, has no tag pips.
+- **No markup outside the helper:** no view builds tag pip markup outside `tagPipsHtml`.
+
+### Card Images Stop Carrying Tag Stickers
+**User story**
+As the operator, I want tags removed from the card image itself, so that a card never shows a sticker and a symbol for the same tag, and a tag change shows at once.
+
+**Acceptance criteria**
+- **Image:** `GET /cards/{id}/image` composites no tag stickers. `_apply_stickers` and its constants are removed, and the route no longer reads tags.
+- **Live updates:** granting or removing a tag, or changing admin status, changes the card's tag pips on the next page load without touching the image.
+
+### Tags Data Is Public but Carries No User Identity
+**User story**
+As the operator, I want the tag data behind the symbols to reveal no more than the site already shows, so that tags on cards don't leak who owns which account.
+
+**Acceptance criteria**
+- **API:** `GET /accolades` adds `tags: {"<player id>": [{key, label}]}`, with `{key: "admin", label: "Admin"}` first when the verified linked user is an admin, and `season_winner` left out.
+- **No identity:** no user id, username or email appears anywhere in the response.
+- **Verified links only:** only Steam-verified links on full, non-demo accounts contribute (`player_links`). A typed-in or stale link contributes nothing.

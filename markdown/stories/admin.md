@@ -814,3 +814,74 @@ As anyone using a demo deployment, I want the "DEMO MODE" notice in the bottom-r
 - It stays above page content and open modals, as before
 - On a phone-width window (360px) it fits on one line inside the window, with a gap from the right and bottom edges, and does not overlap the version badge
 - With `demo_mode` false or unset, the notice is not shown
+
+## Admin Enhancements (issue #214)
+
+Implemented. Plan: `markdown/plans/plan-issue-214-admin-enhancements.md`; feature doc: `markdown/features/reference/admin-enhancements.md`. Design canvas: https://claude.ai/artifact/WPnstGBfP24mJeqHFtm6ih.
+
+### Streamer Approvals Come First
+**User story**
+As an admin, I want pending streamer approvals at the top of their own Twitch tab, with a count I can see from anywhere in Admin, so that streamers get approved quickly.
+
+**Acceptance criteria**
+- **New sub-tab:** Admin gets a **Twitch** sub-tab after User Management.
+- **Order:** Approved streamers first (waiting approvals at the top), then Twitch status, then Twitch collection merges. They move out of User Management; Superseded player id claims stays there.
+- **Badge:** when approvals are waiting, the Twitch sub-tab button and the top-level Admin tab button show a badge with the count (for example "2"). The badge has an `aria-label` such as "2 streamers waiting for approval".
+  - The count is fetched when an admin loads the page and after each Approve or Reject.
+  - With nothing waiting there is no badge.
+- **Unchanged:** Approve, Reject and Remove still need the password re-check.
+- **Split-off:** notifying admins outside the site is #215.
+
+### Ids Are Typed, and Names Show Before Saving
+**User story**
+As an admin adding players, I want to type ids without spinner buttons and see the player's name before I save, so that I catch a wrong id immediately.
+
+**Acceptance criteria**
+- **No spinners:** OpenDota id inputs in Add player, Bulk add, Mark champions, Add accolade and End Season are `type="text"` with `inputmode="numeric"` and no spinner.
+  - Non-digits are rejected with a message.
+  - The accolade value uses `inputmode="decimal"`.
+- **Lookup endpoint:** `GET /admin/players/lookup?ids=1,2,3` (admin only, at most 50 ids, each a positive integer) returns `[{id, name, source: "pool" | "opendota" | null, in_pool}]`.
+  - OpenDota answers are cached in process for 10 minutes.
+  - An invalid or oversized request gets 422.
+- **Add player:** leaving the id field (or pressing Enter) shows the name and "already in the pool", "not in the pool" or "No OpenDota player with this id". Confirm still adds as today.
+- **Bulk add:** after the ids are entered, a preview list shows each id with its name and status (new, already in pool, not found). Confirm adds only the new ids, the count is on the button ("Add 7 players"), and the existing progress panel still runs.
+
+### Mark Champions and Add Accolade Are Simpler
+**User story**
+As an admin entering champions once a season, I want a plain roster editor where I can read every name, so that the rare task is quick and error-free.
+
+**Acceptance criteria**
+- **Mark champions, paste box removed:** the paste box and its parser are removed; **+ Add player** stays.
+- **Mark champions, layout:** each roster row shows the id field (fixed width), the name field (the remaining width, never under 12 characters wide) and **Remove** on one line in a modal at least 640 px wide. Below 640 px the row stacks.
+- **Add accolade:** no spinner on the id or the value. The bulk Played box stays, because it is the fallback for S1–S3 and the Div 2 gaps the OpenDota backfill can't reach.
+
+### Matches Are Organised for Setting MVPs
+**User story**
+As an admin, I want matches grouped by series with the MVP and stream link up front and a filter for missing MVPs, so that I can find and fill missing MVPs fast.
+
+**Acceptance criteria**
+- **Grouped by series:** matches group under series headers (teams, division, week, stream link), newest series first. Matches not in the schedule feed are listed under "Not in the schedule".
+- **Teams in series order:** games show the series' team 1 and team 2 in the same order in every game, not radiant/dire.
+- **Column order:** Match id (OpenDota link), Teams, League (name and Div 1/Div 2), Start, MVP with **Set MVP**, Stream, then Week, Scoring, Parse and the timing columns.
+- **Filters** in one row:
+  - **MVP missing:** checked by default when any match lacks an MVP;
+  - **League:** All, Div 1 or Div 2;
+  - **Unparseable:** as today.
+
+  Filters combine. The empty state names the active filters.
+- **Stream link:** from the series' `stream_url`, opened in a new tab; "—" when the feed has none. The VOD link editor moves into each match's **More** details. The Weekly Report VOD keeps working.
+- **Scoring checkboxes:** aligned in a fixed two-column grid, with labels.
+- **API:** `GET /admin/matches` adds `series_key`, `series_team1_id`, `series_team2_id`, `division`, `league_name` and `stream_url` (null when not in the feed). Existing fields are unchanged.
+
+### Settings Grouped by Purpose
+**User story**
+As an admin, I want Settings grouped into a few named sections with consistent panels, so that I can find a control without scanning twelve boxes.
+
+**Acceptance criteria**
+- **Six sections** in this order: Season, Scoring, Tokens and rewards, Announcements, Players and tags, Maintenance, holding the panels listed in Context.
+  - A section nav lists them; it is sticky on desktop and a chip row at phone width.
+  - Selecting a section scrolls to it, and the last section viewed is remembered per browser.
+- **Consistent panels:** every panel has a title, a one-line description and its primary action at the top right.
+- **Danger last:** Reset Season and Recalculate are danger-styled and sit last in their sections.
+- **No behaviour change:** no panel changes what it does. Every existing element id stays, so existing JS and tests keep working.
+- **Matches the canvas:** the layout follows the design canvas.

@@ -6,7 +6,7 @@ Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars
 
 ## Data
 
-OpenDota's `GET /players/{account_id}` returns top-level `rank_tier` (tens digit: medal 1 Herald … 8 Immortal; ones digit: stars 1–5, 0 for Immortal) and `leaderboard_rank`. They are stored on `players` as `rank_tier`, `leaderboard_rank` and `rank_fetched_at` (all nullable INTEGER; migration `040_players_rank`).
+OpenDota's `GET /players/{account_id}` returns top-level `rank_tier` (tens digit: medal 1 Herald … 8 Immortal; ones digit: stars 1–5, 0 for Immortal) and `leaderboard_rank`. They are stored on `players` as `rank_tier`, `leaderboard_rank` and `rank_fetched_at` (all nullable INTEGER; migration `042_players_rank`).
 
 `backend/player_rank.py` is the one place for the rules:
 - `parse_rank(data)` returns `(rank_tier, leaderboard_rank)`. A tier that is not an integer from 10 to 80 with a known medal is `None`. The leaderboard place is kept only for a positive integer on tier 80.

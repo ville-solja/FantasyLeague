@@ -305,39 +305,24 @@ def test_twitch_connect_account_merge_ready_grants_caster_tag(db):
     assert [r.source for r in _tag_rows(db, web_user.id)] == ["caster_sync"]
 
 
-def test_caster_auto_tag_shows_on_leaderboard_card_sticker_and_profile(db, monkeypatch):
-    """A caster_sync tag appears wherever tags already show: leaderboard tag chips, card stickers and the Profile identity panel (#188)."""
-    import image
-    from models import Card, Player
-    from routers import cards as cards_router
+def test_caster_auto_tag_shows_on_leaderboard_card_tag_pip_and_profile(db):
+    """A caster_sync tag appears wherever tags already show: leaderboard tag chips, the card tag pips (GET /accolades `tags`, issue #217; formerly card stickers) and the Profile identity panel (#188)."""
+    from models import Player
+    from routers.history import get_accolades
     from routers.leaderboard import _fetch_tags_for_users
     from routers.profile import get_profile
     _caster(db)
     db.add(Player(id=77, name="Caster Player"))
     db.commit()
-    user = _web(db, twitch_id=_CH, player_id=77)
+    # Issue #209: card tags follow a Steam-verified player link only.
+    user = _web(db, twitch_id=_CH, player_id=77, steam_id="76561197960265805")
     _add_row(db, status="approved")
     _sync(db)
 
     assert {"key": "caster", "label": "Caster"} in _fetch_tags_for_users(db, [user.id])[user.id]
     profile = get_profile(user.id, db=db, current_user=_acting(user))
     assert {"key": "caster", "label": "Caster"} in profile["tags"]
-
-    card = Card(owner_id=user.id, player_id=77, card_type="common", is_active=False, generation=1)
-    db.add(card)
-    db.commit()
-    seen = {}
-
-    def fake_generate(**kwargs):
-        seen["tag_keys"] = kwargs["tag_keys"]
-        from PIL import Image
-        return Image.new("RGB", (2, 2))
-
-    if not image.PIL_AVAILABLE:
-        pytest.skip("Pillow not installed")
-    monkeypatch.setattr(image, "generate_card_image", fake_generate)
-    cards_router.get_card_image(card.id, db=db)
-    assert seen["tag_keys"] == ["caster"]
+    assert get_accolades(db=db)["tags"]["77"] == [{"key": "caster", "label": "Caster"}]
 
 
 def test_caster_sync_existing_admin_grant_no_duplicate_row_no_audit(db):

@@ -20,7 +20,7 @@ Manual verification (not automated):
   `scripts/backup-db.sh`.
 - Production env vars actually set: TWITCH_EXTENSION_CLIENT_ID,
   TWITCH_EXTENSION_SECRET, TWITCH_EXTENSION_VERSION=1.3.0.
-- Admin › Users › Twitch status shows every check green on production before
+- Admin › Twitch › Twitch status shows every check green on production before
   Submit.
 - Console fields completed (Asset Hosting, Panel Height 500, URL Fetching and
   Image Domains allowlists, Chat + Request Identity Link capabilities,
@@ -370,12 +370,12 @@ class TestSubmissionGuideMatchesBuild:
             assert var in flat, var
 
     def test_checklist_image_domains_names_default_logo_hosts(self):
-        """The Image Domains item names the https:// Steam CDN hosts from backend/logo_hosts.py DEFAULT_LOGO_HOSTS, or points to Admin › Users › Twitch status."""
+        """The Image Domains item names the https:// Steam CDN hosts from backend/logo_hosts.py DEFAULT_LOGO_HOSTS, or points to Admin › Twitch › Twitch status."""
         from logo_hosts import DEFAULT_LOGO_HOSTS
         item = next(i for i in _checklist_items(_checklist()) if "Allowlist for Image Domains" in i)
         for host in DEFAULT_LOGO_HOSTS:
             assert f"https://{host}" in item, host
-        assert "Admin › Users › Twitch status" in item
+        assert "Admin › Twitch › Twitch status" in item
 
     def test_guide_notes_capabilities_editable_only_in_local_test(self):
         """The guide notes that capability fields can be edited only in Local Test."""
@@ -386,10 +386,10 @@ class TestSubmissionGuideMatchesBuild:
             assert field in note, field
 
     def test_guide_has_twitch_status_go_no_go_line(self):
-        """The guide has a go/no-go line: Admin › Users › Twitch status shows every check green on production before Submit."""
+        """The guide has a go/no-go line: Admin › Twitch › Twitch status shows every check green on production before Submit."""
         items = _checklist_items(_checklist())
         go = next(i for i in items if "Go/no-go" in i)
-        assert "Admin › Users › Twitch status" in go
+        assert "Admin › Twitch › Twitch status" in go
         assert "every check green" in go and "production" in go
         # Warnings for settings the extension doesn't need are explained (twitch_status.py).
         assert "Connect Twitch" in go and "STEAM_API_KEY" in go
@@ -409,12 +409,12 @@ class TestSubmissionGuideMatchesBuild:
         assert "missing: Image Domains allowlist" in _checklist_order_problems(missing)
 
     def test_package_sh_prints_image_domains_reminder_after_panel_height(self, tmp_path):
-        """On success, package.sh prints "Allowlist for Image Domains: see Admin › Users › Twitch status" after the Panel Height line (run in a tmp copy)."""
+        """On success, package.sh prints "Allowlist for Image Domains: see Admin › Twitch › Twitch status" after the Panel Height line (run in a tmp copy)."""
         _require_zip()
         ext = _ext_copy(tmp_path)
         result = _run_package(ext, "1.3.0", *_ORIGIN)
         assert result.returncode == 0, result.stdout + result.stderr
-        reminder = "Allowlist for Image Domains: see Admin › Users › Twitch status"
+        reminder = "Allowlist for Image Domains: see Admin › Twitch › Twitch status"
         lines = result.stdout.splitlines()
         height = next(i for i, l in enumerate(lines) if "Panel Height: 500" in l)
         image = next(i for i, l in enumerate(lines) if reminder in l)

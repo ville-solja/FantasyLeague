@@ -160,6 +160,8 @@ DEFAULT_WEIGHTS = [
     {"key": "draw_rate_legendary",  "label": "Draw rate: Legendary (%)",  "value": 5.0},
     # --- Team draw cost ---
     {"key": "team_booster_cost", "label": "Team draw cost (Tokens)", "value": 3.0},
+    # --- Holo (issue #53): chance a past champion's Legendary is drawn as Holo ---
+    {"key": "holo_chance", "label": "Holo chance — champion Legendary (%)", "value": 20.0},
 ]
 
 

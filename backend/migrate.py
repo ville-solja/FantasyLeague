@@ -748,7 +748,36 @@ def _m039_user_tags_source(conn):
     logger.info("Migration: user_tags — added source column")
 
 
-def _m040_players_rank(conn):
+def _m040_cards_is_holo(conn):
+    """Issue #53: a past champion's Legendary can be drawn as Holo."""
+    cols = [r[1] for r in conn.execute(text("PRAGMA table_info(cards)")).fetchall()]
+    if "is_holo" not in cols:
+        conn.execute(text("ALTER TABLE cards ADD COLUMN is_holo BOOLEAN NOT NULL DEFAULT 0"))
+        conn.commit()
+
+
+def _m041_clear_unverified_player_links(conn):
+    """Issue #209: a player link exists only through Steam. Typed-in player ids (no
+    steam_id) are cleared once, with one audit entry carrying the count. Irreversible:
+    run scripts/backup-db.sh before deploying."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
+    if not {"player_id", "steam_id"} <= cols:
+        return
+    cleared = conn.execute(text(
+        "UPDATE users SET player_id = NULL "
+        "WHERE player_id IS NOT NULL AND steam_id IS NULL")).rowcount
+    tables = {r[0] for r in conn.execute(text(
+        "SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+    if cleared and "audit_logs" in tables:
+        conn.execute(text(
+            "INSERT INTO audit_logs (timestamp, actor_id, actor_username, action, detail) "
+            "VALUES (:ts, NULL, 'system', 'player_links_cleared', :detail)"),
+            {"ts": int(__import__("time").time()), "detail": f"migration=041 count={cleared}"})
+    conn.commit()
+    logger.info("Migration 041: cleared %d unverified player link(s)", cleared)
+
+
+def _m042_players_rank(conn):
     """Issue #221: players.rank_tier, leaderboard_rank and rank_fetched_at (all nullable)."""
     cols = {r[1] for r in conn.execute(text("PRAGMA table_info(players)")).fetchall()}
     if not cols:
@@ -823,7 +852,9 @@ MIGRATIONS = [
     ("037_cards_active_player_unique", _m037_cards_active_player_unique),
     ("038_twitch_starter_grants_backfill", _m038_twitch_starter_grants_backfill),
     ("039_user_tags_source",         _m039_user_tags_source),
-    ("040_players_rank",             _m040_players_rank),
+    ("040_cards_is_holo",            _m040_cards_is_holo),
+    ("041_clear_unverified_player_links", _m041_clear_unverified_player_links),
+    ("042_players_rank",             _m042_players_rank),
 ]
 
 

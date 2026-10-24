@@ -189,9 +189,13 @@ def _scene(db):
     linked player ids, a viewer, a locked week with a weekly report, and an archived season."""
     from models import Player, SeasonArchive, Week, WeeklySummary
     now = int(time.time())
-    admin = _mk(db, "Boss", is_admin=True, player_id=987650001)
-    helper = _mk(db, "Admin_Helper", player_id=987650002)
-    viewer = _mk(db, "viewer", player_id=987650003)
+    # Issue #209: a player link exists only through Steam, so the linked ids are Steam-verified.
+    admin = _mk(db, "Boss", is_admin=True, player_id=987650001,
+                steam_id=str(76561197960265728 + 987650001))
+    helper = _mk(db, "Admin_Helper", player_id=987650002,
+                 steam_id=str(76561197960265728 + 987650002))
+    viewer = _mk(db, "viewer", player_id=987650003,
+                 steam_id=str(76561197960265728 + 987650003))
     db.add(Player(id=987650002, name="Famous Player", avatar_url="https://example.com/famous.png"))
     db.add(Week(id=1, label="Week 1", start_time=now - 7 * _DAY, end_time=now - _DAY, is_locked=True))
     db.add(WeeklySummary(week_id=1, generated_at=now))
@@ -669,11 +673,12 @@ class TestProfilesDontLendOutIdentities:
         assert body["player_avatar_url"] == "https://example.com/v.png"
         assert "player_id" not in body
 
-    def test_profile_other_viewer_self_reported_id_hides_avatar(self, db):
-        """Failure path: another user's self-reported id of a well-known player returns that player's name, player_verified false, no player_avatar_url, no player_id."""
+    def test_profile_other_viewer_stale_typed_in_id_hides_player(self, db):
+        """Failure path: another user's leftover typed-in id (no steam_id) of a well-known player shows no player at all (issue #209: only Steam links a player)."""
         scene = _scene(db)
-        body = _profile(db, scene["helper"], scene["viewer"])
-        assert body["player_name"] == "Famous Player"
+        legacy = _mk(db, "legacy", player_id=987650002)
+        body = _profile(db, legacy, scene["viewer"])
+        assert body["player_name"] is None
         assert body["player_verified"] is False
         assert body.get("player_avatar_url") is None
         assert "player_id" not in body
@@ -684,7 +689,7 @@ class TestProfilesDontLendOutIdentities:
         scene = _scene(db)
         body = _profile(db, scene["helper"], scene["helper"])
         assert body["player_id"] == 987650002
-        assert body["player_verified"] is False
+        assert body["player_verified"] is True
         assert body["player_avatar_url"] == "https://example.com/famous.png"
 
     def test_profile_admin_view_includes_player_id(self, db):
@@ -722,12 +727,12 @@ class TestProfilesDontLendOutIdentities:
         exc = _raises(get_roster, scene["helper"].id, db=db, current_user=_acting(scene["viewer"]))
         assert exc.status_code == 403
 
-    def test_frontend_profile_shows_verified_or_self_reported_label(self):
-        """frontend/app-profile.js shows the in-game name with 'Verified with Steam' or 'Self-reported', and the avatar only when player_verified."""
+    def test_frontend_profile_shows_verified_label(self):
+        """frontend/app-profile.js shows the in-game name with 'Verified with Steam' and the avatar; since issue #209 there is no 'Self-reported' label."""
         js = _read("app-profile.js")
-        assert '"Verified with Steam"' in js and '"Self-reported"' in js
-        assert "showPlayerPreview(name, verified ? avatarUrl : null)" in js
-        assert "profile.player_verified === true" in js  # issue #188: _renderPlayerIdentity
+        assert '"Verified with Steam"' in js and '"Self-reported"' not in js
+        assert "showPlayerPreview(name, avatarUrl)" in js
+        assert 'if (state === "linked")' in js  # issue #188/#209: _renderPlayerIdentity
         assert 'id="profilePlayerSource"' in _read("index.html")
 
     def test_privacy_page_states_player_id_visibility(self):

@@ -63,8 +63,8 @@ Testing approach per story (copy the fixtures from the named precedent files):
   Story 5 — Deployment and File Hardening
     - SRI: static parse of `frontend/index.html`; never fetch the CDN.
     - Tags: `TagBody` validation (precedent: test_user_tag_system.py).
-    - Stickers: `image._apply_stickers` with `image.STICKER_DIR`
-      monkeypatched to a tmp_path directory.
+    - Stickers: retired in issue #217; the card image route reads no file named
+      after a tag (spy on `image.Image.open`).
     - Backups: `monkeypatch.setattr(database, "DATABASE_URL",
       f"sqlite:///{tmp_path / 'fantasy.db'}")` as in
       test_issue_132_admin_db_backup.py — never touch the real data/ dir.
@@ -487,7 +487,9 @@ def _raw_interpolations(src, field_patterns):
 
 
 def _players_js():
-    return _read(os.path.join(_FRONTEND_DIR, "app-players.js"))
+    # The player popup moved to app-player-popup.js (issue 208); both files are checked.
+    return (_read(os.path.join(_FRONTEND_DIR, "app-players.js")) + "\n"
+            + _read(os.path.join(_FRONTEND_DIR, "app-player-popup.js")))
 
 
 def _function_source(src, name):
@@ -1190,16 +1192,29 @@ def test_create_tag_invalid_key_returns_422(db, key):
         assert s.query(TagDefinition).count() == 0
 
 
-def _sticker_setup(tmp_path, monkeypatch):
+def test_card_image_reads_no_files_named_after_tags(db, tmp_path, monkeypatch):
+    """Issue #217 retired tag stickers, and with them the tag-key -> file path lookup
+    (formerly guarded against '../' keys). Rendering the card of a verifiably linked
+    user whose tag key is a traversal string opens no file outside the card assets and
+    none named after the tag."""
     image = pytest.importorskip("image")
     if not image.PIL_AVAILABLE:
         pytest.skip("Pillow not installed")
-    from PIL import Image
-    sticker_dir = tmp_path / "stickers"
-    sticker_dir.mkdir()
-    Image.new("RGBA", (8, 8), (255, 0, 0, 255)).save(sticker_dir / "good.png")
-    Image.new("RGBA", (8, 8), (0, 0, 255, 255)).save(tmp_path / "evil.png")
-    monkeypatch.setattr(image, "STICKER_DIR", str(sticker_dir))
+    from models import TagDefinition, User, UserTag
+    from routers import cards as cards_router
+    (tmp_path / "evil.png").write_bytes(b"not an image")
+    evil_key = os.path.relpath(tmp_path / "evil", os.path.join(image._ASSETS_DIR, "stickers"))
+    db.add(Player(id=1001, name="Victim", is_active=True))
+    user = User(username="tagged", email="t@example.com", password_hash="x", tokens=0,
+                steam_id=str(76561197960265728 + 1001), player_id=1001)
+    db.add(user)
+    td = TagDefinition(key=evil_key, label="Evil")
+    db.add(td)
+    db.flush()
+    db.add(UserTag(user_id=user.id, tag_id=td.id))
+    card = Card(owner_id=user.id, player_id=1001, card_type="common", is_active=False, generation=1)
+    db.add(card)
+    db.commit()
     opened = []
     real_open = image.Image.open
 
@@ -1208,25 +1223,11 @@ def _sticker_setup(tmp_path, monkeypatch):
         return real_open(path, *a, **kw)
 
     monkeypatch.setattr(image.Image, "open", _spy_open)
-    base = Image.new("RGBA", (200, 200), (0, 0, 0, 0))
-    return image, base, opened
-
-
-def test_apply_stickers_applies_sticker_inside_sticker_dir(tmp_path, monkeypatch):
-    """_apply_stickers still applies a sticker whose file is inside STICKER_DIR."""
-    image, base, opened = _sticker_setup(tmp_path, monkeypatch)
-    out = image._apply_stickers(base, ["good", "missing"])
-    assert out.getpixel((image.STICKER_START_X + 5, image.STICKER_Y + 5)) == (255, 0, 0, 255)
-    assert opened == [str(tmp_path / "stickers" / "good.png")]
-
-
-def test_apply_stickers_skips_path_outside_sticker_dir(tmp_path, monkeypatch):
-    """_apply_stickers skips a key whose path resolves outside STICKER_DIR (e.g. '../x') without opening it."""
-    image, base, opened = _sticker_setup(tmp_path, monkeypatch)
-    assert (tmp_path / "stickers" / ".." / "evil.png").exists()
-    out = image._apply_stickers(base, ["../evil"])
-    assert opened == []
-    assert out.getpixel((image.STICKER_START_X + 5, image.STICKER_Y + 5)) == (0, 0, 0, 0)
+    resp = cards_router.get_card_image(card.id, db=db)
+    assert resp.status_code == 200 and resp.media_type == "image/png"
+    assets = os.path.abspath(image._ASSETS_DIR)
+    assert opened and all(p.startswith(assets + os.sep) for p in opened), opened
+    assert not [p for p in opened if "evil" in p or os.sep + "stickers" + os.sep in p]
 
 
 def _seed_season(db):

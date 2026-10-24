@@ -119,8 +119,11 @@ The admin tab includes a "Player Pool" section with:
 - "Add Player" button — opens a popup to enter a single OpenDota ID
 - "Bulk Add" button — opens a popup to paste a CSV of IDs
 - "Remove Selected" button — disabled until at least one checkbox is checked; shows a confirmation popup with selected player names before calling `POST /admin/players/remove`
+- "Mark champions" and "Add accolade" buttons next to "Add" (issue #50), a "Champions and accolades"
+  table under the pool, and each pool player's titles as chips beside the name (pips at phone width).
+  See [Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md).
 
-Functions in `frontend/app-admin.js`:
+Functions in `frontend/app-admin-players.js`:
 - `loadPlayerPool()` — `GET /admin/players`, renders table
 - `addPlayer(playerId)` — `POST /admin/players`
 - `bulkAddPlayers(csv)` — `POST /admin/players/bulk`

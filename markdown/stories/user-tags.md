@@ -3,6 +3,9 @@
 ## Card Stickers and Leaderboard Badges
 
 ### See Tag Stickers on a Player Card
+*Superseded by issue #217: tags show as symbols down the card's left edge, not stickers in the
+card PNG. See "Tags Read as Symbols on Cards" in [cards.md](cards.md).*
+
 **User story**
 As a fantasy user, I want to see sticker badges on cards belonging to tagged users (e.g.
 casters, season winners) so that I can recognise notable personalities in my roster.
@@ -65,14 +68,15 @@ know what badges will appear on my cards and leaderboard entry.
 - Tags are loaded from `GET /profile/{user_id}` alongside the existing profile data
 - The tag display updates immediately when the profile is loaded; no extra button press required
 
-### Understand the Link Between Your Player and Tag Stickers
+### Understand the Link Between Your Player and Your Tags on Cards
 **User story**
-As a user, I want to understand that linking my player is what connects my tags to my card
-images so that I know what action to take to make my stickers appear.
+As a user, I want to understand that linking my player is what connects my tags to my cards
+(as tag symbols since #217) so that I know what action to take to make my tags appear on them.
 
 **Acceptance criteria**
 - The tags column of the Profile tab's **Player identity** panel includes a short note: "Link
-  your player so your tags appear as stickers on your cards and on the leaderboard." (issue #188)
+  your player so your tags appear as symbols on your cards and on the leaderboard." (issue #188;
+  "stickers" until #217)
 - The note is only visible when the user has at least one tag but no player linked (the
   actionable gap state); it is hidden otherwise
 - No changes to any other page or workflow
@@ -88,7 +92,7 @@ As an approved streamer with a website account, I want the Caster tag to appear 
 **Acceptance criteria**
 - **When it's granted:** a website account whose `twitch_account_id` equals an approved channel id (`twitch_channels.approved_channels(db)`) gets the `caster` tag with `source = "caster_sync"` and `granted_by = NULL`.
 - **When it runs:** within the same request after the channel is approved, and after the user connects Twitch (both the "connected" and the "merge_ready" outcome of `connect_account`, which is where a soft account's Twitch id moves to the website account; the later merge keeps the tag).
-- **Display:** the tag shows wherever tags already show: leaderboard chips, card stickers and the Profile identity panel (#188).
+- **Display:** the tag shows wherever tags already show: leaderboard chips, card tag symbols (card stickers before #217) and the Profile identity panel (#188).
 - **Already tagged:** a user who already has the Caster tag (from an admin or an earlier sync) gets no second row, and no audit entry is written.
 - **Audit:** each new automatic grant writes `caster_tag_auto_grant` (actor `system`, `detail` = `user_id=… channel=…`). The channel id is an internal id, not personal data.
 - **Soft accounts:** a soft account (`account_type = "twitch"`) is never tagged, even when its Twitch id matches.

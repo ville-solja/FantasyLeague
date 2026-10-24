@@ -60,7 +60,7 @@ from tests.test_issue_159_flicker_free_tab_switching import _node
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
 GLOBALS_JS = os.path.join(FRONTEND_DIR, "app-globals.js")
-PLAYERS_JS = os.path.join(FRONTEND_DIR, "app-players.js")
+PLAYERS_JS = os.path.join(FRONTEND_DIR, "app-player-popup.js")  # popup moved here in #208
 CARDS_JS = os.path.join(FRONTEND_DIR, "app-cards.js")
 STYLE_CSS = os.path.join(FRONTEND_DIR, "style.css")
 TOKENS_CSS = os.path.join(FRONTEND_DIR, "colors_and_type.css")
@@ -152,7 +152,7 @@ class TestStorePlayerRankMedal:
     def test_run_migrations_adds_rank_columns_to_existing_players_table(self):
         """A numbered migration adds the three rank columns to an existing `players` table."""
         from migrate import MIGRATIONS, run_migrations
-        assert "040_players_rank" in [m for m, _ in MIGRATIONS]
+        assert "042_players_rank" in [m for m, _ in MIGRATIONS]
         engine = create_engine("sqlite:///:memory:")
         with engine.connect() as conn:
             conn.execute(text("CREATE TABLE players (id INTEGER PRIMARY KEY, name TEXT, avatar_url TEXT, "
@@ -366,7 +366,7 @@ class TestPlayerPopupMedal:
         assert "★" not in out["h"]
 
     def test_popup_header_includes_rank_medal(self):
-        """The popup header in app-players.js renders the medal badge next to the team name."""
+        """The popup header in app-player-popup.js renders the medal badge next to the team name."""
         body = _fn_body(_read(PLAYERS_JS), "openPlayerModal")
         call = "rankMedalHtml(p.rank_tier, p.leaderboard_rank, p.rank_fetched_at)"
         assert call in body

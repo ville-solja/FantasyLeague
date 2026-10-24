@@ -46,7 +46,7 @@ The link code from `POST /twitch/link-code` is now drawn with `secrets.choice`, 
 
 `_safeUrl(u)` in `frontend/app-globals.js` returns `u` only when it starts with `http://` or `https://`, otherwise `""`. `_escHtml` now also escapes `'`.
 
-- `app-players.js`: `bio_text` (rendered with `white-space: pre-wrap` so line breaks survive), hero names, every `facts.*` value, player and team names in the tables, player modal and team modal, schedule `time`, `stream_label`, unlinked team labels and `data.error` go through `_escHtml`. Avatar, stream and hero-icon URLs go through `_escHtml(_safeUrl(...))`; avatars set via `.src` go through `_safeUrl`.
+- `app-players.js` and `app-player-popup.js` (the player modal, moved there in issue 208): `bio_text` (rendered with `white-space: pre-wrap` so line breaks survive), hero names, every `facts.*` value, player and team names in the tables, player modal and team modal, schedule `time`, `stream_label`, unlinked team labels and `data.error` go through `_escHtml`. Avatar, stream and hero-icon URLs go through `_escHtml(_safeUrl(...))`; avatars set via `.src` go through `_safeUrl`.
 - `app-roster.js`: the card `alt` escapes the player name. The image `onerror` fallback no longer builds HTML inline; it calls `_cardImgFallback(this)`, which builds the placeholder with `textContent` from a `data-player-name` attribute.
 - `app-admin-ingest.js`: audit log `action` and `detail`.
 
@@ -79,7 +79,7 @@ Static checks in the test file parse every `${...}` in these files and fail if a
 ## Hardening
 
 - `frontend/index.html` loads `lucide@0.453.0` and `alpinejs@3.17.4` (the version `3.x.x` resolved to on 2026-09-27) with `integrity="sha384-…"` and `crossorigin="anonymous"`. To upgrade, change the version and recompute the hash with `curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A`.
-- `TagBody.key` must match `^[a-z0-9][a-z0-9_-]*$`. `_apply_stickers` in `backend/image.py` resolves each sticker path and skips any outside `STICKER_DIR`.
+- `TagBody.key` must match `^[a-z0-9][a-z0-9_-]*$`. `_apply_stickers` in `backend/image.py` resolved each sticker path and skipped any outside `STICKER_DIR`. Issue #217 removed the stickers and `_apply_stickers`; the card image route no longer reads tags or opens files named after them.
 - `POST /admin/season/reset` returns 500 and deletes nothing when `backup_sqlite_db()` returns `None`.
 - `backup_sqlite_db()` creates the backup file with mode `0600`; `scripts/backup-db.sh` copies under `umask 077` and runs `chmod 600`.
 

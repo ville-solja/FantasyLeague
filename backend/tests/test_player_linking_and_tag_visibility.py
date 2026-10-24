@@ -48,6 +48,7 @@ def db():
 # ---------------------------------------------------------------------------
 
 def _make_user(db, username="player1", player_id=None):
+    """A linked player_id comes with a steam_id: only Steam links a player (issue #209)."""
     from models import User
     user = User(
         username=username,
@@ -56,6 +57,7 @@ def _make_user(db, username="player1", player_id=None):
         is_admin=False,
         tokens=0,
         player_id=player_id,
+        steam_id=str(76561197960265728 + player_id) if player_id else None,
     )
     db.add(user)
     db.flush()
@@ -90,16 +92,18 @@ def _build_profile_response(db, user_id):
     if user is None:
         return None  # caller treats None as 404
 
+    import player_links
+    player_id = player_links.verified_player_id(user)  # issue #209
     result = {
         "id": user.id,
         "username": user.username,
-        "player_id": user.player_id,
+        "player_id": player_id,
         "player_name": None,
         "player_avatar_url": None,
         "twitch_linked": bool(user.twitch_user_id) if hasattr(user, "twitch_user_id") else False,
     }
-    if user.player_id:
-        player = db.get(Player, user.player_id)
+    if player_id:
+        player = db.get(Player, player_id)
         if player:
             result["player_name"] = player.name
             result["player_avatar_url"] = player.avatar_url

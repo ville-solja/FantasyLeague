@@ -32,8 +32,11 @@ The check is the `require_recent_reauth` dependency (`backend/deps.py`), added a
 the endpoint functions themselves are unchanged. In the admin panel these calls go through
 `adminFetch()` (`frontend/app-admin.js`), which shows an in-page password prompt on
 `reauth_required`, calls `POST /reauth`, and retries the action once. An admin without a password
-(created through Steam) gets **Confirm with Steam** instead, a Steam round trip
-(`GET /auth/steam/start?purpose=reauth&return_tab=admin`) after which the action is repeated. All
+(created through Steam) gets **Confirm with Steam** instead: a Steam check in a popup
+(`GET /auth/steam/start?purpose=reauth&return_tab=popup`, #213) after which the action retries by itself
+and open dialogs are kept. If the popup is blocked, **Continue on this page** uses the full-page round trip
+(`return_tab=admin`), after which the action is repeated. Admins with both a password and Steam can choose
+**Confirm with Steam instead**. All
 other admin endpoints work without re-authentication.
 
 ### Typed confirmation
@@ -120,6 +123,9 @@ id (issue #150), newest first: `timestamp`, `player_id`, `superseded_user_id`,
 `player_id_claim_superseded` audit rows. Shown under User Management as **Superseded player id
 claims**. See `reference/steam-login.md`.
 
+### Twitch sub-tab and pending approvals badge (issue 214)
+Approved streamers, Twitch status and Twitch collection merges live in their own **Twitch** admin sub-tab, approvals first. The sub-tab button and the top-level Admin tab show the number of channels waiting for approval (`pending` from `GET /admin/twitch/channels`), fetched when an admin loads the page and after Approve or Reject; no badge at zero. See `reference/admin-enhancements.md`.
+
 ---
 
 ## Token Distribution: Redeemable Codes
@@ -172,6 +178,9 @@ Recalculates fantasy points for every `PlayerMatchStats` row using the current w
 ---
 
 ## Match & Week Management
+
+### `GET /admin/matches` (series fields, issue 214)
+Each row also carries `series_key`, `series_team1_id`, `series_team2_id` (the schedule-feed series the match belongs to and its teams in feed order), `division` (`div1`/`div2` from the feed, else from the league name), `league_name` and `stream_url` (the series' stream link). The series fields are null for matches outside the feed or when the feed can't be read; one `schedule.get_schedule` pass serves the whole list. The Matches tab groups games by series with them. See `reference/admin-enhancements.md`.
 
 ### `GET /admin/matches` (scoring week fields)
 Besides the match, MVP, timing and parse fields, each row carries `week_override_id`, `scoring_week_id`, `scoring_week_label` and `scoring_week_source` (`override` or `time`; all null when no week contains the match; an override pointing to a deleted week gives source `override` with a null id and label), and `time_week_id` / `time_week_label` (the week containing `start_time`, shown by the picker's "By time" option). See [Weeks › Week Override](weeks.md#week-override).
@@ -297,7 +306,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_force_logout` | Admin ended every session of a user via `POST /users/{user_id}/force-logout` |
 | `admin_seeded_from_env` | A verified Steam sign-in, sign-up or link with an ID in `SEED_ADMIN_STEAM_IDS` made the account an admin (issue #150; written only for Steam seeding, not for `SEED_ADMIN_USERNAME` password seeding) |
 | `steam_linked` | A user linked Steam on Profile; `player_id` became the verified Steam32 id (issue #150; the Steam id is never in `detail`) |
-| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150) |
+| `steam_unlinked` | A user unlinked Steam via `POST /profile/steam/unlink` (issue #150); the player link is cleared too, and `detail` adds `player_id_cleared=1` when one was set (issue #209) |
+| `player_links_cleared` | Migration 041 cleared typed-in player ids (no `steam_id`) on upgrade; one entry, `detail` is `migration=041 count=N`, none when N is 0 (issue #209) |
 | `own_player_card_granted` | A Steam-verified league player got their own player card, or it was recorded as already owned (issue #188; `detail` has `user_id=`, `player_id=`, `card_id=` and `outcome=`) |
 | `player_id_claim_superseded` | A Steam-verified account took a player id another account had self-reported; that account's `player_id` was cleared (`detail` is `user_id=<cleared> verified_user_id=<verified> player_id=<id>`; issue #150) |
 | `admin_reauth` | An admin confirmed their password via `POST /reauth`, or their Steam account via the Steam re-auth round trip (`detail` is `ok` or `failed: …`; Steam adds `method=steam`) |
@@ -352,6 +362,10 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
 | `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_champions_set` | Admin saved a season and division's champion set (Mark champions); detail has added and removed counts |
+| `admin_accolade_added` | Admin added one or more season accolades (also written once per season by `backfill_played.py`) |
+| `admin_accolade_updated` | Admin edited a season accolade |
+| `admin_accolade_removed` | Admin removed a season accolade |
 | `admin_db_backup` | Admin created a database backup from the admin panel (`detail` has the filename) |
 | `admin_db_backup_download` | Admin downloaded a database backup (`detail` has the filename) |
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
@@ -399,6 +413,7 @@ These features have dedicated reference documents:
 | Feature | Endpoints | Reference |
 |---|---|---|
 | Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
+| Player Name Lookup | `GET /admin/players/lookup?ids=…` (name preview for typed ids: pool, then OpenDota, cached 10 minutes; at most 50 ids) | `reference/admin-enhancements.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
 | League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
@@ -409,6 +424,7 @@ These features have dedicated reference documents:
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |

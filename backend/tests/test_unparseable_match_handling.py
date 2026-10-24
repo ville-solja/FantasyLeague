@@ -378,8 +378,8 @@ def test_get_player_unknown_player_returns_404(db):
 
 
 def test_frontend_player_popup_contains_partial_stats_and_not_scored_markers():
-    """Static check: frontend/app-players.js references 'Partial stats' and 'Not scored' and escapes via _escHtml."""
-    src = (FRONTEND_DIR / "app-players.js").read_text()
+    """Static check: the player popup (frontend/app-player-popup.js since issue 208) references 'Partial stats' and 'Not scored' and escapes via _escHtml."""
+    src = (FRONTEND_DIR / "app-player-popup.js").read_text()
     assert "Partial stats" in src
     assert "Not scored" in src
     assert "parse_status" in src

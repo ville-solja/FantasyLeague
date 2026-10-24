@@ -17,6 +17,10 @@ Each draw creates one card with a rarity rolled from configurable percentage wei
 
 **Rarity bonus** is a percentage multiplier applied to the card's total fantasy score after all other calculations. It is configurable via the weights `rarity_common`, `rarity_rare`, `rarity_epic`, `rarity_legendary`, which are percents (`rarity_rare = 1.0` means +1%). In code, `card_utils._load_weights` turns each into the fraction `mod_<type>` (weight / 100), and the multiplier is `1 + mod_<type>`.
 
+### Holo Legendaries
+
+A past season champion's Legendary can be drawn as **Holo** (issue #53). When a draw or a team draw creates a Legendary for a player with a champion accolade in a season other than the current one, it becomes Holo with probability `holo_chance` % (a weight, default 20; `0` turns Holo off), stored as `cards.is_holo`. A Holo card is a Legendary in every rule: `card_type` stays `"legendary"`, and points, modifiers, roster rules, `GET /deck` and team draws are unchanged. Only the art differs, and card responses add `is_holo`. Award winners who aren't champions never get Holo. Cards also show the player's accolade pips as an HTML overlay. See [Season Champions, Accolades and Holo Cards](../reference/season-winners-and-holo-cards.md).
+
 ## Drawing Cards
 
 - Costs **1 token** per draw.

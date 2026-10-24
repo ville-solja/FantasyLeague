@@ -1,7 +1,9 @@
 """Steam sign-in through Steam OpenID 2.0 (issue #150).
 
   GET  /auth/steam/start      purpose=login | link | reauth; store a one-time attempt,
-                              set the state cookie, redirect to steamcommunity.com
+                              set the state cookie, redirect to steamcommunity.com.
+                              reauth also takes return_tab=popup (issue 213): every
+                              redirect then ends on /steam-reauth-done.html?steam=<key>
   GET  /auth/steam/callback   check the assertion (every check below), then sign in,
                               start a sign-up, link, or mark a re-auth
   POST /auth/steam/signup     a new Steam player picks a display name; creates the account
@@ -72,7 +74,11 @@ _VALUE_MAX = 2048
 _QUERY_MAX = 8192
 
 PURPOSES = ("login", "link", "reauth")
-RETURN_TABS = ("profile", "admin")   # re-auth may only return to these tabs
+RETURN_TABS = ("profile", "admin")   # full-page re-auth may only return to these tabs
+# Issue 213: a re-auth in a popup window ends on a static page that tells the opener
+# the result. Accepted for purpose=reauth only; login and link never use it.
+POPUP = "popup"
+DONE_PAGE = "/steam-reauth-done.html"
 
 RATE_LIMIT_STEAM_CALLBACK = os.getenv("RATE_LIMIT_STEAM_CALLBACK", "10/minute")
 
@@ -125,8 +131,16 @@ def callback_url(base: str, state: str) -> str:
 
 
 def _redirect(tab: str, key: str) -> RedirectResponse:
-    """Back to the website with a message key the frontend maps to text."""
+    """Back to the website with a message key the frontend maps to text. A popup
+    re-auth goes to the done page instead, which posts the result to the opener."""
+    if tab == POPUP:
+        return RedirectResponse(f"{DONE_PAGE}?steam={key}", status_code=303)
     return RedirectResponse(f"/#{tab}?steam={key}", status_code=303)
+
+
+def _reauth_tab(value: str | None) -> str:
+    """A stored re-auth target as the allowlist's own constant (profile by default)."""
+    return next((t for t in RETURN_TABS + (POPUP,) if t == value), "profile")
 
 
 def steam32(steam64: str) -> int:
@@ -144,7 +158,10 @@ def start(request: Request, db, purpose: str, return_tab: str | None = None):
     if purpose not in PURPOSES:
         return JSONResponse({"detail": "Unknown purpose"}, status_code=400)
     # The allowlist's own constant, never the request's string, goes into the redirect.
-    tab = next((t for t in RETURN_TABS if t == return_tab), "profile")
+    if purpose == "reauth" and return_tab == POPUP:
+        tab = POPUP
+    else:
+        tab = next((t for t in RETURN_TABS if t == return_tab), "profile")
 
     user = None
     if purpose in ("link", "reauth"):
@@ -277,7 +294,8 @@ def verify_assertion(db, params: dict[str, str], expected_return_to: str) -> str
 # ---------------------------------------------------------------------------
 
 def _supersede_player_id_claims(db, user: User, player_id: int) -> None:
-    """Clear the same self-reported player id on other accounts (audited)."""
+    """Clear the same player id on other accounts (audited). Since migration 041 (#209)
+    only Steam-linked accounts hold a player id, so this catches leftovers only."""
     others = (db.query(User).filter(User.player_id == player_id, User.id != user.id).all())
     for other in others:
         other.player_id = None
@@ -356,10 +374,13 @@ def callback(request: Request, db):
     row = db.get(SteamLoginState, _hash(state))
     now = _now()
     if row is None or row.used_at is not None or row.expires_at < now:
-        return _fail(_redirect("login", "failed"), base, "unknown, used or expired state")
+        # A used or expired popup attempt still closes its popup with a result.
+        popup = row is not None and row.purpose == "reauth" and row.return_tab == POPUP
+        return _fail(_redirect(POPUP if popup else "login", "failed"), base,
+                     "unknown, used or expired state")
     row.used_at = now
     db.commit()
-    tab = {"login": "login", "link": "profile"}.get(row.purpose, row.return_tab or "profile")
+    tab = {"login": "login", "link": "profile"}.get(row.purpose) or _reauth_tab(row.return_tab)
 
     # 2. The assertion itself.
     try:
@@ -416,7 +437,7 @@ def _link(request: Request, db, row: SteamLoginState, steam64: str):
 
 
 def _reauth(request: Request, db, row: SteamLoginState, steam64: str):
-    tab = row.return_tab if row.return_tab in RETURN_TABS else "profile"
+    tab = _reauth_tab(row.return_tab)
     user = session_user_or_none(request, db)
     if user is None:
         return _redirect(tab, "no_session")
@@ -508,9 +529,14 @@ def unlink(db, current_user: dict) -> dict:
     if not user.password_hash:
         raise HTTPException(status_code=409,
                             detail="This account signs in only through Steam, so Steam can't be unlinked")
+    # Issue #209: the player link exists only through Steam, so it goes with it.
+    detail = f"user_id={user.id}"
+    if user.player_id is not None:
+        detail += " player_id_cleared=1"
     user.steam_id = None
+    user.player_id = None
     _audit(db, "steam_unlinked", actor_id=user.id, actor_username=user.username,
-           detail=f"user_id={user.id}")
+           detail=detail)
     db.commit()
     return {"steam_linked": False, "changed": True}
 
@@ -518,7 +544,7 @@ def unlink(db, current_user: dict) -> dict:
 @router.post("/profile/steam/unlink", dependencies=[Depends(login_mode.require_steam)])
 @limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
 def unlink_route(request: Request, current_user: dict = Depends(require_recent_player_reauth), db=Depends(get_db)):
-    """Unlink Steam (needs a recent check). The verified player id stays."""
+    """Unlink Steam (needs a recent check). The player link is cleared with it (#209)."""
     return unlink(db, current_user)
 
 

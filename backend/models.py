@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Float, Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
-from sqlalchemy import text
+from sqlalchemy import func, text
 from database import Base
 from scoring import SCORING_STATS
 
@@ -83,6 +83,8 @@ class Card(Base):
     is_active = Column(Boolean, default=False)
     generation = Column(Integer, default=1, nullable=False)
     slot_index = Column(Integer, nullable=True)
+    # Issue #53: a past champion's Legendary drawn as Holo (still card_type "legendary").
+    is_holo = Column(Boolean, default=False, nullable=False, server_default="0")
 
 
 _VALID_STAT_KEYS_LIST = list(SCORING_STATS) + ["deaths"]
@@ -243,6 +245,30 @@ class SeasonArchive(Base):
     points       = Column(Float, nullable=False)
     rank         = Column(Integer, nullable=False)
     archived_at  = Column(Integer, nullable=False)  # Unix timestamp
+
+
+class SeasonAccolade(Base):
+    """A season title (issues #50, #53, #105): a Div 1 / Div 2 champion, a season award
+    (most_points, best_average, best_match), the fantasy winner (a user) or one season
+    played. Season Reset never touches this table, and names are stored on the row, so
+    every reader works after the season's players, teams, cards or users are gone. See
+    accolades.py and markdown/features/reference/season-winners-and-holo-cards.md."""
+    __tablename__ = "season_accolades"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    season_label      = Column(String, nullable=False)
+    kind              = Column(String, nullable=False)   # champion | most_points | best_average | best_match | fantasy_winner | played
+    division          = Column(String, nullable=True)    # div1 | div2 (champion only)
+    team_name         = Column(String, nullable=True)    # denormalised (champion only)
+    player_account_id = Column(Integer, nullable=True, index=True)  # OpenDota account id
+    player_name       = Column(String, nullable=True)    # denormalised
+    user_id           = Column(Integer, nullable=True)   # fantasy_winner only; no FK (users may be deleted)
+    username          = Column(String, nullable=True)    # denormalised
+    value             = Column(Float, nullable=True)
+    match_id          = Column(Integer, nullable=True)   # best_match only
+    source            = Column(String, nullable=False)   # season_end | admin
+    created_at        = Column(Integer, nullable=True)
+    created_by        = Column(Integer, nullable=True)
 
 
 class PromoCode(Base):
@@ -648,3 +674,9 @@ Index('ix_match_bans_match_id',      MatchBan.match_id)
 Index('ix_matches_league_id',        Match.league_id)
 # Covering index for the readers' card_id -> (match_id, points) lookups.
 Index('ix_card_match_points_card_cover', CardMatchPoints.card_id, CardMatchPoints.match_id, CardMatchPoints.points)
+# Issue #50: one row per (season, kind, division, player, user). NULLs are distinct in a
+# SQLite unique index, so the nullable parts are compared through COALESCE.
+Index('ux_season_accolades_key', SeasonAccolade.season_label, SeasonAccolade.kind,
+      func.coalesce(SeasonAccolade.division, ''),
+      func.coalesce(SeasonAccolade.player_account_id, 0),
+      func.coalesce(SeasonAccolade.user_id, 0), unique=True)

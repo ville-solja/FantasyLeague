@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
-import login_mode
 import own_card
+import player_links
 import sessions
 from database import get_db
 from deps import _audit, get_current_user, is_admin_fresh
@@ -44,10 +44,6 @@ class UpdateUsernameBody(BaseModel):
     _username_chars = field_validator("username")(check_username)
 
 
-class UpdatePlayerIdBody(BaseModel):
-    player_id: int | None = None
-
-
 class ChangePasswordBody(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password:     str = Field(min_length=6, max_length=128)
@@ -79,7 +75,8 @@ def me(db=Depends(get_db), current_user: dict = Depends(get_current_user)):
             "own_card_grant": own_card.pending_popup(db, user)}
 
 
-@router.get("/profile/{user_id}")
+# The int convertor keeps PUT /profile/player-id (removed in #209) a 404, not a 405.
+@router.get("/profile/{user_id:int}")
 def get_profile(user_id: int, db=Depends(get_db),
                  current_user: dict = Depends(get_current_user)):
     user = db.get(User, user_id)
@@ -90,18 +87,19 @@ def get_profile(user_id: int, db=Depends(get_db),
     # admins; others see the name, and the avatar only for a Steam-verified id.
     privileged = (user.id == current_user["user_id"]
                   or is_admin_fresh(db, current_user["user_id"]))
-    verified = bool(user.steam_id and user.player_id)
+    # Issue #209: only a Steam-verified link counts; a stale player_id is never shown.
+    player_id = player_links.verified_player_id(user)
     result = {"id": user.id, "username": user.username, "is_admin": bool(user.is_admin),
-              "player_name": None, "player_avatar_url": None, "player_verified": verified,
+              "player_name": None, "player_avatar_url": None,
+              "player_verified": player_id is not None,
               "twitch_linked": bool(user.twitch_user_id)}
     if privileged:
-        result["player_id"] = user.player_id
-    if user.player_id:
-        player = db.get(Player, user.player_id)
+        result["player_id"] = player_id
+    if player_id:
+        player = db.get(Player, player_id)
         if player:
             result["player_name"] = player.name
-            if privileged or verified:
-                result["player_avatar_url"] = player.avatar_url
+            result["player_avatar_url"] = player.avatar_url
             # Issue #188: the player's latest team, for the Player identity panel.
             team = db.execute(text("""
                 SELECT t.name FROM player_match_stats s
@@ -169,35 +167,6 @@ def update_username(body: UpdateUsernameBody, db=Depends(get_db),
 def update_username_route(request: Request, body: UpdateUsernameBody, db=Depends(get_db),
                           current_user: dict = Depends(get_current_user)):
     return update_username(body, db, current_user)
-
-
-def update_player_id(body: UpdatePlayerIdBody, db=Depends(get_db), current_user: dict = Depends(get_current_user)):
-    # Issue #188: where Steam is available, only Steam sets the player id.
-    if login_mode.steam_enabled():
-        raise HTTPException(status_code=410, detail="Link Steam to verify your player id")
-    user_id = current_user["user_id"]
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.steam_id:
-        # Issue #150: a linked Steam account sets the verified player id.
-        raise HTTPException(status_code=409, detail="Your player id is verified through Steam")
-    user.player_id = body.player_id
-    db.commit()
-    result = {"player_id": body.player_id, "player_name": None, "player_avatar_url": None}
-    if body.player_id:
-        player = db.get(Player, body.player_id)
-        if player:
-            result["player_name"] = player.name
-            result["player_avatar_url"] = player.avatar_url
-    return result
-
-
-@router.put("/profile/player-id")
-@limiter.limit(RATE_LIMIT_USER_ACTION, key_func=key_by_user_or_ip)
-def update_player_id_route(request: Request, body: UpdatePlayerIdBody, db=Depends(get_db),
-                           current_user: dict = Depends(get_current_user)):
-    return update_player_id(body, db, current_user)
 
 
 def own_card_grant_seen(db=Depends(get_db), current_user: dict = Depends(get_current_user)):

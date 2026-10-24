@@ -1120,8 +1120,8 @@ class TestLinkSteamToExistingAccount:
         assert _user(web, holder).steam_id == _STEAM64
         assert "This Steam account is linked to another Kana Cards account" in _read("app-auth.js")
 
-    def test_steam_unlink_clears_steam_id_keeps_player_id(self, web, mode):
-        """AC: POST /profile/steam/unlink with a recent check clears steam_id, keeps player_id and audits steam_unlinked."""
+    def test_steam_unlink_clears_steam_id_and_player_id(self, web, mode):
+        """AC: POST /profile/steam/unlink with a recent check clears steam_id and (issue #209) player_id, and audits steam_unlinked."""
         from models import AuditLog
         mode("both")
         uid = web.add_user("alice", steam_id=_STEAM64, player_id=_STEAM32)
@@ -1129,7 +1129,7 @@ class TestLinkSteamToExistingAccount:
         resp = client.post("/profile/steam/unlink")
         assert resp.status_code == 200 and resp.json()["changed"] is True
         user = _user(web, uid)
-        assert user.steam_id is None and user.player_id == _STEAM32
+        assert user.steam_id is None and user.player_id is None
         assert len(web.rows(AuditLog, action="steam_unlinked")) == 1
 
     def test_steam_unlink_requires_recent_reauth(self, web, mode):
@@ -1152,31 +1152,22 @@ class TestLinkSteamToExistingAccount:
         assert resp.status_code == 409
         assert _user_by_name(web, "steamonly").steam_id == _STEAM64
 
-    def test_update_player_id_409_when_steam_linked(self, db):
-        """AC: PUT /profile/player-id answers 409 for an account with a linked Steam id."""
-        from fastapi import HTTPException
+    def test_steam_linked_player_id_cannot_be_overwritten(self, web, mode):
+        """AC: a Steam-verified player id can't be replaced by a typed-in one (issue #209: the PUT route is gone, 404)."""
         from models import User
-        from routers.profile import UpdatePlayerIdBody, update_player_id
-        user = User(username="alice", steam_id=_STEAM64, player_id=_STEAM32, tokens=0)
-        db.add(user)
-        db.commit()
-        with pytest.raises(HTTPException) as exc:
-            update_player_id(UpdatePlayerIdBody(player_id=1), db=db, current_user=_acting(user))
-        assert exc.value.status_code == 409
-        db.refresh(user)
-        assert user.player_id == _STEAM32
+        mode("both")
+        uid = web.add_user("alice", steam_id=_STEAM64, player_id=_STEAM32)
+        client = web.login("alice")
+        assert client.put("/profile/player-id", json={"player_id": 1}).status_code == 404
+        assert _user(web, uid).player_id == _STEAM32
 
-    def test_update_player_id_still_works_without_steam(self, db):
-        """AC: accounts without Steam can still set player_id via PUT /profile/player-id as today."""
-        from models import User
-        from routers.profile import UpdatePlayerIdBody, update_player_id
-        user = User(username="alice", tokens=0)
-        db.add(user)
-        db.commit()
-        result = update_player_id(UpdatePlayerIdBody(player_id=4242), db=db, current_user=_acting(user))
-        assert result["player_id"] == 4242
-        db.refresh(user)
-        assert user.player_id == 4242
+    def test_accounts_without_steam_cannot_type_in_player_id(self, web, mode):
+        """AC (changed by issue #209): accounts without Steam can no longer set player_id; PUT /profile/player-id answers 404."""
+        mode("password")
+        uid = web.add_user("alice")
+        client = web.login("alice")
+        assert client.put("/profile/player-id", json={"player_id": 4242}).status_code == 404
+        assert _user(web, uid).player_id is None
 
     def test_profile_s17_reminder_for_password_players_without_steam(self):
         """AC: from the start of S17 Profile shows "Link Steam now. Password sign-in will end in a later update." to password players without Steam."""

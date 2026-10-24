@@ -65,7 +65,7 @@ As the operator, I want third-party scripts pinned and local files protected so 
 
 **Acceptance criteria**
 - Alpine.js is loaded from an exact version, and both CDN scripts carry `integrity` and `crossorigin="anonymous"`
-- Tag keys must match `^[a-z0-9][a-z0-9_-]*$` when created, and `_apply_stickers` skips any path that resolves outside `STICKER_DIR`
+- Tag keys must match `^[a-z0-9][a-z0-9_-]*$` when created, and `_apply_stickers` skips any path that resolves outside `STICKER_DIR` (stickers retired in #217: no file is named after a tag any more)
 - `POST /admin/season/reset` aborts with 500 and deletes nothing when `backup_sqlite_db()` returns `None`
 - Backup files are written with mode `0600`
 
@@ -199,7 +199,7 @@ As the operator, I want every write route a player can reach to carry an explici
 
 **Acceptance criteria**
 - These routes get a per-user limit `RATE_LIMIT_USER_ACTION` (default `60/minute`):
-  - `PUT /profile/username`, `PUT /profile/player-id`, `PUT /profile/password`
+  - `PUT /profile/username`, `PUT /profile/player-id` *(removed in #209)*, `PUT /profile/password`
   - `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted`
   - `POST /claim-events`, `POST /notifications/{notification_id}/dismiss`
   - `DELETE /sessions/{session_id}`, `POST /logout-everywhere`

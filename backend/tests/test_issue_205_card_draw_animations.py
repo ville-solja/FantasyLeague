@@ -486,35 +486,70 @@ class TestDrawFromTheDeck:
         assert out["afterDecode"] == 1 and out["firstCls"] == "draw-flight"
 
     def test_draw_card_flight_lifts_travels_flips_from_deck_to_modal_card(self):
-        """Node harness: _playDrawFlight runs three animate() calls (lift, travel, flip) on a .draw-flight clone starting at #drawDeck's rect and ending at the modal card's rect; the clone is removed afterwards and the rarity burst starts at flip time."""
+        """Node harness: _playDrawFlight moves a .draw-flight clone from #drawDeck's rect to the modal card's rect in ONE animation (lift then travel, no stop between them), then flips its inner layer, starting 120 ms before the card arrives; the clone is removed afterwards and the rarity burst starts at flip time."""
         out = _run("""
   drawCard();
   await advance(160);
   out.inFlight = flights().length;
   out.frontFace = flights().length ? flights()[0].children[0].children[0].children[0].className : null;
   out.backFace = flights().length ? flights()[0].children[0].children[1].className : null;
+  out.backFont = flights().length ? flights()[0].children[0].children[1].style.fontSize : null;
   await advance(3000);
-  out.anims = ANIMS.map(a => ({ cls: a.cls, duration: a.opts.duration, burst: a.burst, style: a.style,
-                                first: a.keyframes[0].transform, last: a.keyframes[a.keyframes.length - 1].transform }));
+  out.anims = ANIMS.map(a => ({ cls: a.cls, duration: a.opts.duration, easing: a.opts.easing, burst: a.burst,
+                                style: a.style, at: a.at, frames: a.keyframes.map(k => [k.transform, k.offset]) }));
   out.afterFlight = flights().length;
   out.burstClasses = els.revealDrawBurst.className;
 """)
         assert out["inFlight"] == 1
         assert out["frontFace"] == "draw-flight-img"
         assert "card-back" in out["backFace"].split()
-        lift, travel, flip = out["anims"]
-        assert [a["cls"] for a in out["anims"]] == ["draw-flight", "draw-flight", "draw-flight-inner"]
-        assert [a["duration"] for a in out["anims"]] == [220, 460, 520]
-        # The clone sits at the modal card's rect; the lift starts at the deck's rect.
-        assert lift["style"] == {"left": "540px", "top": "200px", "width": "200px", "height": "283px"}
-        assert lift["first"].startswith("translate(460px, -50px) scale(0.44, 0.44")
-        assert "rotate(-3deg)" in lift["last"] and lift["last"] == travel["first"]
-        assert travel["last"] == "none"
-        assert flip["first"] == "rotateY(180deg)" and flip["last"].startswith("rotateY(0deg)")
+        move, flip = out["anims"]
+        assert [a["cls"] for a in out["anims"]] == ["draw-flight", "draw-flight-inner"]
+        assert [a["duration"] for a in out["anims"]] == [680, 520]
+        # The clone sits at the modal card's rect; the move starts at the deck's rect,
+        # passes the lifted pose at the lift's share of the time and ends in place.
+        assert move["style"] == {"left": "540px", "top": "200px", "width": "200px", "height": "283px"}
+        (f0, o0), (f1, o1), (f2, o2) = move["frames"]
+        assert f0.startswith("translate(460px, -50px) scale(0.44, 0.44")
+        assert "rotate(-3deg)" in f1 and abs(o1 - 220 / 680) < 1e-9
+        assert f2 == "none" and o0 == 0 and o2 == 1
+        # One easing over the whole move: it doesn't decelerate to a stop after the lift.
+        assert move["easing"] == "cubic-bezier(0.45, 0, 0.2, 1)"
+        # The flip overlaps the end of the move by 120 ms.
+        assert flip["at"] - move["at"] == 680 - 120
+        assert flip["frames"][0][0] == "rotateY(180deg)" and flip["frames"][-1][0].startswith("rotateY(0deg)")
         # The burst starts at the flip, not before.
-        assert [a["burst"] for a in out["anims"]] == [False, False, True]
+        assert [a["burst"] for a in out["anims"]] == [False, True]
         assert "reveal-draw-burst--rarity-epic" in out["burstClasses"] or out["burstClasses"] == ""
         assert out["afterFlight"] == 0
+        # The flying card's back is drawn at a larger em base, so scaled down to the
+        # deck it matches the deck card's pattern (16px base × 200 / 88).
+        assert out["backFont"] == f"{16 * 200 / 88:.2f}px"
+
+    def test_reveal_card_image_hidden_while_entering(self):
+        """The reveal's own card image (which sets visibility: visible on itself) is hidden while the reveal is entering, so the real card doesn't show at its resting place before the flying card has arrived and flipped."""
+        css = _read(STYLE_CSS)
+        body = " ".join(_rule(css, ".reveal-overlay--entering .reveal-img-wrap .reveal-card-img"))
+        assert "visibility: hidden" in body
+        # It must come after the base rule that makes the image visible, to win.
+        assert css.index(".reveal-overlay--entering .reveal-img-wrap .reveal-card-img") > css.index(".reveal-img-wrap .reveal-card-img {")
+
+    def test_reveal_card_image_never_forced_visible_inline(self):
+        """app-cards.js never sets the reveal image's inline visibility to "visible": an inline value would override the entering rule and show the real card behind the flying card while it flips. Once decoded, the inline value is cleared so the stylesheet decides."""
+        js = _read(CARDS_JS)
+        assert 'style.visibility = "visible"' not in js
+        body = _fn_body(js, "showCard")
+        assert 'img.style.visibility = "";' in body
+
+    def test_card_back_pattern_scales_with_the_card(self):
+        """The card back's border, cross-hatch and emblem are sized in em from a 16px base, so the flying clone keeps the deck card's proportions as it grows (no px lengths that would change shape mid-flight)."""
+        css = _read(STYLE_CSS)
+        base = _rule(css, ".card-back")[0]
+        assert "font-size: 16px" in base
+        assert "0.125em solid" in base and "transparent 0.125em 0.75em" in base
+        assert not re.search(r"\b\d+px\b", base.replace("font-size: 16px", ""))
+        before = " ".join(_rule(css, ".card-back::before"))
+        assert "0.1875em solid" in before and "3px" not in before
 
     def test_draw_card_reveal_details_fade_in_after_flip(self):
         """Node harness: after the flip, showReveal shows rarity label, destination ("Added to active roster" / "Added to bench"), Reroll and Continue with the entering fade-in; the finished modal matches today's reveal."""
@@ -571,7 +606,7 @@ class TestDrawFromTheDeck:
         assert out["stirAtStart"] is True and out["stirAfter"] is False
         assert out["pickerHidden"] is True
         assert out["posts"] == ["POST /draw/booster/4"]
-        assert out["anims"] == ["draw-flight", "draw-flight", "draw-flight-inner"]
+        assert out["anims"] == ["draw-flight", "draw-flight-inner"]
         assert out["teamId"] == 4 and out["shown"] is True and out["inFlight"] is False
 
     @pytest.mark.parametrize("draw, message", [
@@ -615,9 +650,10 @@ class TestDrawFromTheDeck:
         assert out["at2990"] == [0, True]
         assert out["at3010"] == [1, False]
         assert out["face"] == ["draw-flight-rarity draw-flight-rarity--epic", "EPIC"]
-        assert out["anims"] == ["draw-flight", "draw-flight", "draw-flight-inner"]
+        assert out["anims"] == ["draw-flight", "draw-flight-inner"]
         assert out["placeholder"] == ["flex", "EPIC"] and out["img"] == "none"
-        assert out["loaded"] == ["", "visible", "none"]
+        # Shown: the inline visibility is cleared and the stylesheet makes the image visible.
+        assert out["loaded"] == ["", "", "none"]
 
     def test_draw_card_image_error_shows_rarity_fallback(self):
         """Node harness: an image error still plays the flight and the reveal shows today's rarity fallback text instead of the PNG."""
@@ -632,7 +668,7 @@ class TestDrawFromTheDeck:
   out.shown = shown();
 """, img="error")
         assert out["face"] == "draw-flight-rarity draw-flight-rarity--epic"
-        assert out["anims"] == ["draw-flight", "draw-flight", "draw-flight-inner"]
+        assert out["anims"] == ["draw-flight", "draw-flight-inner"]
         assert out["placeholder"] == ["flex", "EPIC"] and out["img"] == "none"
         assert out["shown"] is True
 
@@ -856,7 +892,7 @@ class TestDeckInMyTeam:
         assert out["label"] == "Draw another card"
         assert out["stirring"] is True
         assert out["landing"] == 0
-        assert out["nextFlight"] == ["draw-flight", "draw-flight", "draw-flight-inner"]
+        assert out["nextFlight"] == ["draw-flight", "draw-flight-inner"]
         assert out["posts"] == ["POST /draw", "POST /draw"]
         assert out["shown"] is True
 

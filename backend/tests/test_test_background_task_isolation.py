@@ -144,7 +144,8 @@ def test_lifespan_background_tasks_enabled_by_default(monkeypatch, tmp_path):
     # threading.Thread is replaced with a recorder so the real loops never
     # run in this process; the subprocess tests below start the real ones.
     started = _run_lifespan_recording_threads(monkeypatch, tmp_path)
-    assert sorted(started) == sorted(_LOOP_TARGETS)
+    # Plus the one-shot hero constants warm-up (issue 208), which is not a loop.
+    assert sorted(started) == sorted(_LOOP_TARGETS + ("warm_hero_maps",))
 
 
 def test_lifespan_background_tasks_disabled_when_false(monkeypatch, tmp_path):

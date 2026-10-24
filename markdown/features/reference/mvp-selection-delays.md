@@ -58,7 +58,7 @@ New table `match_timings` (model `MatchTiming`, created by `create_all`, no migr
 The age is measured against the caster's clock, so a skewed clock shifts it.
 
 ### Admin Matches table
-"Live seen", "Stats in" and "MVP picked" columns after Start Time show each timing as minutes after the match's `start_time` ("+2 min", "−1 min" when before the start), with the exact time in the cell's `title`. Unknown values show "—"; a dash under Live seen means live detection missed the match.
+Columns run Match, Teams, League, Start, MVP, Stream, Week, Scoring, Parse, then "Live seen", "Stats in" and "MVP picked" (issue 214). These three show each timing as minutes after the match's `start_time` ("+2 min", "−1 min" when before the start), with the exact time in the cell's `title` and under the row's **More** details. Unknown values show "—"; a dash under Live seen means live detection missed the match.
 
 ## Endpoints
 
