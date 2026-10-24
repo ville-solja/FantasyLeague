@@ -13,7 +13,7 @@ Scoring runs in fantasy weeks. A week locks a snapshot of each roster at its `st
 | 4 | **Separate events with parallel rosters** (the issue's second idea) | Each event has its own roster, so a user keeps several rosters at once and a card may be in more than one. | Large | The most flexible. | It changes the roster model, My Team, roster limits, locking, scoring, leaderboards, the Weekly Report and the Twitch panel. That's a drastic change for a few series a season. |
 | 5 | Per-match scoring with no windows | Score every match for the roster held at its start. | Large | No windows to manage. | It replaces the core of the game, and roster snapshots per match are expensive. |
 
-**Recommendation: option 3, stage weeks.** It keeps the week structure, which is the whole engine, and fixes the real problem: the lock moment and the set of scored matches follow the bracket, not the calendar. For the current season, if there isn't time to build it, option 1 (one long week) or option 2 (overrides) works today with no code. The plan below builds option 3.
+**Recommendation at planning time: option 3, stage weeks** (revised for season 16 under Feasibility below). It keeps the week structure, which is the whole engine, and fixes the real problem: the lock moment and the set of scored matches follow the bracket, not the calendar. For the current season, if there isn't time to build it, option 1 (one long week) or option 2 (overrides) works today with no code. The plan below builds option 3.
 
 Assumptions:
 - **Few series:** playoff series are few (semifinals and finals for two divisions, about six series), so assigning them by hand in Admin › Matches is enough. If the fixtures feed marks playoff series (a stage or round field), Step 1 records it as a later shortcut. I couldn't reach the feed or the schedule site from the planning environment.
@@ -31,12 +31,18 @@ Feasibility timeline: https://claude.ai/artifact/WofLAWSmtKkTrF4p79R2bt (private
 - **Off-week series:** three regular-season series were already played outside their league week. Week overrides (#193) handle them.
 
 ### Feasibility (timeline artifact)
-The projection is the top four by maps won, semifinals 1 v 4 and 2 v 3, and a final the week after. On that projection:
-- every playoff round fits inside a single Monday–Sunday fantasy week, so option 2 (ordinary weeks, no code) works this season;
-- the lower semifinals (projected to lock Tue 27 Oct) come before option 3 could realistically be live (about Fri 30 Oct, after develop, review, deploy and a rehearsal on test);
-- a mix is therefore feasible: the lower semifinals as an ordinary week, then stages from the upper semifinals (projected around 3 Nov).
+Organiser input (24 Oct): the first lower semifinal is Sun 25 Oct and the other about two weeks later, so even one round has a large calendar gap. With that:
+- **Per-round stages don't fit.** A "Lower semifinals" stage would lock on 25 Oct and keep that roster until about 9 Nov (15 days), much like option 1.
+- **Too late for this season:** option 3 also can't be live before the 25 Oct lock.
+- **Ordinary weeks fit this schedule:** each series scores in the fantasy week it's played, with that week's roster. The lower semifinals fall in the weeks of 19 Oct and 2 Nov; the week of 26 Oct has no lower playoff series.
+- **Operational needs this season:**
+  - fantasy weeks must exist until the last final;
+  - a series played outside its week needs an override (#193);
+  - the playoff matches must be ingested: if the organiser runs them under a different OpenDota league, that league must be added to Monitored leagues.
 
-Replace the projected dates in the artifact with the organiser's real ones before deciding.
+Upper dates are still guesses. Replace them in the artifact when known.
+
+**Revised recommendation (24 Oct): option 2 for season 16, no code.** Keep weekly fantasy weeks running through the playoffs, and check the three operational points above. Option 3 stays a plan for a later season. Building it is only worth it if a future bracket packs rounds into a few days, so that separate locks per round matter. If it is built, one stage per series (not per round) avoids long locks when a round is spread out.
 
 Resolves GitHub issue #222.
 
