@@ -46,6 +46,23 @@ The upper semifinal dates are still guesses. Replace them in the artifact when k
 
 **Revised recommendation (24 Oct): option 2 for season 16, no code.** Keep weekly fantasy weeks running through the playoffs, and check the three operational points above. Option 3 stays a plan for a later season. Building it is only worth it if a future bracket packs rounds into a few days, so that separate locks per round matter. If it is built, one stage per series (not per round) avoids long locks when a round is spread out.
 
+### Decision for season 16 (24 Oct 2026)
+The product owner chose ordinary weeks with no code change:
+- **Weekly to week 7:** the weekly schedule continues through week 7.
+- **Lower playoffs:** the lower semifinals and final have no league week. Each scores in the fantasy week it is played.
+- **LAN week:** the LAN (upper semifinals and grand final on 14 Nov) gets its own fantasy week.
+- **Idle cards:** bench substitution swaps out active cards whose players didn't play in a given week.
+
+Weeks created in Week Management:
+
+| Week | Dates |
+|---|---|
+| Week 7 | 26 Oct – 1 Nov |
+| Week 8 | 2–8 Nov |
+| Lan finals weekend | 9–15 Nov |
+
+They run back to back, so every date up to 15 Nov is covered. Stage weeks (option 3) are not built; the plan stays on file for a later season.
+
 Resolves GitHub issue #222.
 
 ## User Stories
