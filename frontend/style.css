@@ -2645,59 +2645,59 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
    The pip and chip symbols themselves are in SHARED STATES below.
    ============================================================ */
 
-/* Pips on a card (issues 50, 217, 218): HTML overlays over the card image's side
-   pillars (layout A), tag pips down the left pillar and accolade pips down the right,
-   from the portrait row to the pillar's bottom. Lengths are in --card-u, a hundredth
-   of the card's width: 1cqw where container queries work (the card wrappers declare
-   container-type), else the px value for the 180 px roster card and the 200 px card
-   viewer. On the 597 px card: pillars 24-104 and 492-572 px, rows 104-484 px. */
-.card-slot { width: 180px; --card-u: 1.8px; }
-.reveal-img-wrap { --card-u: 2px; }
-@supports (container-type: inline-size) {
-  .card-slot,
-  .reveal-img-wrap,
-  .draw-landing { container-type: inline-size; --card-u: 1cqw; }
+/* Tags and Accolades in the card viewer (issue 228): the pips left the card face, so
+   the viewer lists the linked user's tags and the player's accolades under the card,
+   one line each with its pip symbol (decorative) and its text. Lines wrap. */
+.reveal-details {
+  max-width: 280px;
+  margin: 0 auto var(--s-3);
+  text-align: left;
 }
-.card-slot .card-pips,
-.reveal-pips .card-pips {
-  position: absolute;
-  top: calc(var(--card-u) * 18.4);
-  right: calc(var(--card-u) * 4.4);
-  z-index: 3;
-  box-sizing: border-box;
-  padding: calc(var(--card-u) * 1.5);
-  max-height: calc(var(--card-u) * 62.6);
-  overflow: hidden;
-  font-size: calc(var(--card-u) * 5.9);
-  pointer-events: none;
+.reveal-details[hidden] { display: none; }
+.card-details-title {
+  margin: 0 0 var(--s-1);
+  font-family: var(--font-display);
+  font-size: var(--fs-xs);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  color: var(--fg-muted);
 }
-.card-pips .accolade-pips {
+.card-details-list {
+  display: flex;
   flex-direction: column;
-  flex-wrap: nowrap;
-  gap: calc(var(--card-u) * 2);
+  gap: var(--s-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.card-pips .accolade-pip { pointer-events: auto; }
-.card-slot .card-tag-pips,
-.reveal-pips .card-tag-pips {
-  position: absolute;
-  top: calc(var(--card-u) * 18.4);
-  left: calc(var(--card-u) * 4.2);
-  z-index: 3;
-  box-sizing: border-box;
-  padding: calc(var(--card-u) * 1.5);
-  max-height: calc(var(--card-u) * 62.6);
-  overflow: hidden;
-  font-size: calc(var(--card-u) * 5.9);
-  pointer-events: none;
+.card-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-snug);
+  color: var(--fg);
 }
-.card-tag-pips .tag-pips {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  gap: calc(var(--card-u) * 2);
+.card-detail-symbol {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  cursor: default;
 }
-.card-tag-pips .card-tag-pip { pointer-events: auto; }
-.reveal-accolades { margin: -4px 0 12px; }
-.reveal-accolades .accolade-chips { justify-content: center; }
+.card-detail-text { min-width: 0; overflow-wrap: anywhere; }
+.card-detail-more { min-width: 0; }
+.card-detail-more summary { cursor: pointer; }
+.card-detail-seasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+  margin: var(--s-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
 
 /* Holo: one iridescent sweep across the card art on the draw reveal (off under
    reduced motion). The sheen stays on the card art, never on the page chrome. */
@@ -3033,7 +3033,7 @@ button {
 /* Accolade symbols (issue 50): pips for a glance, chips where the names fit. One
    colour token, Lucide icon and plate per kind (ACCOLADE_KINDS in app-globals.js);
    champions sit on a filled plate, awards on an outlined one, Played is muted.
-   Sized in em, so a card's overlay scales with the card. */
+   Sized in em, so the symbols scale with the text around them. */
 .accolade-pips {
   display: inline-flex;
   flex-wrap: wrap;

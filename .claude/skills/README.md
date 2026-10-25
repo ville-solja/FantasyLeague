@@ -158,13 +158,14 @@ Season accolades (issue 50) read like a mana cost: every kind has its own Lucide
 | Fantasy winner | Fantasy Winner | `medal` | outlined | `--accolade-fantasy` |
 | Played | Played | `calendar-check` | outlined, muted | `--accolade-played` (grey) |
 
-- **Pips** (`.accolade-pip`, built only by `accoladePipsHtml`): one per earned kind in the table's order, with a count from two; Played comes last, muted, and always shows its seasons count. Each pip is focusable, carries its text as `aria-label`, and shows a tooltip (`.accolade-tip`) on hover, focus or tap that closes on Escape, blur or a tap elsewhere. Used on cards (an HTML overlay down the card's right edge, sized in em), the Players list and the popup header.
+- **Pips** (`.accolade-pip`, built by `accoladePipsHtml`; `accoladeDetailsHtml` reuses the class as a decorative symbol on its detail lines): one per earned kind in the table's order, with a count from two; Played comes last, muted, and always shows its seasons count. Each pip is focusable, carries its text as `aria-label`, and shows a tooltip (`.accolade-tip`) on hover, focus or tap that closes on Escape, blur or a tap elsewhere. Used in the Players list, the Teams tab, the team popup, the Hall of fame and the player popup header. Never on a card face (issue 228).
 - **Chips** (`.accolade-chip`, built only by `accoladeChipsHtml`): one per accolade with the full name ("S16 Div 1 Champion"), newest season first, champions first within a season. Used in Player management, the popup timeline and History; at phone width those views show the pips instead (`.accolade-swap`).
+- **Detail lines** (`.card-detail`, built only through the shared `_cardDetailLine`, by `accoladeDetailsHtml` and `tagDetailsHtml`): the card viewer's Accolades section, one line per accolade with its pip symbol (decorative) and text, newest season first, champions first within a season: "S15 Div 1 Champion · with Team", "S15 Most Points · 812.3 pts"; Played is one line ("Played 7 seasons · S4–S16") with the seasons in a disclosure (issue 228).
 - The registry is `ACCOLADE_KINDS` in `frontend/app-globals.js`, mirrored in `backend/accolades.py`. No view builds its own symbol markup.
 - **Holo**: the iridescent sheen of a Holo card is allowed only on the card art (the card image and its one-time reveal sweep), never on chrome.
 
 ### Tag symbols
-User tags (issue 217) show on a player's cards as pips down the card's **left** edge, opposite the accolade pips, for the user verifiably linked to that player. They share the accolade pip's shape, tooltip and focus behaviour; every kind has its own Lucide icon, so colour is never the only difference.
+User tags (issue 217) show as pips in the player popup header and the team popup, and as the card viewer's Tags section (issue 228), for the user verifiably linked to that player. Card faces carry no tag pips. They share the accolade pip's shape, tooltip and focus behaviour; every kind has its own Lucide icon, so colour is never the only difference.
 
 | Tag | Tooltip | Icon | Colour token |
 |---|---|---|---|
@@ -172,7 +173,8 @@ User tags (issue 217) show on a player's cards as pips down the card's **left** 
 | Caster | Caster | `mic` | `--tag-caster` (= `--badge-caster`) |
 | Any other tag | the tag's label | `tag` | `--tag-generic` (= `--badge-tag`) |
 
-- **Pips** (`.card-tag-pip`, built only by `tagPipsHtml`): top to bottom admin, caster, then other tags in tag-definition order. Used on cards (`.card-tag-pips`, beside `.card-pips`) and in the player popup header, before the accolade pips.
+- **Pips** (`.card-tag-pip`, built by `tagPipsHtml`; `tagDetailsHtml` reuses the class as a decorative symbol. The "card" prefix is historical: since issue 228 no card face shows these pips): admin, caster, then other tags in tag-definition order. Used in the player popup header and the team popup, before the accolade pips.
+- **Detail lines** (`.card-detail`, built by `tagDetailsHtml` through `_cardDetailLine`): the card viewer's Tags section, one line per tag with its symbol and text ("Kana Cards admin", "Caster", then other tags by label), above the Accolades section.
 - **Season winner** is never a tag pip: the Fantasy Winner accolade pip already shows it.
 - The registry is `TAG_SYMBOLS` in `frontend/app-globals.js`; the data is `tags` in `GET /accolades` (keys and labels only). Card images carry no tag stickers.
 

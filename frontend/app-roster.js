@@ -297,21 +297,16 @@ function toggleCardZone(cardId) {
 // Keyed render: nodes are kept per card id and moved, never rebuilt
 // ---------------------------------------------------------------------------
 
-/** The inner markup of a card slot: image, the player's accolade pips over the card's
- * right edge (issue 50) and tag pips over its left edge (issue 217), weekly points
- * (and a substitution label). */
+/** The inner markup of a card slot: image, weekly points (and a substitution label).
+ * No accolade or tag pips on the card face (issue 228): the card viewer lists them. */
 function _cardSlotHTML(c) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
-  const pips = typeof accoladePipsHtml === "function" && typeof playerAccolades === "function"
-    ? accoladePipsHtml(playerAccolades(c.player_id)) : "";
-  const tagPips = typeof tagPipsHtml === "function" && typeof playerTags === "function"
-    ? tagPipsHtml(playerTags(c.player_id)) : "";
   return `
       <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
            data-player-name="${_escHtml(c.player_name)}"
            draggable="false" tabindex="0" role="button"
-           onerror="_cardImgFallback(this)" />${pips ? `<div class="card-pips">${pips}</div>` : ""}${tagPips ? `<div class="card-tag-pips">${tagPips}</div>` : ""}
+           onerror="_cardImgFallback(this)" />
       <div class="card-slot-pts">${pts} pts</div>${_subLabelHTML(c)}`;
 }
 
@@ -330,17 +325,8 @@ function _rosterSlotNode(c, zone, editable) {
   if (node._slotHtml !== html) {
     node.innerHTML = html;
     node._slotHtml = html;
-    if (html.includes("data-lucide")) _rosterPipIconsPending = true;
   }
   return node;
-}
-
-// Issue 50: pip icons to render after a roster render wrote new pips.
-let _rosterPipIconsPending = false;
-
-/** GET /accolades arrived after the roster rendered: draw the pips on the cards. */
-function _rerenderRosterPips() {
-  if (_rosterById && _rosterById.size) renderRosterLayout();
 }
 
 function _emptySlotNode(i) {
@@ -407,10 +393,6 @@ function renderRosterLayout(layout = _layout, opts = {}) {
     focused.focus({ preventScroll: true });
   }
   if (first) flipMove([...activeNodes, ...benchNodes], first, { from: opts.from, duration: opts.duration });
-  if (_rosterPipIconsPending && typeof refreshAccoladeIcons === "function") {
-    _rosterPipIconsPending = false;
-    refreshAccoladeIcons();
-  }
 }
 
 /** Substitution label for a locked-week card (issue #129). */

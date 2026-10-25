@@ -24,9 +24,10 @@ Notes:
   frontend tooltip text is "Kana Cards admin" (from `TAG_SYMBOLS`).
 - Node harness: `_escHtml`, `_ownValue` and the ACCOLADES block of app-globals.js
   (which holds the TAG SYMBOLS block), markup parsed with `html.parser`.
-- Card views: the views render `.card-tag-pips` containers around `tagPipsHtml`
-  output, as they do `.card-pips` around `accoladePipsHtml`; the pip markup itself
-  (`card-tag-pip` and `TAG_SYMBOLS`) lives only in app-globals.js.
+- Card views: since issue 228 no card face carries tag pips (`.card-tag-pips` is
+  gone); the card viewer lists the tags in its Tags section (`tagDetailsHtml`) and the
+  player popup header keeps the pips. The pip markup itself (`card-tag-pip` and
+  `TAG_SYMBOLS`) lives only in app-globals.js's TAG SYMBOLS block.
 """
 
 import inspect
@@ -390,19 +391,17 @@ loadAccolades().then(() => {
     assert out == [both, both, []]
 
 
-def test_card_views_render_tag_pips_beside_accolade_pips():
-    """Source-reading: card viewer, draw reveal, My Team roster and bench, and collection each render `.card-tag-pips` via tagPipsHtml next to `.card-pips`."""
+def test_card_views_list_tags_in_viewer_not_on_card_faces():
+    """Source-reading (issue 228): no card face renders tag pips; the card viewer and draw reveal fill the Tags section from tagDetailsHtml(tags), and My Team / the collection render no tag pips."""
     cards = _fe("app-cards.js")
-    overlay = _fn_body(cards, "_renderCardAccolades")  # the card viewer and the draw reveal
-    assert "tagPipsHtml(tags)" in overlay and "playerTags(card.player_id)" in overlay
-    assert 'class="card-tag-pips"' in overlay and 'class="card-pips"' in overlay
+    viewer = _fn_body(cards, "_renderCardAccolades")  # the card viewer and the draw reveal
+    assert "tagDetailsHtml(tags)" in viewer and "playerTags(card.player_id)" in viewer
+    assert "tagPipsHtml" not in viewer and "card-tag-pips" not in viewer
     assert "_renderCardAccolades(card, drawFx)" in _fn_body(cards, "showCard")
     slot = _fn_body(_fe("app-roster.js"), "_cardSlotHTML")  # My Team roster and bench (the collection)
-    assert "tagPipsHtml(playerTags(c.player_id))" in slot
-    assert 'class="card-tag-pips"' in slot and 'class="card-pips"' in slot
-    # The roster re-renders when GET /accolades (which carries tags) arrives.
+    assert "tagPipsHtml" not in slot and "card-tag-pips" not in slot
     load = _fn_body(_fe("app-globals.js"), "loadAccolades")
-    assert "_tagsByPlayer = data.tags" in load and "_rerenderRosterPips" in load
+    assert "_tagsByPlayer = data.tags" in load
 
 
 def test_player_popup_header_shows_tag_pips_before_accolade_pips():
@@ -442,21 +441,15 @@ def test_tag_color_tokens_identical_in_both_color_files():
     assert re.search(r"--tag-caster:\s*var\(--badge-caster\)", fe)
 
 
-def test_card_tag_pips_css_on_left_edge_before_guided_tour():
-    """Source-reading (style.css): `.card-tag-pips` is positioned on the left edge (opposite `.card-pips`) and defined before the GUIDED TOUR section."""
+def test_tag_pip_css_before_guided_tour_no_card_face_overlay():
+    """Source-reading (style.css): the tag pip rules use --pip-color and the tag tokens and sit before the GUIDED TOUR section; since issue 228 there is no `.card-tag-pips` card-face overlay."""
     css = _fe("style.css")
-    tags = _rule(css, ".card-slot .card-tag-pips")
-    assert tags and "position: absolute" in tags[0] and "left:" in tags[0] and "right:" not in tags[0]
-    assert _rule(css, ".reveal-pips .card-tag-pips")
-    accolades = _rule(css, ".card-slot .card-pips")[0]
-    assert "right:" in accolades and "left:" not in accolades
-    assert "flex-direction: column" in _rule(css, ".card-tag-pips .tag-pips")[0]
+    assert "card-tag-pips" not in css
     pip = _rule(css, ".card-tag-pip")
     assert pip and any("var(--pip-color)" in body for body in pip)
     assert "var(--tag-admin)" in _rule(css, ".card-tag-pip--admin")[0]
     assert "var(--tag-caster)" in _rule(css, ".card-tag-pip--caster")[0]
     tour = css.index("GUIDED TOUR (issue #144)")
-    assert css.index(".card-slot .card-tag-pips") < tour
     assert max(m.start() for m in re.finditer(r"card-tag-pip", css)) < tour
 
 

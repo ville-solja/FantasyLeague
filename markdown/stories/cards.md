@@ -57,10 +57,10 @@ As a user, I want to browse my roster and bench.
 As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance.
 
 **Acceptance criteria**
-- Player name is printed on the card image in the name bar (shrunk, then ellipsized if too long; layout A, #218)
-- Team name is printed on the type line, beside the team logo
-- Player avatar (from OpenDota) is composited as a square portrait on the card image (#218; was circular)
-- Team logo (from local Dotabuff cache, HTTP fallback) is composited in a 100 × 60 slot on the type line, no circle crop (#218)
+- Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
+- Team name is printed below the player name on the card image
+- Player avatar (from OpenDota) is composited as a circular portrait on the card image
+- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
 - If the avatar is unavailable, the card still renders correctly with that slot left empty
   (team logo unavailability is covered separately below)
 - During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
@@ -75,9 +75,9 @@ still looks polished pre-season.
 
 **Acceptance criteria**
 - When neither the local Dotabuff PNG cache nor the team's HTTP `logo_url` resolves to a usable
-  image, the team logo slot is filled with a solid black placeholder instead of being
+  image, the team logo slot is filled with a solid black circular placeholder instead of being
   left unpainted
-- The placeholder uses the same size and position as a real team logo (the 100 × 60 slot since #218), so the
+- The placeholder uses the same circular crop, size, and position as a real team logo, so the
   card layout is identical either way
 - Once a team logo becomes available (local cache populated via ingest, or `logo_url` set), it
   replaces the placeholder on the next card image request — no cache to invalidate, since the
@@ -102,21 +102,20 @@ As a user, I want each rarity tier to have a visually distinct card frame so I c
 As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
 
 **Acceptance criteria**
-- Each active modifier is shown in the card's rules box (layout A, #218) as `STAT +X%`, up to 3 lines
+- Each active modifier is shown in the lower band of the card as `STAT +X%`
 - After a reroll, the card image updates immediately to reflect the new modifiers
-- Cards with no modifiers (e.g. Common) show "No stat modifiers" in that area (#218)
+- Cards with no modifiers (e.g. Common) show no modifier text in that area
 
 ---
 
 ### Replaceable Card Template Artwork
 **User story**
-As an operator, I want to refresh the card template artwork for each rarity between seasons so the visual design can change without touching the renderer.
+As an operator, I want to update card template artwork for each rarity by replacing files so the visual design can be refreshed between seasons without code changes.
 
 **Acceptance criteria**
 - Templates are loaded from a configurable assets directory at startup
-- Since #218 the template PNGs are drawn by `backend/scripts/make_card_templates.py`; artwork changes go through the script, which regenerates the committed PNGs (a test checks they match)
-- Replacing a template PNG takes effect on the next card image request
-- Missing templates fail with a clear error rather than silently using a wrong rarity; a missing `Card_Template_Holo.png` falls back to the generated sheen with a warning
+- Replacing any of the four template PNGs takes effect on the next card image request
+- Missing templates fail with a clear error rather than silently using a wrong rarity
 
 ---
 
@@ -470,7 +469,7 @@ As a player, I want the back of a card to show its stats or accolades so that I 
 
 ## Card Formatting (issue #218)
 
-### Choose a New Card Layout
+### Choose a New Card Layout *(layout A rolled back by #228)*
 **User story**
 As the product owner, I want to compare radically different card layouts so that I can choose one that fits the card's symbols and still reads as a trading card.
 
@@ -478,7 +477,7 @@ As the product owner, I want to compare radically different card layouts so that
 - A design canvas shows portrait and landscape layouts at full, roster (180 px) and Twitch-panel (110 px) sizes, with the current card for comparison
 - The chosen layout (A · Classic TCG) is recorded in this plan
 
-### Card Frame With Exact Portrait and Logo Slots
+### Card Frame With Exact Portrait and Logo Slots *(rolled back by #228)*
 **User story**
 As a player, I want the portrait and team logo on my card to look sharp and undistorted so that the card looks finished.
 
@@ -502,7 +501,7 @@ As a player, I want to see the player's rank medal on the card itself so that it
 - An unranked player's card leaves the medal place empty, with no placeholder
 - The medal uses the same medal colours as the website badge
 
-### Pips Sit in the Pillars
+### Pips Sit in the Pillars *(rolled back by #228)*
 **User story**
 As a player, I want the tag and accolade symbols to sit neatly in the card's side pillars so that they never cover the portrait, the name or the frame.
 
@@ -527,6 +526,8 @@ As a player, I want accolades such as match MVP picks to show how many times the
 Plan: `markdown/plans/plan-issue-217-tag-symbols-on-cards.md`. Feature doc: `markdown/features/reference/tag-symbols-on-cards.md`.
 
 ### Tags Read as Symbols on Cards
+*Card-face placement superseded by issue #228: tags no longer show on card faces; they are listed in the card viewer's Tags section and shown as pips in the player popup header. See "Card Visuals Rollback" below.*
+
 **User story**
 As a visitor looking at a card, I want a caster's or admin's tag shown as a clear symbol I can hover, so that I can see who they are without squinting at a tiny sticker.
 
@@ -554,3 +555,44 @@ As the operator, I want the tag data behind the symbols to reveal no more than t
 - **API:** `GET /accolades` adds `tags: {"<player id>": [{key, label}]}`, with `{key: "admin", label: "Admin"}` first when the verified linked user is an admin, and `season_winner` left out.
 - **No identity:** no user id, username or email appears anywhere in the response.
 - **Verified links only:** only Steam-verified links on full, non-demo accounts contribute (`player_links`). A typed-in or stale link contributes nothing.
+
+
+## Card Visuals Rollback (issue #228)
+
+### Cards Return to the Original Art
+**User story**
+As a player, I want my cards to look like the original illustrated cards again, so that the card art isn't crowded by symbols.
+
+**Acceptance criteria**
+- **Templates:** `GET /cards/{id}/image` renders on the original templates (`Card_Template_{Common,Rare,Epic,Legendary}.png` as of `da89798^`), byte-identical to those files.
+- **Renderer:** the portrait circle, logo circle, name, team and modifier placement match the renderer before #218, including the blank team-logo placeholder (#107).
+- **Holo:** a Holo legendary uses the Legendary template with the generated iridescent sheen (#53), and `Card_Template_Holo.png` no longer exists.
+- **No generator:** `backend/scripts/make_card_templates.py` is removed.
+- **Card size:** the image stays 597 × 845, so the roster, the reveal and the #205 draw animation keep their sizes.
+- **Everywhere:** My Team, the collection, the draw reveal, the card viewer and the Weekly Report (which opens cards in the card viewer) all show the restored art. The Twitch panel draws its own card art and loads no card PNG, so it is unaffected.
+
+### Accolades and Tags Leave the Card Face
+**User story**
+As a player, I want accolade and tag symbols off the card art, so that the cards look clean.
+
+**Acceptance criteria**
+- **No accolade pips on cards:** no `.card-pips` overlay on any card face: My Team roster and bench, the collection, the draw reveal and the card viewer.
+- **No tag pips on cards:** no `.card-tag-pips` overlay on any card face either.
+- **Elsewhere unchanged:** the player popup header keeps its tag and accolade pips; the Players list, the Teams tab, the team popup and the Hall of fame keep their accolade pips and chips.
+- **No dead code:** `cardPipsHtml` and the card-face pip CSS (`.card-pips`, `.card-tag-pips`) are removed if nothing else uses them; `accoladePipsHtml` and `tagPipsHtml` stay for the views above.
+
+### Accolade and Tag Details in the Card Popup
+**User story**
+As a player, I want to see a card's tags and accolades with their details when I open it, so that I can see who the player is and which seasons they won, and with which team.
+
+**Acceptance criteria**
+- **Tags:** opening a card in the card viewer shows a **Tags** section under the card when the linked user has tags: admin first ("Kana Cards admin"), then "Caster", then other tags by label, each with its symbol; never `season_winner`. Only Steam-verified links count, and no user identity is shown (#217 rules).
+- **Accolades section:** below the tags, an **Accolades** section, one line per accolade, newest season first, champions first within a season.
+- **Details:**
+  - champion lines name the season, division and team ("S15 Div 1 Champion · with Team Name");
+  - point-based accolades show their value ("S15 Most Points · 812.3 pts");
+  - Played is one line with the count and season range, with the per-season list in a disclosure.
+- **Look:** each line uses its kind's symbol and plate colour from `ACCOLADE_KINDS`; the symbol is decorative and the line's text carries the meaning.
+- **Draw reveal:** both sections are hidden during the draw animation and shown once the flip has finished.
+- **Empty:** a player with no tags or no accolades shows no section for it and no empty space.
+- **Phone width:** the section wraps with no sideways scroll.

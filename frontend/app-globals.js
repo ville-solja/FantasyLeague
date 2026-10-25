@@ -443,8 +443,9 @@ function tweenNumber(el, from, to, ms, opts = {}) {
 }
 
 // ACCOLADES (issue 50)
-// Season accolades as symbols. Pips for a glance (cards, the Players list, the popup
-// header), chips where the names fit (Player management, the popup timeline, History).
+// Season accolades as symbols. Pips for a glance (the Players list, the popup header),
+// chips where the names fit (Player management, the popup timeline, History), and one
+// line per accolade with its details in the card viewer (issue 228).
 // Same order, names, icons and tokens as ACCOLADE_KINDS in backend/accolades.py.
 const ACCOLADE_KINDS = [
   { key: "div1", kind: "champion", division: "div1", name: "Div 1 Champion", icon: "crown", plate: "filled", token: "--accolade-div1" },
@@ -562,6 +563,52 @@ function accoladeChipsHtml(accolades) {
   }).join("")}</span>`;
 }
 
+// Issue 228: Played is counted from the first season with an OpenDota record
+// (accolades.FIRST_COUNTED_SEASON, issue 212).
+const ACCOLADE_PLAYED_FROM = 4;
+
+/** One line of a card viewer section: the kind's symbol (decorative) and its text. */
+function _cardDetailLine(symbolClass, icon, body) {
+  return `<li class="card-detail"><span class="${symbolClass} card-detail-symbol" aria-hidden="true"><i data-lucide="${icon}" aria-hidden="true"></i></span>${body}</li>`;
+}
+
+/** A card viewer section with its heading; "" when it has no lines. */
+function _cardDetailsSection(kind, title, lines) {
+  if (!lines.length) return "";
+  return `<div class="card-details card-details--${kind}"><h3 class="card-details-title">${title}</h3><ul class="card-details-list">${lines.join("")}</ul></div>`;
+}
+
+/**
+ * Issue 228: the card viewer's Accolades section. One line per title, newest season
+ * first and champions first within a season: "S15 Div 1 Champion · with Team",
+ * "S15 Most Points · 812.3 pts". Played is one summary line counted from Season 4,
+ * "Played 7 seasons · S4–S16", with the seasons in a disclosure. Empty input gives "".
+ */
+function accoladeDetailsHtml(accolades) {
+  const list = Array.isArray(accolades) ? accolades.filter(a => _accoladeKind(a)).sort(_accoladeNewestFirst) : [];
+  const lines = list.filter(a => a.kind !== "played").map(a => {
+    const kind = _accoladeKind(a);
+    const detail = kind.kind === "champion"
+      ? (a.team_name ? ` · with ${a.team_name}` : "")
+      : (a.value != null && Number.isFinite(Number(a.value)) ? ` · ${Number(a.value).toFixed(1)} pts` : "");
+    const text = `${_seasonShort(a)} ${kind.name}${detail}`;
+    return _cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
+      `<span class="card-detail-text">${_escHtml(text)}</span>`);
+  });
+  const nums = [...new Set(list.filter(a => a.kind === "played").map(a => _seasonNumber(a.season))
+    .filter(n => n !== null && n >= ACCOLADE_PLAYED_FROM))].sort((x, y) => y - x);
+  if (nums.length) {
+    const kind = ACCOLADE_KINDS.find(k => k.key === "played");
+    const first = nums[nums.length - 1], last = nums[0];
+    const range = first === last ? `S${first}` : `S${first}–S${last}`;
+    const summary = `Played ${nums.length} season${nums.length === 1 ? "" : "s"} · ${range}`;
+    const seasons = nums.map(n => `<li>S${n}</li>`).join("");
+    lines.push(_cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
+      `<details class="card-detail-more"><summary class="card-detail-text">${_escHtml(summary)}</summary><ul class="card-detail-seasons" aria-label="Seasons played">${seasons}</ul></details>`));
+  }
+  return _cardDetailsSection("accolades", "Accolades", lines);
+}
+
 // The shared tooltip (issue 50, generalised in issue 208): one element for any
 // [data-tip] (accolade pips, the player popup's form chart bars), opened on hover,
 // focus or tap and closed on Escape, blur, mouse leave or a tap elsewhere.
@@ -643,9 +690,8 @@ function loadAccolades(force = false) {
       _accoladesByPlayer = data.players || {};
       _tagsByPlayer = data.tags || {};
       _accoladesCurrentSeason = data.current_season || "";
-      if (typeof _rerenderRosterPips === "function") _rerenderRosterPips();
     })
-    .catch(() => { /* cards render without pips */ });
+    .catch(() => { /* the card viewer shows no Tags or Accolades sections */ });
   return _accoladesLoading;
 }
 
@@ -655,15 +701,9 @@ function playerAccolades(playerId) {
   return Array.isArray(list) ? list : [];
 }
 
-/** The pip overlay stacked down a card's right edge. */
-function cardPipsHtml(playerId) {
-  const pips = accoladePipsHtml(playerAccolades(playerId));
-  return pips ? `<div class="card-pips">${pips}</div>` : "";
-}
-
 // TAG SYMBOLS (issue 217)
-// A linked user's tags as pips down a card's left edge, mirroring the accolade pips on
-// the right. Admin first, then caster, then any other tag (its label as the tooltip).
+// A linked user's tags as pips (the player popup header) and, issue 228, as the card
+// viewer's Tags section. Admin first, then caster, then any other tag.
 // season_winner is never a tag pip: the Fantasy Winner accolade already shows it.
 const TAG_SYMBOLS = {
   admin:  { icon: "shield", tip: "Kana Cards admin", token: "--tag-admin", order: 0 },
@@ -700,6 +740,27 @@ function tagPipsHtml(tags) {
     return `<span class="card-tag-pip card-tag-pip--${variant}" role="listitem" tabindex="0" aria-label="${_escHtml(t.tip)}" data-tip="${_escHtml(t.tip)}"><i data-lucide="${t.sym.icon}" aria-hidden="true"></i></span>`;
   });
   return `<span class="tag-pips" role="list" aria-label="Tags">${pips.join("")}</span>`;
+}
+
+/**
+ * Issue 228: the card viewer's Tags section. One line per tag with its symbol and
+ * text: "Kana Cards admin", "Caster", then other tags by label. season_winner is
+ * never shown. Keys and labels only. Empty input gives "".
+ */
+function tagDetailsHtml(tags) {
+  const lines = (Array.isArray(tags) ? tags : [])
+    .map(t => {
+      const key = String((t && t.key) ?? "");
+      const known = _ownValue(TAG_SYMBOLS, key);
+      const sym = known || TAG_SYMBOL_GENERIC;
+      const text = known ? known.tip : String((t && t.label) ?? key);
+      return { key, sym, text, variant: known ? key : "generic" };
+    })
+    .filter(t => t.key && !TAG_SYMBOLS_HIDDEN.includes(t.key))
+    .sort((a, b) => (a.sym.order - b.sym.order) || a.text.localeCompare(b.text))
+    .map(t => _cardDetailLine(`card-tag-pip card-tag-pip--${t.variant}`, t.sym.icon,
+      `<span class="card-detail-text">${_escHtml(t.text)}</span>`));
+  return _cardDetailsSection("tags", "Tags", lines);
 }
 // END TAG SYMBOLS (issue 217)
 // END ACCOLADES (issue 50)

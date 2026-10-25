@@ -1,19 +1,11 @@
-"""Card image generation (layout A, Classic TCG; issue #218).
-
-The rarity templates (`assets/Card_Template_<Rarity>.png`, and the optional
-`Card_Template_Holo.png`) are drawn by `backend/scripts/make_card_templates.py`
-from the slot constants below. This module pastes the avatar and team logo under
-the template's transparent cutouts, then draws the player name, team name and
-modifier lines. The frame's edge colour is the rarity; nothing else names it.
-"""
+"""Card image generation — PIL compositing extracted from main.py."""
 import colorsys
 import io
 import logging
-import math
 import os
 
 try:
-    from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+    from PIL import Image, ImageDraw, ImageFont
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -69,55 +61,18 @@ _HOLO_TEMPLATE = "Card_Template_Holo.png"
 _HOLO_SHEEN_ALPHA = 70
 _holo_warned = False
 
-# ── Layout A on the 597 x 845 card. Boxes are (left, top, right, bottom), right
-# and bottom exclusive, as in PIL's crop boxes. ─────────────────────────────────
-_CARD_SIZE = (597, 845)
-_CARD_RADIUS = 28
-_FRAME_WIDTH = 6
-_NAME_BAR = (24, 24, 573, 92)
-_LEFT_PILLAR = (24, 104, 104, 484)         # tag pips (HTML overlay, #217)
-_PORTRAIT_FRAME = (108, 104, 488, 484)     # 6 px rarity border around the slot
-_PORTRAIT_SLOT = (114, 110, 482, 478)      # 368 x 368: the 184 px avatar at 2x
-_RIGHT_PILLAR = (492, 104, 572, 484)       # season pips (HTML overlay, #50)
-_TYPE_LINE = (24, 496, 573, 560)
-_LOGO_SLOT = (26, 498, 126, 558)           # 100 x 60: the 250 x 150 logo at 0.4x
-_RULES_BOX = (24, 572, 573, 821)
-
-_BASE_COLOR = (35, 37, 40, 255)            # shows through empty cutouts
-_LOGO_PLATE = (27, 27, 33, 255)            # behind a contained fallback logo
-
-# Rarity colours match the frontend tokens (--k-rarity-*, colors_and_type.css).
-_RARITY_COLORS = {
-    "common":    (154, 154, 162),
-    "rare":      (90, 160, 232),
-    "epic":      (176, 106, 224),
-    "legendary": (240, 168, 58),
-}
-_RARITY_DEEP = {
-    "common":    (38, 38, 44),
-    "rare":      (15, 42, 70),
-    "epic":      (46, 22, 64),
-    "legendary": (58, 37, 10),
-}
-_FOIL_ALPHA = 34                           # the ordinary legendary's light shine
-
-# Text colours from the layout A drawing.
-_NAME_COLOR = (243, 234, 216, 255)
-_TEAM_COLOR = (216, 208, 192, 255)
-_RULES_TEXT = (42, 38, 32, 255)
-_RULES_MUTED = (74, 67, 54, 255)
-_RULES_LINE = (184, 173, 150, 255)
-
-# Font sizes chosen so the name and modifier values stay readable at 180 px wide
-# (x0.30): 40 -> 12 px, 34 -> 10 px.
-_NAME_FONT_SIZE = 40
-_NAME_FONT_MIN = 30
-_TEAM_FONT_SIZE = 28
-_TEAM_FONT_MIN = 20
-_MODIFIER_FONT_SIZE = 34
-_MODIFIER_FIRST_Y = 606
-_MODIFIER_LINE_GAP = 58
-_MAX_MODIFIER_LINES = 3
+# Layout positions discovered by pixel analysis of the 597×845 templates
+_BIG_CIRCLE    = (298, 375, 175)   # (cx, cy, radius) — player avatar
+_SMALL_CIRCLE  = (444, 258,  52)   # (cx, cy, radius) — team logo
+_PLAYER_NAME_Y = 90
+_TEAM_NAME_Y   = 155
+_CARD_SIZE     = (597, 845)
+# Stat modifiers — bottom band of the template (below portrait)
+_MODIFIERS_START_Y = 620
+_MODIFIER_LINE_GAP = 50
+_MODIFIER_MAX_WIDTH = 500
+# Epic/Legendary templates' cutouts/plates sit slightly higher than common/rare — nudge content down.
+_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY = 8
 
 
 _FONT_PATHS = [
@@ -139,37 +94,32 @@ def _get_font(size: int):
     return ImageFont.load_default()
 
 
-def _slot_size(slot) -> tuple[int, int]:
-    return slot[2] - slot[0], slot[3] - slot[1]
+def _fetch_team_logo_image(team_logo_url: str | None, diameter: int):
+    """Team badge from DB `logo_url` (HTTP), fetched only from an allowlisted host (issue #171)."""
+    u = safe_logo_url(_normalize_image_url(team_logo_url))
+    return _fetch_pil_image(u, diameter) if u else None
 
 
-def _text_width(draw, text: str, font) -> float:
-    if hasattr(draw, "textlength"):
-        return draw.textlength(text, font=font)
-    bbox = draw.textbbox((0, 0), text, font=font)
-    return bbox[2] - bbox[0]
+def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None, diameter: int):
+    """Prefer PNG under {assets}/dotabuff_league_logos/ (ingest), else HTTP logo_url."""
+    logo_dir = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
+    path = resolve_local_team_logo_path(logo_dir, team_name)
+    if path and PIL_AVAILABLE:
+        try:
+            img = Image.open(path).convert("RGBA")
+            img = img.resize((diameter, diameter), Image.LANCZOS)
+            return img
+        except Exception:
+            pass
+    return _fetch_team_logo_image(team_logo_url, diameter)
 
 
-def _ellipsize(draw, text: str, font, max_w: int) -> str:
-    if _text_width(draw, text, font) <= max_w:
-        return text
-    t = text
-    while len(t) > 1 and _text_width(draw, t + "…", font) > max_w:
-        t = t[:-1]
-    return t.rstrip() + "…"
+def _blank_logo_placeholder(diameter: int):
+    """Solid black circular placeholder for a card's team-logo slot when no logo
+    can be resolved yet (e.g. before a team's local Dotabuff PNG has been scraped
+    or logo_url populated) — cleaner than leaving the slot unpainted."""
+    return Image.new("RGBA", (diameter, diameter), (0, 0, 0, 255))
 
-
-def _fit_text(draw, text: str, max_w: int, size: int, min_size: int):
-    """(text, font): shrink the font down to min_size, then ellipsize."""
-    for s in range(size, min_size - 1, -2):
-        font = _get_font(s)
-        if _text_width(draw, text, font) <= max_w:
-            return text, font
-    font = _get_font(min_size)
-    return _ellipsize(draw, text, font, max_w), font
-
-
-# ── Images ──────────────────────────────────────────────────────────────────
 
 def _normalize_image_url(url: str | None) -> str | None:
     if not url or not str(url).strip():
@@ -180,8 +130,8 @@ def _normalize_image_url(url: str | None) -> str | None:
     return u
 
 
-def _fetch_pil_image(url: str, size=None):
-    """Download an image as RGBA, or None. `size` (int) resizes it to a square."""
+def _fetch_pil_image(url: str, diameter: int):
+    """Download an image, resize to diameter×diameter, return RGBA PIL Image or None."""
     url = _normalize_image_url(url)
     if not url or not PIL_AVAILABLE:
         return None
@@ -195,139 +145,71 @@ def _fetch_pil_image(url: str, size=None):
         if r.status_code != 200:
             return None
         img = Image.open(io.BytesIO(r.content)).convert("RGBA")
-        if size:
-            img = img.resize((size, size), Image.LANCZOS)
+        img = img.resize((diameter, diameter), Image.LANCZOS)
         return img
     except Exception:
         return None
 
 
-def _fit_into_slot(img, slot_size: tuple[int, int], plate=_LOGO_PLATE):
-    """Resize to slot_size when the aspect ratio matches (an exact scale); otherwise
-    contain it, centred, on the plate colour. Never stretched or cropped."""
-    w, h = slot_size
-    if img.width * h == img.height * w:
-        return img.resize((w, h), Image.LANCZOS)
-    out = Image.new("RGBA", (w, h), plate)
-    fitted = ImageOps.contain(img, (w, h), Image.LANCZOS)
-    out.alpha_composite(fitted, ((w - fitted.width) // 2, (h - fitted.height) // 2))
-    return out
+def _circle_crop(img):
+    """Apply a circular alpha mask to a square PIL RGBA image."""
+    sz = img.size[0]
+    mask = Image.new("L", (sz, sz), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, sz, sz), fill=255)
+    result = img.copy()
+    result.putalpha(mask)
+    return result
 
 
-def _fetch_team_logo_image(team_logo_url: str | None, size=None):
-    """Team badge from DB `logo_url` (HTTP), fetched only from an allowlisted host (issue #171)."""
-    u = safe_logo_url(_normalize_image_url(team_logo_url))
-    return _fetch_pil_image(u, size) if u else None
-
-
-def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None,
-                             slot_size=None):
-    """Logo fitted into the logo slot: the cached 250 x 150 PNG under
-    {assets}/dotabuff_league_logos/ (scaled 0.4x), else the HTTP `logo_url`
-    contained in the slot. None when neither resolves. No circle crop."""
-    if isinstance(slot_size, int):
-        slot_size = (slot_size, slot_size)
-    slot_size = slot_size or _slot_size(_LOGO_SLOT)
-    logo_dir = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
-    path = resolve_local_team_logo_path(logo_dir, team_name)
-    if path and PIL_AVAILABLE:
-        try:
-            return _fit_into_slot(Image.open(path).convert("RGBA"), slot_size)
-        except Exception:
-            pass
-    img = _fetch_team_logo_image(team_logo_url, None)
-    return _fit_into_slot(img, slot_size) if img is not None else None
-
-
-def _blank_logo_placeholder(slot_size=None):
-    """Solid black plate for the logo slot when no logo resolves yet (issue #107)."""
-    if isinstance(slot_size, int):
-        slot_size = (slot_size, slot_size)
-    return Image.new("RGBA", slot_size or _slot_size(_LOGO_SLOT), (0, 0, 0, 255))
-
-
-def _avatar_for_slot(img):
-    """The avatar at the portrait slot size: the 184 px Steam avatar scales 2x
-    exactly; a non-square source is centre-fitted, never stretched."""
-    size = _slot_size(_PORTRAIT_SLOT)
-    if img.width == img.height:
-        return img.resize(size, Image.LANCZOS)
-    return ImageOps.fit(img, size, Image.LANCZOS)
-
-
-# ── Drawing helpers ─────────────────────────────────────────────────────────
-
-def _draw_text(draw, xy, text: str, font, fill, anchor: str = "lm"):
+def _draw_centered_text(draw, text: str, cx: int, cy: int, font, fill,
+                        shadow=(0, 0, 0, 160)):
+    """Draw text centred at (cx, cy) with a configurable drop shadow."""
     try:
-        draw.text(xy, text, font=font, fill=fill, anchor=anchor)
+        draw.text((cx + 2, cy + 2), text, font=font, fill=shadow, anchor="mm")
+        draw.text((cx, cy), text, font=font, fill=fill, anchor="mm")
+        return
     except (TypeError, ValueError):
-        draw.text(xy, text, font=font, fill=fill)
+        pass
+    bbox = draw.textbbox((0, 0), text, font=font)
+    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x, y = cx - w // 2, cy - h // 2
+    draw.text((x + 2, y + 2), text, font=font, fill=shadow)
+    draw.text((x, y), text, font=font, fill=fill)
 
 
-def _modifier_rows_from_map(mods: dict) -> list[tuple[str, str]]:
-    rows: list[tuple[str, str]] = []
-    for stat_key, bonus in sorted((mods or {}).items()):
-        label = STAT_LABELS.get(stat_key, stat_key.replace("_", " ")).upper()
-        pct = int(bonus) if float(bonus).is_integer() else bonus
-        rows.append((label, f"+{pct}%"))
-    return rows
+def _truncate_centered_line(draw, text: str, font, max_w: int) -> str:
+    t = text
+    if hasattr(draw, "textlength"):
+        while len(t) > 3 and draw.textlength(t, font=font) > max_w:
+            t = t[:-1]
+    return t
 
 
 def _modifier_lines_from_map(mods: dict) -> list[str]:
-    return [f"{label} {value}" for label, value in _modifier_rows_from_map(mods)]
+    if not mods:
+        return []
+    lines: list[str] = []
+    for stat_key, bonus in sorted(mods.items()):
+        label = STAT_LABELS.get(stat_key, stat_key.replace("_", " ")).upper()
+        pct = int(bonus) if float(bonus).is_integer() else bonus
+        lines.append(f"{label} +{pct}%")
+    return lines
 
 
-def _draw_rules_box(draw, mods: dict):
-    """Modifier lines (up to 3) in the cream box, or "No stat modifiers"."""
-    x0, _, x1, _ = _RULES_BOX
-    left, right = x0 + 24, x1 - 24
-    rows = _modifier_rows_from_map(mods)[:_MAX_MODIFIER_LINES]
-    font = _get_font(_MODIFIER_FONT_SIZE)
-    y = _MODIFIER_FIRST_Y
-    for label, value in rows:
-        vw = _text_width(draw, value, font)
-        label = _ellipsize(draw, label, font, int(right - left - vw - 16))
-        _draw_text(draw, (left, y), label, font, _RULES_TEXT, anchor="lm")
-        _draw_text(draw, (right, y), value, font, _RULES_TEXT, anchor="rm")
-        for dx in range(left, right, 6):
-            draw.line((dx, y + 24, dx + 2, y + 24), fill=_RULES_LINE, width=2)
-        y += _MODIFIER_LINE_GAP
-    if not rows:
-        _draw_text(draw, ((x0 + x1) // 2, _MODIFIER_FIRST_Y + _MODIFIER_LINE_GAP),
-                   "No stat modifiers", _get_font(24), _RULES_MUTED, anchor="mm")
+def _draw_card_modifiers(draw, mods: dict, y_offset: int = 0):
+    """Stack modifier lines in the empty lower area of the card template."""
+    lines = _modifier_lines_from_map(mods)
+    if not lines:
+        return
+    font = _get_font(30)
+    fill = (200, 230, 210, 255)
+    shadow = (15, 18, 20, 220)
+    cy = _MODIFIERS_START_Y + y_offset
+    for line in lines:
+        t = _truncate_centered_line(draw, line, font, _MODIFIER_MAX_WIDTH)
+        _draw_centered_text(draw, t, _CARD_SIZE[0] // 2, cy, font, fill, shadow=shadow)
+        cy += _MODIFIER_LINE_GAP
 
-
-def _apply_foil_sheen(img):
-    """The ordinary legendary's light shine: a soft diagonal light band (115 deg)."""
-    w, h = img.size
-    sw, sh = 60, 85
-    small = Image.new("L", (sw, sh), 0)
-    dx, dy = math.sin(math.radians(115)), -math.cos(math.radians(115))
-    length = abs(w * dx) + abs(h * dy)
-    px = small.load()
-    for j in range(sh):
-        for i in range(sw):
-            x, y = (i + 0.5) * w / sw - w / 2, (j + 0.5) * h / sh - h / 2
-            t = (x * dx + y * dy) / length + 0.5
-            a = 0.0
-            if 0.30 < t < 0.60:
-                a = (t - 0.30) / 0.15 if t < 0.45 else (0.60 - t) / 0.15
-            px[i, j] = int(_FOIL_ALPHA * a)
-    alpha = small.resize((w, h), Image.BILINEAR)
-    sheen = Image.new("RGBA", (w, h), (255, 255, 255, 0))
-    sheen.putalpha(alpha)
-    img.alpha_composite(sheen)
-    return img
-
-
-def _card_mask():
-    mask = Image.new("L", _CARD_SIZE, 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, _CARD_SIZE[0] - 1, _CARD_SIZE[1] - 1),
-                                           radius=_CARD_RADIUS, fill=255)
-    return mask
-
-
-# ── Templates and Holo ──────────────────────────────────────────────────────
 
 def _holo_template_path() -> str | None:
     path = os.path.join(_ASSETS_DIR, _HOLO_TEMPLATE)
@@ -346,24 +228,19 @@ def warn_if_holo_template_missing() -> bool:
     return True
 
 
-def _rainbow(size, saturation: float = 0.45, alpha: int = 255, angle: int = 35, bands: float = 1.0):
-    """A diagonal rainbow layer of `size` with a uniform alpha."""
-    w, h = size
-    steps = 64
-    strip = Image.new("RGBA", (steps, 1))
-    strip.putdata([tuple(int(c * 255) for c in colorsys.hsv_to_rgb((i * bands / steps) % 1.0,
-                                                                  saturation, 1.0))
-                   + (alpha,) for i in range(steps)])
-    side = int((w ** 2 + h ** 2) ** 0.5) + 2
-    layer = strip.resize((side, side), Image.BILINEAR).rotate(angle, resample=Image.BILINEAR)
-    left, top = (side - w) // 2, (side - h) // 2
-    return layer.crop((left, top, left + w, top + h))
-
-
 def _holo_sheen(template):
     """A diagonal rainbow sheen, visible only where the frame template is opaque, so
     the avatar and the team logo stay untouched."""
-    sheen = _rainbow(template.size, alpha=_HOLO_SHEEN_ALPHA)
+    w, h = template.size
+    steps = 64
+    strip = Image.new("RGBA", (steps, 1))
+    strip.putdata([tuple(int(c * 255) for c in colorsys.hsv_to_rgb(i / steps, 0.45, 1.0))
+                   + (_HOLO_SHEEN_ALPHA,) for i in range(steps)])
+    side = int((w ** 2 + h ** 2) ** 0.5) + 2
+    sheen = strip.resize((side, side), Image.BILINEAR).rotate(35, resample=Image.BILINEAR)
+    left, top = (side - w) // 2, (side - h) // 2
+    sheen = sheen.crop((left, top, left + w, top + h))
+    from PIL import ImageChops
     sheen.putalpha(ImageChops.multiply(sheen.getchannel("A"), template.getchannel("A")))
     return sheen
 
@@ -390,49 +267,51 @@ def generate_card_image(
     card_modifiers: dict | None = None,
     is_holo: bool = False,
 ):
-    """Composite a layout A player card PNG (597 x 845) and return a PIL Image.
-    Accolades and user tags are not drawn: the frontend overlays them as HTML pips
-    over the right and left pillars (issues #53, #217 and #218)."""
+    """Composite a player card PNG and return a PIL Image. Accolades and user tags are
+    not drawn: the card viewer lists them under the card (issue #228)."""
     ct = (card_type or "common").lower()
-    if ct not in _CARD_TEMPLATES:
-        ct = "common"
-    holo = bool(is_holo) and ct == "legendary"
-    template = _load_template(ct, holo)
+    template = _load_template(ct, is_holo)
 
-    base = Image.new("RGBA", _CARD_SIZE, _BASE_COLOR)
+    y_off = _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY if ct in ("epic", "legendary") else 0
 
-    avatar = _fetch_pil_image(avatar_url, None)
-    if avatar is not None:
-        base.paste(_avatar_for_slot(avatar), _PORTRAIT_SLOT[:2])
+    # Dark base matching the card's background colour
+    base = Image.new("RGBA", _CARD_SIZE, (35, 37, 40, 255))
 
-    logo = _load_team_logo_for_card(team_name, team_logo_url, _slot_size(_LOGO_SLOT))
-    if logo is None:
-        logo = _blank_logo_placeholder(_slot_size(_LOGO_SLOT))
-    plate = Image.new("RGBA", logo.size, _LOGO_PLATE)
-    plate.alpha_composite(logo)
-    base.paste(plate, _LOGO_SLOT[:2])
+    # ── Player avatar (big circle) ──────────────────────────────────────────
+    cx, cy, r = _BIG_CIRCLE
+    cy += y_off
+    avatar = _fetch_pil_image(avatar_url, r * 2)
+    if avatar:
+        base.paste(_circle_crop(avatar), (cx - r, cy - r), _circle_crop(avatar))
 
+    # ── Team logo (small circle) ────────────────────────────────────────────
+    scx, scy, sr = _SMALL_CIRCLE
+    scy += y_off
+    logo = _load_team_logo_for_card(team_name, team_logo_url, sr * 2) or _blank_logo_placeholder(sr * 2)
+    base.paste(_circle_crop(logo), (scx - sr, scy - sr), _circle_crop(logo))
+
+    # ── Composite frame on top ──────────────────────────────────────────────
     base.alpha_composite(template)
+
+    # ── Text ────────────────────────────────────────────────────────────────
     draw = ImageDraw.Draw(base)
 
-    # Name bar: the player name only.
-    nx0, ny0, nx1, ny1 = _NAME_BAR
-    name, font = _fit_text(draw, player_name or "Unknown", (nx1 - 28) - (nx0 + 28),
-                           _NAME_FONT_SIZE, _NAME_FONT_MIN)
-    _draw_text(draw, (nx0 + 28, (ny0 + ny1) // 2), name, font, _NAME_COLOR, anchor="lm")
+    # Player name — big plate (bright silver bg → dark text, light shadow)
+    name_font = _get_font(32)
+    name = (player_name or "Unknown").upper()
+    if hasattr(draw, "textlength"):
+        while len(name) > 1 and draw.textlength(name, font=name_font) > 480:
+            name = name[:-1]
+    _draw_centered_text(draw, name, _CARD_SIZE[0] // 2, _PLAYER_NAME_Y + y_off,
+                        name_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
 
-    # Type line: the logo slot, then the team name.
-    tx0, ty0, tx1, ty1 = _TYPE_LINE
-    if team_name:
-        team_left = _LOGO_SLOT[2] + 14
-        team, tfont = _fit_text(draw, team_name, tx1 - 18 - team_left,
-                                _TEAM_FONT_SIZE, _TEAM_FONT_MIN)
-        _draw_text(draw, (team_left, (ty0 + ty1) // 2), team, tfont, _TEAM_COLOR, anchor="lm")
+    # Team name — use same shadow as player; _draw_centered_text default is dark (0,0,0,160).
+    team_font = _get_font(22)
+    team = (team_name or "").upper()
+    if team:
+        _draw_centered_text(draw, team, _CARD_SIZE[0] // 2, _TEAM_NAME_Y + y_off,
+                            team_font, (35, 35, 35, 255), shadow=(200, 200, 200, 100))
 
-    _draw_rules_box(draw, card_modifiers or {})
+    _draw_card_modifiers(draw, card_modifiers or {}, y_offset=y_off)
 
-    if ct == "legendary" and not holo:
-        _apply_foil_sheen(base)
-
-    base.putalpha(_card_mask())
     return base

@@ -1279,7 +1279,7 @@ def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch, caplog):
     warnings = [r for r in caplog.records if "Card_Template_Holo.png" in r.getMessage()]
     assert len(warnings) == 1
     assert holo.size == plain.size
-    # Compare colour: getbbox() on an RGBA difference looks at alpha only (#218 templates are opaque).
+    # Compare colour: getbbox() on an RGBA difference looks at alpha only.
     assert ImageChops.difference(holo.convert("RGB"), plain.convert("RGB")).getbbox() is not None  # the sheen is there
 
 
@@ -1315,23 +1315,21 @@ console.log(JSON.stringify([_rarityLabel({card_type: "legendary", is_holo: true}
     assert any(".reveal-img-wrap--holo::after" in block and "animation: none" in block for block in reduced)
 
 
-def test_cards_ui_pip_overlay_on_every_card_view():
-    """Source-reading (app-cards.js, app-roster.js): card viewer, draw reveal, My Team and collection render an HTML pip overlay via accoladePipsHtml, and the viewer lists chips via accoladeChipsHtml."""
+def test_cards_ui_no_pips_on_card_faces_viewer_lists_accolades():
+    """Source-reading (app-cards.js, app-roster.js): since issue 228 no card face (card viewer, draw reveal, My Team, collection) carries an accolade pip overlay; the card viewer lists the accolades in its Accolades section via accoladeDetailsHtml."""
     cards = _fe("app-cards.js")
     roster = _fe("app-roster.js")
     html = _fe("index.html")
-    overlay = _fn_body(cards, "_renderCardAccolades")
-    assert "accoladePipsHtml(" in overlay and "accoladeChipsHtml(" in overlay and "card-pips" in overlay
+    viewer = _fn_body(cards, "_renderCardAccolades")
+    assert "accoladeDetailsHtml(list)" in viewer and "playerAccolades(card.player_id)" in viewer
+    assert "accoladePipsHtml" not in viewer and "card-pips" not in viewer
     show = _fn_body(cards, "showCard")
     assert "_renderCardAccolades(card, drawFx)" in show  # the card viewer and the draw reveal
-    assert 'id="revealPips"' in html and 'id="revealAccolades"' in html
+    assert 'id="revealPips"' not in html and 'id="revealAccolades"' in html
     slot = _fn_body(roster, "_cardSlotHTML")  # My Team roster and bench (the collection)
-    assert "accoladePipsHtml(playerAccolades(c.player_id))" in slot and "card-pips" in slot
-    assert "_rerenderRosterPips" in _fe("app-globals.js")
+    assert "accoladePipsHtml" not in slot and "card-pips" not in slot
     css = _fe("style.css")
-    pos = _rule(css, ".card-slot .card-pips")[0]
-    assert "position: absolute" in pos and "right:" in pos and "top:" in pos
-    assert "flex-direction: column" in _rule(css, ".card-pips .accolade-pips")[0]
+    assert not _rule(css, ".card-slot .card-pips") and not _rule(css, ".card-pips .accolade-pips")
 
 
 # ===========================================================================
@@ -1525,7 +1523,7 @@ def test_short_season_label():
 
 
 def test_no_view_builds_pip_or_chip_markup_outside_shared_helpers():
-    """Source-reading: 'accolade-pip' / 'accolade-chip' class strings appear only inside accoladePipsHtml / accoladeChipsHtml in frontend/*.js."""
+    """Source-reading: 'accolade-pip' / 'accolade-chip' class strings appear only inside accoladePipsHtml / accoladeChipsHtml (and, since issue 228, accoladeDetailsHtml for the card viewer's symbols) in frontend/*.js."""
     import glob
     offenders = []
     for path in glob.glob(os.path.join(_FRONTEND, "*.js")):
@@ -1534,9 +1532,12 @@ def test_no_view_builds_pip_or_chip_markup_outside_shared_helpers():
             start = js.index("// ACCOLADES (issue 50)")
             end = js.index("// END ACCOLADES (issue 50)")
             section = js[start:end]
-            # Inside the section, the class strings are only in the two renderers.
-            helpers = _fn_body(section, "accoladePipsHtml") + _fn_body(section, "accoladeChipsHtml")
-            rest = section.replace(_fn_body(section, "accoladePipsHtml"), "").replace(_fn_body(section, "accoladeChipsHtml"), "")
+            # Inside the section, the class strings are only in the renderers.
+            renderers = ("accoladePipsHtml", "accoladeChipsHtml", "accoladeDetailsHtml")
+            helpers = "".join(_fn_body(section, n) for n in renderers)
+            rest = section
+            for n in renderers:
+                rest = rest.replace(_fn_body(section, n), "")
             assert "accolade-pip " in helpers and "accolade-chip " in helpers
             assert not re.search(r"accolade-(pip|chip)\b(?!s\b|-count)", rest)
             js = js[:start] + js[end:]

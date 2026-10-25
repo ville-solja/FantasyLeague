@@ -88,13 +88,13 @@ As the operator, I want the 15 seasons played before this feature recorded once,
 As a player collecting cards, I want past champions' and award winners' cards to show their titles, and champions' Legendaries to sometimes come as Holo, so that a great season leaves a mark in later ones.
 
 **Acceptance criteria**
-- **Symbols on cards:** every card (any rarity) shows the player's accolade pips, as in *Accolade Symbols Read at a Glance*. Fantasy Winner appears only when the winning user's account has a Steam-verified link to that player, and Played comes last with the seasons count. The card viewer lists the chips below the card, such as "S16 Div 1 Champion".
+- **Symbols on cards:** every card (any rarity) shows the player's accolade pips, as in *Accolade Symbols Read at a Glance*. Fantasy Winner appears only when the winning user's account has a Steam-verified link to that player, and Played comes last with the seasons count. The card viewer lists the chips below the card, such as "S16 Div 1 Champion". *(Superseded by #228: no card face shows pips; the card viewer lists the accolades with their details in an Accolades section.)*
 - **Holo roll:** when `draw_card` or `draw_booster` creates a Legendary for a player with a `champion` accolade in a season other than the current one, it becomes Holo with probability `holo_chance` % (a `weights` row, default 20, in Scoring config), stored as `cards.is_holo = true` (migration 040).
 - **Holo is a Legendary in every rule:**
   - `card_type` stays `legendary`;
   - points, modifiers, roster rules, `GET /deck` and boosters are unchanged;
   - card responses (draw, roster, collection, card detail) add `is_holo`.
-- **Holo image:** `Card_Template_Holo.png` when present. Otherwise the Legendary template plus a generated iridescent sheen, with one startup warning.
+- **Holo image:** `Card_Template_Holo.png` when present (the repo ships none since #228). Otherwise the Legendary template plus a generated iridescent sheen, with one startup warning.
 - **In the UI:** the rarity label reads "Legendary · Holo". The draw reveal adds an iridescent sweep on the card art only, off under reduced motion.
 - **Only champions:** a player without a champion accolade never gets a Holo card, and `holo_chance = 0` disables Holo entirely. Award winners who aren't champions get pips but no Holo.
 
@@ -126,12 +126,12 @@ As a visitor or collector, I want every accolade to have its own symbol, with a 
 
   | View | Form |
   |---|---|
-  | Cards: card viewer, draw reveal, My Team, collection | pips, on the card |
+  | Cards: card viewer, draw reveal, My Team, collection | pips, on the card (since #228: none on the card; detail lines in the card viewer's Accolades section) |
   | Players tab, Titles column | pips |
   | Player popup | pips in the header; chips in the season timeline |
   | Admin › Player management: pool marker and accolade table | chips (pips at phone width) |
   | History tab | chips in the season panels; pips with counts in the Hall of fame |
-- **On the card:**
+- **On the card** *(superseded by #228: the pips left the card face)*:
   - the pips stack down the card's right edge from the top-right corner, beside the art and clear of the name and rarity, read top to bottom like a mana cost (a row across the top would collide with long names);
   - they are sized in em, so they scale with the card, like the card back in issue 205;
   - they are an HTML overlay, not part of the card image, so they stay hoverable, and an accolade added later shows without rebuilding cached images;

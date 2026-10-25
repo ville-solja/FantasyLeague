@@ -12,13 +12,17 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-25 — developer — testing
+**Problem:** The #205 draw harness (`_run` in `test_issue_205_*`) loads only app-cards.js, so code that calls app-globals helpers (`accoladeDetailsHtml`, `playerTags`) is skipped by its `typeof` guards and a steps-local `function` stays invisible to the module.
+**Solution:** In the steps, load the helpers globally with an indirect eval, `(0, eval)(<ACCOLADES block>)` (rename its `_escHtml` so the harness's stays), and stub data lookups on `globalThis` (`test_issue_228_card_visuals_rollback.py`).
+
 ### 2026-10-25 — developer — endpoints
 **Problem:** `test_issue_85` caps each of the ten split `routers/admin_*.py` modules at 350 lines, so adding a feature's endpoints to `admin_matches.py` failed only in the full suite.
 **Solution:** Check `wc -l` on the router before adding to it. Keep the routes there as thin wrappers and put request handling in a service module (`manual_match.read_body` / `preview` / `store` for issue 224).
 
 ### 2026-10-25 — developer — testing
 **Problem:** `ImageChops.difference(a, b).getbbox() is None` on RGBA images compares the alpha channel only (Pillow's `getbbox` default), so colour changes pass as "identical" (the #50 Holo-sheen test passed only through the old templates' soft alpha, and failed on the opaque #218 ones).
-**Solution:** Compare images with `a.tobytes() == b.tobytes()` (`_same` in `test_issue_218_card_formatting.py`) or diff `.convert("RGB")` copies.
+**Solution:** Compare images with `a.tobytes() == b.tobytes()` (`_same` in `test_issue_228_card_visuals_rollback.py`) or diff `.convert("RGB")` copies.
 
 ### 2026-10-18 — ship — testing
 **Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.

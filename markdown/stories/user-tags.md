@@ -3,8 +3,9 @@
 ## Card Stickers and Leaderboard Badges
 
 ### See Tag Stickers on a Player Card
-*Superseded by issue #217: tags show as symbols down the card's left edge, not stickers in the
-card PNG. See "Tags Read as Symbols on Cards" in [cards.md](cards.md).*
+*Superseded by issue #217 (tags as symbols, not stickers in the card PNG), then by issue #228:
+tags show in the card viewer's Tags section, not on the card face. See "Tags Read as Symbols on
+Cards" and "Card Visuals Rollback" in [cards.md](cards.md).*
 
 **User story**
 As a fantasy user, I want to see sticker badges on cards belonging to tagged users (e.g.
