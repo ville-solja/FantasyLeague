@@ -1,6 +1,6 @@
 # Player Rank Medals
 
-Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup and the card viewer (issue #221). The medal on the card PNG is deferred (#218, product-owner decision 25 Oct). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
+Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup and the card viewer (issue #221). The medal on the card PNG is deferred (#218, product-owner decision 25 Oct; still off the PNG after the #228 rollback). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
 
 ---
 
@@ -33,7 +33,7 @@ Colours are tokens `--medal-herald` … `--medal-immortal` in `frontend/colors_a
 It appears:
 - in the player popup header, after the team name;
 - under the card image in the card viewer and the draw reveal (`#revealRank`, hidden when empty);
-- *(deferred)* not on the card PNG: the #218 layout leaves the left pillar to the tag pips, `generate_card_image` takes no rank arguments and the route passes none.
+- *(deferred)* not on the card PNG: the original templates restored by #228 have no rank slot, `generate_card_image` takes no rank arguments and the route passes none.
 
 ## Endpoints
 

@@ -32,8 +32,9 @@ Implementation details, integrations, and operator tooling.
 | [OpenDota Query Prioritization](reference/opendota-query-prioritization.md) | Live-match-aware gating: skips low-priority enrichment and tightens the poll interval while a monitored league has a match in progress |
 | [Card Image Generation](reference/card-image-generation.md) | Pillow-based PNG card rendering pipeline |
 | [Card Draw Animations](reference/card-draw-animations.md) | The drawn card flies from a deck in the Draw panel, flips face up before the reveal fades in, and lands in its roster or bench slot; a card back is postponed |
-| [Card Formatting](reference/card-formatting.md) | Card layout A: exact portrait and logo slots, rarity by edge colour, light legendary shine and a much stronger Holo template, with the tag and accolade pips over its side pillars in container units; PNG rank medal deferred |
-| [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black placeholder for a card's team-logo slot when no logo can be resolved yet |
+| [Card Visuals Rollback](reference/card-visuals-rollback.md) | Original card templates and renderer restored after layout A (#218); accolade and tag pips leave the card faces for Tags and Accolades sections with details in the card viewer |
+| [Card Formatting](reference/card-formatting.md) | Card layout A (#218), rolled back by #228; kept as the record of that design |
+| [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
 | [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown in the player popup and card viewer; on the card PNG deferred (#218) |
@@ -82,7 +83,7 @@ Implementation details, integrations, and operator tooling.
 | [Technical Writer](reference/technical-writer.md) | `/technical-writer` agent: names a document's audience and core message, then proposes a concise rewrite for approval without losing facts |
 | [Admin Router Organization](reference/admin-router-organization.md) | Module map for `backend/routers/admin_*.py` after splitting the single `admin.py` file by concern |
 | [User Tag System](reference/user-tag-system.md) | Generic admin-granted tags shown as card tag symbols and leaderboard chips; new tags need only a DB row |
-| [Tag Symbols on Cards](reference/tag-symbols-on-cards.md) | Caster, admin and other tags as symbols on the card's left edge with tooltips (`tags` in `GET /accolades`); baked tag stickers retired (#217) |
+| [Tag Symbols on Cards](reference/tag-symbols-on-cards.md) | Caster, admin and other tags as symbols with tooltips (`tags` in `GET /accolades`); baked tag stickers retired (#217). Since #228 they show in the card viewer's Tags section and the player popup header, not on the card face |
 | [Player Linking and Tag Visibility](reference/player-linking-and-tag-visibility.md) | Profile's Player identity panel shows the linked league player and the user's own tags, with a hint to link the player when tags exist but no player is linked; only Steam links a player, and every reader uses `player_links.py` (#209) |
 | [Caster Tag and Link Adoption](reference/caster-tag-and-link-adoption.md) | *(#201)* Approved streamers with Twitch connected get the Caster tag automatically (removed when no longer approved or unlinked; admin grants untouched); User Management shows Steam and Twitch link badges and totals |
 | [Dynamic Card Creation](reference/dynamic-card-creation.md) | Cards generated at draw time with weighted rarity rolls and player proportionality bias; no shared pool |

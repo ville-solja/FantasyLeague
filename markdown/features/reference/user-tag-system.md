@@ -18,8 +18,9 @@ Two new tables power the system:
 
 Tags are granted to **users** (app accounts). On cards, a player shows the tags of the
 user with a Steam-verified link to that player (`player_links.verified_links`, issue #209)
-as tag pips down the card's left edge, fed by `tags` in `GET /accolades`
-(`accolades.tags_by_player`). Card images carry no tags (issue #217).
+in the card viewer's Tags section (`tagDetailsHtml`, issue #228) and as tag pips in the
+player popup header, fed by `tags` in `GET /accolades` (`accolades.tags_by_player`). Card
+images and card faces carry no tags (issues #217, #228).
 
 Initial seed tags: `caster` ("Caster") and `season_winner` ("Season Winner").
 
