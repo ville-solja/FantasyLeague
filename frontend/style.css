@@ -2645,40 +2645,55 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
    The pip and chip symbols themselves are in SHARED STATES below.
    ============================================================ */
 
-/* Pips on a card: an HTML overlay stacked down the card's right edge from the top
-   corner, beside the art and clear of the name. Sized in em from the card's width. */
+/* Pips on a card (issues 50, 217, 218): HTML overlays over the card image's side
+   pillars (layout A), tag pips down the left pillar and accolade pips down the right,
+   from the portrait row to the pillar's bottom. Lengths are in --card-u, a hundredth
+   of the card's width: 1cqw where container queries work (the card wrappers declare
+   container-type), else the px value for the 180 px roster card and the 200 px card
+   viewer. On the 597 px card: pillars 24-104 and 492-572 px, rows 104-484 px. */
+.card-slot { width: 180px; --card-u: 1.8px; }
+.reveal-img-wrap { --card-u: 2px; }
+@supports (container-type: inline-size) {
+  .card-slot,
+  .reveal-img-wrap,
+  .draw-landing { container-type: inline-size; --card-u: 1cqw; }
+}
 .card-slot .card-pips,
 .reveal-pips .card-pips {
   position: absolute;
-  top: 3.4em;
-  right: 0.35em;
+  top: calc(var(--card-u) * 18.4);
+  right: calc(var(--card-u) * 4.4);
   z-index: 3;
-  font-size: 11px;
+  box-sizing: border-box;
+  padding: calc(var(--card-u) * 1.5);
+  max-height: calc(var(--card-u) * 62.6);
+  overflow: hidden;
+  font-size: calc(var(--card-u) * 5.9);
   pointer-events: none;
 }
-.reveal-pips .card-pips { font-size: 12px; }
 .card-pips .accolade-pips {
   flex-direction: column;
   flex-wrap: nowrap;
-  gap: 0.3em;
+  gap: calc(var(--card-u) * 2);
 }
 .card-pips .accolade-pip { pointer-events: auto; }
-/* Tag pips on a card (issue 217): the same overlay down the card's left edge, opposite
-   the accolade pips, so the two columns never overlap. */
 .card-slot .card-tag-pips,
 .reveal-pips .card-tag-pips {
   position: absolute;
-  top: 3.4em;
-  left: 0.35em;
+  top: calc(var(--card-u) * 18.4);
+  left: calc(var(--card-u) * 4.2);
   z-index: 3;
-  font-size: 11px;
+  box-sizing: border-box;
+  padding: calc(var(--card-u) * 1.5);
+  max-height: calc(var(--card-u) * 62.6);
+  overflow: hidden;
+  font-size: calc(var(--card-u) * 5.9);
   pointer-events: none;
 }
-.reveal-pips .card-tag-pips { font-size: 12px; }
 .card-tag-pips .tag-pips {
   flex-direction: column;
   flex-wrap: nowrap;
-  gap: 0.3em;
+  gap: calc(var(--card-u) * 2);
 }
 .card-tag-pips .card-tag-pip { pointer-events: auto; }
 .reveal-accolades { margin: -4px 0 12px; }

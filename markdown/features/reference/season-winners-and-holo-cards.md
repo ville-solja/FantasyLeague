@@ -76,13 +76,13 @@ python scripts/backfill_played.py --league <div1 id> --league <div2 id> --dry-ru
 
 ## Cards
 
-- **Symbols:** every card shows the player's accolade pips as an HTML overlay (`.card-pips`) stacked down the card's right edge, below the top corner and beside the art, sized in em from the card's width. It is not part of the card image, so pips stay hoverable and a later accolade shows without rebuilding images. User tags show as their own pips down the card's left edge (`.card-tag-pips`, issue #217; see [Tag Symbols on Cards](tag-symbols-on-cards.md)). The card viewer lists the player's titles as chips below the card. Views: card viewer and draw reveal (`_renderCardAccolades` in `app-cards.js`), My Team roster and bench (`_cardSlotHTML` in `app-roster.js`).
+- **Symbols:** every card shows the player's accolade pips as an HTML overlay (`.card-pips`) stacked down the card image's right pillar from the portrait row (layout A, issue #218), placed and sized in container units so it scales with the card. It is not part of the card image, so pips stay hoverable and a later accolade shows without rebuilding images. User tags show as their own pips down the card's left edge (`.card-tag-pips`, issue #217; see [Tag Symbols on Cards](tag-symbols-on-cards.md)). The card viewer lists the player's titles as chips below the card. Views: card viewer and draw reveal (`_renderCardAccolades` in `app-cards.js`), My Team roster and bench (`_cardSlotHTML` in `app-roster.js`).
 - **Data:** the frontend loads `GET /accolades` once per page (`loadAccolades` in `app-globals.js`) and redraws the roster's pips when it arrives.
 - **Holo roll:** when `draw_card` or `draw_booster` creates a Legendary for a player with a `champion` accolade in a season other than the live one, it becomes Holo with probability `holo_chance` % (`accolades.roll_holo`), stored as `cards.is_holo = true`. A player removed from the champion record loses eligibility for later draws; cards already drawn as Holo stay Holo.
 - **A Legendary in every rule:** `card_type` stays `legendary`; points, modifiers, roster rules, `GET /deck` and boosters are unchanged. Draw, roster, collection (`collection_for_user`) and card detail responses add `is_holo`; card detail also returns `player_id`, which the viewer uses for the pips and the player link.
 - **Only champions:** award winners who aren't champions get pips but never Holo; `holo_chance = 0` disables Holo.
 - **In the UI:** the rarity label reads "Legendary · Holo". The draw reveal plays one iridescent sweep over the card art (`.reveal-img-wrap--holo`), off under reduced motion.
-- **Holo art:** see [Card Image Generation](card-image-generation.md). `Card_Template_Holo.png` when present, else the Legendary template with a generated sheen.
+- **Holo art:** see [Card Image Generation](card-image-generation.md). `Card_Template_Holo.png` (drawn by `backend/scripts/make_card_templates.py` since #218: a strong rainbow over the frame and pillars, a faint tint over the text panels) when present, else the Legendary template with a generated sheen.
 
 ## Accolade symbols
 

@@ -57,10 +57,10 @@ As a user, I want to browse my roster and bench.
 As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance.
 
 **Acceptance criteria**
-- Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
-- Team name is printed below the player name on the card image
-- Player avatar (from OpenDota) is composited as a circular portrait on the card image
-- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
+- Player name is printed on the card image in the name bar (shrunk, then ellipsized if too long; layout A, #218)
+- Team name is printed on the type line, beside the team logo
+- Player avatar (from OpenDota) is composited as a square portrait on the card image (#218; was circular)
+- Team logo (from local Dotabuff cache, HTTP fallback) is composited in a 100 × 60 slot on the type line, no circle crop (#218)
 - If the avatar is unavailable, the card still renders correctly with that slot left empty
   (team logo unavailability is covered separately below)
 - During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
@@ -75,9 +75,9 @@ still looks polished pre-season.
 
 **Acceptance criteria**
 - When neither the local Dotabuff PNG cache nor the team's HTTP `logo_url` resolves to a usable
-  image, the team logo slot is filled with a solid black circular placeholder instead of being
+  image, the team logo slot is filled with a solid black placeholder instead of being
   left unpainted
-- The placeholder uses the same circular crop, size, and position as a real team logo, so the
+- The placeholder uses the same size and position as a real team logo (the 100 × 60 slot since #218), so the
   card layout is identical either way
 - Once a team logo becomes available (local cache populated via ingest, or `logo_url` set), it
   replaces the placeholder on the next card image request — no cache to invalidate, since the
@@ -102,20 +102,21 @@ As a user, I want each rarity tier to have a visually distinct card frame so I c
 As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
 
 **Acceptance criteria**
-- Each active modifier is shown in the lower band of the card as `STAT +X%`
+- Each active modifier is shown in the card's rules box (layout A, #218) as `STAT +X%`, up to 3 lines
 - After a reroll, the card image updates immediately to reflect the new modifiers
-- Cards with no modifiers (e.g. Common) show no modifier text in that area
+- Cards with no modifiers (e.g. Common) show "No stat modifiers" in that area (#218)
 
 ---
 
 ### Replaceable Card Template Artwork
 **User story**
-As an operator, I want to update card template artwork for each rarity by replacing files so the visual design can be refreshed between seasons without code changes.
+As an operator, I want to refresh the card template artwork for each rarity between seasons so the visual design can change without touching the renderer.
 
 **Acceptance criteria**
 - Templates are loaded from a configurable assets directory at startup
-- Replacing any of the four template PNGs takes effect on the next card image request
-- Missing templates fail with a clear error rather than silently using a wrong rarity
+- Since #218 the template PNGs are drawn by `backend/scripts/make_card_templates.py`; artwork changes go through the script, which regenerates the committed PNGs (a test checks they match)
+- Replacing a template PNG takes effect on the next card image request
+- Missing templates fail with a clear error rather than silently using a wrong rarity; a missing `Card_Template_Holo.png` falls back to the generated sheen with a warning
 
 ---
 
@@ -506,7 +507,7 @@ As a player, I want to see the player's rank medal on the card itself so that it
 As a player, I want the tag and accolade symbols to sit neatly in the card's side pillars so that they never cover the portrait, the name or the frame.
 
 **Acceptance criteria**
-- Tag pips (#217) stack from the top of the left pillar and accolade pips (#50) from the top of the right pillar, on the roster card (180 px), the card viewer and draw reveal, and the Weekly Report cards
+- Tag pips (#217) stack from the top of the left pillar and accolade pips (#50) from the top of the right pillar, on the roster card (180 px) and in the card viewer and draw reveal (the Weekly Report opens cards in the card viewer)
 - The pips scale with the card, so they stay inside the pillars at every card size
 - With more tag pips than fit, the column stops at the pillar's bottom (no overlap with the type line)
 - The pips keep their tooltips, keyboard focus and `aria-label`s; the PNG itself draws no tags or accolades
