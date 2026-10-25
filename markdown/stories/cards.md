@@ -487,11 +487,11 @@ As a player, I want the portrait and team logo on my card to look sharp and undi
 - A 250 × 150 cached logo fills a 100 × 60 slot exactly (0.4×); a fallback logo of another shape is fitted inside the slot without stretching; no circle crop
 - Rarity is shown by the frame edge colour only: common grey, rare blue, epic purple, legendary gold; no gems, rarity word or card number on the image
 - The card viewer still names the rarity in text, so the edge colour is not the only signal
-- An ordinary legendary has a light shine; a Holo legendary has a much stronger rainbow shine on the frame and pillars, with the text panels and medal still readable
+- An ordinary legendary has a light shine; a Holo legendary has a much stronger rainbow shine on the frame and pillars, with the text panels still readable
 - The templates are drawn by `backend/scripts/make_card_templates.py`, and the committed PNGs match its output
 - No league name and no image from a Dota CDN on the card
 
-### Rank Medal on the Card
+### Rank Medal on the Card *(deferred)*
 **User story**
 As a player, I want to see the player's rank medal on the card itself so that it shows wherever the card image is used, including the Twitch panel.
 
@@ -508,7 +508,7 @@ As a player, I want the tag and accolade symbols to sit neatly in the card's sid
 **Acceptance criteria**
 - Tag pips (#217) stack from the top of the left pillar and accolade pips (#50) from the top of the right pillar, on the roster card (180 px), the card viewer and draw reveal, and the Weekly Report cards
 - The pips scale with the card, so they stay inside the pillars at every card size
-- The tag pips end above the rank medal; with more pips than fit, the column stops there (no overlap with the medal or the type line)
+- With more tag pips than fit, the column stops at the pillar's bottom (no overlap with the type line)
 - The pips keep their tooltips, keyboard focus and `aria-label`s; the PNG itself draws no tags or accolades
 
 ### Counted Accolades *(not yet implemented)*
