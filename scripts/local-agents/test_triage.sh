@@ -2,13 +2,18 @@
 # Nightly local test triage (markdown/features/reference/local-model-agents.md section 3.3).
 # Runs the backend suite; on failures, asks the local model to classify each one and writes
 # reports/local/test-triage/<date>.md. Never fails the caller: a missing report costs nothing.
+# TRIAGE_LOG=<file> classifies an existing pytest log instead of running the suite.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 model="${TRIAGE_MODEL:-qwen3:14b}"
 out="reports/local/test-triage/$(date +%F).md"
 mkdir -p "$(dirname "$out")"
 
-log=$(cd backend && python3 -m pytest tests/ -n auto -q --tb=line -p no:cacheprovider 2>&1 | tail -150)
+if [[ -n "${TRIAGE_LOG:-}" ]]; then
+  log=$(tail -150 "$TRIAGE_LOG")
+else
+  log=$(cd backend && python3 -m pytest tests/ -n auto -q --tb=line -p no:cacheprovider 2>&1 | tail -150)
+fi
 summary=$(tail -1 <<<"$log")
 
 if ! grep -qE "[0-9]+ (failed|error)" <<<"$summary"; then
