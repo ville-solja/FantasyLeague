@@ -26,7 +26,7 @@ Demo Mode: `POST /admin/demo/clock` runs `due_substitutions` synchronously after
 
 Changing which week a match counts for (`week_override_id`) changes who "played" in two weeks. So every week change re-runs the substitutions of the weeks it affects, in the same request:
 
-- **Triggers:** `PUT /matches/{match_id}/week` (the Week picker and the out-of-week banner in Admin › Matches) and `POST /admin/sync-match-weeks` without `dry_run`.
+- **Triggers:** `PUT /matches/{match_id}/week` (the Week picker and the out-of-week banner in Admin › Matches) and `POST /admin/sync-match-weeks` without `dry_run`, and Add match (`POST /admin/matches/manual`, reason `match_added`; a replacement that moves the match re-runs both the old and the new week; see `matches-outside-the-league.md`).
 - **Affected weeks:** each changed match's old and new scoring week (`weeks.scoring_week_for`: the override week, else the week containing `start_time`), when they differ.
 - **Re-run:** `weeks.rerun_substitutions_for(db, week_ids, reason)` calls `run_substitutions` for each affected week whose `substitutions_at` is set, and writes one `admin_substitutions_rerun` audit entry per week with `reason=week_override`. A week whose substitutions haven't run yet is left alone; its scheduled run uses the new assignment.
 - **Result:** the response's `substitution_reruns` lists `{week_id, week_label, substitutions}` per re-run week, and the page shows "Week 4: substitutions re-run (3)".

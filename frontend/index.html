@@ -1506,7 +1506,10 @@
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h2 style="margin:0;">Matches</h2>
-        <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+        <div class="admin-matches-actions">
+          <button class="secondary" onclick="loadAdminMatches()">Refresh</button>
+          <button id="adminAddMatchBtn" onclick="openAddMatchDialog()">Add match</button>
+        </div>
       </div>
       <div class="admin-matches-filters" role="group" aria-label="Filter matches">
         <label class="admin-matches-filter"><input type="checkbox" id="adminMatchesMvpMissing" onchange="renderAdminMatches()">MVP missing</label>
@@ -1518,6 +1521,7 @@
           </select>
         </label>
         <label class="admin-matches-filter"><input type="checkbox" id="adminMatchesUnparseableOnly" onchange="renderAdminMatches()">Unparseable only</label>
+        <label class="admin-matches-filter"><input type="checkbox" id="adminMatchesManualOnly" onchange="renderAdminMatches()">Manual only</label>
         <span class="admin-matches-count" id="adminMatchesCount" aria-live="polite"></span>
       </div>
       <div id="adminMatchesOutOfWeek" style="display:none;margin-bottom:12px;padding:8px 10px;border:1px solid var(--accent, #f60);"></div>
@@ -1531,6 +1535,49 @@
     </div>
   </div>
 
+</div>
+
+<!-- Add match (issue 224): a match played outside the league lobby, from OpenDota or a replay -->
+<div id="addMatchModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="addMatchTitle" data-close="closeAddMatchDialog" onclick="if(event.target===this)closeAddMatchDialog()">
+  <div class="modal add-match-modal">
+    <div class="add-match-head">
+      <h2 id="addMatchTitle">Add match</h2>
+      <button class="ghost" onclick="closeAddMatchDialog()" aria-label="Close">&#x2715;</button>
+    </div>
+    <p class="add-match-intro">For a match played outside the league lobby. It is stored and scored like a league match.</p>
+    <div class="add-match-tabs" role="tablist" aria-label="Where the match comes from">
+      <button type="button" class="add-match-tab active" id="addMatchTabOpenDota" role="tab" aria-selected="true" aria-controls="addMatchOpenDotaPanel" onclick="setAddMatchMode('opendota')">From OpenDota</button>
+      <button type="button" class="add-match-tab" id="addMatchTabReplay" role="tab" aria-selected="false" aria-controls="addMatchReplayPanel" onclick="setAddMatchMode('replay')">From replay</button>
+    </div>
+    <div id="addMatchOpenDotaPanel" class="add-match-panel" role="tabpanel" aria-labelledby="addMatchTabOpenDota">
+      <label for="addMatchId">Match id</label>
+      <div class="add-match-row">
+        <input type="text" id="addMatchId" inputmode="numeric" autocomplete="off" placeholder="e.g. 8100000001">
+        <button type="button" class="secondary" id="addMatchFetchBtn" onclick="previewAddMatch()">Fetch</button>
+      </div>
+    </div>
+    <div id="addMatchReplayPanel" class="add-match-panel" role="tabpanel" aria-labelledby="addMatchTabReplay" hidden>
+      <label for="addMatchFile">Replay summary (match-&lt;id&gt;.json from scripts/replay_to_match.py, at most 56 KB)</label>
+      <div class="add-match-row">
+        <input type="file" id="addMatchFile" accept=".json,application/json">
+        <button type="button" class="secondary" id="addMatchCheckBtn" onclick="previewAddMatch()">Check file</button>
+      </div>
+    </div>
+    <div id="addMatchPreview" class="add-match-preview" aria-live="polite"></div>
+    <div class="add-match-pickers">
+      <label for="addMatchLeague">League</label>
+      <select id="addMatchLeague"><option value="">Choose…</option></select>
+      <label for="addMatchRadiant">Radiant team</label>
+      <select id="addMatchRadiant"><option value="">Choose…</option></select>
+      <label for="addMatchDire">Dire team</label>
+      <select id="addMatchDire"><option value="">Choose…</option></select>
+    </div>
+    <div class="add-match-actions">
+      <button type="button" id="addMatchStoreBtn" onclick="storeAddMatch()" disabled>Add</button>
+      <button type="button" class="ghost" onclick="closeAddMatchDialog()">Cancel</button>
+    </div>
+    <div class="status" id="addMatchStatus" role="status"></div>
+  </div>
 </div>
 
 <!-- MVP Selection Modal -->

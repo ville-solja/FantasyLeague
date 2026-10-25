@@ -3917,6 +3917,68 @@ td .accolade-chip { border-color: transparent; }
   }
 }
 
+/* Add match dialog and source chips (issue 224): matches added outside the league. */
+.admin-matches-actions { display: flex; gap: var(--s-2); }
+.admin-source-chip {
+  display: inline-block;
+  margin-left: var(--s-1);
+  padding: 0 var(--s-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.admin-source-chip.replay { border-color: var(--k-info); color: var(--k-info); }
+.add-match-modal { width: min(720px, 95vw); max-width: 720px; }
+.add-match-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--s-2); }
+.add-match-head h2 { margin: 0; }
+.add-match-intro { margin: 0 0 var(--s-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+.add-match-tabs { display: flex; gap: var(--s-1); margin-bottom: var(--s-3); border-bottom: 1px solid var(--border); }
+.add-match-tab {
+  background: transparent;
+  color: var(--fg-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--s-2) var(--s-3);
+}
+.add-match-tab.active { color: var(--fg); border-bottom-color: var(--accent); }
+.add-match-panel { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
+.add-match-panel[hidden] { display: none; }
+.add-match-row { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.add-match-row input { flex: 1 1 200px; min-width: 0; }
+.add-match-preview { margin-bottom: var(--s-3); font-size: var(--fs-sm); }
+.add-match-preview:empty { display: none; }
+.add-match-summary { margin: 0 0 var(--s-2); }
+.add-match-note { margin: 0 0 var(--s-2); color: var(--fg-muted); }
+.add-match-partial { margin: 0 0 var(--s-2); color: var(--k-warn); }
+.add-match-players { width: 100%; font-variant-numeric: tabular-nums; }
+.add-match-players th,
+.add-match-players td { padding: 2px var(--s-2); text-align: left; }
+.add-match-warn {
+  margin-left: var(--s-1);
+  padding: 0 var(--s-1);
+  border: 1px solid var(--k-warn);
+  border-radius: var(--r-sm);
+  color: var(--k-warn);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.add-match-pickers {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s-2) var(--s-3);
+  align-items: center;
+  margin-bottom: var(--s-3);
+  font-size: var(--fs-sm);
+}
+.add-match-actions { display: flex; gap: var(--s-2); }
+.add-match-actions button { flex: 1; }
+@media (max-width: 520px) {
+  .add-match-pickers { grid-template-columns: 1fr; }
+}
+
 /* ============================================================
    GUIDED TOUR (issue #144) — spotlight overlay on My Team
    ============================================================ */

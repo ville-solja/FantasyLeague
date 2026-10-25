@@ -10,7 +10,7 @@ from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
 import card_points
 from database import SessionLocal
-from models import AuditLog, LiveMatch, Match, MatchTiming, Player, PlayerMatchStats, League, Team, Weight, MatchBan, TwitchMVP
+from models import AuditLog, LiveMatch, Match, MatchTiming, Player, PlayerMatchStats, League, Team, Weight, Week, MatchBan, TwitchMVP
 from opendota_client import OPEN_DOTA_URL, get_json as opendota_get_json, post_json as opendota_post_json
 from scoring import apply_mvp_bonus_to_row, fantasy_score
 from dotabuff_league_logos import ensure_dotabuff_league_logos
@@ -237,19 +237,45 @@ def _bust_panel_cache() -> None:
 # MATCH INGESTION
 # -----------------------
 
-def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict):
+MIN_MATCH_SECONDS = 900  # matches shorter than 15 minutes are never stored
+
+MATCH_SOURCES = ("league", "opendota_manual", "replay")
+
+
+def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_teams: set, weights: dict,
+                 source: str = "league", radiant_team_id=None, dire_team_id=None):
     data = opendota_get_json(f"{OPEN_DOTA_URL}/matches/{match_id}", label=f"match {match_id}")
     if data is None:
         logger.warning("Skipping match %d — unavailable after retries", match_id)
         return
+    outcome = _store_match_payload(
+        db, data, match_id, league_id, weights, source=source,
+        radiant_team_id=radiant_team_id, dire_team_id=dire_team_id,
+        seen_players=seen_players, seen_teams=seen_teams,
+    )
+    if outcome == "stored" and _is_unparsed(data):
+        request_parse(match_id)
+    return outcome
+
+
+def _store_match_payload(db, data: dict, match_id: int, league_id: int, weights: dict, *,
+                         source: str = "league", radiant_team_id=None, dire_team_id=None,
+                         parse_status: str | None = None, replace: bool = False,
+                         seen_players: set | None = None, seen_teams: set | None = None) -> str:
+    """The one store path for league ingest, Add match from OpenDota and Add match from a
+    replay (issue 224). `data` is an OpenDota /matches/{id} payload (a replay import is
+    converted to that shape by manual_match). Team ids given here replace the payload's.
+    With `replace`, an existing row for the match keeps its admin fields (VOD, week
+    override, exclusion) and gets new match fields, stat rows and bans.
+    Returns "stored", or "too_short" when nothing was stored."""
+    seen_players = set() if seen_players is None else seen_players
+    seen_teams = set() if seen_teams is None else seen_teams
 
     duration = data.get("duration")
-    if duration is not None and duration < 900:
+    if duration is not None and duration < MIN_MATCH_SECONDS:
         logger.info("Skipping match %d — too short (%ds)", match_id, duration)
-        return
+        return "too_short"
 
-    radiant_team_id = data.get("radiant_team_id")
-    dire_team_id = data.get("dire_team_id")
     radiant_name = data.get("radiant_name")
     dire_name = data.get("dire_name")
     radiant_logo = _match_logo_url(data.get("radiant_logo"))
@@ -257,11 +283,13 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
 
     logger.info("Match %d | %s vs %s", match_id, radiant_name, dire_name)
 
-    for team_id, team_name, row_logo in (
-        (radiant_team_id, radiant_name, radiant_logo),
-        (dire_team_id, dire_name, dire_logo),
+    # Team rows are created from the payload's own team ids; an admin-chosen id
+    # (manual matches) refers to an existing team and is left as it is.
+    for override, team_id, team_name, row_logo in (
+        (radiant_team_id, data.get("radiant_team_id"), radiant_name, radiant_logo),
+        (dire_team_id, data.get("dire_team_id"), dire_name, dire_logo),
     ):
-        if not team_id:
+        if override or not team_id:
             continue
         team = db.get(Team, team_id)
         if not team:
@@ -273,17 +301,29 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
                 team.logo_url = row_logo
         seen_teams.add(team_id)
 
-    match = Match(
-        match_id=match_id,
+    radiant_team_id = radiant_team_id or data.get("radiant_team_id")
+    dire_team_id = dire_team_id or data.get("dire_team_id")
+    fields = dict(
         radiant_team_id=radiant_team_id,
         dire_team_id=dire_team_id,
         league_id=league_id,
         start_time=data.get("start_time"),
         radiant_win=data.get("radiant_win"),
         duration=duration,
-        parse_status=_parse_status_for(data),
+        parse_status=parse_status or _parse_status_for(data),
+        source=source,
     )
-    db.add(match)
+    match = db.get(Match, match_id) if replace else None
+    if match is None:
+        db.add(Match(match_id=match_id, **fields))
+    else:
+        for key, value in fields.items():
+            setattr(match, key, value)
+        # ORM-level delete + flush, as in refresh_match_stats (SQLite reuses rowids).
+        for old in db.query(PlayerMatchStats).filter(PlayerMatchStats.match_id == match_id).all():
+            db.delete(old)
+        db.query(MatchBan).filter(MatchBan.match_id == match_id).delete()
+        db.flush()
 
     raw_players = data.get("players", [])
     _ensure_players(db, raw_players, seen_players)
@@ -295,7 +335,7 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
 
     existing_bans = db.query(MatchBan).filter(MatchBan.match_id == match_id).count()
     if not existing_bans:
-        for pb in data.get("picks_bans", []):
+        for pb in data.get("picks_bans") or []:
             if not pb.get("is_pick"):
                 db.add(MatchBan(match_id=match_id, hero_id=pb.get("hero_id")))
 
@@ -308,9 +348,60 @@ def ingest_match(db, match_id: int, league_id: int, seen_players: set, seen_team
     record_timing(db, match_id, ingested_at=int(time.time()))
     db.commit()
     _bust_panel_cache()
+    return "stored"
 
-    if _is_unparsed(data):
+
+def store_manual_match(db, payload: dict, league_id: int, radiant_team_id: int, dire_team_id: int,
+                       source: str, *, weights: dict | None = None, replace: bool = False,
+                       actor_id=None, actor_username="system") -> str:
+    """Store a match added by an admin (issue 224) through the ingest store path.
+    `payload` is OpenDota-shaped; for source "replay" its `missing_stats` decide the
+    parse status ("unparseable" when any stat is missing: the existing partial-stats
+    marker, which parse retry already leaves alone; else "parsed"). A league-ingested
+    match is never replaced (ValueError). After storing, substitutions are re-run for the
+    affected scoring weeks and the schedule cache is cleared.
+    Returns "stored" or "too_short"."""
+    import schedule
+    import weeks
+
+    if source not in ("opendota_manual", "replay"):
+        raise ValueError(f"unknown manual source {source!r}")
+    match_id = int(payload["match_id"])
+    existing = db.get(Match, match_id)
+    if existing is not None and (existing.source or "league") == "league":
+        raise ValueError(f"match {match_id} is a league match and is never replaced")
+    if existing is not None and not replace:
+        raise ValueError(f"match {match_id} is already stored; pass replace=True")
+    if weights is None:
+        weights = {w.key: w.value for w in db.query(Weight).all()}
+
+    all_weeks = db.query(Week).all()
+    old_week = weeks.scoring_week_for(db, existing, all_weeks)[0] if existing is not None else None
+
+    if source == "replay":
+        parse_status = "unparseable" if payload.get("missing_stats") else "parsed"
+    else:
+        parse_status = _parse_status_for(payload)
+
+    outcome = _store_match_payload(
+        db, payload, match_id, league_id, weights, source=source,
+        radiant_team_id=radiant_team_id, dire_team_id=dire_team_id,
+        parse_status=parse_status, replace=existing is not None,
+    )
+    if outcome != "stored":
+        return outcome
+
+    match = db.get(Match, match_id)
+    new_week = weeks.scoring_week_for(db, match, all_weeks)[0]
+    affected = {w.id for w in (old_week, new_week) if w is not None}
+    if affected:
+        weeks.rerun_substitutions_for(db, affected, "match_added",
+                                      actor_id=actor_id, actor_username=actor_username)
+        db.commit()
+    schedule.bust_cache()
+    if source == "opendota_manual" and _is_unparsed(payload):
         request_parse(match_id)
+    return "stored"
 
 
 def _ensure_players(db, raw_players: list, seen_players: set) -> None:
@@ -425,7 +516,8 @@ def _default_parse_retry_hours() -> int:
 def find_unparsed_match_ids(db, max_age_hours: int) -> list[int]:
     """Match IDs from the last `max_age_hours` whose stat rows sum to 0 on the three
     parse-only signature stats (teamfight_participation, stuns, obs_placed). Matches
-    marked 'unparseable' (by an admin or by mark_stuck_matches_unparseable) are skipped."""
+    marked 'unparseable' (by an admin or by mark_stuck_matches_unparseable) and matches
+    imported from a replay (source "replay", issue 224) are skipped."""
     if max_age_hours <= 0:
         return []
     cutoff = int(time.time()) - max_age_hours * 3600
@@ -434,6 +526,7 @@ def find_unparsed_match_ids(db, max_age_hours: int) -> list[int]:
         .join(PlayerMatchStats, PlayerMatchStats.match_id == Match.match_id)
         .filter(Match.start_time >= cutoff)
         .filter((Match.parse_status.is_(None)) | (Match.parse_status != "unparseable"))
+        .filter(Match.source != "replay")
         .group_by(Match.match_id)
         .having(func.coalesce(func.sum(PlayerMatchStats.teamfight_participation), 0) == 0)
         .having(func.coalesce(func.sum(PlayerMatchStats.stuns), 0) == 0)
@@ -462,8 +555,13 @@ def refresh_match_stats(db, match_id: int, weights: dict) -> str:
         return "unavailable"
     match.parse_status = "parsed"
 
-    radiant_team_id = data.get("radiant_team_id") or match.radiant_team_id
-    dire_team_id = data.get("dire_team_id") or match.dire_team_id
+    if (match.source or "league") == "league":
+        radiant_team_id = data.get("radiant_team_id") or match.radiant_team_id
+        dire_team_id = data.get("dire_team_id") or match.dire_team_id
+    else:
+        # Issue 224: an admin-added match keeps the teams the admin chose.
+        radiant_team_id = match.radiant_team_id
+        dire_team_id = match.dire_team_id
     raw_players = data.get("players", [])
     _ensure_players(db, raw_players, set())
 
@@ -512,14 +610,16 @@ def request_parse(match_id: int) -> bool:
 def mark_stuck_matches_unparseable(db, max_age_hours: int) -> list[int]:
     """Mark every match still 'unparsed' and older than `max_age_hours` as 'unparseable'
     (one `match_marked_unparseable` audit row each) so the retry pass stops asking
-    OpenDota for it and admins see it flagged. Never touches excluded_from_scoring.
+    OpenDota for it and admins see it flagged. Replay matches (issue 224) are never
+    touched. Never touches excluded_from_scoring.
     Commits. Returns the marked match IDs."""
     if max_age_hours <= 0:
         return []
     cutoff = int(time.time()) - max_age_hours * 3600
     stuck = (
         db.query(Match)
-        .filter(Match.parse_status == "unparsed", Match.start_time < cutoff)
+        .filter(Match.parse_status == "unparsed", Match.start_time < cutoff,
+                Match.source != "replay")
         .order_by(Match.match_id)
         .all()
     )

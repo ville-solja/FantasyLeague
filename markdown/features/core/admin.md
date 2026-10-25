@@ -185,6 +185,9 @@ Each row also carries `series_key`, `series_team1_id`, `series_team2_id` (the sc
 ### `GET /admin/matches` (scoring week fields)
 Besides the match, MVP, timing and parse fields, each row carries `week_override_id`, `scoring_week_id`, `scoring_week_label` and `scoring_week_source` (`override` or `time`; all null when no week contains the match; an override pointing to a deleted week gives source `override` with a null id and label), and `time_week_id` / `time_week_label` (the week containing `start_time`, shown by the picker's "By time" option). See [Weeks › Week Override](weeks.md#week-override).
 
+### `GET /admin/matches` (source fields, issue 224)
+Each row also carries `source` (`league`, `opendota_manual` or `replay`) and, for manual matches, `added_by` / `added_at` from the latest `admin_match_added` audit entry. See `reference/matches-outside-the-league.md`.
+
 ### `PUT /matches/{match_id}/week`
 Sets which fantasy week a series counts for, overriding the week derived from `start_time`. Used when a series is played outside its scheduled week.
 ```json
@@ -332,7 +335,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_week_created` | Admin created a week (Week Management tab) |
 | `admin_week_edited` | Admin edited an unlocked week |
 | `admin_week_deleted` | Admin deleted an unlocked, roster-free week |
-| `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`; `reason=week_override` when a week change triggered it) |
+| `admin_substitutions_rerun` | Admin re-ran a finished week's bench substitutions (`detail` has the week and `substitutions=N`; `reason=week_override` when a week change triggered it, `reason=match_added` when Add match stored or replaced a match in a finished week) |
 | `admin_bench_backfill` | One-off retroactive bench backfill for a week by `backend/scripts/backfill_bench.py` (#189); actor `script`, `detail` has the week, `users`, `bench_cards` and `substitutions` |
 | `admin_token_grant_event_created` | Admin created a token grant event |
 | `admin_token_grant_event_deleted` | Admin deleted a token grant event |
@@ -356,6 +359,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
 | `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
 | `admin_match_retry_parse` | Admin retried a match's parse via the Matches tab (`detail` has the fetch result and outcome) |
+| `admin_match_added` | Admin added a match outside the league via Add match (issue #224; `detail` has the source, match, league, both teams, whether it replaced a manual match and any missing stats). See `reference/matches-outside-the-league.md` |
 | `admin_match_scoring` | Admin changed a match's unparseable / excluded-from-scoring flags (`detail` has old and new values) |
 | `match_marked_unparseable` | Background parse-retry pass auto-marked a match still unparsed past the retry window (no actor) |
 | `twitch_mvp_set` | Broadcaster set match MVP via the Twitch extension |
@@ -423,6 +427,7 @@ These features have dedicated reference documents:
 | Match Scoring Week | `PUT /matches/{match_id}/week`, `GET /admin/matches/out-of-week`, `POST /admin/sync-match-weeks` | `core/weeks.md#week-override`, `reference/automatic-bench-substitution.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
+| Matches Outside the League | `POST /admin/matches/manual/preview`, `POST /admin/matches/manual` (`GET /admin/matches` carries `source`, `added_by`, `added_at`) | `reference/matches-outside-the-league.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |

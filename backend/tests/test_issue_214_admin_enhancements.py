@@ -1005,7 +1005,8 @@ def test_admin_matches_existing_fields_unchanged(db, feed):
     without = _rows(db)
     for mid, row in with_feed.items():
         assert _KEYS_BEFORE_214 <= set(row)
-        assert set(row) == _KEYS_BEFORE_214 | _SERIES_KEYS
+        # Issue 224 added source, added_by and added_at (matches added outside the league).
+        assert set(row) == _KEYS_BEFORE_214 | _SERIES_KEYS | {"source", "added_by", "added_at"}
         assert {k: row[k] for k in _KEYS_BEFORE_214} == {k: without[mid][k] for k in _KEYS_BEFORE_214}
     r = with_feed[501]
     assert (r["team1"], r["team2"], r["league_id"], r["vod_url"]) == ("Reds", "Blues", 1, "https://v/1")

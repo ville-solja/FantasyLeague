@@ -20,7 +20,7 @@ Example: radres scored 9.4 in parsed match 9000543547 but 0.9 in match 900063271
 |---|---|
 | `parsed` | OpenDota has parsed the replay. All stats are real. |
 | `unparsed` | Not parsed yet. The background retry pass re-checks it within `INGEST_PARSE_RETRY_HOURS`. |
-| `unparseable` | Still unparsed past the retry window, or marked by an admin. The background pass sends no more parse requests. |
+| `unparseable` | Still unparsed past the retry window, or marked by an admin. The background pass sends no more parse requests. Also set on a match imported from a replay whose summary lists `missing_stats` (issue #224). |
 
 `matches.excluded_from_scoring` (`Boolean`, default false) removes the match from every points aggregation. Only an admin sets it.
 
@@ -28,8 +28,9 @@ Example: radres scored 9.4 in parsed match 9000543547 but 0.9 in match 900063271
 
 - `ingest_match()` stores `parsed` or `unparsed`, based on the payload's `version` (`_is_unparsed()`).
 - `refresh_match_stats()` sets `parsed` when it replaces a match's rows with parsed stats.
-- `find_unparsed_match_ids()` skips `unparseable` matches, so the retry pass neither fetches them nor requests a parse.
-- `mark_stuck_matches_unparseable(db, max_age_hours)` runs at the end of every `retry_unparsed_matches()` pass. It marks each `unparsed` match whose `start_time` is older than the window as `unparseable`, and writes a `match_marked_unparseable` audit row for each one. It never sets `excluded_from_scoring`. The window it uses is `max(max_age_hours, INGEST_PARSE_RETRY_HOURS)`, so a manual pass with a narrow window cannot flag recent matches.
+- `find_unparsed_match_ids()` skips `unparseable` matches, so the retry pass neither fetches them nor requests a parse. It also skips matches imported from a replay (`matches.source = 'replay'`, issue #224), whatever their status.
+- `store_manual_match()` (Admin › Matches › Add match) stores a replay match as `parsed`, or as `unparseable` when the replay summary lists `missing_stats`. A match added from OpenDota gets `parsed` or `unparsed` like an ingested one. See `matches-outside-the-league.md`.
+- `mark_stuck_matches_unparseable(db, max_age_hours)` runs at the end of every `retry_unparsed_matches()` pass. It marks each `unparsed` match whose `start_time` is older than the window as `unparseable` (replay matches excepted), and writes a `match_marked_unparseable` audit row for each one. It never sets `excluded_from_scoring`. The window it uses is `max(max_age_hours, INGEST_PARSE_RETRY_HOURS)`, so a manual pass with a narrow window cannot flag recent matches.
 
 ### Migration `027_match_parse_status`
 
@@ -62,7 +63,7 @@ A Twitch MVP bonus on an excluded match is dropped along with the rest of the ma
 Each row now also includes `parse_status` and `excluded_from_scoring`.
 
 ### `POST /admin/matches/{match_id}/retry-parse`
-Admin only. Accepts any match, whatever its `parse_status` (only the UI limits the button to unparsed rows). Returns 404 for an unknown match, and 409 while `ingest.INGEST_LOCK` is held (a poll cycle, manual ingest or parse-retry run). The lock is always released. It re-fetches the match with `refresh_match_stats()`:
+Admin only. Accepts any match, whatever its `parse_status` (only the UI limits the button to unparsed rows), except a match imported from a replay, which gets 409 (issue #224). Returns 404 for an unknown match, and 409 while `ingest.INGEST_LOCK` is held (a poll cycle, manual ingest or parse-retry run). The lock is always released. It re-fetches the match with `refresh_match_stats()`:
 
 | `outcome` | Meaning |
 |---|---|
@@ -74,7 +75,7 @@ Admin only. Accepts any match, whatever its `parse_status` (only the UI limits t
 Response: `{"match_id", "outcome", "parse_status"}`. Busts the schedule cache only on `refreshed`. Audited as `admin_match_retry_parse` (`detail="match <id> fetch=<refresh result> outcome=<outcome>"`).
 
 ### `PATCH /admin/matches/{match_id}/scoring`
-Admin only, 404 for an unknown match. Body: `{"unparseable": bool | null, "excluded_from_scoring": bool | null}`. An omitted field is left unchanged. `unparseable: true` sets `parse_status = 'unparseable'`. `unparseable: false` on an unparseable match restores `unparsed` or `parsed`, depending on the stat-row signature, and the retry pass picks the match up again while it is inside the window. A match older than the window that is still unparsed is flagged again on the next pass. To retry one in the UI, untick **Unparseable** and then click **Retry parse** on that row before the next poll cycle re-flags it. Busts the schedule cache. Response: `{"match_id", "parse_status", "excluded_from_scoring"}`. Audited as `admin_match_scoring`, with the old and new values of both fields in `detail`. The audit row is written even when the body changes nothing (for example `{}`).
+Admin only, 404 for an unknown match. Body: `{"unparseable": bool | null, "excluded_from_scoring": bool | null}`. An omitted field is left unchanged. `unparseable: true` sets `parse_status = 'unparseable'`. `unparseable: false` on an unparseable match restores `unparsed` or `parsed`, depending on the stat-row signature (always `parsed` for a replay match), and the retry pass picks the match up again while it is inside the window. A match older than the window that is still unparsed is flagged again on the next pass. To retry one in the UI, untick **Unparseable** and then click **Retry parse** on that row before the next poll cycle re-flags it. Busts the schedule cache. Response: `{"match_id", "parse_status", "excluded_from_scoring"}`. Audited as `admin_match_scoring`, with the old and new values of both fields in `detail`. The audit row is written even when the body changes nothing (for example `{}`).
 
 ### Public payload additions
 - `GET /players/{id}`: each `match_history` row has `parse_status` and `excluded_from_scoring`.

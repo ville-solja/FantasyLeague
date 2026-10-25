@@ -308,3 +308,42 @@ As a player, I want to see the player's medal on a card so that I can compare my
 - The card viewer shows the medal badge and name under the card image, next to the accolades (#218)
 - The new card templates in #218 have a rank slot; the PNG draws the medal there and leaves it out when the rank is null
 - No league name, and no image loaded from a Dota CDN
+
+
+## Matches Outside the League (issue #224)
+
+### Add a Match OpenDota Has Outside the League
+**User story**
+As an admin, I want to add a match by its id when the lobby wasn't started as a league match, so that its players get their fantasy points and the series result shows.
+
+**Acceptance criteria**
+- **Form:** Admin › Matches has **Add match** with a match id, a league picker (the monitored leagues, shown with their division), and Radiant and Dire team pickers.
+- **Preview:** **Fetch** loads `/matches/{id}` from OpenDota and shows the start time, duration, winner, the ten players (name, hero, K/D/A) and the team names OpenDota gives; the team pickers are prefilled when the names match a team.
+- **Refusals with a message:**
+  - the match is already stored as a league match;
+  - OpenDota has no player data for it ("Use a replay import instead");
+  - it is shorter than 15 minutes;
+  - a team isn't chosen.
+- **Store:** **Add** needs a recent re-auth, stores the match through the normal ingest code with the chosen league, writes `source = opendota_manual`, and audits `admin_match_added`.
+- **Everything follows:** the match counts in its week, the Schedule series result, leaderboards, Weekly Report and team views like any league match, and parse retry treats it normally.
+
+### Import a Match From a Replay
+**User story**
+As an admin, I want to import a match from a replay file parsed on my own machine, so that a game OpenDota can't read still counts.
+
+**Acceptance criteria**
+- **Local script:** `python scripts/replay_to_match.py replay.dem` runs the parser locally and writes `match-<id>.json`, with the match id, start time, duration, winner, picks and bans, team names when present, and per player: account id, side, hero and every stat `_build_stat_row` reads. Stats the parser can't produce are listed under `missing_stats`.
+- **Upload:** **Add match › From replay** accepts that JSON (at most 56 KB). The server validates it against a strict schema: exactly ten players, five per side, known hero ids, no unknown keys, numbers in sane ranges. It rejects anything else with the field that failed.
+- **Preview:** the same preview as the OpenDota path, plus a "Partial stats: …" note when `missing_stats` is not empty, and a warning for players not in the season's pool (they're stored, as ingest stores them).
+- **Store:** needs a recent re-auth; writes `source = replay`; marks the match partial when stats are missing (existing partial-stat markers); audits `admin_match_added` with `source=replay`.
+- **Parse retry leaves it alone:** `find_unparsed_match_ids`, `mark_stuck_matches_unparseable` and **Retry parse** skip `replay` matches.
+- **Corrections:** importing the same match id again replaces a `replay` or `opendota_manual` match's rows after a confirmation, audited. A league-ingested match is never replaced.
+
+### Manual Matches Are Visible as Such
+**User story**
+As an admin, I want manual and replay matches marked in Admin › Matches, so that I know which results didn't come from the league.
+
+**Acceptance criteria**
+- **Chip:** Admin › Matches shows "Manual" (from OpenDota) or "Replay" next to the match, with a tooltip saying who added it and when (from the audit).
+- **Filter:** a "Manual only" filter lists them.
+- **Public views:** players see no difference, except the existing partial-stats marker where stats are missing.

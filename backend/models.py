@@ -29,8 +29,9 @@ class Match(Base):
     week_override_id = Column(Integer, ForeignKey("weeks.id"), nullable=True)  # admin override: which week this match counts for
     duration = Column(Integer, nullable=True)  # seconds, from OpenDota match JSON
     vod_url = Column(String, nullable=True)  # admin-set caster VOD link, shown in the Weekly Report
-    parse_status = Column(String, nullable=True)  # 'parsed' | 'unparsed' | 'unparseable' (see ingest.py parse retry)
+    parse_status = Column(String, nullable=True)  # 'parsed' | 'unparsed' | 'unparseable' (see ingest.py parse retry; a replay match with missing stats is 'unparseable')
     excluded_from_scoring = Column(Boolean, default=False, nullable=False, server_default="0")  # admin: match counts for no fantasy points
+    source = Column(String, default="league", nullable=False, server_default="league")  # issue 224: 'league' | 'opendota_manual' | 'replay'
 
 
 class PlayerMatchStats(Base):
