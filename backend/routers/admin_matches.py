@@ -1,15 +1,17 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func
+from starlette.concurrency import run_in_threadpool
 
 import card_points
+import manual_match
 import schedule
 from accolades import league_division
 from database import get_db
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, _audit
 import ingest
 from models import League, Match, MatchTiming, Player, PlayerMatchStats, Team, TwitchMVP, Week, Weight
 from schedule import bust_cache, out_of_week_series
@@ -68,6 +70,7 @@ def _feed_series_by_match(db) -> dict:
 def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
     matches = db.query(Match).order_by(Match.start_time.desc()).all()
     match_ids = [m.match_id for m in matches]
+    added_by = manual_match.added_by_match(db) if any((m.source or "league") != "league" for m in matches) else {}
 
     series_by_match = _feed_series_by_match(db)
     league_ids = {m.league_id for m in matches if m.league_id}
@@ -108,6 +111,8 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
         time_week = week_containing(db, m.start_time, all_weeks)
         series = series_by_match.get(m.match_id)
         league_name = league_names.get(m.league_id)
+        source = m.source or "league"
+        added = added_by.get(m.match_id) if source != "league" else None
         result.append({
             "match_id": m.match_id,
             "league_id": m.league_id,
@@ -137,6 +142,9 @@ def list_matches(db=Depends(get_db), _: dict = Depends(require_admin)):
                 league_division(league_name) if league_name is not None else None),
             "league_name": league_name,
             "stream_url": series["stream_url"] if series else None,
+            "source": source,
+            "added_by": added[0] if added else None,
+            "added_at": added[1] if added else None,
         })
     return result
 
@@ -229,6 +237,10 @@ def retry_match_parse(match_id: int, db=Depends(get_db), admin: dict = Depends(r
     match = db.get(Match, match_id)
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
+    if match.source == "replay":
+        raise HTTPException(status_code=409,
+                            detail="This match was imported from a replay and is not re-fetched "
+                                   "from OpenDota. Import a corrected replay instead.")
     if not ingest.INGEST_LOCK.acquire(blocking=False):
         raise HTTPException(status_code=409,
                             detail="An ingest is already in progress — try again shortly")
@@ -282,7 +294,10 @@ def set_match_scoring(
     if body.unparseable is True:
         match.parse_status = "unparseable"
     elif body.unparseable is False and match.parse_status == "unparseable":
-        match.parse_status = "unparsed" if _signature_unparsed(db, match_id) else "parsed"
+        if match.source == "replay":
+            match.parse_status = "parsed"  # issue 224: never re-fetched, so no "unparsed"
+        else:
+            match.parse_status = "unparsed" if _signature_unparsed(db, match_id) else "parsed"
     if body.excluded_from_scoring is not None:
         match.excluded_from_scoring = body.excluded_from_scoring
 
@@ -297,3 +312,25 @@ def set_match_scoring(
         "parse_status": match.parse_status,
         "excluded_from_scoring": bool(match.excluded_from_scoring),
     }
+
+
+# ---------------------------------------------------------------------------
+# Add match: matches outside the league (issue 224); logic in manual_match.py
+# ---------------------------------------------------------------------------
+
+@router.post("/admin/matches/manual/preview")
+async def manual_match_preview(request: Request, db=Depends(get_db), _: dict = Depends(require_admin)):
+    """Add match, step 1: what would be stored. Body {"match_id"} (fetched from OpenDota)
+    or {"replay": <replay summary>}. Writes nothing."""
+    body = await manual_match.read_body(request)
+    return await run_in_threadpool(manual_match.preview, db, body)
+
+
+@router.post("/admin/matches/manual", dependencies=[Depends(require_recent_reauth)])
+async def add_manual_match(request: Request, db=Depends(get_db), admin: dict = Depends(require_admin)):
+    """Add match, step 2: store a match outside the league with the chosen monitored
+    league and teams (issue 224). Never replaces a league match; replacing an earlier
+    manual or replay match needs "confirm": true (409 otherwise). Audited as
+    admin_match_added."""
+    body = await manual_match.read_body(request)
+    return await run_in_threadpool(manual_match.store, db, body, admin)

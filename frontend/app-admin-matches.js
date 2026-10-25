@@ -46,10 +46,12 @@ function adminMatchesFilters() {
   const mvp = document.getElementById('adminMatchesMvpMissing');
   const league = document.getElementById('adminMatchesLeague');
   const unparseable = document.getElementById('adminMatchesUnparseableOnly');
+  const manual = document.getElementById('adminMatchesManualOnly');
   return {
     mvpMissing: !!(mvp && mvp.checked),
     league: league && _DIVISION_LABELS[league.value] ? league.value : '',
     unparseable: !!(unparseable && unparseable.checked),
+    manualOnly: !!(manual && manual.checked),
   };
 }
 
@@ -58,7 +60,8 @@ function filterAdminMatches(rows, f) {
   return rows.filter(m =>
     (!f.mvpMissing || !m.mvp_player_id) &&
     (!f.league || m.division === f.league) &&
-    (!f.unparseable || m.parse_status === 'unparseable'));
+    (!f.unparseable || m.parse_status === 'unparseable') &&
+    (!f.manualOnly || _isManualMatch(m)));
 }
 
 function adminMatchesEmptyText(f) {
@@ -66,7 +69,26 @@ function adminMatchesEmptyText(f) {
   if (f.mvpMissing) active.push('MVP missing');
   if (f.league) active.push(_DIVISION_LABELS[f.league]);
   if (f.unparseable) active.push('Unparseable');
+  if (f.manualOnly) active.push('Manual only');
   return active.length ? `No matches for the filters: ${active.join(', ')}` : 'No matches';
+}
+
+// Issue 224: matches added from Admin > Matches > Add match, not by league ingest.
+const _SOURCE_CHIPS = { opendota_manual: 'Manual', replay: 'Replay' };
+
+function _isManualMatch(m) {
+  return !!_SOURCE_CHIPS[m.source];
+}
+
+// "Manual" / "Replay" chip with "Added by <admin>, <time>" as its tooltip; nothing for league matches.
+function _sourceChipHtml(m) {
+  const label = _SOURCE_CHIPS[m.source];
+  if (!label) return '';
+  const when = m.added_at ? new Date(m.added_at * 1000).toLocaleString() : null;
+  const tip = m.added_by
+    ? `Added by ${m.added_by}${when ? `, ${when}` : ''}`
+    : (m.source === 'replay' ? 'Imported from a replay' : 'Added from OpenDota');
+  return ` <span class="admin-source-chip ${m.source === 'replay' ? 'replay' : 'manual'}" title="${_escHtml(tip)}">${label}</span>`;
 }
 
 // Feed series newest first, each with its games in play order; matches the feed
@@ -135,7 +157,7 @@ function _adminMatchRowHtml(m) {
   const [t1, t2] = _seriesTeams(m);
   const start = m.start_time ? new Date(m.start_time * 1000).toLocaleString() : '—';
   return `
-      <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">${m.match_id} ↗</a></td>
+      <td><a class="stream-link" href="https://www.opendota.com/matches/${m.match_id}" target="_blank" rel="noopener noreferrer">${m.match_id} ↗</a>${_sourceChipHtml(m)}</td>
       <td class="admin-match-teams">${teamLink(t1.id, t1.name)} <span class="admin-match-vs">vs</span> ${teamLink(t2.id, t2.name)}</td>
       <td class="admin-match-league">${_leagueText(m)}</td>
       <td class="admin-match-start">${_escHtml(start)}</td>
@@ -248,7 +270,7 @@ function _buildParseCell(m) {
   const label = document.createElement('span');
   label.textContent = _PARSE_STATUS_LABELS[m.parse_status] || '—';
   wrap.appendChild(label);
-  if (m.parse_status === 'unparsed') {
+  if (m.parse_status === 'unparsed' && m.source !== 'replay') {
     const btn = document.createElement('button');
     btn.className = 'secondary';
     btn.style.cssText = 'padding:2px 7px;';
@@ -611,5 +633,206 @@ async function confirmSetMvp() {
     closeMvpModal();
   } catch (e) {
     document.getElementById('mvpModalStatus').textContent = e.message;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Add match (issue 224): a match played outside the league lobby, from OpenDota
+// by its id or from a replay summary written by scripts/replay_to_match.py
+// ---------------------------------------------------------------------------
+
+const _ADD_MATCH_MAX_BYTES = 56 * 1024;
+let _addMatchMode = 'opendota';
+let _addMatchBody = null;     // {match_id} or {replay} the preview was made from
+let _addMatchPreview = null;
+
+function openAddMatchDialog() {
+  _addMatchBody = null;
+  _addMatchPreview = null;
+  document.getElementById('addMatchId').value = '';
+  document.getElementById('addMatchFile').value = '';
+  document.getElementById('addMatchPreview').innerHTML = '';
+  document.getElementById('addMatchStoreBtn').disabled = true;
+  setStatus('addMatchStatus', '');
+  setAddMatchMode('opendota');
+  document.getElementById('addMatchModal').style.display = 'flex';
+  document.getElementById('addMatchId').focus && document.getElementById('addMatchId').focus();
+}
+
+function closeAddMatchDialog() {
+  document.getElementById('addMatchModal').style.display = 'none';
+}
+
+function setAddMatchMode(mode) {
+  _addMatchMode = mode === 'replay' ? 'replay' : 'opendota';
+  const replay = _addMatchMode === 'replay';
+  const odTab = document.getElementById('addMatchTabOpenDota');
+  const rpTab = document.getElementById('addMatchTabReplay');
+  odTab.classList.toggle('active', !replay);
+  rpTab.classList.toggle('active', replay);
+  odTab.setAttribute('aria-selected', String(!replay));
+  rpTab.setAttribute('aria-selected', String(replay));
+  document.getElementById('addMatchOpenDotaPanel').hidden = replay;
+  document.getElementById('addMatchReplayPanel').hidden = !replay;
+  _addMatchBody = null;
+  _addMatchPreview = null;
+  document.getElementById('addMatchPreview').innerHTML = '';
+  document.getElementById('addMatchStoreBtn').disabled = true;
+}
+
+// The preview request body for the active tab; throws a readable Error.
+async function _addMatchRequestBody() {
+  if (_addMatchMode === 'opendota') {
+    const raw = document.getElementById('addMatchId').value.trim();
+    const id = parseInt(raw, 10);
+    if (!/^[0-9]+$/.test(raw) || !Number.isFinite(id) || id <= 0) throw new Error('Enter a match id.');
+    return { match_id: id };
+  }
+  const input = document.getElementById('addMatchFile');
+  const file = input.files && input.files[0];
+  if (!file) throw new Error('Choose the match-<id>.json file.');
+  if (file.size > _ADD_MATCH_MAX_BYTES) throw new Error('The file is larger than 56 KB.');
+  let replay;
+  try {
+    replay = JSON.parse(await file.text());
+  } catch (e) {
+    throw new Error('The file is not valid JSON.');
+  }
+  return { replay };
+}
+
+function _fmtDuration(sec) {
+  if (!Number.isFinite(sec)) return '—';
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
+// Summary, partial-stats note, replacement note and the ten players (escaped).
+function addMatchPreviewHtml(p) {
+  const start = p.start_time ? new Date(p.start_time * 1000).toLocaleString() : '—';
+  const winnerName = p.winner === 'radiant' ? (p.radiant_name || 'Radiant') : (p.dire_name || 'Dire');
+  const winner = p.winner ? `${p.winner === 'radiant' ? 'Radiant' : 'Dire'} won (${_escHtml(winnerName)})` : 'Winner unknown';
+  const teams = `${_escHtml(p.radiant_name || 'Radiant')} vs ${_escHtml(p.dire_name || 'Dire')}`;
+  const parts = [`<p class="add-match-summary">Match ${_escHtml(String(p.match_id))} · ${teams} · ${_escHtml(start)} · ${_fmtDuration(p.duration)} · ${winner}</p>`];
+  if (p.partial_note) parts.push(`<p class="add-match-partial">${_escHtml(p.partial_note)}</p>`);
+  if (p.existing_source) {
+    parts.push(`<p class="add-match-note">Already added (${_escHtml(_SOURCE_CHIPS[p.existing_source] || p.existing_source)}): adding it again replaces its stats.</p>`);
+  }
+  const notInPool = (p.players || []).filter(pl => !pl.in_pool).length;
+  if (notInPool) {
+    parts.push(`<p class="add-match-note">${notInPool} ${notInPool === 1 ? 'player is' : 'players are'} not in the season's pool; they are stored anyway.</p>`);
+  }
+  const rows = (p.players || []).map(pl => {
+    const hero = pl.hero_name || (pl.hero_id ? `Hero ${pl.hero_id}` : '—');
+    const warn = pl.in_pool ? '' : ' <span class="add-match-warn">Not in pool</span>';
+    return `<tr><td>${pl.side === 'radiant' ? 'Radiant' : 'Dire'}</td><td>${_escHtml(pl.name || String(pl.account_id))}${warn}</td>` +
+      `<td>${_escHtml(hero)}</td><td>${_escHtml(pl.kills)}/${_escHtml(pl.deaths)}/${_escHtml(pl.assists)}</td></tr>`;
+  }).join('');
+  parts.push(`<table class="add-match-players"><thead><tr><th>Side</th><th>Player</th><th>Hero</th><th>K/D/A</th></tr></thead><tbody>${rows}</tbody></table>`);
+  return parts.join('');
+}
+
+function _fillAddMatchSelect(id, options, selected) {
+  const sel = document.getElementById(id);
+  sel.replaceChildren();
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = 'Choose…';
+  sel.appendChild(blank);
+  options.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = String(o.value);
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  });
+  sel.value = selected != null ? String(selected) : '';
+}
+
+function renderAddMatchPreview(p) {
+  _addMatchPreview = p;
+  document.getElementById('addMatchPreview').innerHTML = addMatchPreviewHtml(p);
+  const leagues = (p.leagues || []).map(l => ({ value: l.id, label: `${l.name || l.id} (${l.division_label})` }));
+  const teams = (p.teams || []).map(t => ({ value: t.id, label: t.name || String(t.id) }));
+  const leagueSel = document.getElementById('addMatchLeague');
+  const keepLeague = leagueSel.value && leagues.some(l => String(l.value) === leagueSel.value) ? leagueSel.value : null;
+  _fillAddMatchSelect('addMatchLeague', leagues, keepLeague);
+  _fillAddMatchSelect('addMatchRadiant', teams, p.suggested_radiant_team_id);
+  _fillAddMatchSelect('addMatchDire', teams, p.suggested_dire_team_id);
+  document.getElementById('addMatchStoreBtn').disabled = false;
+}
+
+async function previewAddMatch() {
+  let body;
+  try {
+    body = await _addMatchRequestBody();
+  } catch (e) {
+    setStatus('addMatchStatus', e.message, false);
+    return;
+  }
+  _addMatchBody = null;
+  _addMatchPreview = null;
+  document.getElementById('addMatchPreview').innerHTML = '';
+  document.getElementById('addMatchStoreBtn').disabled = true;
+  setStatus('addMatchStatus', 'Loading…');
+  try {
+    const res = await fetch(`${API}/admin/matches/manual/preview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus('addMatchStatus', data.detail || `Request failed (${res.status})`, false);
+      return;
+    }
+    _addMatchBody = body;
+    renderAddMatchPreview(data);
+    setStatus('addMatchStatus', '');
+  } catch (e) {
+    setStatus('addMatchStatus', e.message, false);
+  }
+}
+
+function _addMatchId(id) {
+  const n = parseInt(document.getElementById(id).value, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// Stores through adminFetch, so a stale re-auth opens the confirm popup and resends.
+// A 409 asking to replace an earlier manual match is confirmed, then resent with confirm.
+async function storeAddMatch(confirmReplace = false) {
+  if (!_addMatchBody) return setStatus('addMatchStatus', 'Fetch or check the match first.', false);
+  const leagueId = _addMatchId('addMatchLeague');
+  const radiantId = _addMatchId('addMatchRadiant');
+  const direId = _addMatchId('addMatchDire');
+  if (!leagueId) return setStatus('addMatchStatus', 'Choose the league.', false);
+  if (!radiantId) return setStatus('addMatchStatus', 'Choose the Radiant team.', false);
+  if (!direId) return setStatus('addMatchStatus', 'Choose the Dire team.', false);
+  const btn = document.getElementById('addMatchStoreBtn');
+  btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API}/admin/matches/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ..._addMatchBody, league_id: leagueId, radiant_team_id: radiantId,
+                             dire_team_id: direId, confirm: confirmReplace }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 409 && !confirmReplace && /Confirm to replace/.test(data.detail || '')) {
+      btn.disabled = false;
+      if (confirm(`${data.detail}\n\nReplace it?`)) return storeAddMatch(true);
+      return setStatus('addMatchStatus', 'Not replaced.', false);
+    }
+    if (!res.ok) {
+      btn.disabled = false;
+      return setStatus('addMatchStatus', data.detail || `Request failed (${res.status})`, false);
+    }
+    closeAddMatchDialog();
+    await loadAdminMatches();
+    const partial = (data.missing_stats || []).length ? ` (partial stats: ${data.missing_stats.join(', ')})` : '';
+    setStatus('adminMatchesStatus',
+      `Match ${data.match_id} ${data.replaced ? 'replaced' : 'added'} as ${_SOURCE_CHIPS[data.source] || data.source}${partial}`);
+  } catch (e) {
+    btn.disabled = false;
+    setStatus('addMatchStatus', e.message, false);
   }
 }

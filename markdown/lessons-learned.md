@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-25 — developer — endpoints
+**Problem:** `test_issue_85` caps each of the ten split `routers/admin_*.py` modules at 350 lines, so adding a feature's endpoints to `admin_matches.py` failed only in the full suite.
+**Solution:** Check `wc -l` on the router before adding to it. Keep the routes there as thin wrappers and put request handling in a service module (`manual_match.read_body` / `preview` / `store` for issue 224).
+
 ### 2026-10-25 — developer — testing
 **Problem:** `ImageChops.difference(a, b).getbbox() is None` on RGBA images compares the alpha channel only (Pillow's `getbbox` default), so colour changes pass as "identical" (the #50 Holo-sheen test passed only through the old templates' soft alpha, and failed on the opaque #218 ones).
 **Solution:** Compare images with `a.tobytes() == b.tobytes()` (`_same` in `test_issue_218_card_formatting.py`) or diff `.convert("RGB")` copies.

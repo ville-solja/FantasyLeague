@@ -789,6 +789,20 @@ def _m042_players_rank(conn):
     conn.commit()
 
 
+def _m043_matches_source(conn):
+    """Issue #224: matches.source records where a match came from: 'league' (ingest,
+    the default and the backfill for every existing row), 'opendota_manual' or
+    'replay' (Admin > Matches > Add match)."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(matches)")).fetchall()}
+    if not cols:
+        return
+    if "source" not in cols:
+        conn.execute(text("ALTER TABLE matches ADD COLUMN source TEXT NOT NULL DEFAULT 'league'"))
+        logger.info("Migration: matches — added source column")
+    conn.execute(text("UPDATE matches SET source = 'league' WHERE source IS NULL OR source = ''"))
+    conn.commit()
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -855,6 +869,7 @@ MIGRATIONS = [
     ("040_cards_is_holo",            _m040_cards_is_holo),
     ("041_clear_unverified_player_links", _m041_clear_unverified_player_links),
     ("042_players_rank",             _m042_players_rank),
+    ("043_matches_source",           _m043_matches_source),
 ]
 
 

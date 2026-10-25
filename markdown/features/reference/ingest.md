@@ -15,6 +15,9 @@ For each match ID not already in the database:
 - Calculates and stores fantasy points for each player using current scoring weights
 - Seeds the player's display name (`personaname`) into the `players` table if the player is new or had no name yet
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid
+- Stored with `matches.source = 'league'`
+
+The store step (`ingest._store_match_payload()`) is shared with **Admin › Matches › Add match**, which adds a match the league list doesn't include, from OpenDota by its id (`source = 'opendota_manual'`) or from a locally parsed replay (`source = 'replay'`). See `reference/matches-outside-the-league.md`.
 
 Note: the `assists`, `sen_placed`, and `tower_damage` columns are retained in the database for historical records but are no longer included in fantasy scoring.
 
@@ -31,8 +34,8 @@ After the per-league loop, `ingest.retry_unparsed_matches()` re-checks every mat
 `teamfight_participation`, `stuns` and `obs_placed`. A match that now has a parsed payload gets
 its `player_match_stats` rows replaced and `fantasy_points` recomputed (Twitch MVP bonus
 preserved); one still reporting `version: null` gets a parse request, at most once per match per
-`INGEST_PARSE_REREQUEST_HOURS` (default 6). Matches with `parse_status = 'unparseable'` are
-skipped. At the end of each pass, every match still `unparsed` and older than the window is
+`INGEST_PARSE_REREQUEST_HOURS` (default 6). Matches with `parse_status = 'unparseable'` and
+matches imported from a replay (`source = 'replay'`) are skipped. At the end of each pass, every match still `unparsed` and older than the window is
 flagged `unparseable`, with one `match_marked_unparseable` audit row each (see
 `reference/unparseable-match-handling.md`).
 Skipped when no league is monitored. Admins can run it on demand with a wider window via
@@ -111,7 +114,7 @@ Without an API key, requests are rate-limited to ~60 requests/minute. With `OPEN
 | Table | Content |
 |---|---|
 | `leagues` | League ID and name |
-| `matches` | Match ID, team IDs, result, start timestamp, league ID |
+| `matches` | Match ID, team IDs, result, start timestamp, league ID, `source` (`league`, `opendota_manual` or `replay`) |
 | `players` | OpenDota account ID, display name, avatar URL |
 | `teams` | OpenDota team ID, team name |
 | `player_match_stats` | Per-player per-match stats, calculated fantasy points, and `hero_id` (the hero picked by the player in that match) |

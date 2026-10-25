@@ -33,7 +33,7 @@ this feature shipped are picked up automatically on the first poll cycle after d
 | `request_parse(match_id) -> bool` | `POST /request/{match_id}` through `opendota_client.post_json(..., cost=10)`; at most once per match per `INGEST_PARSE_REREQUEST_HOURS` (`ingest._parse_requested` maps match_id → time of the last successful request). A failed POST is logged as a warning, returns `False`, and leaves the match eligible next cycle |
 | `retry_unparsed_matches(max_age_hours) -> dict` | One pass over `find_unparsed_match_ids()`: refreshes each match, and requests a parse for every one still unparsed that hasn't been requested yet. Returns `{"checked", "refreshed", "requested", "still_unparsed"}`; an `"unavailable"` match counts toward `still_unparsed`. A failure on one match is logged (`logger.exception`) and does not stop the others |
 
-`find_unparsed_match_ids()` skips matches whose `matches.parse_status` is `unparseable`. At the end of each
+`find_unparsed_match_ids()` skips matches whose `matches.parse_status` is `unparseable`, and replay imports (`matches.source = 'replay'`, issue #224), so a locally parsed replay is never replaced from OpenDota. `refresh_match_stats()` keeps the admin-chosen team ids on a match added from OpenDota outside the league (`source = 'opendota_manual'`); see [Matches Outside the League](matches-outside-the-league.md). At the end of each
 pass, `retry_unparsed_matches()` calls `mark_stuck_matches_unparseable()`. It flags every match that is
 still `unparsed` and older than `max(max_age_hours, INGEST_PARSE_RETRY_HOURS)` as `unparseable`
 and writes a `match_marked_unparseable` audit row. Flagged matches are never requested again. See
