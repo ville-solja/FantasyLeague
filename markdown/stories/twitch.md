@@ -614,7 +614,7 @@ As a viewer, I want team logos to load only from known image hosts, so that open
   
   Otherwise it returns `None`.
 - `ingest._match_logo_url` turns `//host/...` into `https://host/...` and then stores only URLs that pass `safe_logo_url`.
-- Every response that carries `team_logo_url` or a team `logo_url` passes it through `safe_logo_url`: the card and roster routes, `GET /deck/booster`, the panel's teams and collection, and the Weekly Report fallback. `GET /teams` and `GET /teams/{team_id}` return no logo field, and the schedule returns no logos. The local `/assets/` logo stays preferred wherever it is used today.
+- Every response that carries `team_logo_url` or a team `logo_url` passes it through `safe_logo_url`: the card and roster routes, `GET /deck/booster`, the panel's teams and collection, and the Weekly Report fallback. `GET /teams` and `GET /teams/{team_id}` return no logo field *(superseded by #211: they return logos sanitised through `safe_logo_url`)*, and the schedule returns no logos. The local `/assets/` logo stays preferred wherever it is used today.
 - The card image (`GET /cards/{card_id}/image`) also passes the logo through `safe_logo_url` before the server fetches it, so the server never requests a logo from an unknown host.
 - When the logo is `null`, the panel shows the team monogram, the website's team draw shows its blank circle placeholder and the Weekly Report shows the team name alone. This already happens for teams without a logo.
 - **Failure path:** a team whose stored `logo_url` is `https://evil.example/logo.png` is returned with `logo_url: null`, and an ingest of such a URL stores nothing.

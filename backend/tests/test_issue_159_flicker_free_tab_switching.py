@@ -97,6 +97,7 @@ _LOADERS = [
 _RENDER_HELPERS = {
     "loadWeeks": ["_renderWeekSelector"],
     "loadPlayers": ["renderPlayers", "_renderMvpLeaderboard"],
+    "loadTeams": ["renderTeams"],  # issue 211
     "loadLeaderboard": ["_renderLeaderboard"],
     "loadPastSeasons": ["loadPastSeasonStandings"],
 }

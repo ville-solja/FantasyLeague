@@ -263,21 +263,26 @@
   </div>
 </div>
 
-<!-- TEAM DETAIL MODAL -->
-<div class="modal-overlay hidden" id="teamModal" role="dialog" aria-modal="true" data-close="closeTeamModal" onclick="if(event.target===this)closeTeamModal()">
-  <div class="modal modal-wide">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-      <div>
-        <div id="teamModalName" class="player-modal-name"></div>
-        <div id="teamModalMeta" class="player-modal-team"></div>
+<!-- TEAM DETAIL MODAL (issue 211: built by app-team-popup.js) -->
+<div class="modal-overlay hidden" id="teamModal" role="dialog" aria-modal="true" aria-labelledby="teamModalName" data-close="closeTeamModal" onclick="if(event.target===this)closeTeamModal()">
+  <div class="modal modal-wide player-popup team-popup">
+    <div class="team-popup-header">
+      <div class="team-popup-identity">
+        <span id="teamModalLogo" class="team-popup-logo"></span>
+        <div>
+          <div id="teamModalName" class="player-modal-name"></div>
+          <div id="teamModalMeta" class="player-modal-meta"></div>
+          <div id="teamModalTitles" class="team-popup-titles"></div>
+        </div>
       </div>
-      <button class="ghost" onclick="closeTeamModal()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+      <button class="ghost" onclick="closeTeamModal()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
-    <h2 style="margin-bottom:8px;">Players</h2>
-    <table>
-      <thead><tr><th>Player</th><th>Matches</th><th>Avg pts</th><th>Total pts</th></tr></thead>
-      <tbody id="teamModalPlayers"></tbody>
-    </table>
+    <div id="teamModalStats"></div>
+    <p id="teamModalEmpty" class="player-popup-empty" hidden></p>
+    <section id="teamModalResults" class="player-popup-section" hidden></section>
+    <section id="teamModalRoster" class="player-popup-section" hidden></section>
+    <section id="teamModalSources" class="player-popup-section" hidden></section>
+    <section id="teamModalHeroes" class="player-popup-section" hidden></section>
     <div class="status" id="teamModalStatus"></div>
   </div>
 </div>
@@ -842,9 +847,14 @@
     <div class="panel" style="grid-column: span 2;">
       <h2>Teams</h2>
       <button class="secondary" onclick="loadTeams()" style="margin-bottom:12px;">Refresh</button>
-      <table>
-        <thead><tr><th>Team</th><th>Matches</th><th>Players</th></tr></thead>
-        <tbody id="teamsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+      <div class="players-filters" role="group" aria-label="Division">
+        <button type="button" class="players-filter-chip active" data-teams-filter="all" aria-pressed="true" onclick="setTeamsFilter('all')">All</button>
+        <button type="button" class="players-filter-chip" data-teams-filter="div1" aria-pressed="false" onclick="setTeamsFilter('div1')">Div 1</button>
+        <button type="button" class="players-filter-chip" data-teams-filter="div2" aria-pressed="false" onclick="setTeamsFilter('div2')">Div 2</button>
+      </div>
+      <table class="teams-table">
+        <thead id="teamsTableHead"><tr><th data-col="name" data-default-dir="asc">Team</th><th data-col="division" data-default-dir="asc">Division</th><th data-col="series_wins">Series W–L</th><th data-col="wins">Games W–L</th><th data-col="points_per_game">Fantasy pts per game</th><th data-col="player_count">Players</th><th data-col="titles_count">Titles</th></tr></thead>
+        <tbody id="teamsBody"><tr><td colspan="7" class="table-empty">—</td></tr></tbody>
       </table>
       <div class="status" id="teamsStatus"></div>
     </div>
@@ -1632,6 +1642,7 @@
 <script src="/app-roster.js"></script>
 <script src="/app-players.js"></script>
 <script src="/app-player-popup.js"></script>
+<script src="/app-team-popup.js"></script>
 <script src="/app-leaderboard.js"></script>
 <script src="/app-history.js"></script>
 <script src="/app-admin-weeks.js"></script>
