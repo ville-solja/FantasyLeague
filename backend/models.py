@@ -11,6 +11,10 @@ class Player(Base):
     name = Column(String)
     avatar_url = Column(String)
     is_active = Column(Boolean, default=True, nullable=False)
+    # Issue #221: last known Dota 2 rank medal from OpenDota (see player_rank.py)
+    rank_tier = Column(Integer, nullable=True)
+    leaderboard_rank = Column(Integer, nullable=True)
+    rank_fetched_at = Column(Integer, nullable=True)
 
 
 class Match(Base):

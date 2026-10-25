@@ -207,7 +207,7 @@ Applies the scheduled week to every series `GET /admin/matches/out-of-week` list
 ## Player Profile Enrichment
 
 ### `POST /admin/enrich-profiles`
-Triggers a synchronous enrichment batch for players whose profile facts are missing or stale. Enrichment runs automatically in the background (see `reference/player-profile-enrichment.md`); this endpoint forces an immediate pass. Returns `{ "enriched": N, "skipped": M, "errors": K }`. Logged as `admin_enrich_profiles`.
+Triggers a synchronous enrichment batch for players whose profile facts are missing or stale. Enrichment runs automatically in the background (see `reference/player-profile-enrichment.md`); this endpoint forces an immediate pass. It starts with a rank-medal refresh (issue #221, see `reference/player-rank-medals.md`). Returns `{ "enriched": N, "skipped": M, "errors": K, "rank_updated": R }`. Logged as `admin_enrich_profiles` (the detail includes `rank_updated`).
 
 ---
 

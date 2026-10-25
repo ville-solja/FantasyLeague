@@ -57,10 +57,10 @@ As a user, I want to browse my roster and bench.
 As a user, I want each card to display the player's name, team name, photo, and team emblem so I can identify the player and team at a glance.
 
 **Acceptance criteria**
-- Player name is printed on the card image in the name plate area (uppercased, truncated if too long)
-- Team name is printed below the player name on the card image
-- Player avatar (from OpenDota) is composited as a circular portrait on the card image
-- Team logo (from local Dotabuff cache, HTTP fallback) is composited as a smaller circular badge on the card image
+- Player name is printed on the card image in the name bar (shrunk, then ellipsized if too long; layout A, #218)
+- Team name is printed on the type line, beside the team logo
+- Player avatar (from OpenDota) is composited as a square portrait on the card image (#218; was circular)
+- Team logo (from local Dotabuff cache, HTTP fallback) is composited in a 100 × 60 slot on the type line, no circle crop (#218)
 - If the avatar is unavailable, the card still renders correctly with that slot left empty
   (team logo unavailability is covered separately below)
 - During the draw reveal animation, player and team names are sourced from the card PNG only — they are not duplicated in the HTML below the image
@@ -75,9 +75,9 @@ still looks polished pre-season.
 
 **Acceptance criteria**
 - When neither the local Dotabuff PNG cache nor the team's HTTP `logo_url` resolves to a usable
-  image, the team logo slot is filled with a solid black circular placeholder instead of being
+  image, the team logo slot is filled with a solid black placeholder instead of being
   left unpainted
-- The placeholder uses the same circular crop, size, and position as a real team logo, so the
+- The placeholder uses the same size and position as a real team logo (the 100 × 60 slot since #218), so the
   card layout is identical either way
 - Once a team logo becomes available (local cache populated via ingest, or `logo_url` set), it
   replaces the placeholder on the next card image request — no cache to invalidate, since the
@@ -102,20 +102,21 @@ As a user, I want each rarity tier to have a visually distinct card frame so I c
 As a user, I want my card's stat modifiers printed directly on the card image so the bonus is always visible without opening a detail view.
 
 **Acceptance criteria**
-- Each active modifier is shown in the lower band of the card as `STAT +X%`
+- Each active modifier is shown in the card's rules box (layout A, #218) as `STAT +X%`, up to 3 lines
 - After a reroll, the card image updates immediately to reflect the new modifiers
-- Cards with no modifiers (e.g. Common) show no modifier text in that area
+- Cards with no modifiers (e.g. Common) show "No stat modifiers" in that area (#218)
 
 ---
 
 ### Replaceable Card Template Artwork
 **User story**
-As an operator, I want to update card template artwork for each rarity by replacing files so the visual design can be refreshed between seasons without code changes.
+As an operator, I want to refresh the card template artwork for each rarity between seasons so the visual design can change without touching the renderer.
 
 **Acceptance criteria**
 - Templates are loaded from a configurable assets directory at startup
-- Replacing any of the four template PNGs takes effect on the next card image request
-- Missing templates fail with a clear error rather than silently using a wrong rarity
+- Since #218 the template PNGs are drawn by `backend/scripts/make_card_templates.py`; artwork changes go through the script, which regenerates the committed PNGs (a test checks they match)
+- Replacing a template PNG takes effect on the next card image request
+- Missing templates fail with a clear error rather than silently using a wrong rarity; a missing `Card_Template_Holo.png` falls back to the generated sheen with a warning
 
 ---
 
@@ -464,6 +465,62 @@ As a player, I want the back of a card to show its stats or accolades so that I 
 **Acceptance criteria**
 - The back shows either per-card stats (matches scored, points with this card, average, best match, modifiers) or accolades (MVP picks, weekly bests), as on the canvas's "Later" designs
 - Needs the flip from the story above; the data comes from stored per-match card points
+
+---
+
+## Card Formatting (issue #218)
+
+### Choose a New Card Layout
+**User story**
+As the product owner, I want to compare radically different card layouts so that I can choose one that fits the card's symbols and still reads as a trading card.
+
+**Acceptance criteria**
+- A design canvas shows portrait and landscape layouts at full, roster (180 px) and Twitch-panel (110 px) sizes, with the current card for comparison
+- The chosen layout (A · Classic TCG) is recorded in this plan
+
+### Card Frame With Exact Portrait and Logo Slots
+**User story**
+As a player, I want the portrait and team logo on my card to look sharp and undistorted so that the card looks finished.
+
+**Acceptance criteria**
+- The card PNG is 597 × 845 and uses layout A for every rarity, with 0 to 3 modifiers
+- The 184 × 184 avatar fills a 368 × 368 slot exactly (2×), with no crop, stretch or filler
+- A 250 × 150 cached logo fills a 100 × 60 slot exactly (0.4×); a fallback logo of another shape is fitted inside the slot without stretching; no circle crop
+- Rarity is shown by the frame edge colour only: common grey, rare blue, epic purple, legendary gold; no gems, rarity word or card number on the image
+- The card viewer still names the rarity in text, so the edge colour is not the only signal
+- An ordinary legendary has a light shine; a Holo legendary has a much stronger rainbow shine on the frame and pillars, with the text panels still readable
+- The templates are drawn by `backend/scripts/make_card_templates.py`, and the committed PNGs match its output
+- No league name and no image from a Dota CDN on the card
+
+### Rank Medal on the Card *(deferred)*
+**User story**
+As a player, I want to see the player's rank medal on the card itself so that it shows wherever the card image is used, including the Twitch panel.
+
+**Acceptance criteria**
+- `GET /cards/{id}/image` draws the player's medal (#221) at the bottom of the left pillar: our own drawing of that Dota 2 medal in its primary colour (Herald bronze, Guardian green, Crusader teal, Archon yellow-green, Legend red, Ancient purple, Divine blue, Immortal gold) with the medal name; no stars, no leaderboard place
+- The website badge (popup, card viewer) switches to the same emblems and colours and drops its stars and place
+- An unranked player's card leaves the medal place empty, with no placeholder
+- The medal uses the same medal colours as the website badge
+
+### Pips Sit in the Pillars
+**User story**
+As a player, I want the tag and accolade symbols to sit neatly in the card's side pillars so that they never cover the portrait, the name or the frame.
+
+**Acceptance criteria**
+- Tag pips (#217) stack from the top of the left pillar and accolade pips (#50) from the top of the right pillar, on the roster card (180 px) and in the card viewer and draw reveal (the Weekly Report opens cards in the card viewer)
+- The pips scale with the card, so they stay inside the pillars at every card size
+- With more tag pips than fit, the column stops at the pillar's bottom (no overlap with the type line)
+- The pips keep their tooltips, keyboard focus and `aria-label`s; the PNG itself draws no tags or accolades
+
+### Counted Accolades *(not yet implemented)*
+**User story**
+As a player, I want accolades such as match MVP picks to show how many times they were earned so that a standout player's card shows it.
+
+**Acceptance criteria**
+- An accolade pip can carry a count (the existing `accolade-pip-count`) for a counted kind such as Twitch MVP picks
+- Needs a decision on which counted accolades exist and where their data comes from
+
+---
 
 ## Tag Symbols on Cards (issue #217)
 

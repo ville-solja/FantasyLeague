@@ -35,7 +35,9 @@ Table of all players who have participated in any ingested league. Sortable colu
 Opened by clicking any player name or card (in this tab or elsewhere); the code is in
 `frontend/app-player-popup.js`. Sections, top to bottom (issue 208):
 
-- **Header** — avatar, name and current team; the linked user's tag symbols (issue #217) followed by the accolade pips (issue 50); seasons played and a
+- **Header** — avatar, name and current team, then the player's **rank medal** when known
+  (issue #221: medal shape and colour, "Legend 4" or "Immortal #12", ★ stars, tooltip "Last known
+  rank from OpenDota, <date>"; nothing for an unranked player); the linked user's tag symbols (issue #217) followed by the accolade pips (issue 50); seasons played and a
   Core or Support chip (Support when this season's average wards are 3 or more and GPM is under 450;
   no chip without a scored match).
 - **Summary tiles** — Matches with W–L, Avg pts with the league rank ("#7 of 84", only with 3+

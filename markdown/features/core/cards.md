@@ -196,7 +196,7 @@ Returns the calling user's cards split into `active` and `bench` lists, with per
 - For a **locked** week: returns the `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window. `active` holds the counted entries (active not subbed out, plus subbed-in bench cards, each shown in the `slot_index` of the card it replaced). `bench` holds the rest: subbed-out cards first, then the saved bench in its lock-time `bench_order`. A week locked before the bench was saved (issue #129) has an empty `bench`.
 - For the **current editable** week: returns all owned cards of active players from the `cards` table, split by `is_active`, with running points accumulated so far.
 
-Every card also carries `team_id`, `team_name` and `team_logo_url` (the player's most recent team; `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST`, #171). Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
+Every card also carries `rank_tier` and `leaderboard_rank` (the player's last known rank medal, null when unranked; see [Player Rank Medals](../reference/player-rank-medals.md)) and `team_id`, `team_name` and `team_logo_url` (the player's most recent team; `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST`, #171). Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
 
 ```json
 {
@@ -306,6 +306,8 @@ Returns full detail for a single card owned by the authenticated user. Returns 4
   "card_type": "rare",
   "player_name": "SomePlayer",
   "avatar_url": "https://...",
+  "rank_tier": 54,
+  "leaderboard_rank": null,
   "team_name": "SomeTeam",
   "team_logo_url": "https://...",
   "modifiers": [{ "stat": "kills", "bonus_pct": 10.0 }]
@@ -330,6 +332,8 @@ Draws one card. A new Card row is created on demand — no pre-generated pool is
   "player_id": 123456789,
   "player_name": "SomePlayer",
   "avatar_url": "https://...",
+  "rank_tier": 54,
+  "leaderboard_rank": null,
   "team_name": "SomeTeam",
   "team_logo_url": "https://...",
   "is_active": true,
@@ -338,7 +342,7 @@ Draws one card. A new Card row is created on demand — no pre-generated pool is
 }
 ```
 
-`is_active` is `true` if the card was placed directly into the active roster, `false` if it went to the bench. `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST` (#171).
+`is_active` is `true` if the card was placed directly into the active roster, `false` if it went to the bench. `rank_tier` and `leaderboard_rank` are the player's last known rank medal (null when unranked; see [Player Rank Medals](../reference/player-rank-medals.md)); `GET /cards/{card_id}` carries them too. `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST` (#171).
 
 The card is placed in the active roster when fewer than `ROSTER_LIMIT` cards are active and no active card has the same player; otherwise it goes to the bench, and the draw still succeeds. `is_active` is what was stored. The action is recorded in the audit log (`token_draw`).
 

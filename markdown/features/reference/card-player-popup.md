@@ -11,6 +11,8 @@ Makes the player name shown on a viewed card clickable, opening the player detai
 3. User clicks the player name → `openPlayerModal(player_id)` opens `#playerModal` on top
 4. User closes the player modal (button or Escape) → reveal modal remains open and unchanged
 
+The player popup header shows the player's rank medal after the team name, and the card viewer shows it under the card image (issue #221, see `player-rank-medals.md`). Unranked players show no medal.
+
 ## Implementation
 
 | File | Change |
@@ -18,3 +20,5 @@ Makes the player name shown on a viewed card clickable, opening the player detai
 | `frontend/app-cards.js` — `showCard()` | `#revealPlayer` rendered as `entity-link` when `card.player_id` present; plain text during draw animation or when no player |
 | `frontend/app-init.js` — Escape handler | `keydown` listener closes top-most open modal: `playerModal` → `teamModal` → `revealModal` |
 | `backend/routers/cards.py` — draw response | Added `player_id` field to the `POST /draw` response so newly drawn cards also get the clickable name |
+| `frontend/app-cards.js` — `_renderRevealRank()` | Fills `#revealRank` under the card image with `rankMedalHtml(card.rank_tier, card.leaderboard_rank)`; empty (hidden) when unranked |
+| `frontend/app-players.js` — `openPlayerModal()` | Appends the rank medal to `#playerModalTeam` |

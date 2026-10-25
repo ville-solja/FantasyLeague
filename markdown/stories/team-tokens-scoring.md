@@ -982,3 +982,48 @@ As a player, I want a retroactive bench to use only cards I actually had that we
 - **After applying:**
   - My Team shows the week's "Subbed in for {player}" and "Did not play" labels as for any later week;
   - the weekly and season leaderboards include the substituted points.
+
+---
+
+## Playoff Stages (issue #222)
+
+### Create a Playoff Stage
+**User story**
+As an admin, I want to create a playoff stage with its own lock time so that rosters lock when that round of the bracket starts, not on a calendar boundary.
+
+**Acceptance criteria**
+- Week Management can create a week as a **stage** (`weeks.kind = "stage"`; ordinary weeks are `"week"`), with a label, start date and time, and end date and time
+- A stage may overlap any other week or stage; two ordinary weeks still cannot overlap (409 as today)
+- A stage locks at its `start_time` like any week: roster snapshot, +1 token, irreversible
+- A stage appears in every week list (Weekly leaderboard, Week History, Weekly Report) under its label, marked as a stage
+- Creating, editing and deleting a stage is audit-logged as weeks are
+
+### Assign Playoff Series to a Stage
+**User story**
+As an admin, I want to put each playoff series into its stage so that it scores there and nowhere else.
+
+**Acceptance criteria**
+- Admin › Matches "Move to week" lists stages as well as weeks; choosing a stage sets `week_override_id` for the whole series, as today
+- A stage scores only the matches assigned to it; a match inside a stage's dates that isn't assigned to it doesn't count there
+- A match is never counted in two weeks: an assigned match counts only for its stage, even when an ordinary week's window also contains it
+- Matches not assigned to any stage keep today's rule (override, else the ordinary week whose window contains them); stages are never chosen by time
+- Moving a series into or out of a stage re-runs bench substitutions for the affected weeks that already ran them, as today
+- The out-of-week check (`schedule.out_of_week_series`) doesn't flag series assigned to a stage
+
+### Play the Playoffs Stage by Stage
+**User story**
+As a player, I want each playoff stage to lock my roster when it starts so that I can adjust my team between rounds.
+
+**Acceptance criteria**
+- My Team edits the roster for the next unlocked week or stage, the one that starts first, and shows its label and lock time
+- After a stage locks, roster changes apply to the next stage, even while the locked stage is still being played
+- A stage's points are the sum of its assigned matches for the cards in its snapshot (bench substitution included); the season leaderboard adds stages like weeks
+- How to Play explains stages in one short paragraph
+
+### See Stages Clearly *(not yet implemented)*
+**User story**
+As a player, I want the schedule and the bracket to show which stage each playoff series belongs to so that I know which roster it scores for.
+
+**Acceptance criteria**
+- The Schedule tab and the tournament bracket (#94) label playoff series with their stage
+- Needs the bracket view from #94

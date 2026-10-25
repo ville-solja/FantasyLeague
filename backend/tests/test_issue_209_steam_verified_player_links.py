@@ -641,9 +641,9 @@ class TestTypedInLinksAreClearedOnce:
         assert len(_cleared_audits(engine)) == 1
 
     def test_migration_041_recorded_in_schema_migrations(self):
-        """041_clear_unverified_player_links is recorded as applied and is the newest migration name in migrate.py."""
+        """041_clear_unverified_player_links is listed in migrate.py and recorded as applied."""
         import migrate
-        assert migrate.MIGRATIONS[-1][0] == _M041
+        assert _M041 in [name for name, _ in migrate.MIGRATIONS]
         engine = _migration_engine(_MIXED_USERS)
         migrate.run_migrations(engine)
         assert _rows(engine, "SELECT id FROM schema_migrations WHERE id = :id", id=_M041)

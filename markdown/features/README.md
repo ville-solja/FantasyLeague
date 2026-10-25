@@ -32,9 +32,11 @@ Implementation details, integrations, and operator tooling.
 | [OpenDota Query Prioritization](reference/opendota-query-prioritization.md) | Live-match-aware gating: skips low-priority enrichment and tightens the poll interval while a monitored league has a match in progress |
 | [Card Image Generation](reference/card-image-generation.md) | Pillow-based PNG card rendering pipeline |
 | [Card Draw Animations](reference/card-draw-animations.md) | The drawn card flies from a deck in the Draw panel, flips face up before the reveal fades in, and lands in its roster or bench slot; a card back is postponed |
-| [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
+| [Card Formatting](reference/card-formatting.md) | Card layout A: exact portrait and logo slots, rarity by edge colour, light legendary shine and a much stronger Holo template, with the tag and accolade pips over its side pillars in container units; PNG rank medal deferred |
+| [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
+| [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown in the player popup and card viewer; on the card PNG deferred (#218) |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Automated Testing](reference/automated-testing.md) | Playwright UI suite and GitHub Actions CI setup |
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |
@@ -66,6 +68,7 @@ Implementation details, integrations, and operator tooling.
 | [Season Participation Backfill](reference/season-participation-backfill.md) | #212: past Kanaliiga leagues S4–S15 (305 players, 866 rows) backfilled as Played accolades from a checked-in league file with one `--all` run (call budget, resume, report); counts read "since Season 4" |
 | [Admin Enhancements](reference/admin-enhancements.md) | Twitch sub-tab with approval badge, typed ids with name preview, MVP-first matches grouped by series, Settings grouped by purpose; `GET /admin/players/lookup` and series fields on `GET /admin/matches` (#214) |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
+| [Playoff Stages](reference/playoff-stages.md) | Stage weeks for playoff rounds: own lock time, overlap allowed, score only the series assigned to them *(planned)* |
 | [Week Boundary Formula Fix](reference/week-boundary-formula-fix.md) | Applies the grace-period offset to both week-boundary ends so a normal Monday-start/Sunday-end week never overlaps the next by default |
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
 | [Admin DB Backup](reference/admin-db-backup.md) | Admin-panel database backups: create on demand with a cooldown, list existing backups, and download a copy off the server |

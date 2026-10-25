@@ -6,8 +6,9 @@ Player profile enrichment gives each league player structured performance facts 
 
 ## How it works
 
-Enrichment runs as a two-phase pipeline in a dedicated background thread (independent of ingest), and can also be triggered manually from the admin tab.
+Enrichment runs as a pipeline in a dedicated background thread (independent of ingest), and can also be triggered manually from the admin tab.
 
+0. **Rank refresh** (issue #221) — for active pool players whose `rank_fetched_at` is null or older than `PROFILE_ENRICHMENT_COOLDOWN_HOURS`, oldest first and up to the batch size, one `GET /players/{id}` call each stores `rank_tier` and `leaderboard_rank` on `players`. Players with no ingested matches are included. A failed request keeps the old rank and timestamp. See `player-rank-medals.md`.
 1. **Fact crawler** — queries local DB for aggregate stats and tournament hero usage, queries `match_bans` for ban correlation analysis, then makes 2 OpenDota API calls per player (`/heroes` and `/matches?limit=100`). Hero IDs are resolved via a single shared `GET /constants/heroes` call per batch run.
 2. **Bio generator** — sends structured facts to `claude-haiku-4-5-20251001`. Skipped entirely when `ANTHROPIC_API_KEY` is unset.
 
@@ -105,8 +106,10 @@ Triggers a synchronous enrichment batch. Admin only. Logged to audit log as `adm
 
 **Response:**
 ```json
-{"enriched": 3, "skipped": 1, "errors": 0}
+{"enriched": 3, "skipped": 1, "errors": 0, "rank_updated": 3}
 ```
+
+`rank_updated` counts the ranks stored by the rank phase.
 
 ---
 
@@ -127,7 +130,7 @@ The admin tab has a "Re-enrich Player Profiles" button that calls `POST /admin/e
 
 ## Background loop
 
-A daemon thread (`_profile_enrichment_loop`) runs independently of the ingest loop. Each cycle processes up to `ENRICHMENT_BATCH_SIZE` players whose `facts_fetched_at` is null or older than `PROFILE_ENRICHMENT_COOLDOWN_HOURS`. Players with no ingested matches are skipped. The loop is fully resumable across restarts.
+A daemon thread (`_profile_enrichment_loop`) runs independently of the ingest loop. Each cycle first refreshes up to `ENRICHMENT_BATCH_SIZE` stale ranks, then processes up to `ENRICHMENT_BATCH_SIZE` players whose `facts_fetched_at` is null or older than `PROFILE_ENRICHMENT_COOLDOWN_HOURS`. The facts phase skips players with no ingested matches; the rank phase does not. Like the facts phase, the rank phase does not wait for live matches (only the name/avatar enrichment in the ingest loop is deferred during a live match). The loop is fully resumable across restarts.
 
 ---
 
@@ -138,7 +141,7 @@ A daemon thread (`_profile_enrichment_loop`) runs independently of the ingest lo
 | `ANTHROPIC_API_KEY` | *(empty)* | Required for bio generation; if unset, facts are stored but bio is skipped |
 | `PROFILE_ENRICHMENT_COOLDOWN_HOURS` | `24` | Minimum hours between re-enrichment for a given player |
 | `ENRICHMENT_CHECK_INTERVAL` | `300` | Seconds between background enrichment cycles |
-| `ENRICHMENT_BATCH_SIZE` | `3` | Players enriched per cycle |
+| `ENRICHMENT_BATCH_SIZE` | `3` | Players enriched per cycle (and ranks refreshed per cycle) |
 
 ---
 
@@ -149,6 +152,7 @@ Assuming a 40-player roster:
 | Event | API calls |
 |---|---|
 | Initial enrichment | 40 × 2 + 1 (constants) = **81 calls** |
+| Rank refresh (24 h cooldown) | 1 call per pool player per day = **40 calls/day** |
 | Daily re-enrichment (24 h cooldown, batch 3, cycle 5 min) | max **80 calls/day** |
 | Ingest hero_id + ban extraction | **0 extra** (data already in match response) |
 

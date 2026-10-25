@@ -97,6 +97,13 @@ function _playDrawBurst(card) {
   }, DRAW_REVEAL_FLASH_MS);
 }
 
+// Issue #221: the player's rank medal under the card image; empty (hidden) when unranked.
+function _renderRevealRank(card) {
+  const el = document.getElementById("revealRank");
+  if (!el) return;
+  el.innerHTML = rankMedalHtml(card.rank_tier, card.leaderboard_rank);
+}
+
 /** The rarity label: the card type ("legendary", shown in capitals), with " · Holo"
  * for a Holo card, so it reads "Legendary · Holo" (issue 50). */
 function _rarityLabel(card) {
@@ -163,6 +170,7 @@ function showCard(card, footer, opts = {}) {
     revealPlayerEl.textContent = drawFx ? "" : (card.player_name || "");
   }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
+  _renderRevealRank(card);
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
 

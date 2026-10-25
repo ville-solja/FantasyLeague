@@ -339,6 +339,7 @@ def admin_sync_toornament(db=Depends(get_db), admin: dict = Depends(require_admi
 def admin_enrich_profiles(db=Depends(get_db), admin: dict = Depends(require_admin)):
     result = run_profile_enrichment()
     _audit(db, "admin_enrich_profiles", actor_id=admin["user_id"], actor_username=admin["username"],
-           detail=f"enriched={result['enriched']} skipped={result['skipped']} errors={result['errors']}")
+           detail=f"enriched={result['enriched']} skipped={result['skipped']} errors={result['errors']} "
+                  f"rank_updated={result.get('rank_updated', 0)}")
     db.commit()
     return result

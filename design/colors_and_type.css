@@ -92,6 +92,17 @@
   --mark-winner:  var(--k-amber-500);
   --mark-mvp:     var(--accent);
 
+  /* Dota 2 rank medals (issue #221): text colours, each at least 6:1 on --bg-card
+     and on the rarity reveal backgrounds. The app's own palette, no Dota images. */
+  --medal-herald:   #b8a07e;
+  --medal-guardian: #9cc3a0;
+  --medal-crusader: #6cc7c0;
+  --medal-archon:   #7fb2e6;
+  --medal-legend:   #c9b46a;
+  --medal-ancient:  #a8b8d8;
+  --medal-divine:   #d9a3f0;
+  --medal-immortal: #f2b84b;
+
   /* Accolade symbols (issue 50): one colour per kind. Icon and plate differ too, so no
      symbol relies on colour alone. Champions: amber (Div 1) and silver (Div 2). */
   --accolade-div1:    var(--k-amber-500);

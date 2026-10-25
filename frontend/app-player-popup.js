@@ -61,6 +61,8 @@ async function openPlayerModal(playerId) {
     document.getElementById("playerModalTeam").innerHTML = p.team_id
       ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${_escHtml(p.team_name)}</span>`
       : _escHtml(p.team_name || "");
+    document.getElementById("playerModalTeam").insertAdjacentHTML("beforeend",
+      rankMedalHtml(p.rank_tier, p.leaderboard_rank, p.rank_fetched_at));
 
     renderPlayerPopup(p);
     renderPlayerAccolades(p);

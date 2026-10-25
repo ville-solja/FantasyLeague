@@ -12,11 +12,19 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-25 — developer — testing
+**Problem:** `ImageChops.difference(a, b).getbbox() is None` on RGBA images compares the alpha channel only (Pillow's `getbbox` default), so colour changes pass as "identical" (the #50 Holo-sheen test passed only through the old templates' soft alpha, and failed on the opaque #218 ones).
+**Solution:** Compare images with `a.tobytes() == b.tobytes()` (`_same` in `test_issue_218_card_formatting.py`) or diff `.convert("RGB")` copies.
+
 ### 2026-10-18 — ship — testing
 **Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.
 **Solution:** Call route functions with the `db` fixture (or override `get_db`) instead of the real app's database. When disabling rate limits, disable the instance the router imported (`<router_module>.limiter.enabled = False`) and restore it on teardown. Never use regexes to parse HTML in tests (CodeQL `py/bad-tag-filter`); use `html.parser`.
 
 ---
+
+### 2026-10-23 — developer — frontend
+**Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
+**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).
 
 ### 2026-10-18 — developer — testing
 **Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
