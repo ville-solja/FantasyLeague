@@ -26,7 +26,7 @@ User tags and admin status show as symbols down a card's left edge, mirroring th
 | My Team roster and bench (the collection) | `_cardSlotHTML` in `frontend/app-roster.js` | `.card-tag-pips` beside `.card-pips` in each `.card-slot` |
 | Player popup header | `renderPlayerAccolades` in `frontend/app-player-popup.js` | `#playerModalPips`, tag pips before the accolade pips |
 
-On cards, `.card-tag-pips` is absolutely positioned at the card's left edge (`left: 0.35em`, the same `top` as the accolade column on the right), so the two columns never overlap.
+On cards, `.card-tag-pips` sits over the card image's left pillar and `.card-pips` over the right one (layout A, issue #218), so the two columns never overlap. Both are placed and sized in `--card-u`, a hundredth of the card's width: `1cqw` where container queries work (`.card-slot`, `.reveal-img-wrap` and `.draw-landing` declare `container-type: inline-size`), else 1.8 px on the 180 px roster card and 2 px in the 200 px card viewer. A pip is about 10 % of the card's width (`font-size` 5.9 units × the 1.7 em pip), each column is centred on its pillar, starts at the portrait row, and stops at the pillar's bottom (`max-height`, `overflow: hidden`): five pips fit.
 
 ## Frontend
 

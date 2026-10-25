@@ -1279,7 +1279,8 @@ def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch, caplog):
     warnings = [r for r in caplog.records if "Card_Template_Holo.png" in r.getMessage()]
     assert len(warnings) == 1
     assert holo.size == plain.size
-    assert ImageChops.difference(holo, plain).getbbox() is not None  # the sheen is there
+    # Compare colour: getbbox() on an RGBA difference looks at alpha only (#218 templates are opaque).
+    assert ImageChops.difference(holo.convert("RGB"), plain.convert("RGB")).getbbox() is not None  # the sheen is there
 
 
 def test_image_does_not_draw_accolades():

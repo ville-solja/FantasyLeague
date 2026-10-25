@@ -1,7 +1,7 @@
 # Card Team Logo Placeholder
 
 A small correction to card image generation (`reference/card-image-generation.md`): when a
-team's logo can't be resolved yet, the badge slot gets a solid black circular placeholder
+team's logo can't be resolved yet, the badge slot gets a solid black placeholder
 instead of being left unpainted.
 
 *(see `markdown/plans/plan-issue-107-card-team-logo-placeholder.md`, resolves GitHub issue #107)*
@@ -18,9 +18,9 @@ changes what's shown in the meantime.
 
 ## Behaviour
 
-`generate_card_image` falls back to `_blank_logo_placeholder(diameter)` — a plain solid
-black RGBA square, circle-cropped the same way a real logo is — whenever
-`_load_team_logo_for_card` resolves to nothing. Position, size, and crop are identical to a real
+`generate_card_image` falls back to `_blank_logo_placeholder(slot_size)` — a plain solid
+black RGBA rectangle the size of the 100 × 60 logo slot (layout A, issue #218; no circle crop) — whenever
+`_load_team_logo_for_card` resolves to nothing. Position and size are identical to a real
 logo, so the card layout doesn't shift. Because card images are generated fresh on every
 `GET /cards/{card_id}/image` request (no server-side caching), the placeholder is replaced by a
 real logo automatically as soon as one becomes resolvable — no cache to invalidate.
