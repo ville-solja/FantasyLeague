@@ -17,7 +17,8 @@
 TESTING INSTRUCTIONS — Kana Cards 1.3.0
 
 Setup
-- The review channel is live during a Kanaliiga match week, so there are matches to choose an MVP from.
+- The review channel doesn't need to be streaming: MVP selection, the token drop and the chat message all work while it is offline. The recent matches in the MVP tool are left without an MVP for the review, so you can pick any of them.
+- Use the review channel provided, meatstormer. MVP selection works only on channels a Kana Cards admin has approved, and meatstormer is approved. On any other channel the MVP tool says "This channel is waiting for the league's approval to set match MVPs."
 - Easiest with two Twitch accounts in two browsers (or a normal and a private window): the review channel's broadcaster, and any other account as the viewer. One account also works: the broadcaster can join in the panel and then counts as a viewer.
 - The panel is 318 px wide and up to 500 px tall; each tab scrolls within that height.
 - If a section can't load, its message ends with a short code such as (code: E-REACH). Please include the code in your feedback, or send it to support@kana-cards.com.
@@ -38,9 +39,7 @@ This flow shows everything the extension does with Twitch Chat. Each confirmatio
    Expected in the viewer's panel, within a few seconds: "+1 token from the MVP drop".
 4. Confirm the same match again with a different player.
    Expected in chat: Match MVP: OtherPlayer! — and no token is dropped again.
-5. Optional: close the viewer's panel, wait 10 minutes, and confirm the MVP of a different match that has no MVP yet.
-   Expected in chat: Match MVP: PlayerName! No tokens were dropped: no joined viewers were watching.
-The fourth message (new accounts waiting 24 hours) is switched off for the review window, so it can't appear during review.
+The third message ("No tokens were dropped: no joined viewers were watching.") appears when a match without an MVP is confirmed while no joined viewer has the panel open; with a joined viewer's panel open, the drop message above appears instead. The fourth message (new accounts waiting 24 hours) is switched off for the review window.
 If the tool says "No recent matches found. A match appears here as soon as it goes live.", no match is in progress; please contact support@kana-cards.com for a time when one is live.
 
 Flow 3 — Viewer: cards and roster
@@ -85,10 +84,10 @@ Twitch's second 4.2 finding: *"your description does not contain information on 
 | # | Item | Why it matters | Status |
 |---|---|---|---|
 | O1 | `TWITCH_EXTENSION_VERSION=1.3.0` on production, and **Chat** enabled on version 1.3.0 in the console | Without either, confirming an MVP posts nothing in chat: the reviewer sees exactly the 4.2 problem | Done 2026-10-26 (operator) |
-| O2 | Approve the review channel under Admin › Twitch › Approved streamers (startup logs `TWITCH_MVP_CHANNEL_IDS is empty`, so approval is the only way) | Otherwise Flow 2 stops at "waiting for the league's approval to set match MVPs" | Done 2026-10-26 (operator) |
+| O2 | Approve the review channel under Admin › Twitch › Approved streamers (startup logs `TWITCH_MVP_CHANNEL_IDS is empty`, so approval is the only way) | Otherwise Flow 2 stops at "waiting for the league's approval to set match MVPs" | Done 2026-10-26 (operator): the review channel meatstormer is approved; the walkthrough's Setup names it |
 | O3 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS=0` for the review window, back to 24 afterwards | Otherwise the reviewer's new account gets no token and chat says the new-accounts message | Set to 0 on 2026-10-26 (operator); set back after the review |
-| O4 | Submit when a league match will be live or recent during review (`GET /twitch/matches/current` returns a series) | Without a series the reviewer can't trigger any chat message | Done 2026-10-26 (operator) |
-| O5 | After the review: reset any MVPs the reviewer set, in Admin › Matches | The walkthrough confirms MVPs on real league matches (step 4 even changes the MVP), which changes real fantasy points and drops real tokens | After the review |
+| O4 | Leave the MVPs of the MVP tool's series (the 5 most recent) unset during the review, so the reviewer can pick any; the channel needn't stream | Without a series lacking an MVP, the reviewer can't trigger the drop message | Done 2026-10-26 (operator) |
+| O5 | After the review: set the correct MVPs for the matches left open, and correct any the reviewer set, in Admin › Matches | The walkthrough confirms MVPs on real league matches (step 4 even changes the MVP), which changes real fantasy points and drops real tokens | After the review |
 | O6 | Paste the new description as plain text (no `**`), and the walkthrough block as is | Formatting characters count toward the limit and show literally | At submission |
 
 ### Unverified assumptions

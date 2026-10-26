@@ -290,7 +290,12 @@ be live during the time of review"*:
 
 ## Steps to reproduce (paste into "Testing Instructions")
 
-The review channel is live during a Kanaliiga match week. Easiest with two Twitch accounts in two
+The review channel doesn't need to be streaming: MVP selection, the token drop and the chat message
+all work while it is offline. The recent matches in the MVP tool are left without an MVP for the
+review, so you can pick any of them. Use the review channel provided, meatstormer: MVP selection
+works only on channels a Kana Cards admin has approved, and meatstormer is approved. On any other
+channel the MVP tool says "This channel is waiting for the league's approval to set match MVPs."
+Easiest with two Twitch accounts in two
 browsers (or a normal and a private window): the review channel's broadcaster, and any other account
 as the viewer. One account also works: the broadcaster can join in the panel and then counts as a
 viewer. The panel is 318 px wide and up to 500 px tall; each tab scrolls within that height. If a
@@ -323,10 +328,9 @@ reads, stores or moderates chat.
    "+1 token from the MVP drop".
 4. Confirm the same match again with a different player.
    **Expected:** chat shows `Match MVP: <OtherPlayer>!` and no token is dropped again.
-5. Optional: close the viewer's panel, wait 10 minutes, and confirm the MVP of a different match
-   that has no MVP yet.
-   **Expected:** chat shows `Match MVP: <PlayerName>! No tokens were dropped: no joined viewers were watching.`
-The fourth message (new accounts waiting 24 hours) is switched off for the review window. If the
+The third message (`No tokens were dropped: no joined viewers were watching.`) appears when a match
+without an MVP is confirmed while no joined viewer has the panel open; with a joined viewer's panel open, the drop
+message above appears instead. The fourth message (new accounts waiting 24 hours) is switched off for the review window. If the
 tool says "No recent matches found. A match appears here as soon as it goes live.", no match is in
 progress: please contact support@kana-cards.com for a time when one is live.
 
