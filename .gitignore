@@ -32,3 +32,8 @@ backend/scripts/season_placements.csv.tmp
 
 # Local model agent reports (markdown/features/reference/local-model-agents.md)
 reports/local/
+
+# Local replay files for matches outside the league (markdown/features/reference/matches-outside-the-league.md); never committed
+parse/
+*.dem
+*.dem.bz2

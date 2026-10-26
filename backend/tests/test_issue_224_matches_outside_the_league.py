@@ -1053,7 +1053,8 @@ class TestReplayToMatchScript:
         mod = _script()
         out = mod.aggregate(_fixture_events(mod))
         assert (out["match_id"], out["duration"], out["radiant_win"]) == (8100000001, 2400, True)
-        assert out["start_time"] == 1790000000
+        # endTime_ 1790002400 minus playbackTime_ 2700.5 (draft and pre-game included; Step 0 finding)
+        assert out["start_time"] == 1790002400 - 2700
         assert (out["radiant_name"], out["dire_name"]) == ("Synthetic Radiant", "Synthetic Dire")
         assert [pb["hero_id"] for pb in out["picks_bans"] if not pb["is_pick"]] == [74, 86]
         assert len(out["players"]) == 10
@@ -1386,3 +1387,49 @@ class TestAdminUi:
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", block)
         assert "rgba(" not in block and "var(--" in block
         assert "#224" not in block
+
+
+def _bytestring(text):
+    """Gson's serialisation of a protobuf ByteString, as the real parser sends it
+    (Java's signed bytes)."""
+    return {"bytes": [b - 256 if b > 127 else b for b in text.encode("utf-8")], "hash": 0}
+
+
+class TestReplayToMatchRealParserFormat:
+    """Step 0 findings (2026-10-26, a real Kanaliiga replay checked against OpenDota):
+    names arrive as ByteStrings, and the start time comes from the playback time."""
+
+    def test_text_decodes_gson_bytestrings(self):
+        """_text reads {"bytes": [...]} with signed bytes (UTF-8), plain strings, and drops control characters."""
+        mod = _script()
+        assert mod._text(_bytestring("HOLISA")) == "HOLISA"
+        assert mod._text(_bytestring("无为")) == "无为"
+        assert mod._text("  SC ") == "SC"
+        assert mod._text(_bytestring("Bad\x1b[31mName")) == "Bad[31mName"
+        assert mod._text({"bytes": "nope"}) is None and mod._text(None) is None
+        # C1 controls (8-bit CSI) and bidi overrides are dropped too (security review of #236)
+        assert mod._text("A\u009b31mB") == "A31mB"
+        assert mod._text("Evil\u202eName") == "EvilName"
+
+    def test_bytestring_names_match_players_and_playback_sets_start(self):
+        """With ByteString hero/player names and team tags plus playbackTime_, slots match by hero name (the file info lists players out of order), names and tags are decoded, and start_time = endTime - playbackTime."""
+        mod = _script()
+        events = _fixture_events(mod)
+        for e in events:
+            if e.get("type") != "epilogue":
+                continue
+            epi = json.loads(e["key"])
+            dota = epi["gameInfo_"]["dota_"]
+            for info in dota["playerInfo_"]:
+                info["heroName_"] = _bytestring(info["heroName_"])
+                info["playerName_"] = _bytestring(info["playerName_"])
+            dota["radiantTeamTag_"] = _bytestring("SC")
+            dota["direTeamTag_"] = _bytestring("HOLISA")
+            epi["playbackTime_"] = 3879.3335
+            end_time = dota["endTime_"]
+            e["key"] = json.dumps(epi)
+        out = mod.aggregate(events)
+        assert out["start_time"] == end_time - 3879
+        assert (out["radiant_name"], out["dire_name"]) == ("SC", "HOLISA")
+        assert [p["account_id"] for p in out["players"]] == [1001 + s for s in range(10)]
+        assert all(p["personaname"] for p in out["players"])

@@ -13,6 +13,10 @@ Format:
 ```
 
 ### 2026-10-26 — developer — testing
+**Problem:** Running the suite with the system `python3` on Debian/Ubuntu/Mint sees distro packages in `/usr/lib/python3/dist-packages` (`python3-brotli` 1.0.9), so an "installed version" guard failed locally though CI and the image never have them.
+**Solution:** In environment guards, skip distributions with no `INSTALLER` file under `dist-packages` (`_distro_managed` in `test_issue_236_*`); check only what pip installed.
+
+### 2026-10-26 — developer — testing
 **Problem:** A new accolade kind broke older tests in two hidden places: `test_issue_50`'s symbol-table check takes the first README row containing a kind's icon (`medal` is shared by Fantasy Winner and Runner-up), and `test_issue_50`'s history harness extracts `_historyChampionHtml` alone, so a helper it calls is undefined.
 **Solution:** List a row that reuses an icon after the original one in `.claude/skills/README.md`, and pass extra markup into extracted renderers as a trailing default parameter (`_historyChampionHtml(season, division, team, placements = "")`) instead of calling a new helper inside them.
 

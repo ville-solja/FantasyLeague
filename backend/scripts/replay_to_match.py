@@ -21,7 +21,8 @@ reads three kinds:
     holds the final values;
   - "epilogue": `key` is the replay's CDemoFileInfo serialised by Gson (protobuf field
     names with a trailing underscore: gameInfo_.dota_.matchId_, gameWinner_, endTime_,
-    playerInfo_[].steamid_/heroName_/playerName_/gameTeam_, picksBans_, radiantTeamTag_).
+    playerInfo_[].steamid_/heroName_/playerName_/gameTeam_, picksBans_, radiantTeamTag_;
+    playbackTime_ at the top level). Text fields are Gson ByteStrings.
 
 A stat that no player's final interval carries is written as 0 and listed under
 `missing_stats`; the server then marks the match as having partial stats. Standard
@@ -127,8 +128,27 @@ def _hero_names(unit: str) -> set:
     return {"npc_dota_hero_" + ending.lower(), "npc_dota_hero" + snake}
 
 
+# C0 and C1 controls (U+0080-U+009F include an 8-bit CSI some terminals honour) and
+# the bidi embedding/override/isolate characters that can reorder terminal output.
+_BIDI_CONTROLS = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+
+
+def _unsafe_char(ch: str) -> bool:
+    cp = ord(ch)
+    return cp < 0x20 or 0x7f <= cp <= 0x9f or ch in _BIDI_CONTROLS
+
+
 def _text(value):
+    """A text field. The parser serialises protobuf strings as Gson ByteStrings,
+    {"bytes": [...], "hash": 0}, with Java's signed bytes; plain strings are accepted
+    too. Control characters are dropped so names can't garble the terminal."""
+    if isinstance(value, dict) and isinstance(value.get("bytes"), list):
+        try:
+            value = bytes(b & 0xFF for b in value["bytes"]).decode("utf-8", errors="replace")
+        except (TypeError, ValueError):
+            return None
     if isinstance(value, str):
+        value = "".join(ch for ch in value if not _unsafe_char(ch))
         return value.strip() or None
     return None
 
@@ -172,7 +192,15 @@ def aggregate(events: list) -> dict:
     if duration <= 0:
         raise ReplayError("could not tell the game's duration")
     end_time = _get(dota, "endTime", "end_time")
-    start_time = int(end_time) - duration if end_time else None
+    # The replay's playback time covers the draft and pre-game too, so end time minus
+    # playback time lands on the match's start (within about 25 s of OpenDota's
+    # start_time on a real Kanaliiga replay); end time minus the game duration would
+    # be about 20 minutes late. Older or partial output without it falls back.
+    playback = _get(epilogue, "playbackTime", "playback_time")
+    if end_time and isinstance(playback, (int, float)) and 0 < playback < 6 * 3600:
+        start_time = int(end_time) - int(round(playback))
+    else:
+        start_time = int(end_time) - duration if end_time else None
     if not start_time:
         raise ReplayError("the replay has no end time")
 
