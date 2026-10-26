@@ -63,3 +63,11 @@ A full rerun writes nothing new, and the audit log has one `admin_accolade_added
 - The Players list still shows the current pool only. Players from old seasons who aren't in the pool appear in History and the Hall of fame.
 
 No migration, no new table, no environment variable. Tests: `backend/tests/test_issue_212_season_participation_backfill.py`.
+
+## Season history report
+
+`backend/scripts/season_history.py` is read-only: it writes `season_history.json` and prints a summary, and never touches the database. It reads the same league file and cache helpers as the backfill. For each season and division it gives:
+- **Participants:** every account id in the league's matches, with the last personaname, team names and games played.
+- **Winner:** inferred, because OpenDota has no standings. It is the team that won the league's last match by start time (the grand final), with the runner-up, the final's match id and date, and the five account ids on each side. Check it against the league's own records.
+
+From `backend/`: `python scripts/season_history.py --all` (or `--season 14 --season 15`). `--max-calls` (default 900) works as in the backfill: exit 2 on a budget stop, and a rerun continues from `season_history_cache.json`. Tests: `backend/tests/test_season_history_script.py`.

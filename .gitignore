@@ -27,3 +27,8 @@ backfill_played_cache.json.tmp
 
 # Local model agent reports (markdown/features/reference/local-model-agents.md)
 reports/local/
+
+# Season history report and cache (backend/scripts/season_history.py)
+season_history.json
+season_history_cache.json
+season_history_cache.json.tmp
