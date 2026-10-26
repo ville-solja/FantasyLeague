@@ -25,5 +25,10 @@ demos/
 backfill_played_cache.json
 backfill_played_cache.json.tmp
 
+# Placements build match cache (backend/scripts/season_placements.py, issue 233)
+season_placements_cache.json
+season_placements_cache.json.tmp
+backend/scripts/season_placements.csv.tmp
+
 # Local model agent reports (markdown/features/reference/local-model-agents.md)
 reports/local/

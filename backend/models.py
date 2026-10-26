@@ -258,9 +258,9 @@ class SeasonAccolade(Base):
 
     id                = Column(Integer, primary_key=True, autoincrement=True)
     season_label      = Column(String, nullable=False)
-    kind              = Column(String, nullable=False)   # champion | most_points | best_average | best_match | fantasy_winner | played
-    division          = Column(String, nullable=True)    # div1 | div2 (champion only)
-    team_name         = Column(String, nullable=True)    # denormalised (champion only)
+    kind              = Column(String, nullable=False)   # champion | runner_up | third_place | most_points | best_average | best_match | fantasy_winner | played
+    division          = Column(String, nullable=True)    # div1 | div2 (champion, runner_up, third_place)
+    team_name         = Column(String, nullable=True)    # denormalised (champion, runner_up, third_place)
     player_account_id = Column(Integer, nullable=True, index=True)  # OpenDota account id
     player_name       = Column(String, nullable=True)    # denormalised
     user_id           = Column(Integer, nullable=True)   # fantasy_winner only; no FK (users may be deleted)

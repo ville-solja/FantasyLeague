@@ -63,3 +63,5 @@ A full rerun writes nothing new, and the audit log has one `admin_accolade_added
 - The Players list still shows the current pool only. Players from old seasons who aren't in the pool appear in History and the Hall of fame.
 
 No migration, no new table, no environment variable. Tests: `backend/tests/test_issue_212_season_participation_backfill.py`.
+
+The same league file feeds the placements backfill (#233), which derives each past season's top three teams and their rosters: see [Season Placements Backfill](season-placements-backfill.md).

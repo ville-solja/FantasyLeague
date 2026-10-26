@@ -582,7 +582,8 @@ function renderPlayerAccolades(p) {
     return;
   }
   const champions = list.filter(a => a.kind === "champion").length;
-  const awards = list.filter(a => a.kind !== "champion" && a.kind !== "played").length;
+  // Issue 233: runner-up and third place show in the timeline, not as season awards.
+  const awards = list.filter(a => !ACCOLADE_TEAM_KINDS.includes(a.kind) && a.kind !== "played").length;
   const seasons = accoladePlayedSeasons(list).length;
   const played = accoladePlayedLine(list, { season: p.current_season, matches: p.current_season_matches });
   const bySeason = new Map();

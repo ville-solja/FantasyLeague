@@ -473,6 +473,11 @@ async function editAccoladeValue(id) {
   const name = prompt("Name", row[nameField] || "");
   if (name === null) return;
   if (name.trim() && name.trim() !== row[nameField]) body[nameField] = name.trim();
+  if (ACCOLADE_PLACEMENT_KINDS.includes(row.kind)) {
+    const team = prompt("Team name", row.team_name || "");
+    if (team === null) return;
+    if (team.trim() && team.trim() !== row.team_name) body.team_name = team.trim();
+  }
   if (!Object.keys(body).length) return;
   const res = await adminFetch(`${API}/admin/season-accolades/${id}`, {
     method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
@@ -689,10 +694,13 @@ async function saveChampions() {
 
 // --- Add accolade ----------------------------------------------------------
 
+// Issue 233: kinds that need a division and a team name (champions use Mark champions).
+const ACCOLADE_PLACEMENT_KINDS = ["runner_up", "third_place"];
+
 async function openAddAccolade() {
   document.getElementById("addAccoladeModal").classList.remove("hidden");
   setStatus("accStatus", "");
-  ["accPlayerId", "accPlayerName", "accUsername", "accValue", "accBulk"].forEach(id => { document.getElementById(id).value = ""; });
+  ["accPlayerId", "accPlayerName", "accUsername", "accValue", "accBulk", "accTeam"].forEach(id => { document.getElementById(id).value = ""; });
   await _loadChampPreview();
   const n = _currentSeasonNumber();
   document.getElementById("accSeason").value = n && n > 1 ? `Season ${n - 1}` : "";
@@ -707,11 +715,15 @@ function accKindChanged() {
   const kind = document.getElementById("accKind").value;
   const isUser = kind === "fantasy_winner";
   const isPlayed = kind === "played";
+  // Issue 233: runner-up and third place name a division and a team, like champions.
+  const isPlacement = ACCOLADE_PLACEMENT_KINDS.includes(kind);
   document.getElementById("accUserWrap").hidden = !isUser;
   document.getElementById("accPlayerWrap").hidden = isUser || isPlayed;
   document.getElementById("accNameWrap").hidden = isUser || isPlayed;
-  document.getElementById("accValueWrap").hidden = isPlayed;
+  document.getElementById("accValueWrap").hidden = isPlayed || isPlacement;
   document.getElementById("accBulkWrap").hidden = !isPlayed;
+  document.getElementById("accDivisionWrap").hidden = !isPlacement;
+  document.getElementById("accTeamWrap").hidden = !isPlacement;
 }
 
 function accFillName() {
@@ -744,6 +756,12 @@ async function saveAccolade() {
     const problem = validateChampionRoster([row]);
     if (problem) return setStatus("accStatus", problem, false);
     body = { season_label, kind, player_account_id: Number(row.account_id), player_name: row.name.trim(), value };
+    if (ACCOLADE_PLACEMENT_KINDS.includes(kind)) {
+      const team_name = document.getElementById("accTeam").value.trim();
+      if (!team_name) return setStatus("accStatus", "Enter the team name", false);
+      body = { season_label, kind, division: document.getElementById("accDivision").value, team_name,
+               player_account_id: body.player_account_id, player_name: body.player_name };
+    }
   }
   await withBusy(document.getElementById("accSaveBtn"), async () => {
     try {

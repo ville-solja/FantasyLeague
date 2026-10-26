@@ -346,10 +346,19 @@
           <option value="most_points">Most Points</option>
           <option value="best_average">Best Average</option>
           <option value="best_match">Best Single Match</option>
+          <option value="runner_up">Runner-up (a team's player)</option>
+          <option value="third_place">Third place (a team's player)</option>
           <option value="fantasy_winner">Fantasy Winner (a user)</option>
           <option value="played">Played (one or more players)</option>
         </select>
       </label>
+      <label id="accDivisionWrap" hidden>Division
+        <select id="accDivision">
+          <option value="div1">Div 1</option>
+          <option value="div2">Div 2</option>
+        </select>
+      </label>
+      <label id="accTeamWrap" hidden>Team name <input id="accTeam" type="text" maxlength="100" /></label>
       <label id="accPlayerWrap">OpenDota id <input id="accPlayerId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="accFillName()" /></label>
       <label id="accNameWrap">Player name <input id="accPlayerName" type="text" maxlength="100" /></label>
       <label id="accUserWrap" hidden>Username <input id="accUsername" type="text" maxlength="100" /></label>
@@ -765,7 +774,7 @@
     <div class="history-seasons" id="historySeasons"></div>
     <aside class="panel history-fame">
       <h2>Hall of fame</h2>
-      <p class="history-fame-note">Players by titles: champion and season awards. Seasons played don't count.</p>
+      <p class="history-fame-note">Players by titles: champion, runner-up, third place and season awards. Seasons played don't count.</p>
       <div id="historyFame"></div>
     </aside>
   </div>

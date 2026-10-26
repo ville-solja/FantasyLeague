@@ -2808,6 +2808,10 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .history-champion-team { margin: var(--s-2) 0 var(--s-1); font-weight: var(--w-bold); }
 .history-champion-players { list-style: none; margin: 0; padding: 0; }
 .history-champion-player { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); padding: 2px 0; }
+/* Issue 233: runner-up and third place teams under each division's champion. */
+.history-placements { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
+.history-placement { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.history-placement-team { color: var(--fg-muted); font-size: var(--fs-sm); }
 .history-champion-none,
 .history-empty-note,
 .history-fame-note,
@@ -3057,6 +3061,11 @@ button {
 .accolade-pip--best_match,     .accolade-chip--best_match     { --pip-color: var(--accolade-match); }
 .accolade-pip--fantasy_winner, .accolade-chip--fantasy_winner { --pip-color: var(--accolade-fantasy); }
 .accolade-pip--played,         .accolade-chip--played         { --pip-color: var(--accolade-played); }
+/* Issue 233: runner-up and third place, one rule per division key. */
+.accolade-pip--div1_runner_up, .accolade-chip--div1_runner_up,
+.accolade-pip--div2_runner_up, .accolade-chip--div2_runner_up { --pip-color: var(--accolade-runner-up); }
+.accolade-pip--div1_third,     .accolade-chip--div1_third,
+.accolade-pip--div2_third,     .accolade-chip--div2_third     { --pip-color: var(--accolade-third); }
 .accolade-pip {
   position: relative;
   display: inline-flex;

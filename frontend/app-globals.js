@@ -449,6 +449,10 @@ function tweenNumber(el, from, to, ms, opts = {}) {
 const ACCOLADE_KINDS = [
   { key: "div1", kind: "champion", division: "div1", name: "Div 1 Champion", icon: "crown", plate: "filled", token: "--accolade-div1" },
   { key: "div2", kind: "champion", division: "div2", name: "Div 2 Champion", icon: "trophy", plate: "filled", token: "--accolade-div2" },
+  { key: "div1_runner_up", kind: "runner_up", division: "div1", name: "Div 1 Runner-up", icon: "medal", plate: "outlined", token: "--accolade-runner-up" },
+  { key: "div2_runner_up", kind: "runner_up", division: "div2", name: "Div 2 Runner-up", icon: "medal", plate: "outlined", token: "--accolade-runner-up" },
+  { key: "div1_third", kind: "third_place", division: "div1", name: "Div 1 Third place", icon: "award", plate: "outlined", token: "--accolade-third" },
+  { key: "div2_third", kind: "third_place", division: "div2", name: "Div 2 Third place", icon: "award", plate: "outlined", token: "--accolade-third" },
   { key: "most_points", kind: "most_points", division: null, name: "Most Points", icon: "flame", plate: "outlined", token: "--accolade-points" },
   { key: "best_average", kind: "best_average", division: null, name: "Best Average", icon: "gauge", plate: "outlined", token: "--accolade-average" },
   { key: "best_match", kind: "best_match", division: null, name: "Best Single Match", icon: "zap", plate: "outlined", token: "--accolade-match" },
@@ -456,13 +460,19 @@ const ACCOLADE_KINDS = [
   { key: "played", kind: "played", division: null, name: "Played", icon: "calendar-check", plate: "muted", token: "--accolade-played" },
 ];
 
-function _accoladeKindKey(a) {
-  return a && a.kind === "champion" ? String(a.division || "") : String((a && a.kind) || "");
-}
+// Kinds won by a team in a division (issue 233 added runner-up and third place): the
+// registry has one entry per division, and their text names the team.
+const ACCOLADE_TEAM_KINDS = ["champion", "runner_up", "third_place"];
 
 function _accoladeKind(a) {
-  const key = _accoladeKindKey(a);
-  return ACCOLADE_KINDS.find(k => k.key === key) || null;
+  if (!a) return null;
+  const division = a.division || null;
+  return ACCOLADE_KINDS.find(k => k.kind === a.kind
+    && (ACCOLADE_TEAM_KINDS.includes(k.kind) ? k.division === division : true)) || null;
+}
+
+function _accoladeIsTeamKind(kind) {
+  return !!kind && ACCOLADE_TEAM_KINDS.includes(kind.kind);
 }
 
 function _seasonNumber(label) {
@@ -511,7 +521,7 @@ function _accoladePipText(kind, list) {
     const seasons = `${n} season${n === 1 ? "" : "s"}: ${_compressSeasonRuns(list)}`;
     return { tip: `Played · ${seasons}`, aria: `Played, ${seasons}`, count: String(n) };
   }
-  const seasons = list.map(a => (kind.kind === "champion" && a.team_name)
+  const seasons = list.map(a => (_accoladeIsTeamKind(kind) && a.team_name)
     ? `${_seasonShort(a)} with ${a.team_name}` : _seasonShort(a)).join(", ");
   const times = list.length > 1 ? `, ${list.length} times` : "";
   return { tip: `${kind.name} · ${seasons}`, aria: `${kind.name}${times}: ${seasons}`,
@@ -555,7 +565,7 @@ function accoladeChipsHtml(accolades) {
   if (!list.length) return "";
   return `<span class="accolade-chips">${list.map(a => {
     const kind = _accoladeKind(a);
-    const detail = kind.kind === "champion" && a.team_name ? `with ${a.team_name}`
+    const detail = _accoladeIsTeamKind(kind) && a.team_name ? `with ${a.team_name}`
       : (a.value != null && Number.isFinite(Number(a.value)) ? `${Number(a.value).toFixed(1)} pts` : "");
     const tip = detail ? ` title="${_escHtml(detail)}"` : "";
     return `<span class="accolade-chip accolade-chip--${kind.plate} accolade-chip--${kind.key}"${tip}><i data-lucide="${kind.icon}" aria-hidden="true"></i>${_escHtml(_accoladeChipLabel(a, kind))}</span>`;
@@ -580,14 +590,14 @@ function _cardDetailsSection(kind, title, lines) {
 
 /**
  * Issue 228, used by the player popup's Accolades timeline since issue 230: one
- * accolade as a detail line, "S15 Div 1 Champion · with Team" or
- * "S15 Most Points · 812.3 pts". "" for Played (see accoladePlayedLine) or an
+ * accolade as a detail line, "S15 Div 1 Champion · with Team",
+ * "S15 Div 1 Runner-up · with Team" (issue 233) or "S15 Most Points · 812.3 pts". "" for Played (see accoladePlayedLine) or an
  * unknown kind.
  */
 function accoladeDetailLine(a) {
   const kind = _accoladeKind(a);
   if (!kind || kind.key === "played") return "";
-  const detail = kind.kind === "champion"
+  const detail = _accoladeIsTeamKind(kind)
     ? (a.team_name ? ` · with ${a.team_name}` : "")
     : (a.value != null && Number.isFinite(Number(a.value)) ? ` · ${Number(a.value).toFixed(1)} pts` : "");
   const text = `${_seasonShort(a)} ${kind.name}${detail}`;

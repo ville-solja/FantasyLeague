@@ -756,8 +756,11 @@ class TestAccoladeDetailLines:
                _a("most_points", "Season 15", value=1), _a("best_average", "Season 15", value=1),
                _a("best_match", "Season 15", value=1), _a("fantasy_winner", "Season 15", value=1),
                _a("played", "Season 15")]
+        # Issue 233: runner-up and third place per division sit after the champions.
+        acc[2:2] = [_a("runner_up", "Season 15", "div1", "C"), _a("runner_up", "Season 15", "div2", "D"),
+                    _a("third_place", "Season 15", "div1", "E"), _a("third_place", "Season 15", "div2", "F")]
         lines = _parse(_details(acc)).lines
-        assert len(lines) == len(kinds) == 7
+        assert len(lines) == len(kinds) == 11
         for ln, kind in zip(lines, kinds):
             assert ln["icon"] == kind["icon"]
             assert "accolade-pip" in ln["symbol"]

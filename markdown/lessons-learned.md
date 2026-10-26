@@ -13,6 +13,10 @@ Format:
 ```
 
 ### 2026-10-26 — developer — testing
+**Problem:** A new accolade kind broke older tests in two hidden places: `test_issue_50`'s symbol-table check takes the first README row containing a kind's icon (`medal` is shared by Fantasy Winner and Runner-up), and `test_issue_50`'s history harness extracts `_historyChampionHtml` alone, so a helper it calls is undefined.
+**Solution:** List a row that reuses an icon after the original one in `.claude/skills/README.md`, and pass extra markup into extracted renderers as a trailing default parameter (`_historyChampionHtml(season, division, team, placements = "")`) instead of calling a new helper inside them.
+
+### 2026-10-26 — developer — testing
 **Problem:** The #208 popup harness (`_popup_src` in `test_issue_208_*`) loads only the app-globals ACCOLADES block and a few helpers, so popup code that calls `rankMedalHtml` or `playerTags` (which needs `_ownValue`) fails there. `_renderRevealRank`, named in the 2026-10-23 entry, was removed by issue 230.
 **Solution:** Add `_fn_source(g, "_ownValue")` and the `const _RANK_MEDALS` … `rankMedalHtml` slice to the script (`_popup` in `test_issue_230_*`, which also wraps the body in an async IIFE so it can `await openPlayerModal(...)`).
 
