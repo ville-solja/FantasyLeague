@@ -626,7 +626,7 @@ class TestTestingInstructionsCurrent:
         intro = _flat(steps[:steps.index("**Flow 1")])
         assert "scrolls within that height" in intro
         assert "short code" in intro and "E-REACH" in intro
-        assert "send the code to the operator." in intro
+        assert "include the code" in intro  # plus the support contact (plan-issue-195, R3)
         assert "reason codes table" not in intro
         assert '"E-REACH"' in (EXT_DIR / "extension.js").read_text()
 
