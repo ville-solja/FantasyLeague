@@ -295,7 +295,6 @@ let _rosterCards = [];
 const _lastHtml = new WeakMap();
 function renderIfChanged(el, html) { if (!el) return false; el.innerHTML = html; return true; }
 function _escHtml(s) { return String(s ?? ""); }
-function rankMedalHtml() { return ""; }
 function _imgSrc(u) { return u; }
 function cardImageUrl(id) { return `/cards/${id}/image`; }
 function updateTokenDisplay(balance) { _tokenBalance = balance; }

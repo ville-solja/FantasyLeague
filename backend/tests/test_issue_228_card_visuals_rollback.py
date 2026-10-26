@@ -6,7 +6,9 @@ templates and the pre-#218 renderer (`backend/image.py` as of `da89798^`) return
 the generated Holo template and its generator are removed, and accolade and tag
 pips leave every card face. The card viewer (`#revealModal`) gains a Tags section
 and an Accolades section with details, built by `tagDetailsHtml` and
-`accoladeDetailsHtml` in frontend/app-globals.js.
+`accoladeDetailsHtml` in frontend/app-globals.js. Issue 230 moved the accolade
+details to the player popup's timeline (`accoladeDetailLine`, `accoladePlayedLine`)
+and left the card viewer with the Tags section; the tests below follow that.
 
   Story 1: Cards Return to the Original Art
   Story 2: Accolades and Tags Leave the Card Face
@@ -542,10 +544,10 @@ const html = _cardSlotHTML({{id: 5, player_id: 7, player_name: "Glete", total_po
         assert not {"card-pips", "card-tag-pips", "accolade-pip", "card-tag-pip"} & set(classes)
         assert out["calls"] == 0
 
-    def test_render_card_accolades_puts_no_pips_on_card(self):
-        """`_renderCardAccolades` in app-cards.js, run in a Node harness for a champion
-        with tags, writes no card-pips / card-tag-pips markup anywhere; #revealPips is
-        gone from index.html or left empty."""
+    def test_render_reveal_tags_puts_no_pips_on_card(self):
+        """`_renderRevealTags` in app-cards.js (issue 230; `_renderCardAccolades` before),
+        run in a Node harness for a champion with tags, writes no card-pips /
+        card-tag-pips markup anywhere; #revealPips is gone from index.html or left empty."""
         cards = _fe("app-cards.js")
         out = _node_out("{written, calls}", prelude=f"""
 let calls = 0;
@@ -557,12 +559,12 @@ const document = {{ getElementById(id) {{ return els[id] || (els[id] = {{ id, in
                    addEventListener() {{}} }};
 function playerAccolades() {{ return {json.dumps(_CHAMPION)}; }}
 function playerTags() {{ return {json.dumps(_TAGS)}; }}
-{_fn_source(cards, "_renderCardAccolades")}
-{_fn_source(cards, "_showRevealSections")}
-_renderCardAccolades({{player_id: 7}}, false);
+{_fn_source(cards, "_renderRevealTags")}
+{_fn_source(cards, "_showRevealTags")}
+_renderRevealTags({{player_id: 7}}, false);
 const written = Object.fromEntries(Object.entries(els).map(([k, v]) => [k, v.innerHTML]));
 """)
-        assert set(out["written"]) == {"revealTags", "revealAccolades"}
+        assert set(out["written"]) == {"revealTags"}
         for html in out["written"].values():
             assert html
             assert not {"card-pips", "card-tag-pips", "accolade-pips", "tag-pips"} & set(_classes(html))
@@ -675,17 +677,23 @@ class TestTagDetailsHtml:
         assert [ln["text"] for ln in _parse(html).lines] == ["Caster", "VIP"]
 
 
-class TestAccoladeDetailsHtml:
+def _details(acc):
+    """Issue 230: the accolade detail lines as the player popup builds them, newest first,
+    then the Played summary (accoladeDetailsHtml's lines before issue 230)."""
+    return _node_out(f"(l => l.slice().sort(_accoladeNewestFirst).map(accoladeDetailLine).join('') "
+                     f"+ accoladePlayedLine(l))({json.dumps(acc)})")
 
-    def test_accolade_details_html_newest_season_first_champions_first(self):
+
+class TestAccoladeDetailLines:
+
+    def test_accolade_detail_lines_newest_season_first_champions_first(self):
         """Node harness: accolades across S14 and S15, mixing champion and point-based
         kinds, render newest season first and, within a season, champion lines before
         the others."""
         acc = [_a("best_match", "Season 14", value=99.0), _a("most_points", "Season 15", value=812.3),
                _a("champion", "Season 14", "div2", "Old Team"), _a("champion", "Season 15", "div1", "Team Name"),
                _a("best_average", "Season 15", value=40.25)]
-        parsed = _parse(_node_out(f"accoladeDetailsHtml({json.dumps(acc)})"))
-        assert [s["title"] for s in parsed.sections] == ["Accolades"]
+        parsed = _parse(_details(acc))
         assert [ln["text"] for ln in parsed.lines] == [
             "S15 Div 1 Champion · with Team Name",
             "S15 Most Points · 812.3 pts",
@@ -694,18 +702,17 @@ class TestAccoladeDetailsHtml:
             "S14 Best Single Match · 99.0 pts",
         ]
 
-    def test_accolade_details_html_champion_line_names_division_and_team(self):
+    def test_accolade_detail_line_champion_names_division_and_team(self):
         """A season-15 Div 1 champion accolade with team_name 'Team Name' renders the text
         'S15 Div 1 Champion · with Team Name' (team name escaped)."""
         acc = [_a("champion", "Season 15", "div1", "Team Name")]
-        assert [ln["text"] for ln in _parse(_node_out(f"accoladeDetailsHtml({json.dumps(acc)})")).lines] == [
-            "S15 Div 1 Champion · with Team Name"]
+        assert [ln["text"] for ln in _parse(_details(acc)).lines] == ["S15 Div 1 Champion · with Team Name"]
         evil = [_a("champion", "Season 15", "div1", "<img src=x>&Co")]
-        html = _node_out(f"accoladeDetailsHtml({json.dumps(evil)})")
+        html = _details(evil)
         assert "<img" not in html and "&lt;img src=x&gt;&amp;Co" in html
         assert [ln["text"] for ln in _parse(html).lines] == ["S15 Div 1 Champion · with <img src=x>&Co"]
 
-    def test_accolade_details_html_point_accolade_shows_value(self):
+    def test_accolade_detail_line_point_accolade_shows_value(self):
         """A season-15 Most Points accolade with value 812.3 renders
         'S15 Most Points · 812.3 pts'; Best Average, Best Single Match and a valued
         Fantasy Winner follow the same pattern; a Fantasy Winner without value shows no
@@ -718,30 +725,29 @@ class TestAccoladeDetailsHtml:
             (_a("fantasy_winner", "Season 14"), "S14 Fantasy Winner"),
         ]
         for acc, text in cases:
-            lines = _parse(_node_out(f"accoladeDetailsHtml({json.dumps([acc])})")).lines
+            lines = _parse(_details([acc])).lines
             assert [ln["text"] for ln in lines] == [text]
 
-    def test_accolade_details_html_played_summary_with_disclosure(self):
+    def test_accolade_played_line_summary_with_disclosure(self):
         """Played rows for seven seasons S4..S16 render one summary line
         'Played 7 seasons · S4–S16' (counted from Season 4, as #212) and a
         <details> disclosure listing each season; played rows before S4 are not counted."""
         seasons = [2, 3, 4, 5, 6, 10, 14, 15, 16]
         acc = [_a("played", f"Season {n}") for n in seasons]
-        parsed = _parse(_node_out(f"accoladeDetailsHtml({json.dumps(acc)})"))
+        parsed = _parse(_details(acc))
         assert len(parsed.lines) == 1
         line = parsed.lines[0]
         assert line["details"] is True
         assert line["summary"] == "Played 7 seasons · S4–S16"
         assert line["seasons"] == ["S16", "S15", "S14", "S10", "S6", "S5", "S4"]
         assert line["icon"] == "calendar-check" and "accolade-pip--played" in line["symbol"]
-        one = _parse(_node_out(f'accoladeDetailsHtml({json.dumps([_a("played", "Season 15")])})')).lines
+        one = _parse(_details([_a("played", "Season 15")])).lines
         assert one[0]["summary"] == "Played 1 season · S15"
-        early = _node_out(f'accoladeDetailsHtml({json.dumps([_a("played", "Season 3")])})')
-        assert early == ""
-        mixed = _parse(_node_out(f"accoladeDetailsHtml({json.dumps(acc + [_a('champion', 'Season 15', 'div1', 'T')])})")).lines
+        assert _details([_a("played", "Season 3")]) == ""
+        mixed = _parse(_details(acc + [_a("champion", "Season 15", "div1", "T")])).lines
         assert [ln["details"] for ln in mixed] == [False, True]  # Played comes last
 
-    def test_accolade_details_html_uses_kind_symbol_and_plate_colour(self):
+    def test_accolade_detail_lines_use_kind_symbol_and_plate_colour(self):
         """Each line carries the symbol and plate colour of its kind from ACCOLADE_KINDS
         (same class/token as accoladePipsHtml); the symbol is aria-hidden and the text
         carries the meaning."""
@@ -750,7 +756,7 @@ class TestAccoladeDetailsHtml:
                _a("most_points", "Season 15", value=1), _a("best_average", "Season 15", value=1),
                _a("best_match", "Season 15", value=1), _a("fantasy_winner", "Season 15", value=1),
                _a("played", "Season 15")]
-        lines = _parse(_node_out(f"accoladeDetailsHtml({json.dumps(acc)})")).lines
+        lines = _parse(_details(acc)).lines
         assert len(lines) == len(kinds) == 7
         for ln, kind in zip(lines, kinds):
             assert ln["icon"] == kind["icon"]
@@ -763,85 +769,80 @@ class TestAccoladeDetailsHtml:
         css = _fe("style.css")
         assert "var(--accolade-div1)" in _rule(css, ".accolade-pip--div1")[0]
 
-    def test_accolade_details_html_empty_input_returns_empty_string(self):
-        """accoladeDetailsHtml([]) and accoladeDetailsHtml(undefined) return ''."""
-        out = _node_out('[accoladeDetailsHtml([]), accoladeDetailsHtml(undefined), accoladeDetailsHtml(null), '
-                        'accoladeDetailsHtml([{kind: "unknown", season: "Season 15"}])]')
-        assert out == ["", "", "", ""]
+    def test_accolade_detail_lines_empty_input_return_empty_string(self):
+        """accoladeDetailLine and accoladePlayedLine return '' for missing, played-only
+        (the line helper) or unknown input."""
+        out = _node_out('[accoladeDetailLine(undefined), accoladeDetailLine(null), '
+                        'accoladeDetailLine({kind: "unknown", season: "Season 15"}), '
+                        'accoladeDetailLine({kind: "played", season: "Season 15"}), '
+                        'accoladePlayedLine([]), accoladePlayedLine(undefined), accoladePlayedLine(null)]')
+        assert out == ["", "", "", "", "", "", ""]
+        assert "accoladeDetailsHtml" not in _fe("app-globals.js")
 
 
 class TestCardViewerSections:
 
-    def test_index_html_card_viewer_has_tags_and_accolades_sections(self):
+    def test_index_html_card_viewer_has_tags_section(self):
         """#revealModal in index.html (parsed with html.parser) holds a Tags section
-        container followed by an Accolades section container below the card;
-        #revealAccolades (the old chip row) is gone or replaced by them."""
+        container below the card; since issue 230 there is no Accolades section."""
         p = _ids(_reveal_modal_html())
         ids = p.ids
         assert ids[0] == "revealModal"
-        assert "revealPips" not in ids
-        assert ids.index("revealImgWrap") < ids.index("revealTags") < ids.index("revealAccolades")
-        assert ids.index("revealAccolades") < ids.index("revealActionBtn")
-        for sid in ("revealTags", "revealAccolades"):
-            attrs = p.attrs[sid]
-            assert "reveal-details" in attrs.get("class", "").split()
-            assert "hidden" in attrs  # empty until a card fills it
-            assert "reveal-accolades" not in attrs.get("class", "")
+        assert "revealPips" not in ids and "revealAccolades" not in ids
+        assert ids.index("revealImgWrap") < ids.index("revealTags") < ids.index("revealActionBtn")
+        attrs = p.attrs["revealTags"]
+        assert "reveal-details" in attrs.get("class", "").split()
+        assert "hidden" in attrs  # empty until a card fills it
 
-    def test_card_viewer_shows_sections_for_tagged_champion(self):
-        """Node harness: opening a card (showCard, not a draw) for a player with tags and
-        accolades fills the Tags section from tagDetailsHtml and the Accolades section
-        from accoladeDetailsHtml, both visible, tags above accolades."""
+    def test_card_viewer_shows_tags_for_tagged_champion(self):
+        """Node harness: opening a card (showCard, not a draw) for a champion with tags
+        fills the Tags section from tagDetailsHtml and shows it; the accolades are not
+        listed (issue 230 moved them to the player popup)."""
         out = _run_draw(f"""
   (0, eval)({json.dumps(_globals_js().replace("function _escHtml", "function _escHtmlUnused"))});
   globalThis.playerAccolades = () => {json.dumps(_CHAMPION)};
   globalThis.playerTags = () => {json.dumps(_TAGS)};
   showCard({{id: 3, card_type: "legendary", player_id: 7, player_name: "Glete", team_name: "Greens"}}, "");
-  const tags = document.getElementById("revealTags"), acc = document.getElementById("revealAccolades");
+  const tags = document.getElementById("revealTags");
   out.tagsHidden = tags.hidden;
-  out.accHidden = acc.hidden;
   out.tags = tags.innerHTML;
-  out.acc = acc.innerHTML;
   out.expectedTags = tagDetailsHtml(playerTags(7));
-  out.expectedAcc = accoladeDetailsHtml(playerAccolades(7));
+  out.ids = Object.keys(els);
 """)
-        assert out["tagsHidden"] is False and out["accHidden"] is False
-        assert out["tags"] == out["expectedTags"] and out["acc"] == out["expectedAcc"]
+        assert out["tagsHidden"] is False
+        assert out["tags"] == out["expectedTags"]
         assert [ln["text"] for ln in _parse(out["tags"]).lines] == ["Kana Cards admin", "Caster"]
-        assert _parse(out["acc"]).lines[0]["text"] == "S15 Div 1 Champion · with Team Name"
-        ids = _ids(_reveal_modal_html()).ids
-        assert ids.index("revealTags") < ids.index("revealAccolades")  # tags above accolades
+        assert "revealAccolades" not in out["ids"]
 
-    def test_card_viewer_hides_sections_when_player_has_none(self):
-        """Node harness: a player with no tags and no accolades leaves both sections hidden
-        (hidden attribute) and empty, so no empty space shows."""
+    def test_card_viewer_hides_tags_when_player_has_none(self):
+        """Node harness: a player with no tags leaves the Tags section hidden (hidden
+        attribute) and empty, so no empty space shows."""
         out = _run_draw(f"""
   (0, eval)({json.dumps(_globals_js().replace("function _escHtml", "function _escHtmlUnused"))});
   globalThis.playerAccolades = () => [];
   globalThis.playerTags = () => [];
   // A previous card left content behind; the next card must clear it.
   document.getElementById("revealTags").innerHTML = "old";
-  document.getElementById("revealAccolades").innerHTML = "old";
   showCard({{id: 3, card_type: "common", player_id: 8, player_name: "Nobody", team_name: "T"}}, "");
-  const tags = document.getElementById("revealTags"), acc = document.getElementById("revealAccolades");
-  out.state = [tags.hidden, acc.hidden, tags.innerHTML, acc.innerHTML];
+  const tags = document.getElementById("revealTags");
+  out.state = [tags.hidden, tags.innerHTML];
   showCard({{id: 4, card_type: "common", player_name: "No player id"}}, "");
-  out.noPlayer = [tags.hidden, acc.hidden, tags.innerHTML, acc.innerHTML];
+  out.noPlayer = [tags.hidden, tags.innerHTML];
 """)
-        assert out["state"] == [True, True, "", ""]
-        assert out["noPlayer"] == [True, True, "", ""]
+        assert out["state"] == [True, ""]
+        assert out["noPlayer"] == [True, ""]
 
-    def test_draw_reveal_hides_sections_until_flip_finishes(self):
-        """Using test_issue_205's _HARNESS/_run: during a draw of a champion's card both
-        sections stay hidden while the flip animation runs and become visible only after
-        the flip has finished (and immediately under reduced motion)."""
+    def test_draw_reveal_hides_tags_until_flip_finishes(self):
+        """Using test_issue_205's _HARNESS/_run: during a draw of a tagged player's card
+        the Tags section stays hidden while the flip animation runs and becomes visible
+        only after the flip has finished (and immediately under reduced motion)."""
         steps = f"""
   (0, eval)({json.dumps(_globals_js().replace("function _escHtml", "function _escHtmlUnused"))});
   globalThis.playerAccolades = () => {json.dumps(_CHAMPION)};
   globalThis.playerTags = () => {json.dumps(_TAGS)};
-  const tags = document.getElementById("revealTags"), acc = document.getElementById("revealAccolades");
-  tags.hidden = true; acc.hidden = true;
-  const visible = () => !tags.hidden && !acc.hidden;
+  const tags = document.getElementById("revealTags");
+  tags.hidden = true;
+  const visible = () => !tags.hidden;
   drawCard();
   out.firstVisible = null; out.firstShown = null; out.visibleWhileEntering = false;
   for (let i = 0; i < 400; i++) {{
@@ -853,7 +854,7 @@ class TestCardViewerSections:
   const flip = ANIMS.find(a => JSON.stringify(a.keyframes).includes("rotateY"));
   out.flipEnd = flip ? flip.at + flip.opts.duration : null;
   out.finalVisible = visible();
-  out.filled = Boolean(tags.innerHTML) && Boolean(acc.innerHTML);
+  out.filled = Boolean(tags.innerHTML);
 """
         out = _run_draw(steps)
         assert out["filled"] is True and out["finalVisible"] is True

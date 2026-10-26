@@ -5,7 +5,8 @@ Each pool player's Dota 2 rank medal (`rank_tier`, `leaderboard_rank`) is taken
 from the OpenDota `GET /players/{account_id}` response the app already fetches,
 stored on `players` with `rank_fetched_at`, refreshed by the background profile
 enrichment, returned by `GET /players/{id}` and the card lists, and shown as a
-medal badge in the player popup and the card viewer.
+medal badge in the player popup and the card viewer. Since issue 230 the medal
+is the player popup's Rank tile only (no header medal, nothing in the card viewer).
 
   Story 1: Store Each Player's Rank Medal          (TestStorePlayerRankMedal)
   Story 2: See a Player's Medal in the Player Popup (TestPlayerPopupMedal)
@@ -365,23 +366,22 @@ class TestPlayerPopupMedal:
         assert ">Immortal<" in out["n"] and "#" not in re.sub(r"&#\d+;", "", out["n"])
         assert "★" not in out["h"]
 
-    def test_popup_header_includes_rank_medal(self):
-        """The popup header in app-player-popup.js renders the medal badge next to the team name."""
-        body = _fn_body(_read(PLAYERS_JS), "openPlayerModal")
-        call = "rankMedalHtml(p.rank_tier, p.leaderboard_rank, p.rank_fetched_at)"
-        assert call in body
-        team = body.index('document.getElementById("playerModalTeam").innerHTML = p.team_id')
-        medal = body.index(call)
-        assert team < medal
-        assert 'getElementById("playerModalTeam").insertAdjacentHTML("beforeend"' in body[team:medal]
+    def test_popup_shows_rank_medal_as_tile(self):
+        """Since issue 230 the popup shows the medal as the last summary tile (Rank), not
+        next to the team name in the header."""
+        js = _read(PLAYERS_JS)
+        assert "rankMedalHtml" not in _fn_body(js, "openPlayerModal")
+        assert "rankMedalHtml(p.rank_tier, p.leaderboard_rank)" in _fn_body(js, "_popupRankTile")
+        tiles = _fn_body(js, "_popupTilesHtml")
+        assert tiles.index('"MVPs"') < tiles.index("_popupRankTile(p)")
 
-    def test_rank_medal_html_has_approximate_rank_tooltip_with_date(self):
-        """The badge's title says "Last known rank from OpenDota" with the fetch date."""
-        out = _medal_js('out.h = rankMedalHtml(54, null, 1700000000);'
-                        'out.d = new Date(1700000000 * 1000).toLocaleDateString();'
-                        'out.n = rankMedalHtml(54);')
-        assert f'title="Last known rank from OpenDota, {out["d"]}"' in out["h"]
-        assert 'title="Last known rank from OpenDota"' in out["n"]
+    def test_rank_source_and_date_shown_on_the_tile(self):
+        """Since issue 230 the source and fetch date are the Rank tile's visible sub line
+        ("OpenDota, <date>", from rank_fetched_at) instead of a tooltip on the badge."""
+        out = _medal_js('out.h = rankMedalHtml(54);')
+        assert "title=" not in out["h"]
+        tile = _fn_body(_read(PLAYERS_JS), "_popupRankTile")
+        assert "p.rank_fetched_at" in tile and "`OpenDota${when}`" in tile
 
     def test_rank_medal_html_null_rank_renders_nothing(self):
         """`rankMedalHtml(null)` returns an empty string: no medal and no empty space."""
@@ -390,11 +390,14 @@ class TestPlayerPopupMedal:
         assert out == {"a": "", "b": "", "c": "", "d": ""}
 
     def test_rank_medal_html_has_screen_reader_text(self):
-        """The medal has a text equivalent for screen readers (`aria-label` or visible text)."""
+        """The medal has a text equivalent for screen readers: since issue 230 its name is
+        visible text and the symbol and stars are decorative."""
         out = _medal_js('out.h = rankMedalHtml(33); out.i = rankMedalHtml(80, 7);')
-        assert 'role="img"' in out["h"] and 'aria-label="Rank: Crusader 3"' in out["h"]
-        assert 'aria-label="Rank: Immortal #7"' in out["i"]
+        assert '<span class="rank-medal-name">Crusader 3</span>' in out["h"]
+        assert '<span class="rank-medal-name">Immortal #7</span>' in out["i"]
         assert 'class="rank-medal-icon" aria-hidden="true"' in out["h"]
+        assert 'class="rank-medal-stars" aria-hidden="true"' in out["h"]
+        assert 'role="img"' not in out["h"]
 
     def test_style_css_medal_colours_are_tokens(self):
         """Medal colours are `--medal-herald` ... `--medal-immortal` tokens in style.css, no raw hex in `.rank-medal` rules."""
@@ -451,41 +454,20 @@ class TestCardMedal:
         viewer = cards_router.get_card(card.id, db=db, current_user={"user_id": 1})
         assert (viewer["rank_tier"], viewer["leaderboard_rank"]) == (None, None)
 
-    def test_card_viewer_shows_medal_under_card_image(self):
-        """app-cards.js renders the medal badge and name under the card image in the card viewer."""
+    def test_card_viewer_shows_no_medal(self):
+        """Since issue 230 the card viewer shows no medal: the rank is a statistic in the
+        player popup (no `_renderRevealRank`, no `#revealRank`)."""
         js = _read(CARDS_JS)
-        helper = _fn_body(js, "_renderRevealRank")
-        assert "rankMedalHtml(card.rank_tier, card.leaderboard_rank)" in helper
-        assert 'getElementById("revealRank")' in helper
-        assert "_renderRevealRank(card);" in _fn_body(js, "showCard")
-        html = _read(INDEX_HTML)
-        img = html.index('id="revealCardImg"')
-        rank = html.index('id="revealRank"')
-        assert img < rank < html.index('id="revealDestination"')
+        assert "_renderRevealRank" not in js and "rankMedalHtml" not in js
+        assert 'id="revealRank"' not in _read(INDEX_HTML)
 
-    def test_card_viewer_null_rank_shows_no_medal(self):
-        """The card viewer shows no medal for a card whose player has no rank."""
-        node = _node()
-        if not node:
-            pytest.skip("node not installed")
-        js = _read(CARDS_JS)
-        script = "\n".join([
-            "const el = { innerHTML: 'stale' };",
-            "const document = { getElementById: id => id === 'revealRank' ? el : null };",
-            "const calls = [];",
-            "function rankMedalHtml(t, lb) { calls.push([t, lb]); return t == null ? '' : '<b>m</b>'; }",
-            _fn_body(js, "_renderRevealRank") + "\n}\n",
-            "_renderRevealRank({ rank_tier: null, leaderboard_rank: null });",
-            "const a = el.innerHTML;",
-            "_renderRevealRank({ rank_tier: 54 });",
-            "console.log(JSON.stringify({ a, b: el.innerHTML, calls }));",
-        ])
-        res = subprocess.run([node, "-e", script], capture_output=True, text=True, timeout=30)
-        assert res.returncode == 0, res.stderr
-        out = json.loads(res.stdout)
-        assert out["a"] == "" and out["b"] == "<b>m</b>"
-        hidden = [body for sel, body in _css_blocks(_read(STYLE_CSS), r"\.reveal-rank:empty")]
-        assert hidden and "display: none" in hidden[0]
+    def test_card_viewer_medal_css_removed(self):
+        """Since issue 230 the `.reveal-rank` rules are gone; the medal's tile placement
+        rule wraps it in the popup's Rank tile."""
+        css = _read(STYLE_CSS)
+        assert _css_blocks(css, r"\.reveal-rank") == []
+        tile = [body for sel, body in _css_blocks(css, r"\.player-modal-stat--rank \.rank-medal")]
+        assert tile and "margin-left: 0" in tile[0]
 
     def test_medal_uses_no_dota_cdn_image_or_league_name(self):
         """The medal badge loads no image from a Dota CDN and shows no league name."""

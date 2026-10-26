@@ -12,8 +12,12 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-26 — developer — testing
+**Problem:** The #208 popup harness (`_popup_src` in `test_issue_208_*`) loads only the app-globals ACCOLADES block and a few helpers, so popup code that calls `rankMedalHtml` or `playerTags` (which needs `_ownValue`) fails there. `_renderRevealRank`, named in the 2026-10-23 entry, was removed by issue 230.
+**Solution:** Add `_fn_source(g, "_ownValue")` and the `const _RANK_MEDALS` … `rankMedalHtml` slice to the script (`_popup` in `test_issue_230_*`, which also wraps the body in an async IIFE so it can `await openPlayerModal(...)`).
+
 ### 2026-10-25 — developer — testing
-**Problem:** The #205 draw harness (`_run` in `test_issue_205_*`) loads only app-cards.js, so code that calls app-globals helpers (`accoladeDetailsHtml`, `playerTags`) is skipped by its `typeof` guards and a steps-local `function` stays invisible to the module.
+**Problem:** The #205 draw harness (`_run` in `test_issue_205_*`) loads only app-cards.js, so code that calls app-globals helpers (`tagDetailsHtml`, `playerTags`) is skipped by its `typeof` guards and a steps-local `function` stays invisible to the module.
 **Solution:** In the steps, load the helpers globally with an indirect eval, `(0, eval)(<ACCOLADES block>)` (rename its `_escHtml` so the harness's stays), and stub data lookups on `globalThis` (`test_issue_228_card_visuals_rollback.py`).
 
 ### 2026-10-25 — developer — endpoints
@@ -32,7 +36,7 @@ Format:
 
 ### 2026-10-23 — developer — frontend
 **Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
-**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealRank`).
+**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealTags`).
 
 ### 2026-10-18 — developer — testing
 **Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.

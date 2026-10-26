@@ -267,3 +267,39 @@ As a visitor, I want the Teams list to show divisions, records and titles, so th
 - **Columns:** Team (logo, name), Division, Series W–L, Games W–L, Fantasy pts per game, Players, Titles (chips; pips at phone width).
 - **Filters and sorting:** filter chips All, Div 1 and Div 2, and every column sorts. The default sort is by division, then series wins.
 - **Phone width:** the table becomes stacked rows with no sideways scroll.
+
+
+## Accolades and Rank in the Player Popup (issue #230)
+
+### The Card Popup Shows the Card
+**User story**
+As a player, I want the card popup to show the card without the player's statistics, so that it stays about the card.
+
+**Acceptance criteria**
+- **Removed:** the card viewer shows no rank medal and no Accolades section, both when opening a card and after a draw.
+- **Tags stay:** the Tags section still shows for a player with tags, after the flip on a draw.
+- **Way on:** the player's name under the card opens the player popup and carries the hint "Stats and accolades".
+- **No dead code:** `_renderRevealRank`, `#revealRank`, `#revealAccolades` and their CSS are removed.
+
+### Rank as a Player Statistic
+**User story**
+As a player, I want a player's rank shown with their other statistics, so that I can compare it with how they score.
+
+**Acceptance criteria**
+- **Tile:** the player popup's summary tiles end with a **Rank** tile: the medal symbol and its name ("Legend 4", or "Immortal #120" with a leaderboard place), and "OpenDota, <date>" underneath.
+- **Unranked:** a player with no `rank_tier` shows no Rank tile and no empty space.
+- **Once:** the header no longer shows the medal.
+- **Accessible:** the tile's text carries the rank; the medal symbol is decorative.
+
+### Accolades as Player Statistics
+**User story**
+As a player, I want a player's accolades listed with their details in the player popup, so that I can see what they won, when and with which team.
+
+**Acceptance criteria**
+- **Section:** the Accolades section keeps the Holo banner and the Champion titles, Season awards and Seasons played tiles.
+- **Timeline:**
+  - one entry per season, newest first, each listing that season's accolades as detail lines;
+  - champion lines name the team ("S15 Div 1 Champion · with Team Name"), and point-based accolades show their value ("S15 Most Points · 812.3 pts").
+- **Seasons played:** a line "Played 7 seasons · S4–S16" with the per-season list (and the live season's match count) behind a disclosure.
+- **Empty:** a player with no accolades shows no section, as today.
+- **Phone width:** no sideways scroll.

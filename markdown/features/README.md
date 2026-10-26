@@ -32,12 +32,13 @@ Implementation details, integrations, and operator tooling.
 | [OpenDota Query Prioritization](reference/opendota-query-prioritization.md) | Live-match-aware gating: skips low-priority enrichment and tightens the poll interval while a monitored league has a match in progress |
 | [Card Image Generation](reference/card-image-generation.md) | Pillow-based PNG card rendering pipeline |
 | [Card Draw Animations](reference/card-draw-animations.md) | The drawn card flies from a deck in the Draw panel, flips face up before the reveal fades in, and lands in its roster or bench slot; a card back is postponed |
-| [Card Visuals Rollback](reference/card-visuals-rollback.md) | Original card templates and renderer restored after layout A (#218); accolade and tag pips leave the card faces for Tags and Accolades sections with details in the card viewer |
+| [Accolades and Rank in the Player Popup](reference/player-popup-accolades-and-rank.md) | Rank as a summary tile and accolades as a detailed season timeline in the player popup; the card viewer drops its rank medal and Accolades section and keeps Tags |
+| [Card Visuals Rollback](reference/card-visuals-rollback.md) | Original card templates and renderer restored after layout A (#218); accolade and tag pips leave the card faces for Tags and Accolades sections with details in the card viewer (the accolades moved on to the player popup in #230; Tags stay) |
 | [Card Formatting](reference/card-formatting.md) | Card layout A (#218), rolled back by #228; kept as the record of that design |
 | [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
-| [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown in the player popup and card viewer; on the card PNG deferred (#218) |
+| [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown as the player popup's Rank tile (#230; no longer in the card viewer or the popup header); on the card PNG deferred (#218) |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Automated Testing](reference/automated-testing.md) | Playwright UI suite and GitHub Actions CI setup |
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |

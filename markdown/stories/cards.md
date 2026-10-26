@@ -596,3 +596,5 @@ As a player, I want to see a card's tags and accolades with their details when I
 - **Draw reveal:** both sections are hidden during the draw animation and shown once the flip has finished.
 - **Empty:** a player with no tags or no accolades shows no section for it and no empty space.
 - **Phone width:** the section wraps with no sideways scroll.
+
+*Accolades part superseded by #230: the card viewer keeps the Tags section only. The accolade detail lines moved to the player popup's Accolades timeline, and the player name under the card carries the hint "Stats and accolades". See "The Card Popup Shows the Card" in `leaderboard.md`.*

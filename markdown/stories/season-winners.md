@@ -88,7 +88,7 @@ As the operator, I want the 15 seasons played before this feature recorded once,
 As a player collecting cards, I want past champions' and award winners' cards to show their titles, and champions' Legendaries to sometimes come as Holo, so that a great season leaves a mark in later ones.
 
 **Acceptance criteria**
-- **Symbols on cards:** every card (any rarity) shows the player's accolade pips, as in *Accolade Symbols Read at a Glance*. Fantasy Winner appears only when the winning user's account has a Steam-verified link to that player, and Played comes last with the seasons count. The card viewer lists the chips below the card, such as "S16 Div 1 Champion". *(Superseded by #228: no card face shows pips; the card viewer lists the accolades with their details in an Accolades section.)*
+- **Symbols on cards:** every card (any rarity) shows the player's accolade pips, as in *Accolade Symbols Read at a Glance*. Fantasy Winner appears only when the winning user's account has a Steam-verified link to that player, and Played comes last with the seasons count. The card viewer lists the chips below the card, such as "S16 Div 1 Champion". *(Superseded by #228: no card face shows pips; the card viewer lists the accolades with their details in an Accolades section. Superseded again by #230: the card viewer lists no accolades; the player popup's timeline shows them with their details.)*
 - **Holo roll:** when `draw_card` or `draw_booster` creates a Legendary for a player with a `champion` accolade in a season other than the current one, it becomes Holo with probability `holo_chance` % (a `weights` row, default 20, in Scoring config), stored as `cards.is_holo = true` (migration 040).
 - **Holo is a Legendary in every rule:**
   - `card_type` stays `legendary`;
@@ -126,9 +126,9 @@ As a visitor or collector, I want every accolade to have its own symbol, with a 
 
   | View | Form |
   |---|---|
-  | Cards: card viewer, draw reveal, My Team, collection | pips, on the card (since #228: none on the card; detail lines in the card viewer's Accolades section) |
+  | Cards: card viewer, draw reveal, My Team, collection | pips, on the card (since #228: none on the card; since #230: none in the card viewer either) |
   | Players tab, Titles column | pips |
-  | Player popup | pips in the header; chips in the season timeline |
+  | Player popup | pips in the header; chips in the season timeline (since #230: detail lines) |
   | Admin › Player management: pool marker and accolade table | chips (pips at phone width) |
   | History tab | chips in the season panels; pips with counts in the Hall of fame |
 - **On the card** *(superseded by #228: the pips left the card face)*:
@@ -166,7 +166,7 @@ As a visitor, I want to see at a glance who has played many seasons and who has 
   - a "Holo unlocked" banner for champions;
   - counts (champion titles, season awards, seasons played);
   - the pips in the header;
-  - a timeline by season, each season listing its chips, including "S16 Played · 7 matches".
+  - a timeline by season, each season listing its chips, including "S16 Played · 7 matches". *(Superseded by #230: the timeline lists detail lines, and Played is one summary line whose disclosure shows "S16 · 7 matches".)*
 - **History tab:** a top-level **History** tab, after Leaderboards, served by `GET /history/seasons` (public; no user ids).
   - One panel per season, newest first.
   - **Champions:** two team blocks (Div 1 and Div 2) headed by their chip ("S16 Div 1 Champion"), each player with a Holo mark.

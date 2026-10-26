@@ -21,6 +21,8 @@ Returns the cards to the original illustrated art used when accolades were intro
 
 ## Tags and accolades in the card viewer
 
+> **Accolades moved by #230.** The card viewer keeps only the Tags section: `_renderRevealTags` fills `#revealTags`, and `#revealAccolades`, `_renderCardAccolades` and `accoladeDetailsHtml` are gone. The accolade detail lines (`accoladeDetailLine`, `accoladePlayedLine`) now build the player popup's Accolades timeline, and the name under the card carries a "Stats and accolades" hint. See [Accolades and Rank in the Player Popup](player-popup-accolades-and-rank.md). The text below describes the #228 design.
+
 The card viewer (`#revealModal`) has two sections under the card, in place of the old chip row: `#revealTags` and then `#revealAccolades` (`section.reveal-details`, `hidden` until filled). `_renderCardAccolades` in `app-cards.js` fills them from the cached `GET /accolades` data (`playerTags`, `playerAccolades`); there is no new endpoint.
 
 - **Tags** (`tagDetailsHtml(tags)` in the TAG SYMBOLS block of `app-globals.js`): one line per tag with its symbol and text, in `TAG_SYMBOLS` order: "Kana Cards admin", "Caster", then other tags by label. `season_winner` is never shown. Steam-verified links only, keys and labels only (#217 rules).

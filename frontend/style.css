@@ -592,6 +592,17 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   letter-spacing: var(--tr-wide);
   margin-bottom: 24px;
 }
+/* Issue 230: under the name, where the rank and the accolades went (the player popup). */
+.reveal-player-hint {
+  display: block;
+  margin-top: var(--s-1);
+  font-family: var(--font-body);
+  font-weight: var(--w-regular);
+  font-size: var(--fs-xs);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--fg-muted);
+}
 
 /* ============================================================
    LOGIN / REGISTER MODALS
@@ -2645,9 +2656,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
    The pip and chip symbols themselves are in SHARED STATES below.
    ============================================================ */
 
-/* Tags and Accolades in the card viewer (issue 228): the pips left the card face, so
-   the viewer lists the linked user's tags and the player's accolades under the card,
-   one line each with its pip symbol (decorative) and its text. Lines wrap. */
+/* Detail lines (issue 228): the card viewer lists the linked user's tags under the
+   card, and the player popup lists the player's accolades (issue 230), one line each
+   with its pip symbol (decorative) and its text. Lines wrap. */
 .reveal-details {
   max-width: 280px;
   margin: 0 auto var(--s-3);
@@ -2771,21 +2782,13 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   font-size: var(--fs-sm);
 }
 .player-accolades-holo strong { color: var(--accolade-div1); }
+/* Issue 230: the Played summary and the timeline are detail lines, one season per entry. */
+.player-accolades-played { margin-top: var(--s-3); }
 .player-accolades-timeline { list-style: none; margin: var(--s-3) 0 0; padding: 0; }
 .player-accolades-season {
-  display: grid;
-  grid-template-columns: 3.5em 1fr;
-  gap: var(--s-2);
-  align-items: start;
-  padding: var(--s-1) 0;
+  min-width: 0;
+  padding: var(--s-2) 0;
   border-bottom: var(--bw-hair) solid var(--border-soft);
-}
-.player-accolades-season-label {
-  font-family: var(--font-display);
-  font-weight: var(--w-bold);
-  font-size: var(--fs-sm);
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 /* History tab: season panels and the hall of fame sidebar. */
@@ -3015,9 +3018,14 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   font-size: var(--fs-xs);
   letter-spacing: 0;
 }
-.reveal-rank { margin: -6px 0 12px; }
-.reveal-rank:empty { display: none; }
-.reveal-rank .rank-medal { margin-left: 0; }
+/* Issue 230: the medal is the value of the player popup's Rank tile; it wraps there. */
+.player-modal-stat--rank .rank-medal {
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-left: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* Selection: images and controls are not selectable or draggable; text stays selectable. */
 img {
@@ -3191,6 +3199,8 @@ td .accolade-chip { border-color: transparent; }
   margin: var(--s-1) 0 var(--s-2);
 }
 .player-popup-tiles { grid-template-columns: repeat(5, 1fr); }
+/* Issue 230: six tiles with the Rank tile, in two rows of three. */
+.player-popup-tiles--ranked { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .player-modal-stat .val,
 .player-modal-stat .sub { font-variant-numeric: tabular-nums; }
 .player-modal-stat .sub {
@@ -3488,7 +3498,8 @@ td .accolade-chip { border-color: transparent; }
 .history-breakdown-pts { font-variant-numeric: tabular-nums; }
 .history-breakdown-total { border-top: var(--bw-hair) solid var(--border-soft); margin-top: 2px; padding-top: 2px; font-weight: var(--w-bold); }
 @media (max-width: 640px) {
-  .player-popup-tiles { grid-template-columns: repeat(2, 1fr); }
+  .player-popup-tiles,
+  .player-popup-tiles--ranked { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .form-chart-plot { padding-right: 0; }
   .form-ref-label { top: -16px; }
   .sources-head,

@@ -275,10 +275,12 @@ function statusBadgeHtml(label, title) {
 
 // Issue #221: Dota 2 rank medal badge. rank_tier's tens digit is the medal, the ones
 // digit the stars (1-5; Immortal has none). Drawn with CSS only, no Dota images.
+// Since issue 230 it is the value of the player popup's Rank tile: the symbol and the
+// stars are decorative and the name ("Legend 4", "Immortal #120") is the text.
 const _RANK_MEDALS = { 1: "Herald", 2: "Guardian", 3: "Crusader", 4: "Archon",
                        5: "Legend", 6: "Ancient", 7: "Divine", 8: "Immortal" };
 
-function rankMedalHtml(tier, lb, fetchedAt) {
+function rankMedalHtml(tier, lb) {
   const t = Number(tier);
   if (tier == null || !Number.isInteger(t) || t < 10 || t > 80) return "";
   const medal = _RANK_MEDALS[Math.floor(t / 10)];
@@ -291,13 +293,10 @@ function rankMedalHtml(tier, lb, fetchedAt) {
   } else if (stars >= 1 && stars <= 5) {
     name = `${medal} ${stars}`;
   }
-  const date = fetchedAt ? new Date(Number(fetchedAt) * 1000) : null;
-  const when = date && !isNaN(date) ? `, ${date.toLocaleDateString()}` : "";
-  const title = `Last known rank from OpenDota${when}`;
   const starMarks = medal !== "Immortal" && stars >= 1 && stars <= 5
     ? `<span class="rank-medal-stars" aria-hidden="true">${"★".repeat(stars)}</span>` : "";
   const key = medal.toLowerCase();
-  return `<span class="rank-medal rank-medal--${_escHtml(key)}" role="img" title="${_escHtml(title)}" aria-label="${_escHtml(`Rank: ${name}`)}">`
+  return `<span class="rank-medal rank-medal--${_escHtml(key)}">`
     + `<span class="rank-medal-icon" aria-hidden="true"></span>`
     + `<span class="rank-medal-name">${_escHtml(name)}</span>${starMarks}</span>`;
 }
@@ -444,8 +443,8 @@ function tweenNumber(el, from, to, ms, opts = {}) {
 
 // ACCOLADES (issue 50)
 // Season accolades as symbols. Pips for a glance (the Players list, the popup header),
-// chips where the names fit (Player management, the popup timeline, History), and one
-// line per accolade with its details in the card viewer (issue 228).
+// chips where the names fit (Player management, the Teams tab, History), and one
+// line per accolade with its details in the player popup's timeline (issues 228, 230).
 // Same order, names, icons and tokens as ACCOLADE_KINDS in backend/accolades.py.
 const ACCOLADE_KINDS = [
   { key: "div1", kind: "champion", division: "div1", name: "Div 1 Champion", icon: "crown", plate: "filled", token: "--accolade-div1" },
@@ -567,7 +566,8 @@ function accoladeChipsHtml(accolades) {
 // (accolades.FIRST_COUNTED_SEASON, issue 212).
 const ACCOLADE_PLAYED_FROM = 4;
 
-/** One line of a card viewer section: the kind's symbol (decorative) and its text. */
+/** One detail line (card viewer Tags, player popup Accolades): the kind's symbol
+ * (decorative) and its text. */
 function _cardDetailLine(symbolClass, icon, body) {
   return `<li class="card-detail"><span class="${symbolClass} card-detail-symbol" aria-hidden="true"><i data-lucide="${icon}" aria-hidden="true"></i></span>${body}</li>`;
 }
@@ -579,34 +579,50 @@ function _cardDetailsSection(kind, title, lines) {
 }
 
 /**
- * Issue 228: the card viewer's Accolades section. One line per title, newest season
- * first and champions first within a season: "S15 Div 1 Champion · with Team",
- * "S15 Most Points · 812.3 pts". Played is one summary line counted from Season 4,
- * "Played 7 seasons · S4–S16", with the seasons in a disclosure. Empty input gives "".
+ * Issue 228, used by the player popup's Accolades timeline since issue 230: one
+ * accolade as a detail line, "S15 Div 1 Champion · with Team" or
+ * "S15 Most Points · 812.3 pts". "" for Played (see accoladePlayedLine) or an
+ * unknown kind.
  */
-function accoladeDetailsHtml(accolades) {
-  const list = Array.isArray(accolades) ? accolades.filter(a => _accoladeKind(a)).sort(_accoladeNewestFirst) : [];
-  const lines = list.filter(a => a.kind !== "played").map(a => {
-    const kind = _accoladeKind(a);
-    const detail = kind.kind === "champion"
-      ? (a.team_name ? ` · with ${a.team_name}` : "")
-      : (a.value != null && Number.isFinite(Number(a.value)) ? ` · ${Number(a.value).toFixed(1)} pts` : "");
-    const text = `${_seasonShort(a)} ${kind.name}${detail}`;
-    return _cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
-      `<span class="card-detail-text">${_escHtml(text)}</span>`);
-  });
-  const nums = [...new Set(list.filter(a => a.kind === "played").map(a => _seasonNumber(a.season))
+function accoladeDetailLine(a) {
+  const kind = _accoladeKind(a);
+  if (!kind || kind.key === "played") return "";
+  const detail = kind.kind === "champion"
+    ? (a.team_name ? ` · with ${a.team_name}` : "")
+    : (a.value != null && Number.isFinite(Number(a.value)) ? ` · ${Number(a.value).toFixed(1)} pts` : "");
+  const text = `${_seasonShort(a)} ${kind.name}${detail}`;
+  return _cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
+    `<span class="card-detail-text">${_escHtml(text)}</span>`);
+}
+
+/** Played season numbers counted from Season 4, newest first (issue 228). */
+function accoladePlayedSeasons(accolades) {
+  const list = Array.isArray(accolades) ? accolades : [];
+  return [...new Set(list.filter(a => a && a.kind === "played").map(a => _seasonNumber(a.season))
     .filter(n => n !== null && n >= ACCOLADE_PLAYED_FROM))].sort((x, y) => y - x);
-  if (nums.length) {
-    const kind = ACCOLADE_KINDS.find(k => k.key === "played");
-    const first = nums[nums.length - 1], last = nums[0];
-    const range = first === last ? `S${first}` : `S${first}–S${last}`;
-    const summary = `Played ${nums.length} season${nums.length === 1 ? "" : "s"} · ${range}`;
-    const seasons = nums.map(n => `<li>S${n}</li>`).join("");
-    lines.push(_cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
-      `<details class="card-detail-more"><summary class="card-detail-text">${_escHtml(summary)}</summary><ul class="card-detail-seasons" aria-label="Seasons played">${seasons}</ul></details>`));
-  }
-  return _cardDetailsSection("accolades", "Accolades", lines);
+}
+
+/**
+ * Issues 228 and 230: the Played summary line, "Played 7 seasons · S4–S16" (counted
+ * from Season 4), with the seasons in a closed disclosure. `live` ({season, matches})
+ * adds the live season's matches: "S16 · 5 matches". "" when no season counts.
+ */
+function accoladePlayedLine(accolades, live = {}) {
+  const nums = accoladePlayedSeasons(accolades);
+  if (!nums.length) return "";
+  const kind = ACCOLADE_KINDS.find(k => k.key === "played");
+  const first = nums[nums.length - 1], last = nums[0];
+  const range = first === last ? `S${first}` : `S${first}–S${last}`;
+  const summary = `Played ${nums.length} season${nums.length === 1 ? "" : "s"} · ${range}`;
+  const liveNum = live && _seasonNumber(live.season);
+  const liveMatches = live && Number.isFinite(live.matches) ? live.matches : null;
+  const seasons = nums.map(n => {
+    const matches = n === liveNum && liveMatches !== null
+      ? ` · ${liveMatches} match${liveMatches === 1 ? "" : "es"}` : "";
+    return `<li>${_escHtml(`S${n}${matches}`)}</li>`;
+  }).join("");
+  return _cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
+    `<details class="card-detail-more"><summary class="card-detail-text">${_escHtml(summary)}</summary><ul class="card-detail-seasons" aria-label="Seasons played">${seasons}</ul></details>`);
 }
 
 // The shared tooltip (issue 50, generalised in issue 208): one element for any

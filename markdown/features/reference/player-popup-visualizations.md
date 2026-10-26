@@ -8,7 +8,7 @@ The player popup turns a player's season into a form chart, a points-by-source b
 
 Top to bottom:
 1. **Header:** avatar, name and team, with #50's accolade pips (`#playerModalPips`) and seasons played, plus a Core or Support chip.
-2. **Summary tiles:** Matches (W–L), Avg pts with league rank, Total, Best match, MVPs.
+2. **Summary tiles:** Matches (W–L), Avg pts with league rank, Total, Best match, MVPs, and a Rank tile for ranked players (#230; three per row when present, see [Accolades and Rank in the Player Popup](player-popup-accolades-and-rank.md)).
 3. **Form chart:** one bar per match by week. MVP stars, W/L squares, ghost bars for excluded matches, hatching for partial stats, and player and league average lines.
 4. **Points by source:** a stacked bar and rows per source with the league average, and the top three modifier values (highlighting the viewer's own card).
 5. **Compared with the league:** percentile strips for eight stats, against players with 3+ scored matches.

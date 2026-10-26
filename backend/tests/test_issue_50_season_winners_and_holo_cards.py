@@ -1315,17 +1315,17 @@ console.log(JSON.stringify([_rarityLabel({card_type: "legendary", is_holo: true}
     assert any(".reveal-img-wrap--holo::after" in block and "animation: none" in block for block in reduced)
 
 
-def test_cards_ui_no_pips_on_card_faces_viewer_lists_accolades():
-    """Source-reading (app-cards.js, app-roster.js): since issue 228 no card face (card viewer, draw reveal, My Team, collection) carries an accolade pip overlay; the card viewer lists the accolades in its Accolades section via accoladeDetailsHtml."""
+def test_cards_ui_no_pips_on_card_faces_viewer_lists_no_accolades():
+    """Source-reading (app-cards.js, app-roster.js): since issue 228 no card face (card viewer, draw reveal, My Team, collection) carries an accolade pip overlay; since issue 230 the card viewer lists no accolades (they are in the player popup) and keeps its Tags section."""
     cards = _fe("app-cards.js")
     roster = _fe("app-roster.js")
     html = _fe("index.html")
-    viewer = _fn_body(cards, "_renderCardAccolades")
-    assert "accoladeDetailsHtml(list)" in viewer and "playerAccolades(card.player_id)" in viewer
+    viewer = _fn_body(cards, "_renderRevealTags")
+    assert "playerAccolades" not in cards and "accoladeDetail" not in cards
     assert "accoladePipsHtml" not in viewer and "card-pips" not in viewer
     show = _fn_body(cards, "showCard")
-    assert "_renderCardAccolades(card, drawFx)" in show  # the card viewer and the draw reveal
-    assert 'id="revealPips"' not in html and 'id="revealAccolades"' in html
+    assert "_renderRevealTags(card, drawFx)" in show  # the card viewer and the draw reveal
+    assert 'id="revealPips"' not in html and 'id="revealAccolades"' not in html
     slot = _fn_body(roster, "_cardSlotHTML")  # My Team roster and bench (the collection)
     assert "accoladePipsHtml" not in slot and "card-pips" not in slot
     css = _fe("style.css")
@@ -1523,7 +1523,7 @@ def test_short_season_label():
 
 
 def test_no_view_builds_pip_or_chip_markup_outside_shared_helpers():
-    """Source-reading: 'accolade-pip' / 'accolade-chip' class strings appear only inside accoladePipsHtml / accoladeChipsHtml (and, since issue 228, accoladeDetailsHtml for the card viewer's symbols) in frontend/*.js."""
+    """Source-reading: 'accolade-pip' / 'accolade-chip' class strings appear only inside accoladePipsHtml / accoladeChipsHtml (and, since issues 228 and 230, accoladeDetailLine / accoladePlayedLine for the player popup's detail lines) in frontend/*.js."""
     import glob
     offenders = []
     for path in glob.glob(os.path.join(_FRONTEND, "*.js")):
@@ -1533,7 +1533,7 @@ def test_no_view_builds_pip_or_chip_markup_outside_shared_helpers():
             end = js.index("// END ACCOLADES (issue 50)")
             section = js[start:end]
             # Inside the section, the class strings are only in the renderers.
-            renderers = ("accoladePipsHtml", "accoladeChipsHtml", "accoladeDetailsHtml")
+            renderers = ("accoladePipsHtml", "accoladeChipsHtml", "accoladeDetailLine", "accoladePlayedLine")
             helpers = "".join(_fn_body(section, n) for n in renderers)
             rest = section
             for n in renderers:
@@ -1730,7 +1730,7 @@ def test_players_tab_filters_and_sorting_no_veteran():
 
 
 def test_player_popup_accolades_section():
-    """Source-reading (app-player-popup.js since issue 208): popup Accolades section with 'Holo unlocked' banner for champions, counts, pips in header and a per-season chip timeline including 'Played · N matches'."""
+    """Source-reading (app-player-popup.js since issue 208): popup Accolades section with 'Holo unlocked' banner for champions, counts, pips in header and, since issue 230, a per-season timeline of detail lines and a Played summary whose disclosure names the live season's matches."""
     js = _fe("app-player-popup.js")
     html = _fe("index.html")
     fn = _fn_body(js, "renderPlayerAccolades")
@@ -1738,14 +1738,15 @@ def test_player_popup_accolades_section():
     for label in ("Champion titles", "Season awards", "Seasons played"):
         assert label in fn
     assert 'getElementById("playerModalPips")' in fn and "accoladePipsHtml(list)" in fn
-    assert "accoladeChipsHtml(items)" in fn and "current_season_matches" in fn
+    assert "accoladeDetailLine(a)" in fn and "current_season_matches" in fn
+    assert "accoladeChipsHtml" not in fn
     assert "renderPlayerAccolades(p)" in _fn_body(js, "openPlayerModal")
     assert 'id="playerModalPips"' in html and 'id="playerModalAccolades"' in html
-    # The Played chip of the live season names its matches.
+    # The live season's entry in the Played disclosure names its matches.
     out = _run_node(_globals_helpers_js() + """
-console.log(JSON.stringify(accoladeChipsHtml([{kind: "played", season: "Season 16", matches: 7}])));
+console.log(JSON.stringify(accoladePlayedLine([{kind: "played", season: "Season 16"}], {season: "Season 16", matches: 7})));
 """)
-    assert "S16 Played · 7 matches" in out
+    assert "<li>S16 · 7 matches</li>" in out
 
 
 def test_history_tab_after_leaderboards_with_empty_state():

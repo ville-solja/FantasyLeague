@@ -1,6 +1,6 @@
 # Player Rank Medals
 
-Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup and the card viewer (issue #221). The medal on the card PNG is deferred (#218, product-owner decision 25 Oct; still off the PNG after the #228 rollback). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
+Shows each player's last known Dota 2 rank medal (Herald to Immortal, with stars, and the Immortal leaderboard place) in the player popup (issue #221; since issue #230 as the popup's Rank tile, and no longer in the card viewer). The medal on the card PNG is deferred (#218, product-owner decision 25 Oct; still off the PNG after the #228 rollback). Plan: `markdown/plans/plan-issue-221-player-rank-medals.md`.
 
 ---
 
@@ -26,13 +26,13 @@ Notes:
 
 ## Display
 
-The website draws its own badge, `rankMedalHtml(tier, lb, fetchedAt)` in `frontend/app-globals.js`: a CSS shape per medal in the medal colour, the medal name, and the stars as ★ marks. No images, no Dota CDN, no league name. The badge has `role="img"` with `aria-label="Rank: Legend 4"` and the title "Last known rank from OpenDota, <date>" (no date when unknown). A null tier returns an empty string.
+The website draws its own badge, `rankMedalHtml(tier, lb)` in `frontend/app-globals.js`: a CSS shape per medal in the medal colour, the medal name, and the stars as ★ marks. No images, no Dota CDN, no league name. The medal name is visible text. The symbol and the stars are `aria-hidden`. A null tier returns an empty string. Before issue #230 the badge had `role="img"`, an `aria-label` and the title "Last known rank from OpenDota, <date>". The Rank tile now shows the source and date as its sub line.
 
 Colours are tokens `--medal-herald` … `--medal-immortal` in `frontend/colors_and_type.css` (and the `design/` copy). Each has at least 6:1 contrast on `--bg-card` and the rarity reveal backgrounds. Rules are under "RANK MEDAL (issue #221)" in `style.css`.
 
 It appears:
-- in the player popup header, after the team name;
-- under the card image in the card viewer and the draw reveal (`#revealRank`, hidden when empty);
+- in the player popup, as the last summary tile (issue #230, `_popupRankTile` in `app-player-popup.js`): labelled "Rank", with "OpenDota, <date>" (from `rank_fetched_at`) underneath, and no tile for an unranked player. See [Accolades and Rank in the Player Popup](player-popup-accolades-and-rank.md);
+- *(removed by #230)* not in the popup header and not in the card viewer or the draw reveal (`#revealRank` is gone);
 - *(deferred)* not on the card PNG: the original templates restored by #228 have no rank slot, `generate_card_image` takes no rank arguments and the route passes none.
 
 ## Endpoints

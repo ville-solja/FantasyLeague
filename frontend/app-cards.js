@@ -97,13 +97,6 @@ function _playDrawBurst(card) {
   }, DRAW_REVEAL_FLASH_MS);
 }
 
-// Issue #221: the player's rank medal under the card image; empty (hidden) when unranked.
-function _renderRevealRank(card) {
-  const el = document.getElementById("revealRank");
-  if (!el) return;
-  el.innerHTML = rankMedalHtml(card.rank_tier, card.leaderboard_rank);
-}
-
 /** The rarity label: the card type ("legendary", shown in capitals), with " · Holo"
  * for a Holo card, so it reads "Legendary · Holo" (issue 50). */
 function _rarityLabel(card) {
@@ -112,32 +105,26 @@ function _rarityLabel(card) {
 }
 
 /**
- * Issue 228: the card viewer's Tags and Accolades sections under the card (the pips
- * left the card face). Each section is hidden when empty; on a draw both stay hidden
- * until the flip has finished (_showRevealSections).
+ * Issue 228: the card viewer's Tags section under the card (the pips left the card
+ * face). Hidden when empty; on a draw it stays hidden until the flip has finished
+ * (_showRevealTags). Issue 230 moved the rank and the accolades to the player popup.
  */
-function _renderCardAccolades(card, drawFx) {
-  const tagsEl = document.getElementById("revealTags");
-  const accEl = document.getElementById("revealAccolades");
-  const list = card && card.player_id && typeof playerAccolades === "function" ? playerAccolades(card.player_id) : [];
+function _renderRevealTags(card, drawFx) {
+  const el = document.getElementById("revealTags");
   const tags = card && card.player_id && typeof playerTags === "function" ? playerTags(card.player_id) : [];
-  const tagHtml = typeof tagDetailsHtml === "function" ? tagDetailsHtml(tags) : "";
-  const accHtml = typeof accoladeDetailsHtml === "function" ? accoladeDetailsHtml(list) : "";
-  for (const [el, html] of [[tagsEl, tagHtml], [accEl, accHtml]]) {
-    if (!el) continue;
+  const html = typeof tagDetailsHtml === "function" ? tagDetailsHtml(tags) : "";
+  if (el) {
     el.innerHTML = html;
     el.hidden = true;
   }
-  if (!drawFx) _showRevealSections();
-  if (typeof refreshAccoladeIcons === "function" && (tagHtml || accHtml)) refreshAccoladeIcons();
+  if (!drawFx) _showRevealTags();
+  if (typeof refreshAccoladeIcons === "function" && html) refreshAccoladeIcons();
 }
 
-/** Shows the card viewer sections that have content (issue 228). */
-function _showRevealSections() {
-  for (const id of ["revealTags", "revealAccolades"]) {
-    const el = document.getElementById(id);
-    if (el) el.hidden = !el.innerHTML;
-  }
+/** Shows the card viewer's Tags section when it has content (issue 228). */
+function _showRevealTags() {
+  const el = document.getElementById("revealTags");
+  if (el) el.hidden = !el.innerHTML;
 }
 
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
@@ -159,7 +146,7 @@ function showCard(card, footer, opts = {}) {
   _revealDrawn = null;
   cardEl.className = `reveal-card ${card.card_type}${card.is_holo ? " holo" : ""}`;
   document.getElementById("revealRarity").textContent = _rarityLabel(card);
-  _renderCardAccolades(card, drawFx);
+  _renderRevealTags(card, drawFx);
   // Draw reveal: names are painted on the PNG; duplicate HTML lines made _PLAYER_NAME_Y / _TEAM_NAME_Y tuning misleading.
   const revealPlayerEl = document.getElementById("revealPlayer");
   if (card.player_id && !drawFx) {
@@ -170,12 +157,16 @@ function showCard(card, footer, opts = {}) {
     span.onclick = () => openPlayerModal(card.player_id);
     span.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPlayerModal(card.player_id); } };
     span.textContent = card.player_name || "";
+    // Issue 230: the rank and the accolades moved to the player popup; the hint says so.
+    const hint = document.createElement("span");
+    hint.className = "reveal-player-hint";
+    hint.textContent = "Stats and accolades";
+    span.appendChild(hint);
     revealPlayerEl.replaceChildren(span);
   } else {
     revealPlayerEl.textContent = drawFx ? "" : (card.player_name || "");
   }
   document.getElementById("revealTeam").textContent = drawFx ? "" : (card.team_name || "");
-  _renderRevealRank(card);
   document.getElementById("revealDestination").textContent = footer || "";
   closeRerollConfirm();
 
@@ -339,7 +330,7 @@ function showReveal(card, boosterTeamId = null) {
   _revealDrawn = card;
   _revealEntering = entering;
   document.getElementById("revealModal").classList.add(entering ? "reveal-overlay--entering" : "reveal-overlay--fade-in");
-  if (!entering) _showRevealSections();
+  if (!entering) _showRevealTags();
   _updateRevealActionBtn();
   if (!_revealKeyHandler) {
     _revealKeyHandler = (e) => {
@@ -652,7 +643,7 @@ function _finishRevealEntering(card, prep) {
   const modal = document.getElementById("revealModal");
   modal.classList.remove("reveal-overlay--entering", "reveal-overlay--dim");
   modal.classList.add("reveal-overlay--details-in");
-  _showRevealSections();
+  _showRevealTags();
   clearTimeout(_revealDetailsTimer);
   _revealDetailsTimer = setTimeout(() => modal.classList.remove("reveal-overlay--details-in"), DRAW_DETAILS_MS + 200);
   // A slow image flew in as its rarity face; the reveal keeps that face until the PNG loads.

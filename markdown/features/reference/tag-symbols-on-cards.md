@@ -24,7 +24,7 @@ User tags and admin status show as symbols instead of tiny stickers baked into t
 
 | View | Code | Container |
 |---|---|---|
-| Card viewer and draw reveal | `_renderCardAccolades` in `frontend/app-cards.js` | `#revealTags`: the Tags section from `tagDetailsHtml`, one line per tag with its symbol and text (issue #228) |
+| Card viewer and draw reveal | `_renderRevealTags` in `frontend/app-cards.js` (`_renderCardAccolades` before issue #230) | `#revealTags`: the Tags section from `tagDetailsHtml`, one line per tag with its symbol and text (issue #228) |
 | Player popup header | `renderPlayerAccolades` in `frontend/app-player-popup.js` | `#playerModalPips`, tag pips before the accolade pips |
 | Team popup roster | `frontend/app-team-popup.js` | tag pips before the accolade pips in each row |
 
