@@ -2,12 +2,12 @@
 
 **Status (2026-10-26):** round 2. Version 1.2.1 was placed under Pending Approval for policy 4.2 (the description didn't say what the extension does with the Chat capability). Version 1.3.0 is built and goes in next.
 
-**Walkthrough ready to paste: NO.** It still contains the placeholder `<SUPPORT CONTACT>` (open item R3, the only open text item). Change this line to YES once every item under "Before pasting" is ticked.
+**Walkthrough ready to paste: YES** (2026-10-26). Every item under "Before pasting" is ticked; the support contact is fixed as `support@kana-cards.com`.
 
 ## Walkthrough — paste into the console's "Testing Instructions" field
 
 **Before pasting:**
-- [ ] `<SUPPORT CONTACT>` replaced in both places with the real support email (R3). No website address: the listing and notes claim no external website is mentioned.
+- [x] Support contact fixed as `support@kana-cards.com` in both places (R3). It is an email, not a website link; `test_walkthrough_has_fixed_support_contact` fails if a placeholder returns.
 - [x] The operator items O1–O4 below are done, so every Expected line can actually happen (2026-10-26).
 - [x] The block below matches the "Steps to reproduce" section of `markdown/features/reference/twitch-extension-review-submission.md` (same flows, same expected texts).
 
@@ -20,7 +20,7 @@ Setup
 - The review channel is live during a Kanaliiga match week, so there are matches to choose an MVP from.
 - Easiest with two Twitch accounts in two browsers (or a normal and a private window): the review channel's broadcaster, and any other account as the viewer. One account also works: the broadcaster can join in the panel and then counts as a viewer.
 - The panel is 318 px wide and up to 500 px tall; each tab scrolls within that height.
-- If a section can't load, its message ends with a short code such as (code: E-REACH). Please include the code in your feedback, or send it to <SUPPORT CONTACT>.
+- If a section can't load, its message ends with a short code such as (code: E-REACH). Please include the code in your feedback, or send it to support@kana-cards.com.
 
 Flow 1 — Viewer: Live tab and Join
 1. While logged out of Twitch, open the review channel and the Kana Cards panel.
@@ -41,7 +41,7 @@ This flow shows everything the extension does with Twitch Chat. Each confirmatio
 5. Optional: close the viewer's panel, wait 10 minutes, and confirm the MVP of a different match that has no MVP yet.
    Expected in chat: Match MVP: PlayerName! No tokens were dropped: no joined viewers were watching.
 The fourth message (new accounts waiting 24 hours) is switched off for the review window, so it can't appear during review.
-If the tool says "No recent matches found. A match appears here as soon as it goes live.", no match is in progress; please contact <SUPPORT CONTACT> for a time when one is live.
+If the tool says "No recent matches found. A match appears here as soon as it goes live.", no match is in progress; please contact support@kana-cards.com for a time when one is live.
 
 Flow 3 — Viewer: cards and roster
 1. Cards tab > Draw · 1. Expected: the card is revealed with "Added to your roster" or "Added to your bench".
@@ -76,7 +76,7 @@ Twitch's second 4.2 finding: *"your description does not contain information on 
 |---|---|---|
 | R1 | The description said "it posts one message" right after a clause about the broadcaster | Done: "the extension posts one message" |
 | R2 | "or drops off" read like a typo | Done: "(after an MVP change, which does not drop tokens again, or with token drops off)"; the opening "Kanaliiga fantasy cards in the panel." was dropped to stay under 1,000 characters (the summary says what the extension is) |
-| R3 | No support contact anywhere (the privacy page points to the website) | **Open:** decide the support email; put it in the walkthrough (two places), the submission form's support field and the Support contact section |
+| R3 | No support contact anywhere (the privacy page points to the website) | Done: `support@kana-cards.com`, fixed in the walkthrough (two places), the submission doc's steps and its Support contact section; enter the same in the submission form's support field |
 | R4 | The listing mentioned a "website" while the notes say no external website is mentioned | Done: the listing says "Kana Cards never asks for your password inside Twitch."; the privacy page and website Profile keep the longer line; the #157 test checks the listing has no "website" |
 | R5 | The review-history entry said 1.3.0 was already resubmitted | Done: reworded as "to be resubmitted", pointing here; record the date and outcome after submitting |
 | R6 | The submission doc's "Steps to reproduce" must stay identical in substance to the walkthrough block | Done for this round; keep both in one edit |

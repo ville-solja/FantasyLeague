@@ -156,9 +156,11 @@ and reachable directly, no login required:
 
 ## Support contact
 
-Provide an email address or URL the reviewer (and, once live, viewers) can reach for support
-questions. Use whatever the operator's existing support channel is — this repo has no support
-email/URL configured anywhere in code, so this must be supplied manually at submission time.
+**support@kana-cards.com** — enter exactly this in the submission form's support contact field. The same address
+is written into the Testing Instructions (Steps to reproduce below and the walkthrough block in
+`markdown/plans/plan-issue-195-twitch-extension-resubmission.md`), so the reviewer and viewers get
+one contact everywhere. Use the email, not a website link: the listing and reviewer notes say no
+external website is needed.
 
 ---
 
@@ -293,7 +295,7 @@ browsers (or a normal and a private window): the review channel's broadcaster, a
 as the viewer. One account also works: the broadcaster can join in the panel and then counts as a
 viewer. The panel is 318 px wide and up to 500 px tall; each tab scrolls within that height. If a
 section can't load, its message ends with a short code such as `(code: E-REACH)`: please include
-the code in your feedback, or send it to `<SUPPORT CONTACT>`.
+the code in your feedback, or send it to support@kana-cards.com.
 
 **Flow 1 — Viewer: Live tab and Join**
 1. While logged out of Twitch, open the review channel and the Kana Cards panel.
@@ -326,7 +328,7 @@ reads, stores or moderates chat.
    **Expected:** chat shows `Match MVP: <PlayerName>! No tokens were dropped: no joined viewers were watching.`
 The fourth message (new accounts waiting 24 hours) is switched off for the review window. If the
 tool says "No recent matches found. A match appears here as soon as it goes live.", no match is in
-progress: please contact `<SUPPORT CONTACT>` for a time when one is live.
+progress: please contact support@kana-cards.com for a time when one is live.
 
 **Flow 3 — Viewer: cards and roster**
 1. Cards tab → **Draw · 1**. **Expected:** the card is revealed with "Added to your roster" or
