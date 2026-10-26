@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Player popup (issue 208, moved out of app-players.js). Opened from every
 // player name and card. Sections, top to bottom: header (pips, seasons played,
-// role chip), summary tiles, form chart, points by source, league comparison,
+// role chip), summary tiles (with the Rank tile, issue 230), form chart, points by source, league comparison,
 // heroes, Accolades (issue 50), match history with per-match Details, bio.
 // Everything comes from GET /players/{id}; the profile facts (career heroes, bio)
 // load afterwards from GET /players/{id}/profile.
@@ -61,8 +61,6 @@ async function openPlayerModal(playerId) {
     document.getElementById("playerModalTeam").innerHTML = p.team_id
       ? `<span class="entity-link" tabindex="0" role="button" onclick="closePlayerModal();openTeamModal(${p.team_id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();closePlayerModal();openTeamModal(${p.team_id})}">${_escHtml(p.team_name)}</span>`
       : _escHtml(p.team_name || "");
-    document.getElementById("playerModalTeam").insertAdjacentHTML("beforeend",
-      rankMedalHtml(p.rank_tier, p.leaderboard_rank, p.rank_fetched_at));
 
     renderPlayerPopup(p);
     renderPlayerAccolades(p);
@@ -161,8 +159,18 @@ function _popupRoleChipHtml(p) {
 
 // ---- Summary tiles -------------------------------------------------------
 
-function _popupTile(val, lbl, sub) {
-  return `<div class="player-modal-stat"><div class="val">${val}</div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+function _popupTile(val, lbl, sub, cls = "") {
+  return `<div class="player-modal-stat${cls ? ` ${cls}` : ""}"><div class="val">${val}</div><div class="lbl">${lbl}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+}
+
+/** Issue 230: the last known rank as a statistic, "Legend 4" with
+ * "OpenDota, <date>" underneath; "" for an unranked player. */
+function _popupRankTile(p) {
+  const medal = p.rank_tier ? rankMedalHtml(p.rank_tier, p.leaderboard_rank) : "";
+  if (!medal) return "";
+  const ts = Number(p.rank_fetched_at);
+  const when = Number.isFinite(ts) && ts > 0 ? `, ${_popupDate(ts)}` : "";
+  return _popupTile(medal, "Rank", _escHtml(`OpenDota${when}`), "player-modal-stat--rank");
 }
 
 function _popupTilesHtml(p) {
@@ -175,8 +183,10 @@ function _popupTilesHtml(p) {
     _popupTile(Number(p.total_points).toFixed(1), "Total pts", ""),
     best ? _popupTile(Number(best.fantasy_points).toFixed(1), "Best match", best.opponent_team_name ? `vs ${_escHtml(best.opponent_team_name)}` : "") : "",
     _popupTile(_escHtml(s.mvps || 0), "MVPs", ""),
+    _popupRankTile(p),
   ];
-  return `<div class="player-modal-stat-grid player-popup-tiles">${tiles.join("")}</div>`;
+  const ranked = tiles[tiles.length - 1] ? " player-popup-tiles--ranked" : "";
+  return `<div class="player-modal-stat-grid player-popup-tiles${ranked}">${tiles.join("")}</div>`;
 }
 
 // ---- Form chart ----------------------------------------------------------
@@ -550,10 +560,11 @@ function togglePlayerMatchDetails(btn) {
 // ---- Accolades (issue 50) ----------------------------------------------------
 
 /**
- * Issue 50: the popup's Accolades section, self-contained so the popup redesign
- * (plan-issue-208-player-popup-visualizations.md) can move it. Pips in the header; a "Holo
- * unlocked" banner for past champions; counts; a timeline by season, newest first,
- * each season listing its chips (the live season's Played chip with its matches).
+ * Issue 50: the popup's Accolades section. Pips in the header; a "Holo unlocked"
+ * banner for past champions; counts; since issue 230 the Played summary line
+ * ("Played 7 seasons · S4–S16", the seasons and the live season's matches in a
+ * disclosure) and a timeline by season, newest first, each season listing its
+ * accolades as detail lines ("S15 Div 1 Champion · with Team").
  */
 function renderPlayerAccolades(p) {
   const pipsEl = document.getElementById("playerModalPips");
@@ -572,19 +583,17 @@ function renderPlayerAccolades(p) {
   }
   const champions = list.filter(a => a.kind === "champion").length;
   const awards = list.filter(a => a.kind !== "champion" && a.kind !== "played").length;
-  const seasons = new Set(list.filter(a => a.kind === "played").map(a => a.season)).size;
+  const seasons = accoladePlayedSeasons(list).length;
+  const played = accoladePlayedLine(list, { season: p.current_season, matches: p.current_season_matches });
   const bySeason = new Map();
   list.slice().sort(_accoladeNewestFirst).forEach(a => {
-    const entry = a.kind === "played" && a.season === p.current_season
-      ? { ...a, matches: p.current_season_matches } : a;
+    const line = accoladeDetailLine(a);
+    if (!line) return;
     if (!bySeason.has(a.season)) bySeason.set(a.season, []);
-    bySeason.get(a.season).push(entry);
+    bySeason.get(a.season).push(line);
   });
-  const timeline = [...bySeason.values()].map(items => `
-      <li class="player-accolades-season">
-        <span class="player-accolades-season-label">${_escHtml(_seasonShort(items[0]))}</span>
-        ${accoladeChipsHtml(items)}
-      </li>`).join("");
+  const timeline = [...bySeason.values()].map(lines => `
+      <li class="player-accolades-season"><ul class="card-details-list">${lines.join("")}</ul></li>`).join("");
   const banner = p.holo_unlocked
     ? `<div class="player-accolades-holo"><strong>Holo unlocked.</strong> A past champion: their Legendary cards can be drawn as Holo.</div>`
     : "";
@@ -596,7 +605,8 @@ function renderPlayerAccolades(p) {
       <div class="player-modal-stat"><div class="val">${awards}</div><div class="lbl">Season awards</div></div>
       <div class="player-modal-stat"><div class="val">${seasons}</div><div class="lbl">Seasons played</div></div>
     </div>
-    <ol class="player-accolades-timeline">${timeline}</ol>`;
+    ${played ? `<ul class="card-details-list player-accolades-played">${played}</ul>` : ""}
+    ${timeline ? `<ol class="player-accolades-timeline">${timeline}</ol>` : ""}`;
   section.hidden = false;
   refreshAccoladeIcons();
 }

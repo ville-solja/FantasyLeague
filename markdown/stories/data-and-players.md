@@ -299,6 +299,8 @@ As a user, I want to see a player's rank medal in the player popup so that I can
 - A player with no rank shows no medal and no empty space
 - The medal has a text equivalent for screen readers (`aria-label` or visible text)
 
+*Placement superseded by #230: the medal is the popup's last summary tile ("Rank", with "OpenDota, <date>" underneath) instead of a header badge with a tooltip. See "Rank as a Player Statistic" in `leaderboard.md`.*
+
 ### See the Medal on a Card
 **User story**
 As a player, I want to see the player's medal on a card so that I can compare my cards at a glance.
@@ -308,6 +310,8 @@ As a player, I want to see the player's medal on a card so that I can compare my
 - The card viewer shows the medal badge and name under the card image, next to the accolades (#218)
 - The new card templates in #218 have a rank slot; the PNG draws the medal there and leaves it out when the rank is null
 - No league name, and no image loaded from a Dota CDN
+
+*Card viewer medal superseded by #230: the card viewer shows no medal. The rank is a statistic in the player popup. The card data still carries `rank_tier` and `leaderboard_rank`.*
 
 
 ## Matches Outside the League (issue #224)

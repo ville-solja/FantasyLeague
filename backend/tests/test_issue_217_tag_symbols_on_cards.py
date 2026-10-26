@@ -394,10 +394,10 @@ loadAccolades().then(() => {
 def test_card_views_list_tags_in_viewer_not_on_card_faces():
     """Source-reading (issue 228): no card face renders tag pips; the card viewer and draw reveal fill the Tags section from tagDetailsHtml(tags), and My Team / the collection render no tag pips."""
     cards = _fe("app-cards.js")
-    viewer = _fn_body(cards, "_renderCardAccolades")  # the card viewer and the draw reveal
+    viewer = _fn_body(cards, "_renderRevealTags")  # the card viewer and the draw reveal
     assert "tagDetailsHtml(tags)" in viewer and "playerTags(card.player_id)" in viewer
     assert "tagPipsHtml" not in viewer and "card-tag-pips" not in viewer
-    assert "_renderCardAccolades(card, drawFx)" in _fn_body(cards, "showCard")
+    assert "_renderRevealTags(card, drawFx)" in _fn_body(cards, "showCard")
     slot = _fn_body(_fe("app-roster.js"), "_cardSlotHTML")  # My Team roster and bench (the collection)
     assert "tagPipsHtml" not in slot and "card-tag-pips" not in slot
     load = _fn_body(_fe("app-globals.js"), "loadAccolades")

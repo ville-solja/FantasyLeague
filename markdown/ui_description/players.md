@@ -35,13 +35,14 @@ Table of all players who have participated in any ingested league. Sortable colu
 Opened by clicking any player name or card (in this tab or elsewhere); the code is in
 `frontend/app-player-popup.js`. Sections, top to bottom (issue 208):
 
-- **Header** — avatar, name and current team, then the player's **rank medal** when known
-  (issue #221: medal shape and colour, "Legend 4" or "Immortal #12", ★ stars, tooltip "Last known
-  rank from OpenDota, <date>"; nothing for an unranked player); the linked user's tag symbols (issue #217) followed by the accolade pips (issue 50); seasons played and a
+- **Header** — avatar, name and current team; the linked user's tag symbols (issue #217) followed by the accolade pips (issue 50); seasons played and a
   Core or Support chip (Support when this season's average wards are 3 or more and GPM is under 450;
   no chip without a scored match).
 - **Summary tiles** — Matches with W–L, Avg pts with the league rank ("#7 of 84", only with 3+
-  scored matches), Total pts, Best match with its opponent, MVPs.
+  scored matches), Total pts, Best match with its opponent, MVPs, then **Rank** when known (issue
+  #230): the medal shape and colour with "Legend 4" or "Immortal #12" and ★ stars, and "OpenDota,
+  <date>" underneath. There is no Rank tile for an unranked player. With the Rank tile the tiles
+  sit in two rows of three, or two columns at phone width.
 - **Form chart** — one bar per match, oldest left, grouped under scoring-week labels ("W3"). Bar
   height is fantasy points. A star marks the MVP, a filled square a win and a hollow square a loss;
   an excluded match is a dashed ghost bar ("Not scored"), a partial-stats match is hatched. A solid
@@ -61,9 +62,11 @@ Opened by clicking any player name or card (in this tab or elsewhere); the code 
 - **Heroes** — this season's heroes with games, W–L and average points, six then "Show all". When
   profile facts exist, a "Career (OpenDota, updated <date>)" list with games and win rate.
 - **Accolades** section (only when the player has any): a "Holo unlocked" banner for a past
-  champion, counts (champion titles, season awards, seasons played) and a timeline by season,
-  newest first, each season with its chips ("S16 Div 1 Champion"; the current season's
-  "S16 Played · 7 matches").
+  champion; counts (champion titles, season awards, seasons played); a Played line, "Played 7
+  seasons · S4–S16", whose disclosure lists the seasons, with the current season's matches ("S16 ·
+  7 matches"); and a timeline by season, newest first. Each season lists its accolades as detail
+  lines, each with its symbol: "S15 Div 1 Champion · with Team Name", "S15 Most Points · 812.3
+  pts" (issue #230).
 - **Match history table** — one row per match, columns (in order): MVP star, Date, Hero (icon),
   Result (W or L as text, blank when unknown), Fantasy pts, K/A/D, GPM, Wards, Tower dmg, Opponent
   (linked to the opposing team's detail modal), a link to the match on OpenDota, and a **Details**

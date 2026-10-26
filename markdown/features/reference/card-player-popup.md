@@ -11,7 +11,7 @@ Makes the player name shown on a viewed card clickable, opening the player detai
 3. User clicks the player name → `openPlayerModal(player_id)` opens `#playerModal` on top
 4. User closes the player modal (button or Escape) → reveal modal remains open and unchanged
 
-The player popup header shows the player's rank medal after the team name, and the card viewer shows it under the card image (issue #221, see `player-rank-medals.md`). Unranked players show no medal.
+The player name carries the hint "Stats and accolades" (issue #230): the card viewer shows no rank medal and no accolades. The player popup shows them, the rank as its last summary tile (see `player-popup-accolades-and-rank.md` and `player-rank-medals.md`). Unranked players get no Rank tile.
 
 ## Implementation
 
@@ -20,5 +20,5 @@ The player popup header shows the player's rank medal after the team name, and t
 | `frontend/app-cards.js` — `showCard()` | `#revealPlayer` rendered as `entity-link` when `card.player_id` present; plain text during draw animation or when no player |
 | `frontend/app-init.js` — Escape handler | `keydown` listener closes top-most open modal: `playerModal` → `teamModal` → `revealModal` |
 | `backend/routers/cards.py` — draw response | Added `player_id` field to the `POST /draw` response so newly drawn cards also get the clickable name |
-| `frontend/app-cards.js` — `_renderRevealRank()` | Fills `#revealRank` under the card image with `rankMedalHtml(card.rank_tier, card.leaderboard_rank)`; empty (hidden) when unranked |
-| `frontend/app-players.js` — `openPlayerModal()` | Appends the rank medal to `#playerModalTeam` |
+| `frontend/app-cards.js` — `showCard()` | The name link contains a `.reveal-player-hint` line, "Stats and accolades" (issue #230) |
+| `frontend/app-player-popup.js` — `_popupRankTile()` | The Rank summary tile, `rankMedalHtml(p.rank_tier, p.leaderboard_rank)` with "OpenDota, <date>" (issue #230; it replaced the header medal and `_renderRevealRank`) |
