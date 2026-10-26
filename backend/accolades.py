@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 ACCOLADE_KINDS = [
     {"key": "div1",           "kind": "champion",       "division": "div1", "name": "Div 1 Champion",    "icon": "crown",          "plate": "filled",   "token": "--accolade-div1"},
     {"key": "div2",           "kind": "champion",       "division": "div2", "name": "Div 2 Champion",    "icon": "trophy",         "plate": "filled",   "token": "--accolade-div2"},
+    {"key": "div1_runner_up", "kind": "runner_up",      "division": "div1", "name": "Div 1 Runner-up",   "icon": "medal",          "plate": "outlined", "token": "--accolade-runner-up"},
+    {"key": "div2_runner_up", "kind": "runner_up",      "division": "div2", "name": "Div 2 Runner-up",   "icon": "medal",          "plate": "outlined", "token": "--accolade-runner-up"},
+    {"key": "div1_third",     "kind": "third_place",    "division": "div1", "name": "Div 1 Third place", "icon": "award",          "plate": "outlined", "token": "--accolade-third"},
+    {"key": "div2_third",     "kind": "third_place",    "division": "div2", "name": "Div 2 Third place", "icon": "award",          "plate": "outlined", "token": "--accolade-third"},
     {"key": "most_points",    "kind": "most_points",    "division": None,   "name": "Most Points",       "icon": "flame",          "plate": "outlined", "token": "--accolade-points"},
     {"key": "best_average",   "kind": "best_average",   "division": None,   "name": "Best Average",      "icon": "gauge",          "plate": "outlined", "token": "--accolade-average"},
     {"key": "best_match",     "kind": "best_match",     "division": None,   "name": "Best Single Match", "icon": "zap",            "plate": "outlined", "token": "--accolade-match"},
@@ -35,7 +39,12 @@ ACCOLADE_KINDS = [
     {"key": "played",         "kind": "played",         "division": None,   "name": "Played",            "icon": "calendar-check", "plate": "muted",    "token": "--accolade-played"},
 ]
 
-KINDS = ("champion", "most_points", "best_average", "best_match", "fantasy_winner", "played")
+KINDS = ("champion", "runner_up", "third_place", "most_points", "best_average", "best_match",
+         "fantasy_winner", "played")
+# Team placements (issue 233): one per season, division and team, like champions. Only
+# champions unlock Holo; runner_up and third_place are display only.
+PLACEMENT_KINDS = ("runner_up", "third_place")
+TEAM_KINDS = ("champion",) + PLACEMENT_KINDS
 AWARD_KINDS = ("most_points", "best_average", "best_match")
 PLAYER_AWARD_KINDS = AWARD_KINDS
 DIVISIONS = ("div1", "div2")
@@ -374,12 +383,45 @@ def set_champions(db, label: str, division: str, team_name: str, players: list[d
     return added, removed
 
 
+def set_placement(db, label: str, division: str, kind: str, team_name: str,
+                  players: list[dict], actor_id: int | None = None) -> tuple[int, int]:
+    """Issue 233: make one season and division's runner_up or third_place rows exactly
+    `players` ([{account_id, name}]), as set_champions does for champions. Does not
+    commit. Returns (added, removed)."""
+    if kind not in PLACEMENT_KINDS:
+        raise ValueError(f"not a placement kind: {kind}")
+    existing = {r.player_account_id: r for r in db.query(SeasonAccolade).filter(
+        SeasonAccolade.season_label == label, SeasonAccolade.kind == kind,
+        SeasonAccolade.division == division).all()}
+    wanted = {p["account_id"]: p["name"] for p in players}
+    removed = 0
+    for pid, row in existing.items():
+        if pid not in wanted:
+            db.delete(row)
+            removed += 1
+    added = 0
+    now = int(time.time())
+    for pid, name in wanted.items():
+        row = existing.get(pid)
+        if row is not None:
+            row.player_name = name
+            row.team_name = team_name
+        else:
+            db.add(SeasonAccolade(season_label=label, kind=kind, division=division,
+                                  team_name=team_name, player_account_id=pid, player_name=name,
+                                  source=SOURCE_ADMIN, created_at=now, created_by=actor_id))
+            added += 1
+    db.flush()
+    return added, removed
+
+
 # ---------------------------------------------------------------------------
 # Holo
 # ---------------------------------------------------------------------------
 
 def holo_eligible(db, player_id: int, current: str | None = None) -> bool:
-    """True when the player has a champion accolade in a season other than the live one."""
+    """True when the player has a champion accolade in a season other than the live one.
+    Runner-up and third place (issue 233) never count."""
     current = current if current is not None else current_season_label(db)
     return db.query(SeasonAccolade.id).filter(
         SeasonAccolade.kind == "champion",
@@ -425,7 +467,7 @@ def _linked_users(db) -> dict[int, int]:
 
 def accolades_for(db, player_ids=None, include_live: bool = True,
                   current: str | None = None) -> dict[int, list[dict]]:
-    """{player_id: [accolade, ...]} with champion and award titles, fantasy_winner
+    """{player_id: [accolade, ...]} with champion, placement (runner-up, third place) and award titles, fantasy_winner
     seasons resolved through the winning user's current verified link, and
     played seasons, including the live season for players with a scored match. No
     user ids or usernames. Each accolade: kind, division, season, season_short,
@@ -496,10 +538,15 @@ def tags_by_player(db) -> dict[int, list[dict]]:
 
 
 _KIND_ORDER = {k["key"]: i for i, k in enumerate(ACCOLADE_KINDS)}
+_KEY_BY_KIND = {(k["kind"], k["division"]): k["key"] for k in ACCOLADE_KINDS}
 
 
 def kind_key(a: dict) -> str:
-    return a["division"] if a["kind"] == "champion" else a["kind"]
+    """The ACCOLADE_KINDS key of an accolade: "div1" for a Div 1 champion,
+    "div2_runner_up" for a Div 2 runner-up, the kind itself for the rest."""
+    if a["kind"] in TEAM_KINDS:
+        return _KEY_BY_KIND.get((a["kind"], a.get("division")), a["kind"])
+    return a["kind"]
 
 
 def _newest_first_key(a: dict):
@@ -508,8 +555,8 @@ def _newest_first_key(a: dict):
 
 
 def player_seasons(accolades: list[dict]) -> dict:
-    """seasons_played, seasons (newest first) and titles (champion and award
-    accolades, newest first) from one player's accolades_for list."""
+    """seasons_played, seasons (newest first) and titles (champion, placement and
+    award accolades, newest first) from one player's accolades_for list."""
     seasons = []
     for a in accolades:
         if a["kind"] == "played" and a["season"] not in seasons:
@@ -520,7 +567,8 @@ def player_seasons(accolades: list[dict]) -> dict:
 
 def history(db, current: str | None = None) -> dict:
     """GET /history/seasons: the live season's label, one entry per season newest first
-    with the champion teams and the four awards (ties included), plus the hall of fame.
+    with the champion teams, the runner-up and third place teams (issue 233) and the
+    four awards (ties included), plus the hall of fame.
     No user ids."""
     rows = db.query(SeasonAccolade).all()
     by_season: dict[str, list] = {}
@@ -537,6 +585,17 @@ def history(db, current: str | None = None) -> dict:
                 "team_name": members[0].team_name,
                 "players": [{"account_id": r.player_account_id, "name": r.player_name} for r in members],
             } if members else None
+        # Issue 233: runner-up and third place teams, per division.
+        placements = {}
+        for div in DIVISIONS:
+            placements[div] = {}
+            for kind in PLACEMENT_KINDS:
+                members = sorted((r for r in rs if r.kind == kind and r.division == div),
+                                 key=lambda r: (str(r.player_name or "").lower(), r.player_account_id or 0))
+                placements[div][kind] = {
+                    "team_name": members[0].team_name,
+                    "players": [{"account_id": r.player_account_id, "name": r.player_name} for r in members],
+                } if members else None
         awards = {}
         for kind in AWARD_KINDS:
             awards[kind] = [{"player_account_id": r.player_account_id, "player_name": r.player_name,
@@ -548,7 +607,7 @@ def history(db, current: str | None = None) -> dict:
                                                     key=lambda r: str(r.username or "").lower())]
         seasons.append({
             "season_label": label, "season_short": short_season(label),
-            "champions": champions, "awards": awards,
+            "champions": champions, "placements": placements, "awards": awards,
             "played_count": sum(1 for r in rs if r.kind == "played"),
         })
 
@@ -564,9 +623,11 @@ def history(db, current: str | None = None) -> dict:
         if not titles:
             continue
         champ = sum(1 for a in titles if a["kind"] == "champion")
+        placed = sum(1 for a in titles if a["kind"] in PLACEMENT_KINDS)
         fame.append({"player_account_id": pid, "player_name": names.get(pid) or f"Player {pid}",
                      "titles": len(titles), "champion_titles": champ,
-                     "award_titles": len(titles) - champ, "accolades": titles})
+                     "placement_titles": placed,
+                     "award_titles": len(titles) - champ - placed, "accolades": titles})
     fame.sort(key=lambda f: (-f["titles"], -f["champion_titles"], f["player_name"].lower()))
     return {"current_season": current, "seasons": seasons, "hall_of_fame": fame}
 

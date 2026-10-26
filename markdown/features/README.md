@@ -68,6 +68,7 @@ Implementation details, integrations, and operator tooling.
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Season Participation Backfill](reference/season-participation-backfill.md) | #212: past Kanaliiga leagues S4–S15 (305 players, 866 rows) backfilled as Played accolades from a checked-in league file with one `--all` run (call budget, resume, report); counts read "since Season 4" |
+| [Season Placements Backfill](reference/season-placements-backfill.md) | #233: top three teams and their rosters for past seasons (S4–S15) derived from OpenDota series into a reviewed CSV, then applied as champion, runner-up and third-place accolades (`season_placements.py build` / `apply`) |
 | [Admin Enhancements](reference/admin-enhancements.md) | Twitch sub-tab with approval badge, typed ids with name preview, MVP-first matches grouped by series, Settings grouped by purpose; `GET /admin/players/lookup` and series fields on `GET /admin/matches` (#214) |
 | [Admin Week Management](reference/admin-week-management.md) | Admin CRUD for week records: custom lock times, create/delete unlocked weeks, inline table editing, overlap prevention |
 | [Playoff Stages](reference/playoff-stages.md) | Stage weeks for playoff rounds: own lock time, overlap allowed, score only the series assigned to them *(planned)* |

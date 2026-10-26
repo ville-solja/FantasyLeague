@@ -95,9 +95,13 @@ def set_season_champions(body: ChampionSetBody, db=Depends(get_db),
 # /admin/season-accolades
 # ---------------------------------------------------------------------------
 
+_TEAM_KIND_NAMES = {"champion": "champion", "runner_up": "runner-up", "third_place": "third place"}
+
+
 class AccoladeIn(BaseModel):
     season_label: Label
-    kind: Literal["champion", "most_points", "best_average", "best_match", "fantasy_winner", "played"]
+    kind: Literal["champion", "runner_up", "third_place", "most_points", "best_average",
+                  "best_match", "fantasy_winner", "played"]
     division: Literal["div1", "div2"] | None = None
     team_name: Name | None = None
     player_account_id: AccountId | None = None
@@ -116,13 +120,14 @@ class AccoladeIn(BaseModel):
     def _check(self):
         if not self.season_label:
             raise ValueError("Season label cannot be empty")
-        if self.kind == "champion":
+        if self.kind in accolades.TEAM_KINDS:
+            what = _TEAM_KIND_NAMES[self.kind]
             if self.division is None:
-                raise ValueError("A champion needs a division (div1 or div2)")
+                raise ValueError(f"A {what} needs a division (div1 or div2)")
             if not self.team_name:
-                raise ValueError("A champion needs a team name")
+                raise ValueError(f"A {what} needs a team name")
         elif self.division is not None:
-            raise ValueError("Only a champion has a division")
+            raise ValueError("Only a champion, runner-up or third place has a division")
         if self.kind == "fantasy_winner":
             if self.user_id is None and not self.username:
                 raise ValueError("A fantasy winner needs a user")
@@ -154,7 +159,7 @@ def _resolve(db, a: AccoladeIn, admin_id: int, now: int) -> dict:
             raise HTTPException(status_code=422,
                                 detail=f"Name needed for OpenDota id {a.player_account_id}")
         row["player_name"] = name
-    if a.kind != "champion":
+    if a.kind not in accolades.TEAM_KINDS:
         row["team_name"] = None
     if a.kind != "best_match":
         row["match_id"] = None
@@ -213,7 +218,7 @@ def list_season_accolades(season: str | None = Query(None, max_length=100),
     order = {k["key"]: i for i, k in enumerate(accolades.ACCOLADE_KINDS)}
     rows.sort(key=lambda r: (-accolades.season_sort_key(r.season_label)[0],
                              r.season_label,
-                             order.get(r.division if r.kind == "champion" else r.kind, 99),
+                             order.get(accolades.kind_key({"kind": r.kind, "division": r.division}), 99),
                              str(r.player_name or r.username or "").lower()))
     return [accolades.row_dict(r) for r in rows]
 

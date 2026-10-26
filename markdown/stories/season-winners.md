@@ -171,7 +171,7 @@ As a visitor, I want to see at a glance who has played many seasons and who has 
   - One panel per season, newest first.
   - **Champions:** two team blocks (Div 1 and Div 2) headed by their chip ("S16 Div 1 Champion"), each player with a Holo mark.
   - **Awards:** the four awards as chips, with names and values.
-  - **Hall of fame** sidebar: players ranked by titles (champion plus awards, not Played), each with their pips and counts (Played left out).
+  - **Hall of fame** sidebar: players ranked by titles (champion plus awards, not Played; *extended by #233: runner-up and third place count as titles*), each with their pips and counts (Played left out).
   - Empty state: "No season history yet."
 - **Design system:** every new screen follows it (#202): badges, the self row, data-row grids and tabular numbers.
 
@@ -201,3 +201,44 @@ As a visitor, I want the seasons count to say it starts at Season 4, so that a l
 - **Players tab:** the Seasons legend reads "Seasons played since Season 4 (earlier seasons have no OpenDota record)".
 - **Hover text:** the count's hover text lists the seasons and ends with "Counted from Season 4".
 - **One constant:** the first counted season is a single constant used by the backend (`/players` response field `seasons_counted_from`) and the frontend. The text isn't hard-coded in two places.
+
+
+## Season Placements Backfill (issue #233)
+
+### Build the Placements Table From OpenDota
+**User story**
+As the operator, I want a script that works out each past season's top three teams and their players from OpenDota, so that the results can be checked before anything is written.
+
+**Acceptance criteria**
+- **Command:** `python scripts/season_placements.py build` reads `kanaliiga_leagues.json` (every season except the live one) and writes `scripts/season_placements.csv` with one row per season, division and place (1–3).
+- **Placements:** 1st and 2nd are the winner and loser of the league's last series. 3rd follows the placement rules in `markdown/features/reference/season-placements-backfill.md`, and each row records its `evidence` (the series scores used) and its `confidence` (`high`, `low`, `review`).
+- **Rosters:** each row lists the players who played at least one match for that team in that league, with their match counts. Names come from the player pool, else the match's personaname.
+- **Gaps:** leagues with no matches (S10 and S13 Div 2) and seasons without a clear final are listed with `confidence=review` and no guessed placement.
+- **Budget:** `--max-calls` (default 900) stops cleanly with exit code 2 and keeps the cache; a rerun spends no calls on cached matches.
+- **Comparison:** `build` prints where a derived champion differs from champions already recorded for that season and division.
+- **Read-only:** `build` writes nothing to the database.
+
+### Apply the Reviewed Table
+**User story**
+As the operator, I want to write the reviewed placements into Kana Cards in one command, so that past champions, runners-up and third places show up as accolades.
+
+**Acceptance criteria**
+- **Command:** `python scripts/season_placements.py apply [--dry-run] [--replace]` reads the table and writes only rows with `reviewed=yes`; other rows are listed as skipped.
+- **Place 1:** written as `champion` accolades through `accolades.set_champions` (season label "Season N", division, team name, players).
+- **Places 2 and 3:** written as `runner_up` and `third_place` accolades with division and team name, one row per player.
+- **Existing champions:** a place whose recorded rows differ from the table (champions entered by hand, say) is skipped, with a message, unless `--replace` is given; a place already recorded as in the table is reported as "already recorded".
+- **Idempotent:** a second run adds nothing. Each season that changes writes one `admin_placements_backfilled` audit entry.
+- **Dry run:** `--dry-run` prints what would be written and writes nothing.
+
+### Runner-up and Third Place Accolades
+**User story**
+As a visitor, I want to see when a player finished second or third in a season, so that a strong player's history isn't reduced to titles alone.
+
+**Acceptance criteria**
+- **Kinds:** `runner_up` and `third_place` exist in `accolades.KINDS`, in `ACCOLADE_KINDS` (backend and frontend, kept in step by the existing test) and in the admin `AccoladeIn` model. Like `champion`, they need a division and a team name.
+- **Display:**
+  - the player popup timeline lists "S15 Div 1 Runner-up · with Visma Tormentor" and "S15 Div 1 Third place · with Elisa Oyj";
+  - chips, pips and the Hall of fame show them with their own symbol and colour token;
+  - text always names the place, so meaning never depends on colour.
+- **No Holo:** neither kind unlocks Holo (`holo_eligible` counts only `champion`).
+- **Admin:** Player management can add, edit and delete them like other accolades.

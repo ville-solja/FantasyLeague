@@ -1,5 +1,6 @@
 // History tab (issue 50): one panel per season, newest first, with the Div 1 and Div 2
-// champion teams and the season awards as chips, and a hall of fame ranked by titles.
+// champion teams (and, since issue 233, the runner-up and third place teams) and the
+// season awards as chips, and a hall of fame ranked by titles.
 // Served by GET /history/seasons (public, no user ids).
 
 const _HISTORY_AWARDS = [
@@ -39,11 +40,26 @@ function _historyValue(v, unit) {
   return v == null || !Number.isFinite(Number(v)) ? "" : `${Number(v).toFixed(1)} ${unit}`;
 }
 
-function _historyChampionHtml(season, division, team) {
+/** Issue 233: the division's runner-up and third place teams, "" when none is recorded. */
+function _historyPlacementsHtml(season, division) {
+  const placed = (season.placements && season.placements[division]) || {};
+  const rows = ["runner_up", "third_place"].map(kind => {
+    const team = placed[kind];
+    if (!team) return "";
+    const chip = accoladeChipsHtml([{ kind, division, season: season.season_label,
+                                      season_short: season.season_short, team_name: team.team_name }]);
+    return `<div class="history-placement">${chip}<span class="history-placement-team">${_escHtml(team.team_name || "")}</span></div>`;
+  }).join("");
+  return rows ? `<div class="history-placements">${rows}</div>` : "";
+}
+
+/** `placements`: the division's runner-up and third place markup (issue 233), shown
+ * under the champion. */
+function _historyChampionHtml(season, division, team, placements = "") {
   const chip = accoladeChipsHtml([{ kind: "champion", division, season: season.season_label,
                                     season_short: season.season_short, team_name: team && team.team_name }]);
   if (!team) {
-    return `<div class="history-champion">${chip}<p class="history-champion-none">No champion recorded</p></div>`;
+    return `<div class="history-champion">${chip}<p class="history-champion-none">No champion recorded</p>${placements}</div>`;
   }
   // Holo needs a champion title from a season before the current one.
   const badge = season.season_label === _historyCurrentSeason
@@ -54,6 +70,7 @@ function _historyChampionHtml(season, division, team) {
   return `<div class="history-champion">${chip}
       <div class="history-champion-team">${_escHtml(team.team_name)}</div>
       <ul class="history-champion-players">${players}</ul>
+      ${placements}
     </div>`;
 }
 
@@ -76,8 +93,8 @@ function _historySeasonHtml(season) {
   return `<section class="panel history-season">
     <h2>${_escHtml(season.season_label)}</h2>
     <div class="history-champions">
-      ${_historyChampionHtml(season, "div1", champs.div1)}
-      ${_historyChampionHtml(season, "div2", champs.div2)}
+      ${_historyChampionHtml(season, "div1", champs.div1, _historyPlacementsHtml(season, "div1"))}
+      ${_historyChampionHtml(season, "div2", champs.div2, _historyPlacementsHtml(season, "div2"))}
     </div>
     <h3 class="history-sub">Awards</h3>
     <div class="history-awards">${_historyAwardsHtml(season)}</div>

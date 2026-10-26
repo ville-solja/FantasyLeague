@@ -626,7 +626,7 @@ class TestTestingInstructionsCurrent:
         intro = _flat(steps[:steps.index("**Flow 1")])
         assert "scrolls within that height" in intro
         assert "short code" in intro and "E-REACH" in intro
-        assert "send the code to the operator." in intro
+        assert "include the code" in intro  # plus the support contact (plan-issue-195, R3)
         assert "reason codes table" not in intro
         assert '"E-REACH"' in (EXT_DIR / "extension.js").read_text()
 
@@ -705,3 +705,19 @@ class TestChangesSinceRejection:
         feature = RESUBMISSION_FEATURE_DOC.read_text()
         assert "*(planned)*" not in feature
         assert "stub created at feature planning time" not in feature
+
+
+SUPPORT_EMAIL = "support@kana-cards.com"
+
+
+def test_walkthrough_has_fixed_support_contact():
+    """The pasted Testing Instructions (the submission doc's steps and the plan's walkthrough block)
+    name the fixed support email and contain no placeholder, so nothing has to be filled in by hand."""
+    steps = _steps_section()
+    plan = (REPO_ROOT / "markdown" / "plans" / "plan-issue-195-twitch-extension-resubmission.md").read_text()
+    block = plan.split("```text\n", 1)[1].split("\n```", 1)[0]
+    for text in (steps, block, _submission_doc()):
+        assert "<SUPPORT CONTACT>" not in text and "SUPPORT CONTACT" not in text
+    assert steps.count(SUPPORT_EMAIL) >= 2 and block.count(SUPPORT_EMAIL) >= 2
+    support = _section(_submission_doc(), "## Support contact", "## EBS URL disclosure")
+    assert SUPPORT_EMAIL in support

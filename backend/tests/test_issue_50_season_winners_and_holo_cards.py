@@ -1337,11 +1337,16 @@ def test_cards_ui_no_pips_on_card_faces_viewer_lists_no_accolades():
 # ===========================================================================
 
 def test_accolade_kinds_backend_order_names_icons_tokens():
-    """accolades.ACCOLADE_KINDS lists div1 champion, div2 champion, most_points, best_average, best_match, fantasy_winner, played in that order with the planned names, Lucide icons, plates and --accolade-* tokens."""
+    """accolades.ACCOLADE_KINDS lists div1 champion, div2 champion, the runner-up and third place entries per division (issue 233), most_points, best_average, best_match, fantasy_winner, played in that order with the planned names, Lucide icons, plates and --accolade-* tokens."""
     got = [(k["key"], k["name"], k["icon"], k["plate"], k["token"]) for k in accolades.ACCOLADE_KINDS]
     assert got == [
         ("div1", "Div 1 Champion", "crown", "filled", "--accolade-div1"),
         ("div2", "Div 2 Champion", "trophy", "filled", "--accolade-div2"),
+        # Issue 233: runner-up and third place, per division, after the champions.
+        ("div1_runner_up", "Div 1 Runner-up", "medal", "outlined", "--accolade-runner-up"),
+        ("div2_runner_up", "Div 2 Runner-up", "medal", "outlined", "--accolade-runner-up"),
+        ("div1_third", "Div 1 Third place", "award", "outlined", "--accolade-third"),
+        ("div2_third", "Div 2 Third place", "award", "outlined", "--accolade-third"),
         ("most_points", "Most Points", "flame", "outlined", "--accolade-points"),
         ("best_average", "Best Average", "gauge", "outlined", "--accolade-average"),
         ("best_match", "Best Single Match", "zap", "outlined", "--accolade-match"),

@@ -34,7 +34,7 @@ Remaining suspects are all dev-console settings: the Asset Hosting viewer paths,
 
 ## Chat behaviour to disclose
 
-One message each time the broadcaster confirms a match MVP, including re-selections, posted by `backend/twitch.py` via `POST https://api.twitch.tv/helix/extensions/chat`. It contains the MVP player's name and, when tokens were dropped, the Kanaliiga Fantasy usernames of token-drop winners (or a note that the drop pool was empty). A re-selection on a match that already dropped posts only the MVP line. The Extension never reads, stores or moderates chat.
+One message each time the broadcaster confirms a match MVP, including re-selections, posted by `backend/twitch.py` via `POST https://api.twitch.tv/helix/extensions/chat`. It contains the MVP player's name and, when tokens were dropped, how many viewers received a token (no usernames since issue #157), or a note that no tokens were dropped. A re-selection on a match that already dropped posts only the MVP line. The exact four wordings are listed in [Twitch Extension Review Submission](twitch-extension-review-submission.md#chat-capability-disclosure). The Extension never reads, stores or moderates chat.
 
 ## Package self-check
 
@@ -52,7 +52,7 @@ One message each time the broadcaster confirms a match MVP, including re-selecti
 
 - Listing description: a **Twitch Chat** paragraph in [Twitch Extension Review Submission](twitch-extension-review-submission.md#listing-copy).
 - `twitch-extension/config.html`: one sentence under "For broadcasters" describing the MVP chat announcement.
-- `twitch-extension/panel.html`: a note in the unlinked view (`#chat-note`) that a drop winner's Kanaliiga Fantasy username is posted in chat.
+- `twitch-extension/panel.html`: the `#chat-note` about usernames in chat was removed by issue #157, since chat no longer names drop winners.
 
 ## Resubmission
 

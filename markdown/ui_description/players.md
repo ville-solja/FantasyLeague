@@ -18,7 +18,7 @@ Table of all players who have participated in any ingested league. Sortable colu
 - **Seasons legend** (issue 212) — under the table: "Seasons played since Season 4 (earlier seasons
   have no OpenDota record)". The number comes from `seasons_counted_from` on `GET /players`; the
   legend is hidden when the list is empty.
-- **Titles** — the player's accolade pips (champion and award titles; Played is the Seasons column).
+- **Titles** — the player's accolade pips (champion, runner-up, third-place and award titles, issue 233; Played is the Seasons column).
   Each pip shows its name and seasons on hover, focus or tap. Sorting by Titles counts them.
   There is no Veteran status. See `features/reference/season-winners-and-holo-cards.md`.
 
@@ -65,8 +65,9 @@ Opened by clicking any player name or card (in this tab or elsewhere); the code 
   champion; counts (champion titles, season awards, seasons played); a Played line, "Played 7
   seasons · S4–S16", whose disclosure lists the seasons, with the current season's matches ("S16 ·
   7 matches"); and a timeline by season, newest first. Each season lists its accolades as detail
-  lines, each with its symbol: "S15 Div 1 Champion · with Team Name", "S15 Most Points · 812.3
-  pts" (issue #230).
+  lines, each with its symbol: "S15 Div 1 Champion · with Team Name", "S15 Div 1 Runner-up · with
+  Team Name" (issue 233), "S15 Most Points · 812.3 pts" (issue #230). Runner-up and third place are
+  not counted as season awards.
 - **Match history table** — one row per match, columns (in order): MVP star, Date, Hero (icon),
   Result (W or L as text, blank when unknown), Fantasy pts, K/A/D, GPM, Wards, Tower dmg, Opponent
   (linked to the opposing team's detail modal), a link to the match on OpenDota, and a **Details**

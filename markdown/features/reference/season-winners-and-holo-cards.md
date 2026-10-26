@@ -1,15 +1,15 @@
 # Season Champions, Accolades and Holo Cards
 
-Seasons remember who won and who played. Each season has **champions**, the 10 players of the Div 1 and Div 2 winning teams. Champions get Holo cards in later seasons and a Champion accolade. Seasons also hand out **accolades** that add up over time: most points, best average, best single match, fantasy winner and Played (1+ match). Everything sits in a record that Season Reset never touches. It drives the accolade symbols, the Holo roll, seasons-played counts in the Players list, the player popup and the History tab. Resolves GitHub issues #50, #53 and #105; plan: `markdown/plans/plan-issue-50-season-winners-and-holo-cards.md`; design canvas: https://claude.ai/artifact/CXUJ4FJ617oaqzAdf54iwr.
+Seasons remember who won and who played. Each season has **champions**, the 10 players of the Div 1 and Div 2 winning teams. Champions get Holo cards in later seasons and a Champion accolade. Seasons also hand out **accolades** that add up over time: most points, best average, best single match, fantasy winner and Played (1+ match); since #233 the 2nd and 3rd placed teams get Runner-up and Third place accolades (no Holo). Everything sits in a record that Season Reset never touches. It drives the accolade symbols, the Holo roll, seasons-played counts in the Players list, the player popup and the History tab. Resolves GitHub issues #50, #53 and #105; plan: `markdown/plans/plan-issue-50-season-winners-and-holo-cards.md`; design canvas: https://claude.ai/artifact/CXUJ4FJ617oaqzAdf54iwr.
 
 ---
 
 ## Record
 
-- **Storage:** the `season_accolades` table (`models.SeasonAccolade`): season label, kind (`champion`, `most_points`, `best_average`, `best_match`, `fantasy_winner`, `played`), division and team name for champions, player (OpenDota account id and name) or user (id and username, no foreign key), value, match id (best match), source (`season_end` or `admin`), `created_at`, `created_by`.
+- **Storage:** the `season_accolades` table (`models.SeasonAccolade`): season label, kind (`champion`, `runner_up`, `third_place`, `most_points`, `best_average`, `best_match`, `fantasy_winner`, `played`), division and team name for champions, runners-up and third places (#233), player (OpenDota account id and name) or user (id and username, no foreign key), value, match id (best match), source (`season_end` or `admin`), `created_at`, `created_by`.
 - **No duplicates:** the unique index `ux_season_accolades_key` covers season, kind, division, player and user. The nullable parts go through `COALESCE`, because SQLite treats NULLs as distinct in a unique index.
 - **Survives Reset:** names are stored on each row, so every reader works after the season's players, teams, cards or users are gone or renamed. `POST /admin/season/reset` keeps the table and reports `kept.season_accolades`.
-- **Code:** `backend/accolades.py` holds the logic (`compute_awards`, `played_player_ids`, `season_teams`, `record_season`, `set_champions`, `holo_eligible`, `roll_holo`, `accolades_for`, `player_seasons`, `history`, `short_season`, `current_season_label`).
+- **Code:** `backend/accolades.py` holds the logic (`compute_awards`, `played_player_ids`, `season_teams`, `record_season`, `set_champions`, `set_placement` (#233), `holo_eligible`, `roll_holo`, `accolades_for`, `player_seasons`, `history`, `short_season`, `current_season_label`).
 
 ### The live season's label
 
@@ -45,7 +45,8 @@ The label is used for the live Played season, the Holo rule ("a season other tha
   - **Past season:** "Season 1" to the last ended season (plus any season already in the record), a typed team name and players by OpenDota id. Nothing depends on current teams or players.
   - **Roster editor:** one row per player (OpenDota id, name, Remove), and **+ Add player** (the paste box for "`<id> <name>`" lines was removed in #214; the name field takes the remaining width of the row). Typing an id fills an empty name from the pool, else from earlier accolade rows. A note shows "6 players (usually 5)" when the count isn't 5. Each id must be a positive whole number and appear once; each row needs a name (`validateChampionRoster`, checked again by the server).
   - **Saving** calls `PUT /admin/season-champions`, which makes that season and division's champions exactly the list shown.
-- **Add accolade:** season, kind (Most Points, Best Average, Best Single Match, Fantasy Winner, Played), a player (OpenDota id and name, filled from the pool) or a username for Fantasy Winner, and an optional value. Played takes several "`<id> <name>`" lines at once.
+- **Add accolade:** season, kind (Most Points, Best Average, Best Single Match, Runner-up, Third place, Fantasy Winner, Played), a player (OpenDota id and name, filled from the pool) or a username for Fantasy Winner, and an optional value. Runner-up and Third place (#233) also take a division and a team name, and no value; their rows are listed one per player, and **Edit** also asks for the team name. Played takes several "`<id> <name>`" lines at once.
+- **Past placements:** the top three of past seasons are backfilled from OpenDota through a reviewed table: see [Season Placements Backfill](season-placements-backfill.md).
 
 ## Backfill of Played
 
@@ -86,19 +87,21 @@ python scripts/backfill_played.py --league <div1 id> --league <div2 id> --dry-ru
 
 ## Accolade symbols
 
-Each kind has a Lucide icon, a colour token (`--accolade-*`, in both copies of `colors_and_type.css`) and a plate: filled for champions, outlined for awards, muted for Played. The symbol table is in the design system README (`.claude/skills/README.md`, "Accolade symbols").
+Each kind has a Lucide icon, a colour token (`--accolade-*`, in both copies of `colors_and_type.css`) and a plate: filled for champions, outlined for runner-up, third place and awards, muted for Played. The symbol table is in the design system README (`.claude/skills/README.md`, "Accolade symbols").
 
 | Kind | Name | Icon |
 |---|---|---|
 | `champion` (div1) | Div 1 Champion | `crown` |
 | `champion` (div2) | Div 2 Champion | `trophy` |
+| `runner_up` (div1, div2) | Div 1 Runner-up, Div 2 Runner-up | `medal` (`--accolade-runner-up`, silver) |
+| `third_place` (div1, div2) | Div 1 Third place, Div 2 Third place | `award` (`--accolade-third`, bronze) |
 | `most_points` | Most Points | `flame` |
 | `best_average` | Best Average | `gauge` |
 | `best_match` | Best Single Match | `zap` |
 | `fantasy_winner` | Fantasy Winner | `medal` |
 | `played` | Played | `calendar-check` |
 
-- **Compact (pips):** one pip per earned kind in this order, with a count from two. Played comes last, muted, and always shows its seasons count. The tooltip reads "Div 1 Champion · S16 with Reds, S15 with Blues" (newest first; champions name the team); Played compresses runs ("Played · 12 seasons: S1–S10, S14, S16"). Each pip is focusable and carries the same text as `aria-label` ("Div 1 Champion, 2 times: …"). The tooltip opens on hover, focus or tap and closes on Escape, blur, mouse leave or a tap elsewhere. Used on cards, in the Players list Titles column and in the popup header.
+- **Compact (pips):** one pip per earned kind in this order, with a count from two. Played comes last, muted, and always shows its seasons count. The tooltip reads "Div 1 Champion · S16 with Reds, S15 with Blues" (newest first; champions, runners-up and third places name the team); Played compresses runs ("Played · 12 seasons: S1–S10, S14, S16"). Each pip is focusable and carries the same text as `aria-label` ("Div 1 Champion, 2 times: …"). The tooltip opens on hover, focus or tap and closes on Escape, blur, mouse leave or a tap elsewhere. Used in the Players list Titles column, the popup header, the team popup and the Hall of fame; never on a card face (#228).
 - **Expanded (chips):** one chip per accolade, such as "S16 Div 1 Champion", newest season first, champions first within a season. Used in Player management, the Teams tab, the team popup and History (the popup timeline uses detail lines since issue #230). At phone width, Player management shows pips instead (`.accolade-swap`).
 - **Fantasy Winner on a player:** shown only while the winning user has a Steam-verified link (`users.steam_id` and `users.player_id` on a full, non-demo account), resolved when read (`accolades._linked_users` through `player_links.verified_links`, the same rule as `own_card.is_candidate`; #209). Linking your account to your player with Steam makes your fantasy win visible on your player's cards and in public lists, which shows that your username belongs to that player; unlinking removes it. A typed (self-reported) player id is never trusted for this, so nobody can put a Fantasy Winner pip on another player.
 - **Code:** `ACCOLADE_KINDS` in `backend/accolades.py` and `frontend/app-globals.js` (a test keeps them in sync). Every view renders through `accoladePipsHtml(accolades, {omitPlayed})`, `accoladeChipsHtml(accolades)` and, in the player popup timeline, `accoladeDetailLine(a)` and `accoladePlayedLine(accolades, live)` (issue #230, from #228's `accoladeDetailsHtml`); the pip and chip CSS is in the SHARED STATES section of `style.css`. All names are escaped with `_escHtml`.
@@ -106,21 +109,21 @@ Each kind has a Lucide icon, a colour token (`--accolade-*`, in both copies of `
 ## Where it shows
 
 - **Players tab:** a Seasons column (the count in tabular numbers, one bar per season for the last six known seasons: grey played, amber champion season, empty not played; hovering the count lists the seasons) and a Titles column of pips, both sortable. Filter chips All, Champions and New this season (one season played, the live one). There is no Veteran status.
-- **Player popup:** pips under the name, and an Accolades section (`renderPlayerAccolades`, self-contained for the planned popup redesign): a "Holo unlocked" banner for past champions, counts (champion titles, season awards, seasons played) and, since issue #230, a Played line ("Played 7 seasons · S4–S16", with the seasons in a disclosure and "S16 · 7 matches" for the live season) and a timeline by season of detail lines ("S15 Div 1 Champion · with Reds"). Before #230 the timeline used chips.
-- **History tab:** a top-level tab after Leaderboards (`app-history.js`). One panel per season, newest first: the Div 1 and Div 2 champion teams headed by their chip, each player with a Holo badge ("Holo from next season" for the current season's champions, who are not Holo-eligible until the season ends), the four awards as chips with names and values, and the Played count. A Hall of fame sidebar ranks players by titles (champion plus awards, not Played) with their pips. Empty state: "No season history yet."
+- **Player popup:** pips under the name, and an Accolades section (`renderPlayerAccolades`, self-contained for the planned popup redesign): a "Holo unlocked" banner for past champions, counts (champion titles, season awards, seasons played) and, since issue #230, a Played line ("Played 7 seasons · S4–S16", with the seasons in a disclosure and "S16 · 7 matches" for the live season) and a timeline by season of detail lines ("S15 Div 1 Champion · with Reds", "S15 Div 1 Runner-up · with Blues"). Runner-up and third place show only in the timeline; the season awards count leaves them out (#233). Before #230 the timeline used chips.
+- **History tab:** a top-level tab after Leaderboards (`app-history.js`). One panel per season, newest first: the Div 1 and Div 2 champion teams headed by their chip, each player with a Holo badge ("Holo from next season" for the current season's champions, who are not Holo-eligible until the season ends), the division's runner-up and third place teams as chips with their team names under it (#233), the four awards as chips with names and values, and the Played count. A Hall of fame sidebar ranks players by titles (champion, runner-up, third place and awards, not Played) with their pips. Empty state: "No season history yet."
 
 ## Endpoints
 
 | Method and path | Access | Notes |
 |---|---|---|
-| `GET /history/seasons` | public | `{current_season, seasons: [{season_label, season_short, champions: {div1, div2}, awards: {most_points, best_average, best_match, fantasy_winner}, played_count}], hall_of_fame: [{player_account_id, player_name, titles, champion_titles, award_titles, accolades}]}`; no user ids (fantasy winners by username) |
+| `GET /history/seasons` | public | `{current_season, seasons: [{season_label, season_short, champions: {div1, div2}, placements: {div1, div2: {runner_up, third_place}} (each `{team_name, players}` or null, #233), awards: {most_points, best_average, best_match, fantasy_winner}, played_count}], hall_of_fame: [{player_account_id, player_name, titles, champion_titles, placement_titles, award_titles, accolades}]}`; no user ids (fantasy winners by username) |
 | `GET /accolades` | public | `{current_season, current_season_short, players: {"<player id>": [{kind, division, season, season_short, team_name, value, match_id}]}}`; Played includes the live season; fantasy winner only through a current Steam-verified link; no user ids or usernames |
-| `GET /players`, `GET /players/{id}` | public | add `seasons_played`, `seasons` (newest first) and `titles` (champion and award accolades, newest first); list rows also carry `seasons_counted_from` (the first season counts start from, 4, #212); the detail also adds `accolades`, `current_season`, `current_season_matches` and `holo_unlocked` |
+| `GET /players`, `GET /players/{id}` | public | add `seasons_played`, `seasons` (newest first) and `titles` (champion, runner-up, third-place and award accolades, newest first; #233); list rows also carry `seasons_counted_from` (the first season counts start from, 4, #212); the detail also adds `accolades`, `current_season`, `current_season_matches` and `holo_unlocked` |
 | `GET /admin/season/accolades-preview` | admin | see End Season |
 | `POST /admin/season/end` | admin, re-auth, typed confirmation | optional `champions` |
 | `PUT /admin/season-champions` | admin, re-auth | `{season_label, division, team_name, players: [{account_id, name}]}` (at most 50); replaces the set in one transaction; an empty list clears the division; 422 on duplicate, non-positive or oversized ids, empty names, an unknown division, or players without a team name; audit `admin_champions_set` with season, division and `added=` / `removed=` |
 | `GET /admin/season-accolades?season=&kind=` | admin | every row, newest season first |
-| `POST /admin/season-accolades` | admin, re-auth | one row (409 on a duplicate) or a list of up to 500 (rows already recorded are skipped and counted: `{added, skipped}`); validates kind, division and player or user (a fantasy winner must be an existing website account that is not a tester, by id or username; a Twitch viewer soft account or a tester answers 422); audit `admin_accolade_added` |
+| `POST /admin/season-accolades` | admin, re-auth | one row (409 on a duplicate) or a list of up to 500 (rows already recorded are skipped and counted: `{added, skipped}`); validates kind, division (and team name for champion, runner_up and third_place) and player or user (a fantasy winner must be an existing website account that is not a tester, by id or username; a Twitch viewer soft account or a tester answers 422); audit `admin_accolade_added` |
 | `PATCH /admin/season-accolades/{id}` | admin, re-auth | `value`, `player_name`, `team_name`, `username`; 404 when missing; audit `admin_accolade_updated` |
 | `DELETE /admin/season-accolades/{id}` | admin, re-auth | audit `admin_accolade_removed`; a `season_winner` tag already granted stays |
 

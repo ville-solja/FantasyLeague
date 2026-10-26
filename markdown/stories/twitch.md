@@ -395,7 +395,7 @@ As a viewer, I want my soft account kept private and easy to remove, and as an a
 - **Retention:** soft accounts with no activity (`last_seen_at`) for `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` (default 365) are deleted by a daily background job, with an audit entry.
 - **Privacy text:** `frontend/privacy.html`, `frontend/terms.html` and the extension listing describe what's stored (opaque Twitch id, game progress, timestamps), why, and how to leave.
 - **No public Twitch ids:** no public or player-facing endpoint, website or EBS, returns `twitch_user_id` or `twitch_account_id`. The only exception allowed is the admin users list, which in the implementation returns only booleans (`twitch_linked`, `twitch_identity_shared`). `GET /twitch/me` returns the player's game state, never their Twitch ids. A test checks every route's response for these field names, and admin exports leave them out.
-- **No password requests:** the extension listing and the privacy page say "Kana Cards never asks for your Twitch or website password inside Twitch." The panel never shows a password field.
+- **No password requests:** the extension listing says "Kana Cards never asks for your password inside Twitch." (no website mention, since the 2026-10 review) and the privacy page says "Kana Cards never asks for your Twitch or website password inside Twitch." The panel never shows a password field.
 - **Failure path:** leaving twice, or leaving without an account, returns 200 with no change.
 
 ## Twitch Account Connection (Part 2, #160)

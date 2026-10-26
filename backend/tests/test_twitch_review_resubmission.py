@@ -313,6 +313,44 @@ def test_listing_description_states_message_contents():
     assert "no joined viewers" in para.lower()
 
 
+def test_listing_chat_paragraph_lists_every_exact_message():
+    """The Twitch Chat paragraph quotes every message `_mvp_chat_text` can post, word for word,
+    so the listing explicitly names what the extension writes in chat (2026-10 review)."""
+    import os, sys
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    os.environ.pop("TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS", None)
+    import twitch
+    para = _chat_paragraph()
+    expected = [
+        twitch._mvp_chat_text("PlayerName", 3, False),
+        twitch._mvp_chat_text("PlayerName", 0, True),
+        twitch._mvp_chat_text("PlayerName", 0, True, only_new_accounts=True),
+        twitch._mvp_chat_text("PlayerName", 0, False),
+        twitch._mvp_chat_text("PlayerName", 0, True, drops_enabled=False),
+    ]
+    for text in expected:
+        assert text in para, text
+
+
+def _description_text():
+    """The description as pasted: the quoted lines, without the ** markers."""
+    block = _description_block()
+    lines = [l[1:].lstrip() if l.startswith(">") else None for l in block.splitlines()]
+    text = "\n".join(l for l in lines if l is not None).strip()
+    return text.replace("**", "")
+
+
+def test_listing_description_fits_1024_characters():
+    """Twitch's Description field holds 1,024 characters; the pasted text stays under 1,000 so
+    the chat disclosure is never cut off (the 2026-10 review's 4.2 finding)."""
+    assert len(_description_text()) <= 1000
+
+
+def test_listing_description_starts_with_chat_paragraph():
+    """The Twitch Chat paragraph is the first thing in the description."""
+    assert _description_text().startswith("Twitch Chat:")
+
+
 def test_listing_description_states_no_chat_read_store_or_repeat_drop():
     """The chat paragraph states the Extension never reads, stores or moderates chat, and re-selecting the MVP does not trigger a second token drop."""
     para = _chat_paragraph().lower()

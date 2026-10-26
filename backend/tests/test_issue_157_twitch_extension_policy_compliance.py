@@ -1684,13 +1684,15 @@ class TestHiddenPrivateRemovable:
             _no_twitch_ids(out, "Uexported", "2718281828", "Ulinkedsite")
 
     def test_no_viewer_password_field_and_listing_never_asks_for_passwords(self):
-        """AC No password requests: no viewer file has type="password"; the listing and privacy page say "Kana Cards never asks for your Twitch or website password inside Twitch."."""
+        """AC No password requests: no viewer file has type="password"; the listing says "Kana Cards never asks for your password inside Twitch." (no website mention since the 2026-10 review, plan-issue-195 R4) and the privacy page keeps "Kana Cards never asks for your Twitch or website password inside Twitch."."""
         for name in VIEWER_FILES:
             assert not re.search(r'type="?password', _ext(name), re.I), name
+        listing_line = "Kana Cards never asks for your password inside Twitch."
         line = "Kana Cards never asks for your Twitch or website password inside Twitch."
         doc = _read(REPO_ROOT / "markdown" / "features" / "reference" / "twitch-extension-review-submission.md")
         description = doc[doc.index("**Description** (full):"):doc.index("This wording is deliberately")]
-        assert line in " ".join(l.lstrip("> ").strip() for l in description.splitlines())
+        flat = " ".join(l.lstrip("> ").strip() for l in description.splitlines())
+        assert listing_line in flat and "website" not in flat.lower()
         privacy = re.sub(r"<[^>]+>", "", _read(FRONTEND_DIR / "privacy.html"))
         assert line in " ".join(privacy.split())
 

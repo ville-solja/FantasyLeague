@@ -34,6 +34,9 @@
   --k-amber-500: #f0a83a;
   --k-amber-300: #ffc96a;
 
+  /* Bronze — third place accolades (issue 233) */
+  --k-bronze-400: #cd8f5e;
+
   /* ---- Neutrals (true black to near-black, logo outline) --- */
   --k-ink-000: #000000;
   --k-ink-950: #0a0a0c;   /* page bg */
@@ -112,6 +115,10 @@
   --accolade-match:   var(--k-amber-300);
   --accolade-fantasy: var(--k-orange-100);
   --accolade-played:  var(--fg-muted);
+  /* Team placements (issue 233): silver runner-up and bronze third place, on outlined
+     plates with their own icons (medal, award), so they never read as a title. */
+  --accolade-runner-up: var(--k-ink-100);
+  --accolade-third:     var(--k-bronze-400);
 
   /* Tag symbols (issue 217): the same colours as the role badges, so a caster or admin
      reads the same on a card as on the leaderboard. Each kind has its own icon too. */
