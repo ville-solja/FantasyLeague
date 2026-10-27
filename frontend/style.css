@@ -2868,6 +2868,142 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 }
 
 /* ============================================================
+   FINALS (issue #237) — the Div 1 match tree and predictions. Match cards are
+   .panel surfaces; picks use the shared selected state (see SHARED STATES) and a
+   winner is a .mark-winner name under its "Winner" label. Tokens only.
+   ============================================================ */
+.finals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-2);
+}
+.finals-head h2 { margin-bottom: 0; }
+.finals-notice { margin: 0 0 var(--s-4); color: var(--fg-muted); font-size: var(--fs-sm); }
+.finals-tree {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+.finals-col { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.finals-connector { align-self: stretch; width: 40px; height: 100%; }
+.finals-connector path {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: var(--bw-thin);
+  vector-effect: non-scaling-stroke;
+}
+.finals-match { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; padding: var(--s-4); }
+.finals-match-head { display: flex; align-items: center; gap: var(--s-2); }
+.finals-match-label {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.finals-score {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.finals-teams { display: flex; flex-direction: column; gap: var(--s-2); }
+.finals-team,
+.finals-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  text-align: left;
+}
+.finals-team { background: var(--bg-card-hi); border: var(--bw-thin) solid transparent; }
+.finals-pick {
+  background: var(--bg-card-hi);
+  color: var(--fg);
+  border: var(--bw-thin) solid var(--border-soft);
+  font-family: var(--font-body);
+  font-weight: var(--w-regular);
+  text-transform: none;
+  white-space: normal;
+  cursor: pointer;
+}
+.finals-pick:hover { background: var(--k-ink-600); color: var(--fg); }
+.finals-pick[aria-pressed="true"] {
+  background: var(--accent-ghost);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.finals-team-name {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-md);
+  letter-spacing: var(--tr-wide);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.finals-slot-mark { color: var(--fg-dim); }
+.finals-team-now,
+.finals-share {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.finals-winner,
+.finals-your-pick,
+.finals-count,
+.finals-hint { margin: 0; font-size: var(--fs-sm); }
+.finals-your-pick,
+.finals-count,
+.finals-hint { color: var(--fg-muted); }
+.finals-winner-label {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--mark-winner);
+}
+.finals-mark--right { color: var(--k-ok); font-weight: var(--w-bold); }
+.finals-mark--wrong { color: var(--k-err); font-weight: var(--w-bold); }
+.finals-actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); margin-top: var(--s-4); }
+.finals-actions:empty { display: none; }
+.finals-summary-own {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-lg);
+  text-transform: uppercase;
+  color: var(--fg);
+}
+.finals-summary-all { margin: 0; color: var(--fg-muted); }
+/* Admin › Season › Season Finals */
+.finals-admin-facts { margin: 0 0 var(--s-3); padding-left: var(--s-5); font-size: var(--fs-sm); }
+.finals-cross-check--differs { color: var(--k-warn); }
+.finals-tie-list { margin: var(--s-2) 0; padding-left: 0; list-style: none; display: grid; gap: var(--s-1); }
+.finals-tie-item { display: flex; align-items: center; gap: var(--s-2); }
+.finals-tie-item > span { min-width: 12em; }
+.finals-admin-standings { margin-top: var(--s-3); }
+@media (max-width: 720px) { /* finals */
+  .finals-tree { grid-template-columns: 1fr; gap: var(--s-4); }
+  .finals-connector { display: none; }
+}
+
+/* ============================================================
    SHARED STATES (issue #202) — the design system's "States and emphasis"
    rules (.claude/skills/README.md). Surfaces use these instead of their own copies.
    ============================================================ */
@@ -2890,7 +3026,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .players-filter-chip.active:hover,
 .players-filter-chip.active:focus-visible,
 .settings-nav-btn.active:hover,
-.settings-nav-btn.active:focus-visible {
+.settings-nav-btn.active:focus-visible,
+.finals-pick[aria-pressed="true"]:hover,
+.finals-pick[aria-pressed="true"]:focus-visible {
   background: var(--state-selected-hover-bg);
   color: var(--state-selected-hover-fg);
 }
@@ -2913,7 +3051,8 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .schedule-week-chip.selected:focus-visible,
 .schedule-hide-toggle[aria-pressed="true"]:focus-visible,
 .players-filter-chip.active:focus-visible,
-.settings-nav-btn.active:focus-visible {
+.settings-nav-btn.active:focus-visible,
+.finals-pick[aria-pressed="true"]:focus-visible {
   outline: var(--bw-thick) solid var(--accent);
   outline-offset: 2px;
 }

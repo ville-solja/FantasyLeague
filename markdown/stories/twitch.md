@@ -961,3 +961,51 @@ As a Twitch reviewer re-reviewing the extension, I want a short note on what cha
   - Roster;
   - Settings with Leave;
   - the broadcaster's MVP selection.
+
+
+## MVP Poll for Watchers (#234, S17; not yet implemented)
+
+### The Streamer Starts a Viewer Vote for a Match
+**User story**
+As a broadcaster on an approved channel, I want to start a timed MVP vote for a specific match from Quick Actions, so that my viewers choose the MVP.
+
+**Acceptance criteria**
+- **Start:** the MVP tool's match view has **Start viewer vote** next to **Pick MVP**, with a timer choice of 1, 2 or 3 minutes (2 by default).
+- **Right match:** the vote opens for the match picked in the series → match picker. It works for a match with stats and for a live match without stats, using its live players.
+- **Refused cases** (nothing is written):
+  - a channel that isn't approved (`403`, with an approval request recorded as for MVPs);
+  - a match outside the series window (`403`);
+  - a second open poll on the channel (`409`);
+  - a match whose poll was already confirmed (`409`).
+- **Announce:** opening the poll posts one chat message naming the teams, the game number and the time left, and sends a PubSub "poll open" message to every panel.
+- **Control:** while it's open, the tool shows a countdown and the number of votes, with **End now** and **Cancel**. Cancel ends the poll without a result and posts no MVP.
+
+### Viewers Vote in the Panel
+**User story**
+As a viewer watching the stream, I want to vote for the MVP in the panel, so that the audience decides who played best.
+
+**Acceptance criteria**
+- **Shown:** while a poll is open on the channel, the Live tab shows it at the top: the match, a countdown, the 10 players grouped by team, and a **Vote** button. A panel opened mid-poll shows it too (`GET /twitch/mvp-poll`).
+- **Who can vote:** joined viewers eligible for drops. A viewer who hasn't joined sees "Join to vote". A soft account too new for drops sees "Your vote counts from <date>". Their votes are refused with `403`.
+- **One vote:** a viewer has one vote and can change it until the poll closes. A vote after `closes_at`, or for a player not in the match, is refused (`409` and `422`).
+- **No bandwagon:** while the poll is open, only the total number of votes shows. After it closes, the panel shows each player's share and the viewer's own pick.
+- **Limits:** voting is rate-limited per IP like the other panel actions.
+
+### The Streamer Confirms the Vote's Result
+**User story**
+As a broadcaster, I want to confirm the poll's winner with one click, so that the MVP, the fantasy bonus and the token drop happen as they do today.
+
+**Acceptance criteria**
+- **Result:** when the poll closes (timer or **End now**), the tool shows each player's votes with the winner preselected. A tie preselects no one and lists the tied players. A poll with no votes says so and opens Pick MVP.
+- **Confirm:** **Confirm MVP & Drop Tokens** calls `POST /twitch/mvp` with the poll id. The MVP row, bonus, token drop (once per channel and match), PubSub message and audit work as they do today, and the poll becomes `confirmed`.
+- **Chat:** a confirmed vote posts "Match MVP by viewer vote: {name} ({pct}% of {votes} votes)!" and then the existing drop sentence. If the streamer confirms someone other than the vote's winner, the message is the existing "Match MVP: {name}!" one, and the audit records `override=True`.
+- **Audit:** `twitch_mvp_poll_opened`, `twitch_mvp_poll_closed` (votes, winner, tie) and `twitch_mvp_poll_cancelled`, with no voter ids.
+
+### Votes Are Kept Only as Long as Needed
+**User story**
+As a viewer, I want my vote stored only briefly, so that voting doesn't build a record about me.
+
+**Acceptance criteria**
+- **Retention:** individual votes are deleted 30 days after their poll ends (the daily cleanup). The poll keeps only per-player counts.
+- **Leave:** Leave Kana Cards deletes the soft account's votes.
+- **Disclosure:** the privacy page and the extension's review notes mention votes. The review walkthrough has a step for starting, voting in and confirming a poll, and the 1.4.0 change log lists the new chat messages.

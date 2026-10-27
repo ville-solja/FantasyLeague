@@ -659,6 +659,48 @@ class UserTag(Base):
     source     = Column(String, nullable=False, default="admin", server_default="admin")
 
 
+
+class FinalsBracket(Base):
+    """The Div 1 final four of a season (issue #237), stored once the seeds are clear
+    or an admin breaks a tie. Kept across season resets; team names are copied into
+    seed_names_json because a reset deletes the teams."""
+    __tablename__ = "finals_brackets"
+    __table_args__ = (UniqueConstraint("season_label", "division", name="uq_finals_bracket_season_div"),)
+
+    id               = Column(Integer, primary_key=True)
+    season_label     = Column(String, nullable=False)
+    division         = Column(String, nullable=False, default="div1")
+    seed1_team_id    = Column(Integer, nullable=False)
+    seed2_team_id    = Column(Integer, nullable=False)
+    seed3_team_id    = Column(Integer, nullable=False)
+    seed4_team_id    = Column(Integer, nullable=False)
+    seed_names_json  = Column(Text)                      # {team_id: name}
+    set_at           = Column(Integer, nullable=False)
+    group_end_at     = Column(Integer, nullable=False)   # start of the last group game; playoff games start later
+    seed_source      = Column(String, nullable=False)    # "standings" | "admin_tiebreak"
+    locked_at        = Column(Integer, nullable=True)
+    lock_source      = Column(String, nullable=True)     # "live" | "ingested" | "admin" | "feed_time"
+    paused           = Column(Boolean, nullable=False, default=False, server_default="0")
+    sf1_winner       = Column(Integer, nullable=True)
+    sf2_winner       = Column(Integer, nullable=True)
+    final_winner     = Column(Integer, nullable=True)
+    result_sources_json = Column(Text)                   # {"sf1": "matches" | "admin", ...}
+
+
+class FinalsPrediction(Base):
+    """One saved finals prediction (issue #237). Append-only: every save is a new row,
+    and the one that counts is the user's latest saved before the bracket's lock."""
+    __tablename__ = "finals_predictions"
+
+    id            = Column(Integer, primary_key=True)
+    bracket_id    = Column(Integer, ForeignKey("finals_brackets.id"), nullable=False)
+    user_id       = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sf1_pick      = Column(Integer, nullable=False)
+    sf2_pick      = Column(Integer, nullable=False)
+    final_pick    = Column(Integer, nullable=False)
+    saved_at      = Column(Integer, nullable=False)
+    correct_picks = Column(Integer, nullable=True)  # 0-3 on the effective row once the final is decided
+
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)
@@ -673,6 +715,7 @@ Index('ix_matches_week_override_id', Match.week_override_id)
 Index('ix_matches_start_time',       Match.start_time)
 Index('ix_match_bans_match_id',      MatchBan.match_id)
 Index('ix_matches_league_id',        Match.league_id)
+Index('ix_finals_predictions_bracket_user', FinalsPrediction.bracket_id, FinalsPrediction.user_id)
 # Covering index for the readers' card_id -> (match_id, points) lookups.
 Index('ix_card_match_points_card_cover', CardMatchPoints.card_id, CardMatchPoints.match_id, CardMatchPoints.points)
 # Issue #50: one row per (season, kind, division, player, user). NULLs are distinct in a

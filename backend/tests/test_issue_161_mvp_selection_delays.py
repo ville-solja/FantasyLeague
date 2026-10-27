@@ -553,6 +553,7 @@ class TestLiveMatchesAppearWithinAMinute:
         import main
         ticks = []
         monkeypatch.setattr(main, "_live_poll_once", lambda: ticks.append(1))
+        monkeypatch.setattr(main, "_run_finals_check", lambda: None)  # issue #237; keeps the real DB out
         monkeypatch.setattr(main, "_LIVE_POLL_INTERVAL", 7)
         event = _TwoShotEvent()
         monkeypatch.setattr(main, "_stop_event", event)
@@ -664,6 +665,7 @@ class TestLiveMatchesAppearWithinAMinute:
             if len(ticks) == 1:
                 raise RuntimeError("simulated live check failure")
         monkeypatch.setattr(main, "_live_poll_once", _once)
+        monkeypatch.setattr(main, "_run_finals_check", lambda: None)  # issue #237; keeps the real DB out
         event = _TwoShotEvent()
         monkeypatch.setattr(main, "_stop_event", event)
 

@@ -47,6 +47,8 @@ async function loadConfig() {
       _loginMethod = cfg.login_method || "password";
       _steamReauthAvailable = cfg.steam_reauth_available === true;
       if (typeof applyLoginMode === "function") applyLoginMode();
+      // Issue #237: the Finals tab shows from the projected Div 1 bracket until the season ends.
+      if (typeof applyFinalsAvailability === "function") applyFinalsAvailability(cfg.finals_available === true);
       const htpCostEl = document.getElementById("htpTeamDrawCost");
       if (htpCostEl) htpCostEl.textContent = _teamBoosterCost;
       const hintCostEl = document.getElementById("boosterHintCost");
@@ -211,8 +213,9 @@ function switchTab(name) {
   if (name === "players")       { loadPlayers(); loadLeaderboard(); loadTop(); }
   if (name === "teams")         loadTeams();
   if (name === "schedule")      loadSchedule();
+  if (name === "finals")        loadFinals();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); }
 }
 
 /**

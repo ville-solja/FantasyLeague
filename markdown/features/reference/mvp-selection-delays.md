@@ -27,7 +27,8 @@ OpenDota's `/live` and `ingest.get_live_matches()` are gone. OpenDota remains th
 `main._live_poll_loop` runs `_live_poll_once()` every `LIVE_POLL_INTERVAL` seconds, apart from the ingest loop, so ingest, enrichment, parse retries, the Toornament sync and their backoffs never delay it. Each tick:
 1. returns at once when no league is monitored or `STEAM_API_KEY` is unset;
 2. calls `get_live_league_games(monitored)`; on `None` it returns, leaving `live_matches` as it is (no row is marked ended);
-3. otherwise calls `store_live_matches(games, monitored)` and sets `steam_live.live_checked_at` to now.
+3. otherwise calls `store_live_matches(games, monitored)` and sets `steam_live.live_checked_at` to now;
+4. then runs `_run_finals_check()` (issue #237): `finals.refresh` in its own session, rolled back and logged on failure ("Finals check failed"), never stopping the loop. See `core/finals-predictions.md`.
 
 An exception is logged ("Live poll failed") and the next tick runs as usual.
 

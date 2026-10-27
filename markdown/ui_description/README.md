@@ -8,6 +8,7 @@ Short specifications for each tab and major UI element. Use these as the referen
 | [leaderboards.md](leaderboards.md) | Leaderboards — season standings, weekly standings, player performance |
 | [history.md](history.md) | History — past seasons' champions and awards, hall of fame |
 | [schedule.md](schedule.md) | Schedule — Right now strip (live, next up, latest result), fantasy-week strip with a Now line, hide/reveal results, stream/VOD links |
+| [finals.md](finals.md) | Finals (#237) — Div 1 match tree, semifinal and grand-final predictions, shares and results |
 | [players.md](players.md) | Players — player table, player detail modal |
 | [teams.md](teams.md) | Teams — team table, team detail modal |
 | [profile.md](profile.md) | Profile — username, password, Steam link, Dota 2 player link |

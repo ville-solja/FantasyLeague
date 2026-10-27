@@ -49,9 +49,21 @@ OpenDota id inputs here and in Mark champions, Add accolade, End Season and Add 
 
 **End Season (Archive)** opens a dialog: the season label (the typed one, else the current season), the four awards with their winners and values, the Played count, and a Div 1 and a Div 2 winner picker. Picking a team ticks the players who played for it this season; a stand-in can be unticked and a player added by OpenDota id. With no champion picked the dialog warns "No champions recorded; add them in Player management". **Continue to END SEASON** opens the typed confirmation.
 
+## Season Finals panel (issue #237)
+
+In Settings › Season, before Season Lifecycle; loads `GET /admin/finals` when the Admin tab opens, and **Refresh** reloads it. A list of facts: the state (Projected, Waiting for a tiebreak decision, Set: predictions open, Locked, Decided), "N/28 group series played", once the bracket is set the seed source (standings or admin tiebreak), the prediction count and "(paused)", the lock time and its source (first semi game seen live, first semi game ingested, closed by an admin, fixtures feed start time), and the fixtures-site cross-check: "Matches our seeds 1–4", "Differs: the fixtures site's seeds 1–4 are …" (in `--k-warn`), or "Fixtures site not reachable; nothing depends on it."
+
+- **Resolve the tie** (only while waiting for a tiebreak): the tied teams as a numbered list with ↑ and ↓ buttons, ordered as the fixtures site has them when it ranks them apart ("a hint only"), else by name. **Save order and set the bracket** sends `PUT /admin/finals/tiebreak`.
+- **Series table** (once set): Series, Teams, Score (with **Live**), Winner (a `.mark-winner` name), Source (matches or admin), and a winner select with **Set result**.
+- **Pause predictions** / **Resume predictions** and a red **Close now** (asks for confirmation; disabled once locked).
+- Save order, Set result (which also locks predictions if they are still open) and Close now need the password re-entry prompt; Pause does not.
+- **Div 1 standings** in a collapsed `<details>`: #, with "=" for a shared rank, Team, P, W–D–L, Pts and the tiebreak note.
+
+Every action is audited (`admin_finals_tiebreak`, `admin_finals_paused`, `admin_finals_closed`, `admin_finals_result_set`) and its result shows in the panel's status line. See `markdown/features/core/finals-predictions.md` and `finals.md`.
+
 ## Settings tab (issue 214)
 
-Six sections, each a heading with its panels: **Season** (League Management, Refresh Schedule Cache, Season Lifecycle), **Scoring** (Scoring Weights, Recalculate Fantasy Points), **Tokens and rewards** (Promo Codes, Token Grant Events), **Announcements** (Notifications), **Players and tags** (Tag Definitions, Re-enrich Player Profiles) and **Maintenance** (Database Backups, Demo Mode).
+Six sections, each a heading with its panels: **Season** (League Management, Refresh Schedule Cache, Season Finals, Season Lifecycle), **Scoring** (Scoring Weights, Recalculate Fantasy Points), **Tokens and rewards** (Promo Codes, Token Grant Events), **Announcements** (Notifications), **Players and tags** (Tag Definitions, Re-enrich Player Profiles) and **Maintenance** (Database Backups, Demo Mode).
 
 - A section nav sits on the left and stays in view while scrolling (sticky); at phone width it becomes a row of chips above the sections. Selecting a section scrolls to it and marks it selected; the browser remembers the last one and Settings opens there next time.
 - Every panel has the same header: title, a one-line description and its primary action on the right (Refresh where the panel has no other action).
