@@ -137,14 +137,14 @@ For the operator, on their own machine. You need Docker, Python 3 and the `.dem`
 
 1. Build and start OpenDota's parser once:
    ```
-   git clone https://github.com/odota/parser && cd parser
+   git clone https://github.com/odota/parser ~/odota-parser && cd ~/odota-parser
    docker build -t odota-parser .
-   docker run --rm -p 5600:5600 odota-parser
+   docker run --rm -p 127.0.0.1:5600:5600 odota-parser
    ```
-   The container listens on port 5600. Building it needs Maven, which the Dockerfile provides.
+   The container listens on port 5600 (bound to this machine only). Building it needs Maven, which the Dockerfile provides.
 2. In another terminal, from the repository's `backend/` folder:
    ```
-   python scripts/replay_to_match.py /path/to/8100000001.dem --out-dir /tmp
+   python scripts/replay_to_match.py /path/to/8100000001.dem --out-dir "$(dirname /path/to/8100000001.dem)"
    ```
    It prints `wrote /tmp/match-8100000001.json`, and lists any partial stats. If the parser is elsewhere, use `--parser-url http://host:5600` (or `REPLAY_PARSER_URL`). When the container isn't running, the script prints "could not reach the replay parser …" and exits with code 2 without writing a file.
 3. In **Admin › Matches › Add match › From replay**, choose the file and click **Check file**. Compare the preview with the in-client scoreboard: winner, duration, and every player's hero and K/D/A.
@@ -157,32 +157,47 @@ The parser answers a POST of the raw `.dem` with line-delimited JSON events (`sc
 
 - `player_slot`: `key` is the slot (0–9), `value` the player slot (0–4 Radiant, 128–132 Dire).
 - `interval`: one per player per game second until the game ends, with the game's own scoreboard counters. The last one per slot gives the final values: `kills`, `deaths`, `assists`, `lh` → `last_hits`, `denies`, `obs_placed`, `sen_placed`, `camps_stacked`, `rune_pickups`, `towers_killed`, `roshans_killed` → `roshan_kills`, `stuns`, `tower_damage`, `teamfight_participation`, `firstblood_claimed` (capped at 1), `hero_id` and `unit` (the hero's entity class).
-- `epilogue`: `key` is the replay's `CDemoFileInfo` serialised by Gson. Protobuf field names have a trailing underscore: `gameInfo_.dota_.matchId_`, `gameWinner_` (2 Radiant, 3 Dire), `endTime_`, `radiantTeamTag_`, `direTeamTag_`, `picksBans_`, and `playerInfo_[]` with `steamid_`, `heroName_`, `playerName_` and `gameTeam_`.
+- `epilogue`: `key` is the replay's `CDemoFileInfo` serialised by Gson. Protobuf field names have a trailing underscore: `gameInfo_.dota_.matchId_`, `gameWinner_` (2 Radiant, 3 Dire), `endTime_`, `radiantTeamTag_`, `direTeamTag_`, `picksBans_`, and `playerInfo_[]` with `steamid_`, `heroName_`, `playerName_` and `gameTeam_`; and, at the top level of the epilogue, `playbackTime_` (the whole replay's length in seconds, draft and pre-game included). Text fields arrive as Gson ByteStrings (below).
 
 From these:
 
 - **Account ids**: the account id is `steamid − 76561197960265728`. Each slot is matched to its file-info player by hero name (`CDOTA_Unit_Hero_ShadowShaman` → `npc_dota_hero_shadow_shaman`, both spellings, as odota's `processMetadata` builds them), falling back to the order within the team. A slot that can't be matched stops the script with an error.
-- **Duration**: the time of the last interval (seconds from the horn). **Start time**: `endTime_` minus the duration (approximate).
+- **Duration**: the time of the last interval (seconds from the horn). **Start time**: `endTime_` minus `playbackTime_` (within about 25 s of OpenDota's `start_time` on the Step 0 replay); without `playbackTime_`, `endTime_` minus the duration, which is about 20 minutes late.
 - **GPM**: total earned gold (`gold`) × 60 / duration. This is close to, but not guaranteed to equal, OpenDota's scoreboard GPM.
 - **Missing stats**: any stat that no player's final interval carries is set to 0 for everyone and listed under `missing_stats`. The parser leaves out `teamfight_participation` when the game reports none, so it is the likeliest one.
 
 The script uses the Python standard library only. It contains no `@dataclass` (tests load it with `spec_from_file_location`).
 
-### Step 0 spike: still to do
+### Step 0: checked on a real replay (2026-10-26)
 
-The plan's Step 0, running the parser on a real Kanaliiga replay, has **not been done**. The event format above was checked against the odota/parser source on GitHub (`Parse.java`, `Main.java`, `processors/processExpand.mjs`, `scripts/test.sh`, October 2026), not against a real run. Before relying on the replay path:
+Run on the Div 2 series SC vs HOLISA (Season 16): game 2, `9061985546`, is on OpenDota (league 20163, parsed) and served as the reference. Games 1 and 3 (`9061891961`, `9062072752`) are not on OpenDota at all and were imported from their replays.
 
-1. Run the run book on one real replay whose OpenDota scoreboard is known.
-2. Compare every stat in the JSON with the scoreboard, especially GPM, `teamfight_participation`, `stuns` and the start time.
-3. Record the results here, and move any stat that doesn't match reliably into `missing_stats` in `aggregate()`.
+Game 2's JSON against OpenDota's match data:
 
-The plan's fallback still applies: if the parser can't reasonably be run, the same JSON can be filled in by hand from the in-client scoreboard and uploaded.
+| Field | Result |
+|---|---|
+| Players, sides, accounts, heroes, names | All 10 match |
+| Winner, duration, picks and bans | Match (duration 1 s longer) |
+| K/D/A, last hits, denies, wards, towers, Roshans, camps, runes, first blood | Exact |
+| `teamfight_participation`, `stuns` | Within 2 % (the game's own counters) |
+| `gold_per_min` | Within 1 (three players +1, from the 1 s duration difference) |
+| `tower_damage` | About 1 % low for three players |
+| `start_time` | 25 s later than OpenDota's |
+
+Two fixes came out of the run:
+
+- **Names are ByteStrings.** The parser serialises protobuf strings (`heroName_`, `playerName_`, the team tags) as Gson ByteStrings, `{"bytes": [...], "hash": 0}`, with Java's signed bytes. `_text` decodes them and drops control characters, so names can't garble the operator's terminal. Before the fix, hero names were empty, so slots fell back to their order within the team: right on this replay, but fragile. Player names and team tags were empty too.
+- **Start time.** `endTime_` minus the game duration was 20.5 minutes late, because the duration excludes the draft and pre-game. The script now uses `endTime_ − playbackTime_` (the whole replay), which landed within 25 s. Output without `playbackTime_` falls back to the old rule.
+
+No stat had to move to `missing_stats`: all of them are present and within the tolerances above. The team tags (for example "SC", "HOLISA") are short tags, not the full team names, so the Add match preview won't suggest teams from them; pick both teams by hand.
+
+The replay files live in the git-ignored `parse/` folder (`*.dem` is ignored too); the upload files are written next to them.
 
 ### Test fixture
 
-`backend/tests/fixtures/replay_parser_sample.jsonl` is **synthetic**. It was written by hand in the parser's event format, not recorded from a real replay: ten players, `player_slot` events, intervals at −30, 0, 600 and 2400 s without `teamfight_participation`, two other events, and an epilogue whose players are listed out of slot order. Replace it with a trimmed real recording after the spike.
+`backend/tests/fixtures/replay_parser_sample.jsonl` is **synthetic**. It was written by hand in the parser's event format, not recorded from a real replay: ten players, `player_slot` events, intervals at −30, 0, 600 and 2400 s without `teamfight_participation`, two other events, and an epilogue whose players are listed out of slot order. It stays synthetic on purpose (a real recording carries players' Steam ids); since Step 0 the script's tests also cover the real format: ByteString names and `playbackTime_`.
 
 ## Tests
 
-`backend/tests/test_issue_224_matches_outside_the_league.py` (76 tests, no network): migration, the shared store, both preview and store paths with their refusals, re-auth and audit, the week, Schedule, leaderboard and team-view follow-ups, replay validation, parse-retry exclusion, re-imports, the script against the fixture, the admin list, and the frontend dialog, chips, filter and CSS.
+`backend/tests/test_issue_224_matches_outside_the_league.py` (79 tests, no network): migration, the shared store, both preview and store paths with their refusals, re-auth and audit, the week, Schedule, leaderboard and team-view follow-ups, replay validation, parse-retry exclusion, re-imports, the script against the fixture and the real parser format (ByteString names, `playbackTime_`), the admin list, and the frontend dialog, chips, filter and CSS.
 

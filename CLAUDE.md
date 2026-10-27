@@ -80,4 +80,4 @@ Fix **High** findings from `/security-reviewer` or `/systems-architect` before o
 Session-scoped; re-register at the start of a session.
 
 - **Issue Crawler** (`/schedule daily issue crawl at 8am`): for each open GitHub issue not in `markdown/plans/.issue-index`, run the product-planner logic on `"{title} — {body}"`, name the plan `plan-issue-{N}-{slug}.md`, add `{N} plan-issue-{N}-{slug}` to the index, and report how many plans were created. Plans are not implemented automatically.
-- **Dependency Scout** (`/schedule weekly dep check on Monday mornings`): check every pin in `backend/requirements.txt` against PyPI and flag outdated or security-relevant versions.
+- **Dependency Scout** (`/schedule weekly dep check on Monday mornings`): check every pin in `backend/requirements.txt` against PyPI and flag outdated or security-relevant versions; also check Pillow's bundled native libraries (`pillow.libs`), Brotli included, against advisories, since `pip-audit` sees only Python packages.
