@@ -27,6 +27,7 @@ import steam_openid
 import login_mode
 import card_points
 import caster_tags
+import finals
 import database
 import sessions
 import soft_accounts
@@ -63,6 +64,8 @@ from routers import admin_backups as admin_backups_router
 from routers import admin_matches as admin_matches_router
 from routers import admin_demo as admin_demo_router
 from routers import weekly_summary as weekly_summary_router
+from routers import finals as finals_router
+from routers import admin_finals as admin_finals_router
 
 logger = logging.getLogger(__name__)
 # API keys travel in query strings (STEAM_API_KEY, OPENDOTA_API_KEY), and urllib3's
@@ -321,7 +324,23 @@ def _live_poll_loop():
             _live_poll_once()
         except Exception:
             logger.exception("Live poll failed")
+        _run_finals_check()
         _stop_event.wait(timeout=_LIVE_POLL_INTERVAL)
+
+
+def _run_finals_check():
+    """Issue #237: right after the live poll, set the Div 1 finals bracket, lock
+    predictions at a semi's first live or ingested game and record results. A few small
+    queries; a failure is logged and rolled back and never stops the live loop."""
+    db = database.SessionLocal()
+    try:
+        finals.refresh(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Finals check failed")
+    finally:
+        db.close()
 
 
 def _backup_loop():
@@ -840,6 +859,8 @@ app.include_router(admin_backups_router.router)
 app.include_router(admin_matches_router.router)
 app.include_router(admin_demo_router.router)
 app.include_router(weekly_summary_router.router)
+app.include_router(finals_router.router)
+app.include_router(admin_finals_router.router)
 
 
 @app.api_route("/twitch/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -896,6 +917,8 @@ def get_config(db=Depends(get_db)):
         "steam_reauth_available": login_mode.steam_enabled() and login_mode.app_base_url() is not None,
         # Issue #187 — named in Profile's "You received N Twitch starter tokens."
         "twitch_connect_bonus_tokens": twitch_oauth.connect_bonus_tokens(),
+        # Issue #237 — the Finals tab shows from the projected Div 1 bracket until the season ends.
+        "finals_available": finals.is_available(db),
     }
 
 

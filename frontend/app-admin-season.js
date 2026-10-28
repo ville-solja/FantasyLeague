@@ -203,3 +203,157 @@ async function confirmSeasonReset() {
     document.getElementById("seasonResetModalStatus").textContent = e.message;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Issue #237: Season Finals card. Our Div 1 standings with tiebreak notes, the
+// bracket state, the lock and its source, each series' result and source, the
+// fixtures-site cross-check (informational only), and the admin steps: order a
+// shared tie, Pause predictions, Close now and Set result.
+// ---------------------------------------------------------------------------
+
+let _adminFinals = null;
+let _finalsTieOrder = [];
+
+const _FINALS_STATE_LABELS = {
+  projected: "Projected (group series remain)",
+  waiting_for_tiebreak: "Waiting for a tiebreak decision",
+  set: "Set: predictions open",
+  locked: "Locked",
+  decided: "Decided",
+};
+const _FINALS_LOCK_LABELS = {
+  live: "first semi game seen live",
+  ingested: "first semi game ingested",
+  admin: "closed by an admin",
+  feed_time: "fixtures feed start time",
+};
+
+async function loadAdminFinals() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/finals`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("adminFinalsStatus", data.detail, false);
+    _adminFinals = data;
+    _finalsTieOrder = (data.suggestion || (data.tied || []).map(t => t.team_id)).slice();
+    renderAdminFinals();
+  } catch (e) {
+    setStatus("adminFinalsStatus", e.message, false);
+  }
+}
+
+function _adminFinalsTeamName(id) {
+  const row = ((_adminFinals && _adminFinals.standings) || []).find(r => r.team_id === id);
+  if (row) return row.name;
+  for (const s of (_adminFinals && _adminFinals.bracket && _adminFinals.bracket.series) || []) {
+    const t = (s.teams || []).find(x => x.team_id === id);
+    if (t) return t.name;
+  }
+  return `Team ${id}`;
+}
+
+function _adminFinalsTieHtml(d) {
+  if (!(d.tied || []).length) return "";
+  const hint = d.suggestion ? `<p class="admin-panel-note">Ordered as the fixtures site has them (a hint only).</p>` : "";
+  const items = _finalsTieOrder.map((id, i) => `
+    <li class="finals-tie-item"><span>${i + 1}. ${_escHtml(_adminFinalsTeamName(id))}</span>
+      <button type="button" class="secondary" aria-label="Move up" onclick="moveFinalsTie(${i}, -1)" ${i === 0 ? "disabled" : ""}>↑</button>
+      <button type="button" class="secondary" aria-label="Move down" onclick="moveFinalsTie(${i}, 1)" ${i === _finalsTieOrder.length - 1 ? "disabled" : ""}>↓</button></li>`).join("");
+  return `<h4 class="admin-panel-subtitle">Resolve the tie</h4>${hint}<ol class="finals-tie-list">${items}</ol>
+    <button type="button" onclick="saveFinalsTiebreak(this)">Save order and set the bracket</button>`;
+}
+
+function _adminFinalsSeriesHtml(b) {
+  const rows = (b.series || []).map(s => {
+    const teams = (s.teams || []).map(t => _escHtml(t.team_id ? t.name : t.slot || "")).join(" vs ");
+    const score = Array.isArray(s.score) ? `${Number(s.score[0])}–${Number(s.score[1])}` : "—";
+    const winner = s.winner ? `<span class="mark-winner">${_escHtml(_adminFinalsTeamName(s.winner))}</span>` : "—";
+    const options = (s.teams || []).filter(t => t.team_id)
+      .map(t => `<option value="${Number(t.team_id)}">${_escHtml(t.name)}</option>`).join("");
+    const setter = options
+      ? `<select id="finalsResult_${s.key}" aria-label="Winner of ${_escHtml(s.label)}">${options}</select> <button type="button" class="secondary" onclick="setFinalsResult('${s.key}', this)">Set result</button>`
+      : "";
+    return `<tr><td>${_escHtml(s.label)}</td><td>${teams}</td><td>${score}${s.live ? ' <span class="live-tag">Live</span>' : ""}</td><td>${winner}</td><td>${_escHtml(s.source || "—")}</td><td>${setter}</td></tr>`;
+  }).join("");
+  return `<div class="admin-table-wrap"><table><thead><tr><th>Series</th><th>Teams</th><th>Score</th><th>Winner</th><th>Source</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function renderAdminFinals() {
+  const d = _adminFinals;
+  const el = document.getElementById("adminFinalsBody");
+  if (!d || !el) return;
+  const b = d.bracket;
+  const facts = [`<li>State: <strong>${_escHtml(_FINALS_STATE_LABELS[d.state] || d.state)}</strong></li>`,
+                 `<li>${Number(d.played)}/${Number(d.total)} group series played</li>`];
+  if (b) {
+    const lock = b.locked_at
+      ? `${new Date(b.locked_at * 1000).toLocaleString()} (${_escHtml(_FINALS_LOCK_LABELS[b.lock_source] || b.lock_source || "")})`
+      : "not yet";
+    facts.push(`<li>Seeds: ${b.seed_source === "admin_tiebreak" ? "admin tiebreak" : "standings"}; predictions: ${Number(b.prediction_count)}${b.paused ? " (paused)" : ""}</li>`);
+    facts.push(`<li>Locked: ${lock}</li>`);
+  }
+  const cc = d.cross_check || {};
+  const ccText = !cc.reachable ? "Fixtures site not reachable; nothing depends on it."
+    : cc.differs ? `Differs: the fixtures site's seeds 1–4 are ${(cc.site_top4 || []).map(n => _escHtml(n)).join(", ")}.`
+    : "Matches our seeds 1–4.";
+  facts.push(`<li class="${cc.differs ? "finals-cross-check--differs" : ""}">Fixtures-site cross-check: ${ccText}</li>`);
+  const table = (d.standings || []).map(r => {
+    const seriesPoints = Number(r.points);  // league table points (2/1/0 per series), whole numbers, not fantasy points
+    return `<tr><td>${Number(r.rank)}${r.shared ? "=" : ""}</td><td>${_escHtml(r.name)}</td><td>${Number(r.played)}</td><td>${Number(r.series_wins)}–${Number(r.draws)}–${Number(r.losses)}</td><td>${seriesPoints}</td><td>${_escHtml(r.note || "")}</td></tr>`;
+  }).join("");
+  const actions = b ? `<div class="admin-panel-row">
+      <button type="button" class="secondary" onclick="toggleFinalsPause(this)">${b.paused ? "Resume predictions" : "Pause predictions"}</button>
+      <button type="button" class="danger" onclick="closeFinalsNow(this)" ${b.locked_at ? "disabled" : ""}>Close now</button></div>` : "";
+  el.innerHTML = `<ul class="finals-admin-facts">${facts.join("")}</ul>
+    ${_adminFinalsTieHtml(d)}
+    ${b ? _adminFinalsSeriesHtml(b) : ""}${actions}
+    <details class="finals-admin-standings"><summary>Div 1 standings</summary>
+      <div class="admin-table-wrap"><table><thead><tr><th>#</th><th>Team</th><th>P</th><th>W–D–L</th><th>Pts</th><th>Tiebreak</th></tr></thead><tbody>${table}</tbody></table></div>
+    </details>`;
+}
+
+function moveFinalsTie(i, step) {
+  const j = i + step;
+  if (j < 0 || j >= _finalsTieOrder.length) return;
+  [_finalsTieOrder[i], _finalsTieOrder[j]] = [_finalsTieOrder[j], _finalsTieOrder[i]];
+  renderAdminFinals();
+}
+
+async function _adminFinalsSend(btn, url, method, body, done) {
+  await withBusy(btn, async () => {
+    try {
+      const opts = { method };
+      if (body) { opts.headers = { "Content-Type": "application/json" }; opts.body = JSON.stringify(body); }
+      const res = await adminFetch(url, opts);
+      const data = await res.json();
+      if (!res.ok) return setStatus("adminFinalsStatus", typeof data.detail === "string" ? data.detail : "Request failed", false);
+      setStatus("adminFinalsStatus", done(data));
+      await loadAdminFinals();
+    } catch (e) {
+      setStatus("adminFinalsStatus", e.message, false);
+    }
+  });
+}
+
+function saveFinalsTiebreak(btn) {
+  return _adminFinalsSend(btn, `${API}/admin/finals/tiebreak`, "PUT", { order: _finalsTieOrder },
+    () => "Tie resolved; the bracket is set and predictions are open");
+}
+
+function toggleFinalsPause(btn) {
+  return _adminFinalsSend(btn, `${API}/admin/finals/pause`, "POST", null,
+    data => (data.paused ? "Predictions paused" : "Predictions resumed"));
+}
+
+function closeFinalsNow(btn) {
+  if (!confirm("Close predictions now? Saves after this are not counted.")) return;
+  return _adminFinalsSend(btn, `${API}/admin/finals/close`, "POST", null, () => "Predictions closed");
+}
+
+function setFinalsResult(series, btn) {
+  const sel = document.getElementById(`finalsResult_${series}`);
+  const winner = sel ? parseInt(sel.value, 10) : NaN;
+  if (!Number.isFinite(winner)) return;
+  return _adminFinalsSend(btn, `${API}/admin/finals/result`, "PUT", { series, winner },
+    () => "Result set");
+}

@@ -1257,7 +1257,8 @@ def test_settings_six_sections_in_order():
 def test_settings_sections_hold_listed_panels():
     """Source-reading: Season = League Management, Season Lifecycle, Refresh Schedule Cache; Scoring = Scoring Weights, Recalculate; Tokens and rewards = Promo Codes, Token Grant Events; Announcements = Notifications; Players and tags = Tag Definitions, Re-enrich; Maintenance = Database Backups, Demo Mode."""
     expected = {
-        "season": {"League Management", "Season Lifecycle", "Refresh Schedule Cache"},
+        "season": {"League Management", "Season Lifecycle", "Refresh Schedule Cache",
+                   "Season Finals"},  # issue #237
         "scoring": {"Scoring Weights", "Recalculate Fantasy Points"},
         "tokens": {"Promo Codes", "Token Grant Events"},
         "announcements": {"Notifications"},
@@ -1319,7 +1320,7 @@ def test_settings_panels_have_consistent_header():
     """Source-reading: every Settings panel has a title, a one-line description and its primary action in a shared header element."""
     tab = _settings()
     panels = re.split(r'<div class="panel admin-panel"', tab)[1:]
-    assert len(panels) == 11
+    assert len(panels) == 12  # issue #237 added Season Finals
     for p in panels:
         head = p[p.index('<div class="admin-panel-head">'):p.index('<div class="admin-panel-head">') + 1500]
         assert re.search(r'<h3 class="admin-panel-title">[^<]+</h3>\s*<p class="admin-panel-desc">[^\n]+</p>', head), p[:200]

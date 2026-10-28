@@ -53,7 +53,7 @@ fresh backup existing first. Deletes all rows from `player_match_stats`, `match_
 `teams`, `card_modifiers`, `cards` and `own_player_card_grants` (issue #188, so next season's
 league players get their own player card again). Resets every user's `tokens` to `INITIAL_TOKENS` and
 unmonitors all leagues. Retains users, tags, audit logs, `season_archive` rows and
-`season_accolades` rows (issue #50; the response's `kept.season_accolades` counts them). Returns 409
+`season_accolades` rows (issue #50; the response's `kept.season_accolades` counts them). The finals tables `finals_brackets` and `finals_predictions` are also kept, keyed by season label, though not counted in `kept` (issue #237, see `core/finals-predictions.md`). Returns 409
 if any locked week exists with no `season_archive` row archived at or after that week's start
 time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
 includes `{"status", "initial_tokens", "counts": {...}, "kept": {"season_accolades": N}, "backup_path"}` with a per-table

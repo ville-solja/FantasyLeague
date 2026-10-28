@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-10-27 — developer — testing
+**Problem:** A step added to `main._live_poll_loop` (`_run_finals_check`, issue 237) opens `database.SessionLocal`, the real `data/fantasy.db`, in the `test_issue_161` tests that run the loop with only `_live_poll_once` stubbed; and the conftest `db` (plain `:memory:`) is invisible to TestClient's worker threads.
+**Solution:** Stub the new step in every test that runs the loop (`monkeypatch.setattr(main, "_run_finals_check", lambda: None)`). For TestClient tests, give the module its own `db` fixture on a `StaticPool` with `check_same_thread=False` (`test_issue_237_*`).
+
 ### 2026-10-26 — developer — testing
 **Problem:** Running the suite with the system `python3` on Debian/Ubuntu/Mint sees distro packages in `/usr/lib/python3/dist-packages` (`python3-brotli` 1.0.9), so an "installed version" guard failed locally though CI and the image never have them.
 **Solution:** In environment guards, skip distributions with no `INSTALLER` file under `dist-packages` (`_distro_managed` in `test_issue_236_*`); check only what pip installed.

@@ -366,6 +366,10 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
 | `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_finals_tiebreak` | Admin ordered teams in a shared tie at the finals seeding cut (`core/finals-predictions.md`) |
+| `admin_finals_paused` | Admin paused or resumed finals predictions |
+| `admin_finals_closed` | Admin closed finals predictions early |
+| `admin_finals_result_set` | Admin set a finals series winner |
 | `admin_champions_set` | Admin saved a season and division's champion set (Mark champions); detail has added and removed counts |
 | `admin_accolade_added` | Admin added one or more season accolades (also written once per season by `backfill_played.py`) |
 | `admin_accolade_updated` | Admin edited a season accolade |
@@ -429,6 +433,7 @@ These features have dedicated reference documents:
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Matches Outside the League | `POST /admin/matches/manual/preview`, `POST /admin/matches/manual` (`GET /admin/matches` carries `source`, `added_by`, `added_at`) | `reference/matches-outside-the-league.md` |
 | Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Season Finals | `GET /admin/finals`, `PUT /admin/finals/tiebreak`, `POST /admin/finals/pause`, `POST /admin/finals/close`, `PUT /admin/finals/result` | `core/finals-predictions.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
 | Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |

@@ -526,6 +526,7 @@
   <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
+  <button class="tab" id="tab-btn-finals"      onclick="switchTab('finals')" hidden>Finals</button>
   <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin<span class="admin-pending-badge" id="adminTabPendingBadge" role="img" hidden></span></button>
 </div>
@@ -887,6 +888,20 @@
       <div class="status" id="scheduleStatus"></div>
     </div>
   </div>
+</div>
+
+<!-- TAB: FINALS (issue #237): the Div 1 match tree and predictions; shown from GET /config finals_available -->
+<div id="tab-finals" class="tab-content">
+  <section class="finals-page" aria-labelledby="finalsTitle">
+    <div class="finals-head">
+      <h2 id="finalsTitle">Div 1 Finals</h2>
+      <button type="button" class="secondary" onclick="loadFinals()">Refresh</button>
+    </div>
+    <p class="finals-notice" id="finalsNotice" aria-live="polite"></p>
+    <div id="finalsTree"></div>
+    <div class="finals-actions" id="finalsActions"></div>
+    <div class="status" id="finalsStatus" role="status"></div>
+  </section>
 </div>
 
 <!-- TAB: HOW TO PLAY -->
@@ -1311,6 +1326,18 @@
           <div class="status" id="scheduleRefreshStatus"></div>
         </div>
 
+        <div class="panel admin-panel" id="adminFinalsPanel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Season Finals</h3>
+              <p class="admin-panel-desc">The Div 1 bracket and predictions (Finals tab), built from our own results. Step in only for a tie, a pause or a result we can't ingest.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadAdminFinals()">Refresh</button></div>
+          </div>
+          <div id="adminFinalsBody"></div>
+          <div class="status" id="adminFinalsStatus"></div>
+        </div>
+
         <div class="panel admin-panel">
           <div class="admin-panel-head">
             <div class="admin-panel-heading">
@@ -1699,6 +1726,7 @@
 <script src="/app-team-popup.js"></script>
 <script src="/app-leaderboard.js"></script>
 <script src="/app-history.js"></script>
+<script src="/app-finals.js"></script>
 <script src="/app-admin-weeks.js"></script>
 <script src="/app-admin-users.js"></script>
 <script src="/app-admin-notifications.js"></script>
