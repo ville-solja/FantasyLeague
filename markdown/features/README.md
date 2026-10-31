@@ -76,6 +76,7 @@ Implementation details, integrations, and operator tooling.
 | [Playoff Stages](reference/playoff-stages.md) | Stage weeks for playoff rounds: own lock time, overlap allowed, score only the series assigned to them *(planned)* |
 | [Week Boundary Formula Fix](reference/week-boundary-formula-fix.md) | Applies the grace-period offset to both week-boundary ends so a normal Monday-start/Sunday-end week never overlaps the next by default |
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
+| [Dependency Locking and Release Gating](reference/dependency-locking.md) | Hash-locked dependencies for the image and CI (`scripts/lock-deps.sh`), the image built only after the tests pass, the single-process rule and background-job safeguards (2026-10-31 architecture review) |
 | [Admin DB Backup](reference/admin-db-backup.md) | Admin-panel database backups: create on demand with a cooldown, list existing backups, and download a copy off the server |
 | [Table Element Sortability](reference/table-element-sortability.md) | Client-side sortable column headers for the Players tab table |
 | [Card Draw Modal UX](reference/card-draw-modal-ux.md) | Enter-key support, dynamic button label, and backdrop-click dismiss for the draw modal |

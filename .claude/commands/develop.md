@@ -1,4 +1,4 @@
-<!-- version: 7 -->
+<!-- version: 8 -->
 <!-- mode: read-write -->
 
 You are the **Development Orchestrator** for this project.
@@ -76,7 +76,8 @@ file matches:
   `backend/soft_accounts.py`, `backend/rate_limit.py`, `backend/email_utils.py`
 - any backend module that reads a secret or calls an outside service with a key
   (`backend/steam_live.py`, `backend/opendota_client.py`, `backend/toornament.py`)
-- `backend/requirements*.txt` (dependency changes)
+- `backend/requirements*.txt`, `backend/requirements*.lock`, `scripts/lock-deps.sh` (dependency changes;
+  the image installs only the lock files)
 - `frontend/privacy.html`, `frontend/terms.html` are **not** sensitive by themselves
 
 or when the plan's Context or stories mention authentication, sessions, passwords, tokens,

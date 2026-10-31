@@ -155,26 +155,46 @@ def _week_maintenance_loop():
                 db.close()
         except Exception:
             logger.exception("Week maintenance error")
+        # Issue #237: also here, so the finals lock and results keep up where the live
+        # thread doesn't run (no STEAM_API_KEY, DEMO_MODE).
+        _run_finals_check()
         _stop_event.wait(timeout=_WEEK_CHECK_INTERVAL)
 
 
+_ENRICHMENT_TIMEOUT_SECONDS = 300
+
+
 def _profile_enrichment_loop():
-    """Background thread: periodically enrich player profiles with hero stats and AI bios."""
-    while not _stop_event.is_set():
-        try:
-            with ThreadPoolExecutor(max_workers=1) as _executor:
-                _future = _executor.submit(run_profile_enrichment, batch_size=_ENRICHMENT_BATCH_SIZE)
-                try:
-                    result = _future.result(timeout=300)  # 5-minute timeout
-                    if result["enriched"] or result["errors"] or result.get("rank_updated"):
-                        logger.info("Profile enrichment: %s", result)
-                except FuturesTimeoutError:
-                    logging.warning("Profile enrichment timed out after 300s")
-                except Exception as _e:
-                    logging.error("Profile enrichment error: %s", _e)
-        except Exception:
-            logger.exception("Profile enrichment loop error")
-        _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
+    """Background thread: periodically enrich player profiles with hero stats and AI bios.
+
+    One long-lived worker runs the batches. A batch still running after
+    _ENRICHMENT_TIMEOUT_SECONDS is left to finish on its own (a thread can't be killed)
+    and the loop goes back to waiting; while it runs, later cycles are skipped, so two
+    batches never write at once. (A `with ThreadPoolExecutor()` block here would wait
+    for the stuck batch on exit, which made the timeout do nothing.)"""
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="enrichment")
+    future = None
+    try:
+        while not _stop_event.is_set():
+            try:
+                if future is not None and not future.done():
+                    logger.warning("Profile enrichment: the previous batch is still running; skipping this cycle")
+                else:
+                    future = executor.submit(run_profile_enrichment, batch_size=_ENRICHMENT_BATCH_SIZE)
+                    try:
+                        result = future.result(timeout=_ENRICHMENT_TIMEOUT_SECONDS)
+                        if result["enriched"] or result["errors"] or result.get("rank_updated"):
+                            logger.info("Profile enrichment: %s", result)
+                    except FuturesTimeoutError:
+                        logger.warning("Profile enrichment still running after %ds; later cycles wait for it",
+                                       _ENRICHMENT_TIMEOUT_SECONDS)
+                    except Exception as _e:
+                        logger.error("Profile enrichment error: %s", _e)
+            except Exception:
+                logger.exception("Profile enrichment loop error")
+            _stop_event.wait(timeout=_ENRICHMENT_INTERVAL)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _auto_ingest(league_ids: list[int], live_league_ids: set[int]):
@@ -363,6 +383,21 @@ def _backup_loop():
         _stop_event.wait(timeout=_DB_BACKUP_INTERVAL_HOURS * 3600)
 
 
+def _single_process_guard():
+    """Refuse to start with more than one worker process. The rate limiter, INGEST_LOCK,
+    the in-memory caches and the background threads (ingest, Twitch drops, backups) all
+    assume one process; a second worker would run every job twice."""
+    try:
+        workers = int(os.getenv("WEB_CONCURRENCY", "1") or "1")
+    except ValueError:
+        workers = 1
+    if workers > 1:
+        raise RuntimeError(
+            f"WEB_CONCURRENCY={workers}: Kana Cards must run as a single process "
+            "(in-memory rate limits, locks, caches and background jobs). Unset it, and "
+            "don't pass --workers to uvicorn.")
+
+
 def _start_background_threads():
     if _DEMO_MODE:
         logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
@@ -432,6 +467,7 @@ async def lifespan(app: FastAPI):
     )
     logger.info("DB: %s", DATABASE_URL)
     Base.metadata.create_all(bind=engine)
+    _single_process_guard()
     run_migrations(engine)
     seed_users()
     login_mode.log_startup()

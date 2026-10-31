@@ -597,13 +597,14 @@ def _workflow_steps():
 
 def _pip_audit_index(steps):
     for i, step in enumerate(steps):
-        if "pip-audit -r backend/requirements.txt" in step:
+        if "pip-audit -r backend/requirements.lock" in step:
             return i
     return None
 
 
 def test_unit_tests_workflow_runs_pip_audit_on_requirements():
-    """.github/workflows/unit-tests.yml runs `pip-audit -r backend/requirements.txt` after dependency install."""
+    """.github/workflows/unit-tests.yml runs `pip-audit -r backend/requirements.lock` (the versions the image
+    installs) after dependency install."""
     steps = _workflow_steps()
     audit = _pip_audit_index(steps)
     assert audit is not None, "no pip-audit step"

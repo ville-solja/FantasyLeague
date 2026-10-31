@@ -12,95 +12,41 @@ Format:
 **Solution:** What works instead.
 ```
 
-### 2026-10-27 — developer — testing
-**Problem:** A step added to `main._live_poll_loop` (`_run_finals_check`, issue 237) opens `database.SessionLocal`, the real `data/fantasy.db`, in the `test_issue_161` tests that run the loop with only `_live_poll_once` stubbed; and the conftest `db` (plain `:memory:`) is invisible to TestClient's worker threads.
-**Solution:** Stub the new step in every test that runs the loop (`monkeypatch.setattr(main, "_run_finals_check", lambda: None)`). For TestClient tests, give the module its own `db` fixture on a `StaticPool` with `check_same_thread=False` (`test_issue_237_*`).
+### 2026-10-31 — curated — testing
+**Problem:** Node harnesses load only slices of the frontend modules (`_js([...])`, `_fn_source`, `_fn_body`), so code calling a helper from another module, top-level `window.*` calls, moved constants, `append()`/`innerHTML` children and helpers called inside extracted renderers break far from the change; `_fn_body` drops `async`, and a stub defined before a module is replaced by the module's own function.
+**Solution:** Before touching a module, grep `backend/tests` for harnesses that load it and add the helper or stub there (or load helpers with an indirect `(0, eval)(<ACCOLADES block>)`). Pass extra markup into extracted renderers as a trailing default parameter, re-add `async` when pasting, use `appendChild`/`replaceChildren`, stub only globals the modules don't define, and print `status()` when a harness fails oddly. Reuse: `_HARNESS` (`test_issue_186`, roster drag/FLIP, `_rule(css, selector)`), `_HARNESS`/`_run` (`test_issue_205`, draws), `_ADMIN_HARNESS` (`test_issue_213`, re-auth popup), `_popup` (`test_issue_230`, player popup), `_ROSTER_HARNESS` (`test_issue_155`).
 
-### 2026-10-26 — developer — testing
-**Problem:** Running the suite with the system `python3` on Debian/Ubuntu/Mint sees distro packages in `/usr/lib/python3/dist-packages` (`python3-brotli` 1.0.9), so an "installed version" guard failed locally though CI and the image never have them.
-**Solution:** In environment guards, skip distributions with no `INSTALLER` file under `dist-packages` (`_distro_managed` in `test_issue_236_*`); check only what pip installed.
+### 2026-10-31 — curated — testing
+**Problem:** Hand-built requests fail on sessions, re-auth and rate limits: the `session` cookie is a signed Starlette session that needs a `user_sessions` row and `SessionMiddleware`; destructive admin routes need a recent re-auth; slowapi checks `request`; another file reloading `rate_limit` leaves routers holding a different Limiter (a rate-limit test then passes alone and fails under `-n auto`); plain `:memory:` SQLite is invisible to TestClient's worker threads.
+**Solution:** Build sessions with `{"sid": sessions.create_session(db, user)}` or `POST /login`, or override `deps.get_current_user` (`require_admin` still checks the database); `POST /reauth` or override `require_recent_reauth`. Split limited routes into a plain function plus a `*_route` wrapper. Take the limit and the Limiter from the router module itself (`<router>.limiter`), never from `rate_limit`. Give TestClient tests a `StaticPool` engine with `check_same_thread=False` (`test_issue_237_*`). Never parse HTML with regexes in tests (CodeQL `py/bad-tag-filter`).
 
-### 2026-10-26 — developer — testing
-**Problem:** A new accolade kind broke older tests in two hidden places: `test_issue_50`'s symbol-table check takes the first README row containing a kind's icon (`medal` is shared by Fantasy Winner and Runner-up), and `test_issue_50`'s history harness extracts `_historyChampionHtml` alone, so a helper it calls is undefined.
-**Solution:** List a row that reuses an icon after the original one in `.claude/skills/README.md`, and pass extra markup into extracted renderers as a trailing default parameter (`_historyChampionHtml(season, division, team, placements = "")`) instead of calling a new helper inside them.
+### 2026-10-31 — curated — testing
+**Problem:** The test environment is easy to break: the `db` fixture creates tables only for imported models; the shell may export real keys (`STEAM_API_KEY`) that start threads; `DEBUG` and `BACKGROUND_TASKS_ENABLED` come from conftest; backups and new loop steps default to the real `data/fantasy.db`; the system `python3` sees distro packages in `dist-packages`; cloud sessions refuse `api.opendota.com`; CI installs the hash-locked `requirements-dev.lock`, not your local versions.
+**Solution:** Import `models` at module level. Pin env-dependent attributes with `monkeypatch` and pop real keys from subprocess envs. Import check: `DEBUG=true python3 -c "import main"`. Point backups at `tmp_path`; stub new background-loop steps in every test that runs the loop (`_run_finals_check`). Skip distributions without an `INSTALLER` file in environment guards. Treat the three `test_test_background_task_isolation` lifespan tests as environmental behind a refusing proxy. A failure only CI sees may be a newer locked version: compare with `backend/requirements-dev.lock`.
 
-### 2026-10-26 — developer — testing
-**Problem:** The #208 popup harness (`_popup_src` in `test_issue_208_*`) loads only the app-globals ACCOLADES block and a few helpers, so popup code that calls `rankMedalHtml` or `playerTags` (which needs `_ownValue`) fails there. `_renderRevealRank`, named in the 2026-10-23 entry, was removed by issue 230.
-**Solution:** Add `_fn_source(g, "_ownValue")` and the `const _RANK_MEDALS` … `rankMedalHtml` slice to the script (`_popup` in `test_issue_230_*`, which also wraps the body in an async IIFE so it can `await openPlayerModal(...)`).
+### 2026-10-31 — curated — frontend
+**Problem:** CSS and design-file rules are pinned by tests: colour tokens live only in `frontend/colors_and_type.css` and `design/colors_and_type.css` must stay identical; tests that slice `style.css` from "GUIDED TOUR" to the end apply its rules to anything appended; `test_issue_188` forbids `innerHTML` between `function showCard(` and `let _revealBoosterTeamId`; `test_issue_50` takes the first `.claude/skills/README.md` symbol row containing an icon; a class setting `display` overrides `hidden`.
+**Solution:** Add tokens to the frontend file and copy it over the design one. Put new CSS before "GUIDED TOUR (issue #144)", next to related rules. Render card-viewer markup in a helper defined before `showCard`. List a row that reuses an icon after the original. Add `.cls[hidden] { display: none; }` for classes the code hides with `hidden`.
 
-### 2026-10-25 — developer — testing
-**Problem:** The #205 draw harness (`_run` in `test_issue_205_*`) loads only app-cards.js, so code that calls app-globals helpers (`tagDetailsHtml`, `playerTags`) is skipped by its `typeof` guards and a steps-local `function` stays invisible to the module.
-**Solution:** In the steps, load the helpers globally with an indirect eval, `(0, eval)(<ACCOLADES block>)` (rename its `_escHtml` so the harness's stays), and stub data lookups on `globalThis` (`test_issue_228_card_visuals_rollback.py`).
+### 2026-10-31 — curated — models
+**Problem:** New `_week_maintenance_loop` steps are easy to get wrong: `test_issue_117` slices the loop from its first `try:` to its first `except Exception`, so a nested try hides later steps; and Demo Mode moves the clock but not the loop's timer.
+**Solution:** Put a best-effort step in a helper with its own try/except (`_run_caster_tag_sync`, `_run_finals_check`) and call it from the loop. If the step depends on the demo clock (week locks, substitutions, summaries), add the same call to `set_demo_clock()` in `routers/admin_demo.py`. In requests, use a savepoint wrapper (`caster_tags.sync_safely`).
+
+### 2026-10-31 — curated — security
+**Problem:** Dependabot alerts can be blocked by a range's upper bound, nothing self-resolves since the image installs only `backend/requirements.lock`, and in cloud sessions the alerts API answers 403.
+**Solution:** Compare each open alert's `first_patched_version` with the version pinned in `backend/requirements*.lock` and the range in `requirements*.txt`; ship a fix by editing the range if needed and running `bash scripts/lock-deps.sh`. On 403, report the dependency check as "not checked (403)".
 
 ### 2026-10-25 — developer — endpoints
 **Problem:** `test_issue_85` caps each of the ten split `routers/admin_*.py` modules at 350 lines, so adding a feature's endpoints to `admin_matches.py` failed only in the full suite.
 **Solution:** Check `wc -l` on the router before adding to it. Keep the routes there as thin wrappers and put request handling in a service module (`manual_match.read_body` / `preview` / `store` for issue 224).
 
-### 2026-10-25 — developer — testing
-**Problem:** `ImageChops.difference(a, b).getbbox() is None` on RGBA images compares the alpha channel only (Pillow's `getbbox` default), so colour changes pass as "identical" (the #50 Holo-sheen test passed only through the old templates' soft alpha, and failed on the opaque #218 ones).
-**Solution:** Compare images with `a.tobytes() == b.tobytes()` (`_same` in `test_issue_228_card_visuals_rollback.py`) or diff `.convert("RGB")` copies.
-
-### 2026-10-18 — ship — testing
-**Problem:** Tests passed locally but failed in CI: one hit the real `/config` route (no tables in a fresh checkout), and one got 429 because another test file had reloaded `rate_limit`, leaving the router holding a different, still-enabled Limiter.
-**Solution:** Call route functions with the `db` fixture (or override `get_db`) instead of the real app's database. When disabling rate limits, disable the instance the router imported (`<router_module>.limiter.enabled = False`) and restore it on teardown. Never use regexes to parse HTML in tests (CodeQL `py/bad-tag-filter`); use `html.parser`.
-
----
-
-### 2026-10-23 — developer — frontend
-**Problem:** Colour tokens live in `frontend/colors_and_type.css` (style.css defines none), and `test_issue_202` requires `design/colors_and_type.css` to stay byte-identical to it; `test_issue_188` also forbids `innerHTML` anywhere between `function showCard(` and `let _revealBoosterTeamId`.
-**Solution:** Add tokens to the frontend file and copy it over the `design/` one. Put markup rendering for the card viewer in a helper defined before `showCard` (`_renderRevealTags`).
-
-### 2026-10-18 — developer — testing
-**Problem:** A new top-level `window.addEventListener(...)` in `app-admin.js` broke the `test_issue_214` harness, which loads the whole module with a minimal `window = { matchMedia }`.
-**Solution:** Before adding top-level code to a module, grep `backend/tests` for harnesses that load it whole (`_js(["app-admin.js"]`) and add the stub there (`addEventListener: () => {}`). For the re-auth popup flow, reuse `_ADMIN_HARNESS` / `_admin` in `test_issue_213_*` (fake `window.open`, `message` events, timers).
-
-### 2026-10-18 — developer — testing
-**Problem:** Tests load operator scripts with `spec_from_file_location` + `exec_module` without adding them to `sys.modules`, so a `@dataclass` in a script with `from __future__ import annotations` fails at import (`'NoneType' object has no attribute '__dict__'`).
-**Solution:** In `backend/scripts/*.py`, use a plain class with `__init__` (as `SeasonResult` in `backfill_played.py`) instead of `@dataclass`.
-
-### 2026-10-18 — developer — testing
-**Problem:** A TestClient on a bare router can't sign in by setting a `session` cookie to a raw sid (the cookie is a signed Starlette session, and without `SessionMiddleware` `get_current_user` raises), and in Node harnesses a stub defined before a module is silently replaced by the module's own function of the same name.
-**Solution:** Add `SessionMiddleware` and override `deps.get_current_user` with the user's identity dict; `require_admin` still checks `is_admin` in the database (`_signed_in` in `test_issue_214_admin_enhancements.py`). In harnesses, stub only globals the loaded modules don't define, and assert on the call you mean (filter `fetch` calls by method) rather than the last one.
-
-### 2026-10-17 — developer — endpoints
-**Problem:** After removing `PUT /profile/player-id`, a request answered 405, not 404, even in an app with only the profile router: `GET /profile/{user_id}` matches the path for any method, so Starlette reports a method mismatch.
-**Solution:** Give path parameters a convertor (`/profile/{user_id:int}`) so a removed sibling path matches nothing and answers 404. FastAPI binds `user_id` as usual.
-
-### 2026-10-17 — developer — frontend
-**Problem:** Moving functions or constants out of a frontend module broke Node harnesses that load only that module (`test_issue_156` loads app-players.js and needed `_NOT_SCORED_TOOLTIP`), and a class that sets `display` (`.hero-grid { display: grid }`) overrides the `hidden` attribute, so "hidden" elements showed.
-**Solution:** Before moving code between modules, grep `backend/tests` for every identifier the remaining code still uses, and keep shared constants in the module loaded first. Add `.cls[hidden] { display: none; }` for any class with a `display` value that the code hides with `hidden`.
-
 ### 2026-10-17 — developer — models
 **Problem:** A plan's "unique on (a, b, c)" with nullable columns doesn't hold in SQLite: NULLs are distinct in a unique index, so two rows with the same values and a NULL never collide and `ON CONFLICT DO NOTHING` inserts duplicates.
 **Solution:** Index the nullable parts through `COALESCE` (`Index(..., func.coalesce(col, ''), unique=True)`, as `ux_season_accolades_key` in `models.py`); `ON CONFLICT DO NOTHING` without a target then honours it. Test the NULL case explicitly.
 
-### 2026-10-15 — developer — testing
-**Problem:** In cloud sessions, three `test_test_background_task_isolation.py` lifespan tests fail (or hang when run alone) because their subprocess starts the real loops, which call `api.opendota.com` through an egress proxy that refuses it; pytest-xdist may also be missing.
-**Solution:** Treat those three as environmental when the proxy log shows refused `api.opendota.com` connections; install `requirements-dev.txt` for `-n auto`. For draw/reveal behaviour in `app-cards.js`, reuse `_HARNESS` / `_run` in `test_issue_205_card_draw_animations.py` (fake `Image`, `fetch`, timers and `Element.animate`).
-
-### 2026-10-14 — developer — testing
-**Problem:** Node harnesses that paste functions cut with `_fn_body` lose the `async` keyword (`withBusy` then fails to parse), and harnesses that load only `_escHtml` from app-globals.js (the #201 users table) break when a module starts calling a new global helper.
-**Solution:** When pasting an extracted function, re-add `async ` if the source has it (`_globals_src` in `test_issue_202_ui_feedback_polish.py`). When a module gains a call to a global helper, grep `backend/tests` for harnesses that load that module and add the helper there.
-
-### 2026-10-14 — developer — testing
-**Problem:** `test_issue_117` slices `_week_maintenance_loop` from its first `try:` to its first `except Exception`, so a nested try/except added inside the loop hides the later steps from that check.
-**Solution:** Put a new best-effort loop step in a helper that does its own try/except (`main._run_caster_tag_sync`) and call it from the loop. For best-effort work inside a request, use a savepoint wrapper (`caster_tags.sync_safely`, `own_card.grant_in_savepoint`).
-
-### 2026-10-14 — developer — testing
-**Problem:** The #186 Node harness's fake `El` has no `append`/`createTextNode`, and `innerHTML` writes create no children, so code that queries inside rendered markup or uses `append()` fails there (and `loadRoster` swallows the error into the status line).
-**Solution:** Use `appendChild`/`replaceChildren` in app code; for markup queries, patch the harness's `innerHTML` setter in your test (see `_ROSTER_HARNESS` in `test_issue_155_my_team_motion.py`). When a harness test fails oddly, print `status()` first.
-
 ### 2026-10-14 — developer — security
 **Problem:** An unbounded Pydantic `int` (card ids in a request body) bound into a SQLite query raises `OverflowError` above 2**63-1, which surfaces as a 500.
 **Solution:** Bound ids in request models, e.g. `Annotated[int, Field(ge=1, le=2**63 - 1)]` (`CardId` in `routers/cards.py`), so an oversized id answers 422. Also size list caps (`max_length`) from what a user can actually reach, not a guess.
-
-### 2026-10-14 — developer — testing
-**Problem:** Frontend behaviour that moves DOM nodes (drag, FLIP, timers, fetch) can't be checked with string tests, and `_css_blocks` keeps the newline before a selector, so a `^…$` selector regex never matches.
-**Solution:** Reuse `_HARNESS` in `tests/test_issue_186_my_team_save_roster.py` (fake DOM with fixed layout, `fire()`, fake timers/frames/fetch) for app-roster.js behaviour. Match CSS rules by exact selector with its `_rule(css, selector)` helper. In Playwright, drop points must be inside the viewport (`elementFromPoint` is null outside it).
-
-### 2026-10-14 — developer — testing
-**Problem:** Some static CSS tests slice `style.css` from a section header to the end of the file (`test_issue_144_guided_tour` checks every rule after "GUIDED TOUR"), so a block appended at the end inherits that section's rules (no `50%` radius, no `rgba`).
-**Solution:** Put a new CSS block before the "GUIDED TOUR (issue #144)" section, next to related rules, not at the end of `style.css`.
 
 ### 2026-10-13 — curated — plans
 **Problem:** Plans and stubs are often wrong about the code: file paths after a split, "as today" behaviour, step numbers, which rules gate a flow, token sources, status codes, model constraints.
@@ -114,14 +60,6 @@ Format:
 **Problem:** Concurrency tests passed against broken code: with pysqlite's legacy transactions, the first write takes SQLite's write lock, so threads were already serialised.
 **Solution:** Run a race test against the old code first and confirm it fails. For "insert once, then credit", use `INSERT … ON CONFLICT DO NOTHING` and act only when `rowcount == 1`. In multi-statement roster changes, free the slot first and stop on `rowcount == 0`.
 
-### 2026-10-13 — curated — testing
-**Problem:** The test environment is easy to break: the `db` fixture only creates tables for models already imported; the shell may export real keys (`STEAM_API_KEY`) that start extra threads; `DEBUG` and `BACKGROUND_TASKS_ENABLED` come from conftest, not the shell; backups default to the real `data/fantasy.db`.
-**Solution:** Import `models` at module level in test files. Pin env-dependent module attributes with `monkeypatch` and pop real keys from subprocess envs. Run the import check as `DEBUG=true python3 -c "import main"`. Point backup tests at `tmp_path` by patching `database.DATABASE_URL`. Keep DB writes a test must see on the request thread (in-memory SQLite gives each thread its own connection).
-
-### 2026-10-13 — curated — testing
-**Problem:** Sessions, re-auth and rate limits make hand-built requests fail: sessions need a `user_sessions` row, destructive admin routes need a recent re-auth, and slowapi checks `request` on every decorated call; reloaded modules keep decorators bound to an older `Limiter`.
-**Solution:** Build sessions with `{"sid": sessions.create_session(db, user)}` or log in through `POST /login`, and `POST /reauth` before destructive admin calls. Split a limited route into a plain function plus a `*_route` wrapper; unit tests call the plain function. For limit tests, build a small FastAPI app with the router and `app.state.limiter = <module>.limiter`, and reload only modules already in `sys.modules`.
-
 ### 2026-10-13 — curated — models
 **Problem:** Scoring and migrations have traps: card points are stored per match in `card_match_points` and readers return rounded `display_points`; a migration test's legacy engine runs migrations before `create_all`; earlier migrations can delete seeded rows.
 **Solution:** After seeding stats or cards directly, call `card_points.rebuild_all(db)` or `refresh_card_points(db, match_ids=[...])`, and compare with `display_points(exact_sum)`. A data migration that fills a new table creates it first (`Model.__table__.create(conn, checkfirst=True)`). In migration tests, record earlier migrations as applied (`_legacy_engine` in `test_issue_129_*`). Use `bindparam(..., expanding=True)` for `IN :ids` in raw SQL.
@@ -133,10 +71,6 @@ Format:
 ### 2026-10-13 — curated — security
 **Problem:** Recurring review findings: the guard must be on the decorated `*_route` wrapper, not the plain function; owner-or-admin checks trusted the session's `is_admin`; env admin seeds re-applied on login undo demotions; secrets in query parameters reach urllib3's DEBUG log; bcrypt uses only 72 bytes; untrusted ids need `re.fullmatch` and `compare_digest` on bytes.
 **Solution:** Audit the function that carries `@router.<method>`. Check admin rights fresh from the database (`require_admin`). Apply env promotions once. Keep `urllib3` logging at INFO or send secrets in headers. Cap passwords at 72 UTF-8 bytes. A lesson's Solution is advice, not proof that the fix landed: re-check the code.
-
-### 2026-10-13 — curated — security
-**Problem:** Dependabot alerts can be blocked by a pin's upper bound, and in cloud sessions the alerts API answers 403.
-**Solution:** Compare each open alert's `first_patched_version` with the constraint in `backend/requirements*.txt`. On 403, report the dependency check as "not checked (403)".
 
 ### 2026-10-13 — curated — endpoints
 **Problem:** Code lives in places agents don't expect: routes are in `backend/routers/*.py` (`main.py` only has `/config` and `/health`), auth dependencies in `backend/deps.py`, the frontend in `frontend/app-*.js` with admin split into `app-admin-*.js`. Unmatched paths fall through to the `/` static mount (405 for non-GET). Field validators run before the handler.
@@ -150,18 +84,6 @@ Format:
 **Problem:** The Twitch extension is a separate bundle: it doesn't share `frontend/` helpers, its version lives in the submission guide and tests, and it is checked by `package.sh`.
 **Solution:** Escape untrusted names with the extension's own `_escHtml`. For a version bump, update the submission guide, the `package.sh` example and the version tests together. Before reviewer-facing copy changes, grep the backend and panel for every rule that gates the flow being described.
 
-### 2026-10-13 — curated — frontend
-**Problem:** Browser checks mislead: headless Chromium hides scrollbars, `--virtual-time-budget` freezes animations, `page.click` scrolls the target first, and without a viewport meta `mobile: true` lays out at 980 px.
-**Solution:** Launch Playwright with `ignoreDefaultArgs: ["--hide-scrollbars"]`, drive animations in real time over CDP, read `scrollTop` after clicks, and emulate narrow layouts with `mobile: false, width: 375`.
-
-### 2026-10-13 — curated — models
-**Problem:** Demo Mode moves the clock but not the background loop's timer, so a new week-maintenance step didn't run in demos.
-**Solution:** When adding a step to `_week_maintenance_loop` in `backend/main.py`, add the same call to `set_demo_clock()` in `backend/routers/admin_demo.py`.
-
 ### 2026-10-13 — curated — agent-config
 **Problem:** GitHub details tripped `/ship`: PR-only code-scanning alerts keep `state: null`, a stacked PR gets no CI and lands on the old base if merged after it, and a bare `#N` in a commit doesn't mean the issue merged.
 **Solution:** List PR alerts with `ref=refs/pull/<P>/head` and read `/instances`. Open PRs against `main`. Treat an issue as merged only when a merged PR or default-branch commit closes it.
-
-### 2026-10-13 — curated — docs
-**Problem:** Repo-level docs used the deployment's branding, developer overviews were trimmed too far, and external-repo claims came from READMEs instead of code.
-**Solution:** Describe the product generically in repo docs (Kana Cards and Kanaliiga names only in deployment content). Keep developer overviews complete and structured. Confirm claims about other repos against their code and latest migrations.
