@@ -598,3 +598,46 @@ As a player, I want to see a card's tags and accolades with their details when I
 - **Phone width:** the section wraps with no sideways scroll.
 
 *Accolades part superseded by #230: the card viewer keeps the Tags section only. The accolade detail lines moved to the player popup's Accolades timeline, and the player name under the card carries the hint "Stats and accolades". See "The Card Popup Shows the Card" in `leaderboard.md`.*
+
+## Card Art Accolade Redesign
+
+Plan: `markdown/plans/plan-card-art-accolade-redesign.md`. Feature doc: `markdown/features/reference/card-art-accolade-redesign.md`.
+
+### New Card Template With Accolade Slots
+**User story**
+As a player, I want my card's name, team name, photo, team logo and stats to sit inside the new illustrated template's dedicated slots so that the art and the accolades read as one design instead of overlapping symbols.
+
+**Acceptance criteria**
+- `GET /cards/{id}/image` renders on the new rarity templates (Common → Grey, Rare → Blue, Epic → Purple, Legendary → Gold) instead of the originals
+- Player photo is composited as a square portrait filling the template's photo slot (no circular crop)
+- Team logo is composited inside the template's dedicated logo box, scaled to fit without distortion (no circular crop)
+- Player name and team name are drawn in their own template bars, each sized and positioned for that bar
+- Stat modifier lines are drawn inside the template's stats box
+- Card size changes to 687 × 1024; every view that shows a card image (My Team, collection, draw reveal, card viewer, Weekly Report) displays correctly at the new size
+- Missing player photo or team logo leaves that slot visibly blank rather than broken (same placeholder intent as today, resized to the new slot shape)
+
+---
+
+### Accolades Printed on the Card Face
+**User story**
+As a player, I want my card's accolades shown as icons on the card itself so that a champion or top performer's card stands out without opening the player popup.
+
+**Acceptance criteria**
+- `GET /cards/{id}/image` composites up to 6 accolade icons into the template's accolade grid, one icon per accolade the player holds
+- Each accolade kind uses its matching badge icon asset (e.g. Division 1 Champion → crown badge), not the Lucide icon used elsewhere on the site
+- A player with no accolades shows an empty grid (no placeholder icons)
+- A player with more than 6 accolades shows the 6 highest-priority ones: champion > runner-up > third place > fantasy winner > performance awards (Most Points, Best Average, Best Single Match) > seasons played, newest season first within a tier
+- A kind earned more than once (e.g. division champion in two seasons) takes one grid slot, not several, with a small count badge in the icon's corner; a kind held once shows no badge
+- Accolades still show as detailed HTML pips/timeline elsewhere (Players list, Teams tab, team popup, Hall of Fame, player popup) — the card face icons are additive, not a replacement
+- Accolade icons update on the very next card image request after an accolade is granted or changed, since the image has no server-side cache (same as the rest of the card)
+
+---
+
+### Dedicated Holo Template Art
+**User story**
+As a player, I want a Holo Legendary card to use its own illustrated holo template so that it looks distinct from a procedurally generated shine.
+
+**Acceptance criteria**
+- A Holo Legendary (`cards.is_holo`) uses the dedicated Holo template file for its base art
+- The procedurally generated rainbow sheen effect is removed; no code path falls back to a generated shine
+- All dynamic content (photo, logo, name, team, stats, accolades) composites onto the Holo template the same way as the rarity templates

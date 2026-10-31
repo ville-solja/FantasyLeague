@@ -1246,14 +1246,18 @@ def test_card_responses_include_is_holo(db, monkeypatch):
 
 
 def test_image_holo_uses_template_when_present(tmp_path, monkeypatch):
-    """image.py uses Card_Template_Holo.png for a Holo card when the file exists."""
+    """Superseded by plan-card-art-accolade-redesign.md: image.py now always uses the
+    dedicated Card_Holo.png template for a Holo Legendary — it is no longer optional,
+    and no procedural-sheen fallback remains. See test_card_art_accolade_redesign.py
+    (TestDedicatedHoloTemplateArt) for the full story."""
     image = pytest.importorskip("image")
     if not image.PIL_AVAILABLE:
         pytest.skip("Pillow not installed")
     from PIL import Image
-    for name in ("Legendary", "Epic"):
-        shutil.copy(os.path.join(image._ASSETS_DIR, f"Card_Template_{name}.png"), tmp_path)
-    Image.new("RGBA", (597, 845), (255, 0, 0, 255)).save(tmp_path / "Card_Template_Holo.png")
+    os.makedirs(tmp_path / "card_templates")
+    for ct_file in image._CARD_TEMPLATES.values():
+        shutil.copy(os.path.join(image._ASSETS_DIR, ct_file), tmp_path / ct_file)
+    Image.new("RGBA", image._CARD_SIZE, (255, 0, 0, 255)).save(tmp_path / image._HOLO_TEMPLATE)
     monkeypatch.setattr(image, "_ASSETS_DIR", str(tmp_path))
     assert image._load_template("legendary", True).getpixel((5, 5)) == (255, 0, 0, 255)
     # A non-Holo Legendary, and a "Holo" flag on another rarity, keep their own template.
@@ -1261,37 +1265,36 @@ def test_image_holo_uses_template_when_present(tmp_path, monkeypatch):
     assert image._load_template("epic", True).getpixel((5, 5)) != (255, 0, 0, 255)
 
 
-def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch, caplog):
-    """Without Card_Template_Holo.png, Holo uses the Legendary template plus a sheen and logs one warning only."""
-    import logging
+def test_image_holo_fallback_sheen_warns_once(tmp_path, monkeypatch):
+    """Superseded by plan-card-art-accolade-redesign.md: the procedural Holo sheen
+    fallback (`_holo_sheen`, `warn_if_holo_template_missing`) is removed entirely. A
+    real Holo template always ships; a missing one now raises rather than warning and
+    substituting a generated shine."""
     image = pytest.importorskip("image")
     if not image.PIL_AVAILABLE:
         pytest.skip("Pillow not installed")
-    from PIL import ImageChops
-    shutil.copy(os.path.join(image._ASSETS_DIR, "Card_Template_Legendary.png"), tmp_path)
+    assert not hasattr(image, "_holo_sheen")
+    assert not hasattr(image, "warn_if_holo_template_missing")
+    os.makedirs(tmp_path / "card_templates")
+    for ct_file in image._CARD_TEMPLATES.values():
+        shutil.copy(os.path.join(image._ASSETS_DIR, ct_file), tmp_path / ct_file)
     monkeypatch.setattr(image, "_ASSETS_DIR", str(tmp_path))
-    monkeypatch.setattr(image, "_holo_warned", False)
-    caplog.set_level(logging.WARNING, logger="image")
-    holo = image._load_template("legendary", True)
-    image._load_template("legendary", True)
-    image.warn_if_holo_template_missing()
-    plain = image._load_template("legendary", False)
-    warnings = [r for r in caplog.records if "Card_Template_Holo.png" in r.getMessage()]
-    assert len(warnings) == 1
-    assert holo.size == plain.size
-    # Compare colour: getbbox() on an RGBA difference looks at alpha only.
-    assert ImageChops.difference(holo.convert("RGB"), plain.convert("RGB")).getbbox() is not None  # the sheen is there
+    with pytest.raises(FileNotFoundError):
+        image._load_template("legendary", True)
 
 
-def test_image_does_not_draw_accolades():
-    """Source-reading (image.py): accolades are not composited into the card image (nor, since issue #217, tag stickers)."""
+def test_image_draws_accolades_not_tags():
+    """Superseded by plan-card-art-accolade-redesign.md: accolade badge icons are
+    composited into the card image again (`_ACCOLADE_ICON_FILES`, `accolade_keys`).
+    User tags still are not drawn — that part of issue #217 stays."""
     src = _read("backend", "image.py")
-    assert "accolade" not in src.replace("Accolades and user tags are", "")
-    assert "season_accolades" not in src and "SeasonAccolade" not in src
-    assert "_apply_stickers" not in src  # issue #217: tags are HTML tag pips now
+    assert "_ACCOLADE_ICON_FILES" in src and "accolade_keys" in src
+    assert "_apply_stickers" not in src  # issue #217: tags are HTML tag pips, not drawn
     cards_src = _read("backend", "routers", "cards.py")
     img_fn = cards_src[cards_src.index("def get_card_image("):cards_src.index("def get_card_image_route(")]
-    assert "accolade" not in img_fn
+    assert "accolade" in img_fn
+    for needle in ("UserTag", "TagDefinition", "tag_keys"):
+        assert needle not in img_fn
 
 
 def test_cards_ui_holo_rarity_label_and_reveal_sweep():

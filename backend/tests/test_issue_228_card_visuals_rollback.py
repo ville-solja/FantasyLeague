@@ -1,33 +1,37 @@
 """
 Tests for plan-issue-228-card-visuals-rollback.md (resolves GitHub issue #228).
 
-#218 ("layout A", commit da89798) is rolled back: the original illustrated card
-templates and the pre-#218 renderer (`backend/image.py` as of `da89798^`) return,
-the generated Holo template and its generator are removed, and accolade and tag
-pips leave every card face. The card viewer (`#revealModal`) gains a Tags section
-and an Accolades section with details, built by `tagDetailsHtml` and
-`accoladeDetailsHtml` in frontend/app-globals.js. Issue 230 moved the accolade
-details to the player popup's timeline (`accoladeDetailLine`, `accoladePlayedLine`)
-and left the card viewer with the Tags section; the tests below follow that.
+#218 ("layout A", commit da89798) was rolled back: the original illustrated card
+templates and the pre-#218 renderer returned, the generated Holo template and its
+generator were removed, and accolade and tag pips left every card face. The card
+viewer (`#revealModal`) gained a Tags section and an Accolades section with details,
+built by `tagDetailsHtml` and `accoladeDetailsHtml` in frontend/app-globals.js. Issue
+230 moved the accolade details to the player popup's timeline (`accoladeDetailLine`,
+`accoladePlayedLine`) and left the card viewer with the Tags section.
 
-  Story 1: Cards Return to the Original Art
+plan-card-art-accolade-redesign.md then rewrote `backend/image.py` again: new
+templates (687x1024, opaque slot fills), a square photo crop, an aspect-fit team-logo
+box and up to 6 accolade badge icons back on the card face (see
+test_card_art_accolade_redesign.py for that story's own tests). Per that plan's
+instructions, Story 1's whole-file SHA-256 pin on `backend/image.py` and the
+per-template hash pins below are replaced with assertions on the new named slot
+constants and compositing behaviour, and Story 1's pre-#218 circle geometry tests
+become aspect-fit-box geometry tests. Stories 2 and 3 (accolade/tag pips off the
+card face, into the card viewer's Tags section) are unaffected by the art redesign —
+tags still never show on the card face, and accolades return only as card-face icons,
+additive to the existing HTML pips/timeline elsewhere — so those tests are unchanged.
+
+  Story 1: New Card Template (see test_card_art_accolade_redesign.py for the art
+           redesign's own acceptance criteria; this file keeps a light regression
+           check that the route renders and a basic render-at-every-rarity check)
   Story 2: Accolades and Tags Leave the Card Face
   Story 3: Accolade and Tag Details in the Card Popup
   Step 4:  Extra checks (geometry, CSS placement, harness checks)
 
 Notes for the developer:
 
-- Restored files are pinned by SHA-256 of the `da89798^` blobs (below), so CI needs
-  no git history. Computed with `git show da89798^:<path> | sha256sum`.
-  `git log da89798..HEAD -- backend/image.py` is empty, so image.py should match its
-  pre-#218 blob exactly; if something must be kept on top of it, replace the image.py
-  hash test with checks of the pre-#218 constants (_BIG_CIRCLE, _SMALL_CIRCLE, ...).
-- Pre-#218 renderer constants: `_BIG_CIRCLE = (298, 375, 175)` (350 px portrait
-  circle), `_SMALL_CIRCLE = (444, 258, 52)` (104 px logo circle), `_PLAYER_NAME_Y = 90`,
-  `_TEAM_NAME_Y = 155`, `_CARD_SIZE = (597, 845)`, `_MODIFIERS_START_Y = 620`,
-  `_HOLO_TEMPLATE = "Card_Template_Holo.png"`, `_holo_sheen`, `_load_template`.
 - Compare images with `a.tobytes() == b.tobytes()` (lessons-learned: RGBA getbbox
-  checks alpha only); see `_same` in the old test_issue_218_card_formatting.py.
+  checks alpha only); see `_same` below.
 - Never touch the real app database: use the `db` fixture, and for routes the
   `_client` helper from test_issue_50 (shared-connection override of get_db).
 - Frontend: reuse `_fe`, `_fn_body`, `_fn_source`, `_read`, `_rule`, `_run_node`
@@ -39,12 +43,10 @@ Notes for the developer:
   replaced by these).
 """
 
-import hashlib
 import io
 import json
 import os
 import re
-import shutil
 from html.parser import HTMLParser
 
 import pytest
@@ -55,18 +57,6 @@ from tests.test_issue_50_season_winners_and_holo_cards import (  # noqa: F401  (
     _a, _client, _css_blocks, _fe, _fn_body, _fn_source, _read, _rule, _run_node, _user, db,
 )
 from tests.test_issue_205_card_draw_animations import _run as _run_draw
-
-# SHA-256 of the da89798^ blobs (the pre-#218 originals).
-TEMPLATE_SHA256 = {
-    "Card_Template_Common.png": "057747d09772646b1caa4fe0486070f9c1a716c1883a011754bcdce13b76e227",
-    "Card_Template_Rare.png": "5cdd80538cbe57295b795ff2ab25986bad1ba06d0e03ac46cece84ccfb5dbab5",
-    "Card_Template_Epic.png": "fa06c9b16575b47b32ef77b53f78fe143473fb8594f89c14c5e4c647c98a0fc7",
-    "Card_Template_Legendary.png": "d2181a108f56271ab5c8c10bc1affa14fbc3f577045e5fd3a4b9e61c208c277e",
-}
-# The da89798^ blob with one docstring correction in generate_card_image (issue 228);
-# the geometry tests below pin the rendering itself.
-IMAGE_PY_SHA256 = "24b8819d5ff3cdf48c12ef15237a7693c61cddb2488ae0ad594f361ac5219db6"
-
 
 
 _ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -83,11 +73,6 @@ def _image():
     return image
 
 
-def _sha256(path):
-    with open(path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
-
-
 def _same(a, b):
     """Pixel-identical, all channels (an RGBA difference's getbbox() checks alpha only)."""
     return a.size == b.size and a.convert("RGBA").tobytes() == b.convert("RGBA").tobytes()
@@ -99,16 +84,19 @@ def _template(image, ct):
 
 
 def _no_fetch(image, monkeypatch, avatar=None, logo=None):
-    """No network: the avatar and the team logo come from the given images (or none)."""
+    """No network: the avatar and the team logo come from the given images (or none).
+    `avatar`/`logo` may be a PIL Image or a callable taking the fetch `size`."""
     monkeypatch.setattr(image, "_fetch_pil_image",
-                        lambda url, d: avatar(d) if callable(avatar) else avatar)
+                        lambda url, size: avatar(size) if callable(avatar) else avatar)
     monkeypatch.setattr(image, "_load_team_logo_for_card",
-                        lambda name, url, d: logo(d) if callable(logo) else logo)
+                        lambda name, url, size: logo(size) if callable(logo) else logo)
 
 
-def _render(image, ct="common", name="Ab", team="T1", mods=None, is_holo=False, avatar=False):
+def _render(image, ct="common", name="Ab", team="T1", mods=None, is_holo=False, avatar=False,
+           accolade_keys=None):
     return image.generate_card_image(ct, name, "https://avatars.example/a.png" if avatar else None,
-                                     team, None, mods or {}, is_holo=is_holo)
+                                     team, None, mods or {}, is_holo=is_holo,
+                                     accolade_keys=accolade_keys)
 
 
 def _quadrants(size):
@@ -267,49 +255,52 @@ def _details_rules(css):
 
 
 # ---------------------------------------------------------------------------
-# Story 1: Cards Return to the Original Art
+# Story 1: New Card Template (see test_card_art_accolade_redesign.py for the full
+# redesign story; this file keeps a light regression check per-rarity)
 # ---------------------------------------------------------------------------
 
 class TestOriginalArt:
 
-    def test_card_templates_byte_identical_to_pre_218(self):
-        """Each of assets/Card_Template_{Common,Rare,Epic,Legendary}.png (resolved via
-        image._ASSETS_DIR and image._CARD_TEMPLATES) exists and its SHA-256 equals
-        TEMPLATE_SHA256[name]."""
-        image = pytest.importorskip("image")
-        assert sorted(image._CARD_TEMPLATES.values()) == sorted(TEMPLATE_SHA256)
-        for name, digest in TEMPLATE_SHA256.items():
-            path = os.path.join(image._ASSETS_DIR, name)
-            assert os.path.isfile(path), name
-            assert _sha256(path) == digest, name
-
-    def test_image_py_restored_from_pre_218(self):
-        """backend/image.py's SHA-256 equals IMAGE_PY_SHA256 (the da89798^ blob plus one docstring fix); see the
-        module notes if additions on top of it become necessary."""
-        assert _sha256(os.path.join(_ROOT, "backend", "image.py")) == IMAGE_PY_SHA256
-
-    def test_image_module_has_no_layout_a_symbols(self):
-        """The image module defines none of #218's layout A names (_LEFT_PILLAR,
-        _RIGHT_PILLAR, _RARITY_COLORS, _apply_foil_sheen and the portrait/logo slot
-        constants), and does define _BIG_CIRCLE == (298, 375, 175) and
-        _SMALL_CIRCLE == (444, 258, 52)."""
+    def test_image_module_has_new_slot_constants_no_old_circle_geometry(self):
+        """The image module defines the redesign's named slot constants (not the
+        pre-redesign circle geometry or #218's layout A names), and the Holo sheen
+        generator is gone."""
         image = pytest.importorskip("image")
         for name in ("_LEFT_PILLAR", "_RIGHT_PILLAR", "_RARITY_COLORS", "_RARITY_DEEP",
-                     "_apply_foil_sheen", "_PORTRAIT_SLOT", "_PORTRAIT_FRAME", "_LOGO_SLOT",
-                     "_NAME_BAR", "_TYPE_LINE", "_RULES_BOX"):
+                     "_apply_foil_sheen", "_PORTRAIT_FRAME", "_LOGO_SLOT", "_TYPE_LINE", "_RULES_BOX",
+                     "_BIG_CIRCLE", "_SMALL_CIRCLE", "_PLAYER_NAME_Y", "_TEAM_NAME_Y",
+                     "_MODIFIERS_START_Y", "_CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY",
+                     "_circle_crop", "_holo_sheen", "warn_if_holo_template_missing"):
             assert not hasattr(image, name), name
-        assert image._BIG_CIRCLE == (298, 375, 175)
-        assert image._SMALL_CIRCLE == (444, 258, 52)
-        assert image._PLAYER_NAME_Y == 90 and image._TEAM_NAME_Y == 155
-        assert image._MODIFIERS_START_Y == 620 and image._CARD_SIZE == (597, 845)
-        assert image._HOLO_TEMPLATE == "Card_Template_Holo.png"
-        assert callable(image._holo_sheen) and callable(image._load_template)
+        assert image._CARD_SIZE == (687, 1024)
+        for name in ("_PHOTO_SLOT", "_NAME_BAR", "_TEAM_NAME_BAR", "_STATS_BOX", "_LOGO_BOX"):
+            assert len(getattr(image, name)) == 4, name
+        assert len(image._ACCOLADE_COLS) == 3 and len(image._ACCOLADE_ROWS) == 2
+        assert callable(image._load_template)
 
-    def test_get_card_image_route_renders_on_restored_template(self, db, monkeypatch):
+    def test_card_templates_exist_at_687x1024(self):
+        """Each of the new rarity templates (image._CARD_TEMPLATES, resolved via
+        image._ASSETS_DIR) exists, is 687x1024 RGBA, and the old Card_Template_*
+        originals are gone."""
+        image = pytest.importorskip("image")
+        from PIL import Image
+        assert sorted(os.path.basename(v) for v in image._CARD_TEMPLATES.values()) == \
+            ["Card_Blue.png", "Card_Gold.png", "Card_Grey.png", "Card_Purple.png"]
+        for name in image._CARD_TEMPLATES.values():
+            path = os.path.join(image._ASSETS_DIR, name)
+            assert os.path.isfile(path), name
+            img = Image.open(path)
+            assert img.size == (687, 1024) and img.mode == "RGBA", name
+        for old in ("Card_Template_Common.png", "Card_Template_Rare.png",
+                    "Card_Template_Epic.png", "Card_Template_Legendary.png",
+                    "Card_Template_Holo.png"):
+            assert not os.path.exists(os.path.join(_ROOT, "assets", old)), old
+
+    def test_get_card_image_route_renders_on_new_template(self, db, monkeypatch):
         """GET /cards/{id}/image for a seeded common card (db fixture, `_client` from
         test_issue_50, image fetches monkeypatched to None) answers 200 image/png whose
-        pixels outside the portrait circle, logo circle and text rows equal the restored
-        Common template at those pixels (tobytes comparison of crops)."""
+        pixels at a frame-only corner (outside every slot) equal the new Common
+        template's own pixels there, proving the template composites as the base."""
         image = _image()
         from PIL import Image
         _no_fetch(image, monkeypatch)
@@ -319,66 +310,37 @@ class TestOriginalArt:
         assert res.headers["content-type"] == "image/png"
         got = Image.open(io.BytesIO(res.content)).convert("RGBA")
         assert got.size == image._CARD_SIZE
-        expected = Image.new("RGBA", image._CARD_SIZE, (35, 37, 40, 255))
-        expected.alpha_composite(_template(image, "common"))
-        # Above the name row, and below the portrait circle (no modifiers on a fresh common).
-        for box in ((0, 0, 597, 60), (0, 560, 597, 845)):
-            assert _same(got.crop(box), expected.crop(box)), box
+        assert got.getpixel((10, 10)) == _template(image, "common").getpixel((10, 10))
 
     def test_get_card_image_route_missing_card_returns_404(self, db, monkeypatch):
         """GET /cards/{id}/image for an id with no Card row answers 404 (failure path;
-        the rollback must not change the route's error handling)."""
+        the redesign must not change the route's error handling)."""
         _image()
         res = _image_client(db, monkeypatch).get("/cards/987654/image")
         assert res.status_code == 404
         assert res.json()["detail"] == "Card not found"
 
-    def test_generate_card_image_every_rarity_renders_597x845(self, monkeypatch):
+    def test_generate_card_image_every_rarity_renders_687x1024(self, monkeypatch):
         """image.generate_card_image for common, rare, epic, legendary and a Holo
-        legendary, with 0 to 3 modifiers, returns a 597 x 845 image (image._CARD_SIZE)."""
+        legendary, with 0 to 3 modifiers, returns a 687 x 1024 image (image._CARD_SIZE)."""
         image = _image()
         _no_fetch(image, monkeypatch)
-        monkeypatch.setattr(image, "_holo_warned", True)
         mods = [{}, {"kills": 5}, {"kills": 5, "assists": 10}, {"kills": 5, "assists": 10, "gpm": 15}]
         for ct, holo in (("common", False), ("rare", False), ("epic", False),
                          ("legendary", False), ("legendary", True)):
             for m in mods:
                 img = _render(image, ct, mods=m, is_holo=holo)
-                assert img.size == image._CARD_SIZE == (597, 845), (ct, holo, m)
+                assert img.size == image._CARD_SIZE == (687, 1024), (ct, holo, m)
 
     def test_generate_card_image_unknown_card_type_falls_back_to_common(self, monkeypatch):
-        """An unknown card_type renders without error, 597 x 845, on the Common template
+        """An unknown card_type renders without error, 687 x 1024, on the Common template
         (same pixels as a 'common' render with identical inputs)."""
         image = _image()
         _no_fetch(image, monkeypatch)
         odd = _render(image, "mythic")
-        assert odd.size == (597, 845)
+        assert odd.size == (687, 1024)
         assert _same(odd, _render(image, "common"))
         assert not _same(odd, _render(image, "rare"))
-
-    def test_holo_without_template_uses_legendary_with_generated_sheen(self, tmp_path, monkeypatch):
-        """With no Card_Template_Holo.png in the assets dir, image._load_template('legendary',
-        True) equals the Legendary template with image._holo_sheen alpha-composited on it,
-        and differs from _load_template('legendary', False) (tobytes comparison)."""
-        image = _image()
-        shutil.copy(os.path.join(image._ASSETS_DIR, "Card_Template_Legendary.png"), tmp_path)
-        monkeypatch.setattr(image, "_ASSETS_DIR", str(tmp_path))
-        monkeypatch.setattr(image, "_holo_warned", True)
-        assert not os.path.exists(tmp_path / "Card_Template_Holo.png")
-        plain = image._load_template("legendary", False)
-        expected = plain.copy()
-        expected.alpha_composite(image._holo_sheen(plain))
-        holo = image._load_template("legendary", True)
-        assert _same(holo, expected)
-        assert not _same(holo, plain)
-
-    def test_holo_template_file_removed(self):
-        """assets/Card_Template_Holo.png does not exist in the repo (failure path for the
-        Holo story: a leftover #218 Holo template would bypass the #105 sheen)."""
-        assert not os.path.exists(os.path.join(_ROOT, "assets", "Card_Template_Holo.png"))
-        assert not os.path.exists(os.path.join(_ROOT, "assets", "card_template_holo.png"))
-        image = pytest.importorskip("image")
-        assert image._holo_template_path() is None
 
     def test_make_card_templates_script_removed(self):
         """backend/scripts/make_card_templates.py does not exist, and no file under
@@ -398,27 +360,26 @@ class TestOriginalArt:
                             offenders.append(os.path.relpath(path, _ROOT))
         assert offenders == []
 
-    def test_blank_team_logo_placeholder_drawn_in_logo_circle(self, monkeypatch):
-        """With no team logo (team_logo_url None and no fetch result), the logo circle
-        (_SMALL_CIRCLE) shows the #107 blank placeholder from image._blank_logo_placeholder
+    def test_blank_team_logo_placeholder_drawn_in_logo_box(self, monkeypatch):
+        """With no team logo (team_logo_url None and no fetch result), the logo box
+        (_LOGO_BOX) shows the #107 blank placeholder from image._blank_logo_placeholder
         rather than the bare template."""
         image = _image()
         _no_fetch(image, monkeypatch)
-        scx, scy, sr = image._SMALL_CIRCLE
-        placeholder = image._blank_logo_placeholder(sr * 2)
-        assert placeholder.size == (sr * 2, sr * 2)
-        assert placeholder.getcolors() == [(sr * 2 * sr * 2, (0, 0, 0, 255))]
+        lx0, ly0, lx1, ly1 = image._LOGO_BOX
+        lw, lh = lx1 - lx0, ly1 - ly0
+        placeholder = image._blank_logo_placeholder(lw, lh)
+        assert placeholder.size == (lw, lh)
+        assert placeholder.getcolors() == [(lw * lh, (0, 0, 0, 255))]
         img = _render(image, "common", team=None)
-        assert img.getpixel((scx, scy)) == (0, 0, 0, 255)
-        # The bare template is transparent there: without the placeholder the dark base shows.
-        assert _template(image, "common").getpixel((scx, scy))[3] == 0
+        assert img.getpixel(((lx0 + lx1) // 2, (ly0 + ly1) // 2)) == (0, 0, 0, 255)
 
     def test_card_views_use_same_card_image_url(self):
         """My Team (app-roster.js), the collection and card viewer (app-cards.js) and the
         Weekly Report (through the card viewer) load card art from `/cards/{id}/image`
-        (source inspection), so they all show the restored art. The Twitch panel draws
-        its own card art and loads no card PNG. No frontend or panel file references a
-        card template or a layout A-specific asset."""
+        (source inspection), so they all show the redesigned art. The Twitch panel draws
+        its own card art and loads no card PNG. No frontend or panel file references the
+        old card template names or a layout A-specific asset."""
         assert "return `${API}/cards/${cardId}/image" in _fn_body(_fe("app-globals.js"), "cardImageUrl")
         assert "cardImageUrl(c.id)" in _fn_body(_fe("app-roster.js"), "_cardSlotHTML")
         assert "cardImageUrl(card.id)" in _fn_body(_fe("app-cards.js"), "showCard")
@@ -436,61 +397,51 @@ class TestOriginalArt:
 
 
 # ---------------------------------------------------------------------------
-# Step 4: Pre-#218 geometry
+# Step 4: New template geometry (card-art-accolade-redesign)
 # ---------------------------------------------------------------------------
 
 class TestPre218Geometry:
 
-    def test_avatar_cropped_into_350px_portrait_circle(self, monkeypatch):
-        """A quadrant-coloured avatar renders inside the circle centred (298, 375 + layout
-        offset) with radius 175: pixels just inside the radius on each axis carry the
-        avatar's colours and pixels just outside equal the template."""
+    def test_photo_slot_filled_with_square_avatar_no_circle_mask(self, monkeypatch):
+        """A quadrant-coloured avatar fills the photo slot (_PHOTO_SLOT) corner to
+        corner: a circular mask would have cut these corners, so finding the avatar's
+        own colour right at each corner proves there is no circular crop."""
         image = _image()
-        sizes = []
-        _no_fetch(image, monkeypatch, avatar=lambda d: (sizes.append(d), _quadrants(d))[1])
-        _transparent_template(image, monkeypatch)
-        base = (35, 37, 40, 255)
-        for ct, off in (("common", 0), ("epic", image._CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY)):
-            img = _render(image, ct, name="", team=None, avatar=True)
-            cx, cy, r = image._BIG_CIRCLE
-            cy += off
-            inside = {(cx, cy - r + 3): (0, 200, 0, 255),       # top: top-right quadrant
-                      (cx, cy + r - 3): (200, 200, 0, 255),     # bottom: bottom-right
-                      (cx - r + 3, cy): (0, 0, 200, 255),       # left: bottom-left
-                      (cx + r - 3, cy): (200, 200, 0, 255),     # right: bottom-right
-                      (cx - 60, cy - 60): (200, 0, 0, 255)}     # top-left quadrant
-            for xy, colour in inside.items():
-                assert img.getpixel(xy) == colour, (ct, xy)
-            for xy in ((cx, cy - r - 3), (cx, cy + r + 3), (cx - r - 3, cy), (cx + r + 3, cy)):
-                assert img.getpixel(xy) == base, (ct, xy)
-        assert set(sizes) == {350}
+        _no_fetch(image, monkeypatch, avatar=lambda size: _quadrants(max(size) if isinstance(size, tuple) else size))
+        img = _render(image, "common", name="", team=None, avatar=True)
+        x0, y0, x1, y1 = image._PHOTO_SLOT
+        inset = 6
+        assert img.getpixel((x0 + inset, y0 + inset)) == (200, 0, 0, 255)      # top-left
+        assert img.getpixel((x1 - inset, y0 + inset)) == (0, 200, 0, 255)      # top-right
+        assert img.getpixel((x0 + inset, y1 - inset)) == (0, 0, 200, 255)      # bottom-left
+        assert img.getpixel((x1 - inset, y1 - inset)) == (200, 200, 0, 255)    # bottom-right
+        # Just outside the slot, the template's own pixels show (not the avatar).
+        template_px = _template(image, "common").getpixel((x0 - 4, y0 - 4))
+        assert img.getpixel((x0 - 4, y0 - 4)) == template_px
 
-    def test_team_logo_cropped_into_104px_logo_circle(self, monkeypatch):
-        """A solid-colour team logo renders inside the circle centred (444, 258 + layout
-        offset) with radius 52; a pixel at the centre has the logo colour and a pixel
-        10 px outside the radius equals the template."""
+    def test_team_logo_aspect_fit_into_logo_box_no_distortion(self, monkeypatch):
+        """A non-square team logo is aspect-fit into the logo box (_LOGO_BOX): its own
+        aspect ratio is preserved (not stretched to the box's own ratio), and a
+        letterboxed margin (if any) shows no logo colour."""
         image = _image()
         from PIL import Image
-        sizes = []
-        colour = (10, 20, 230, 255)
-        for ct, off in (("common", 0), ("epic", image._CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY)):
-            _no_fetch(image, monkeypatch, logo=lambda d: (sizes.append(d), Image.new("RGBA", (d, d), colour))[1])
-            img = _render(image, ct, name="", team=None)
-            _no_fetch(image, monkeypatch, logo=lambda d: Image.new("RGBA", (d, d), (240, 0, 0, 255)))
-            other = _render(image, ct, name="", team=None)
-            scx, scy, sr = image._SMALL_CIRCLE
-            scy += off
-            assert img.getpixel((scx, scy)) == colour, ct
-            for xy in ((scx, scy - sr - 10), (scx, scy + sr + 10), (scx - sr - 10, scy), (scx + sr + 10, scy)):
-                # Outside the circle the logo leaves no trace: the same pixel whatever the logo.
-                assert img.getpixel(xy) == other.getpixel(xy), (ct, xy)
-                assert img.getpixel(xy) != colour
-        assert set(sizes) == {104}
+        src = Image.new("RGBA", (300, 90), (10, 20, 230, 255))
+        _no_fetch(image, monkeypatch, logo=lambda size: image._aspect_fit(src, *size))
+        img = _render(image, "common", name="", team="T")
+        lx0, ly0, lx1, ly1 = image._LOGO_BOX
+        lw, lh = lx1 - lx0, ly1 - ly0
+        fitted = image._aspect_fit(src, lw, lh)
+        assert abs((fitted.width / fitted.height) - (300 / 90)) < 0.1
+        cx, cy = (lx0 + lx1) // 2, (ly0 + ly1) // 2
+        assert img.getpixel((cx, cy)) == (10, 20, 230, 255)
+        if fitted.height < lh:
+            margin_y = ly0 + (lh - fitted.height) // 4
+            assert img.getpixel((cx, margin_y)) != (10, 20, 230, 255)
 
-    def test_name_team_and_modifiers_drawn_at_pre_218_rows(self, monkeypatch):
-        """Recording _draw_centered_text calls: the player name is drawn at y=90, the team
-        name at y=155 and modifier lines from y=620 in 50 px steps (plus
-        _CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY for epic and legendary)."""
+    def test_name_team_and_modifiers_drawn_in_their_own_slots(self, monkeypatch):
+        """Recording _draw_centered_text calls: the player name and team name are drawn
+        at their own bar's centre (_NAME_BAR, _TEAM_NAME_BAR) and modifier lines fall
+        inside the stats box (_STATS_BOX)."""
         image = _image()
         _no_fetch(image, monkeypatch)
         calls = []
@@ -504,13 +455,18 @@ class TestPre218Geometry:
         mods = {"kills": 5, "assists": 10, "gpm": 15}
         for ct in ("common", "rare", "epic", "legendary"):
             calls.clear()
-            off = image._CARD_LAYOUT_Y_OFFSET_EPIC_LEGENDARY if ct in ("epic", "legendary") else 0
             _render(image, ct, name="Ab", team="Reds", mods=mods)
-            rows = [(t, cx, cy) for t, cx, cy in calls]
-            assert rows[0] == ("AB", 298, 90 + off), ct
-            assert rows[1] == ("REDS", 298, 155 + off), ct
-            assert [cy for _, _, cy in rows[2:]] == [620 + off, 670 + off, 720 + off], ct
-            assert len(rows) == 5
+            name_cx, name_cy = (image._NAME_BAR[0] + image._NAME_BAR[2]) // 2, \
+                (image._NAME_BAR[1] + image._NAME_BAR[3]) // 2
+            team_cx, team_cy = (image._TEAM_NAME_BAR[0] + image._TEAM_NAME_BAR[2]) // 2, \
+                (image._TEAM_NAME_BAR[1] + image._TEAM_NAME_BAR[3]) // 2
+            assert calls[0] == ("AB", name_cx, name_cy), ct
+            assert calls[1] == ("REDS", team_cx, team_cy), ct
+            x0, y0, x1, y1 = image._STATS_BOX
+            mod_calls = calls[2:]
+            assert len(mod_calls) == 3, ct
+            for _, cx, cy in mod_calls:
+                assert x0 <= cx <= x1 and y0 <= cy <= y1, ct
 
 
 # ---------------------------------------------------------------------------

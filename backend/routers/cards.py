@@ -537,7 +537,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not PIL_AVAILABLE:
         raise HTTPException(status_code=503, detail="Image generation unavailable (Pillow not installed)")
     result = db.execute(text("""
-        SELECT c.card_type, c.is_holo, p.name as player_name, p.avatar_url,
+        SELECT c.card_type, c.is_holo, p.id as player_id, p.name as player_name, p.avatar_url,
                t.name as team_name, t.logo_url as team_logo_url
         FROM cards c
         JOIN players p ON p.id = c.player_id
@@ -547,6 +547,8 @@ def get_card_image(card_id: int, db=Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="Card not found")
     mods: dict = _card_modifiers_dict_for_image(db, card_id)
+    player_accolades = accolades.accolades_for(db, [result.player_id]).get(result.player_id, [])
+    accolade_keys = [accolades.kind_key(a) for a in player_accolades]
     img = generate_card_image(
         card_type=result.card_type,
         player_name=result.player_name,
@@ -555,6 +557,7 @@ def get_card_image(card_id: int, db=Depends(get_db)):
         team_logo_url=result.team_logo_url,
         card_modifiers=mods,
         is_holo=bool(result.is_holo),
+        accolade_keys=accolade_keys,
     )
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=False, compress_level=5)

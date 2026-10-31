@@ -31,10 +31,10 @@ IMG_RE = re.compile(
 )
 
 _TEMPLATE_FILES = (
-    "Card_Template_Common.png",
-    "Card_Template_Rare.png",
-    "Card_Template_Epic.png",
-    "Card_Template_Legendary.png",
+    os.path.join("card_templates", "Card_Grey.png"),
+    os.path.join("card_templates", "Card_Blue.png"),
+    os.path.join("card_templates", "Card_Purple.png"),
+    os.path.join("card_templates", "Card_Gold.png"),
 )
 
 

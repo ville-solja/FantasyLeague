@@ -436,7 +436,23 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   height: 125px;
   margin: 0 8px 8px 0;
 }
-.draw-deck-layer { position: absolute; width: 88px; height: 125px; left: 0; top: 0; }
+/* The deck art (assets/card_templates/Card_Deck.png) already bakes in a stacked-edge
+   shadow, so the layers need none of .card-back's own border or diamond emblem — only
+   its sizing and the stir animation are shared. */
+.draw-deck-layer {
+  position: absolute; width: 88px; height: 125px; left: 0; top: 0;
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("/assets/card_templates/Card_Deck.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.draw-deck-layer::before,
+.draw-deck-layer::after {
+  content: none;
+}
 .draw-deck-layer:nth-child(1) { left: 8px; top: 8px; }
 .draw-deck-layer:nth-child(2) { left: 4px; top: 4px; }
 .draw-deck--stirring .draw-deck-layer:nth-child(2) { animation: draw-deck-stir 240ms var(--ease-io) infinite alternate; }
@@ -1275,7 +1291,7 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 }
 .card-img-loading {
   width: 180px;
-  height: 255px;
+  height: 268px;
   border-radius: var(--r-lg);
   background: var(--bg-card);
   border: var(--bw-hair) solid var(--border-soft);
@@ -1288,7 +1304,7 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 .card-slot-empty {
   flex: 0 0 auto;
   width: 180px;
-  height: 255px;
+  height: 268px;
   border: 2px dashed var(--border-soft);
   border-radius: var(--r-lg);
   display: flex;
@@ -1561,7 +1577,7 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .reveal-img-wrap {
   position: relative;
   width: 200px;
-  height: 283px;
+  height: 298px;
   margin: 0 auto 16px;
   flex-shrink: 0;
 }
@@ -1569,7 +1585,7 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   position: absolute;
   left: 0; top: 0;
   width: 200px;
-  height: 283px;
+  height: 298px;
   border-radius: var(--r-lg);
   background: var(--k-ink-950);
   border: var(--bw-hair) solid var(--border-soft);
@@ -1585,7 +1601,7 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   position: absolute;
   left: 0; top: 0;
   width: 200px;
-  height: 283px;
+  height: 298px;
   border-radius: var(--r-lg);
   object-fit: contain;
   object-position: center;
@@ -1719,6 +1735,21 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   -webkit-backface-visibility: hidden;
 }
 .draw-flight-face--back { transform: rotateY(180deg); }
+/* Matches .draw-deck-layer's art swap: the flying card's back must read as the same
+   object as the deck it just left, not the old CSS cross-hatch pattern. */
+.draw-flight-face--back.card-back {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url("/assets/card_templates/Card_Back.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.draw-flight-face--back.card-back::before,
+.draw-flight-face--back.card-back::after {
+  content: none;
+}
 .draw-flight-img,
 .draw-landing .draw-flight-img {
   display: block;

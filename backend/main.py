@@ -447,8 +447,6 @@ async def lifespan(app: FastAPI):
                 "this bypass must never run in production"
             )
     twitch_module.warn_if_mvp_channels_unset()
-    import image as _card_image
-    _card_image.warn_if_holo_template_missing()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
