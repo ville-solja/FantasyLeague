@@ -427,18 +427,24 @@ class TestDrawFromTheDeck:
         assert panel.index('id="drawDeck"') < panel.index('id="drawBtn"')
 
     def test_style_css_card_back_has_no_league_name_or_image_file(self):
-        """The deck's .card-back is CSS only (brand pattern + emblem, tokens): no url() image file and no league name in its rules or markup."""
+        """The base .card-back pattern itself is CSS only (brand pattern + emblem,
+        tokens): no url() image file and no league name. Feature-specific overrides
+        that swap in real card-art images (.draw-deck-layer, the flying card's
+        .draw-flight-face--back.card-back) are allowed their own url() -- they
+        intentionally replace the pattern for those two uses (card-art-accolade-
+        redesign); the plain pattern itself stays untouched for the postponed
+        flip-to-back feature."""
         css = _read(STYLE_CSS)
-        blocks = [(sel, body) for sel, body in _css_blocks(css, r"\.card-back\b")]
         assert _rule(css, ".card-back"), "no .card-back rule"
         assert _rule(css, ".card-back::before") and _rule(css, ".card-back::after")
         base = _rule(css, ".card-back")[0]
         assert "repeating-linear-gradient" in base and "var(--accent-ghost)" in base
-        for sel, body in blocks:
-            assert "url(" not in body, sel
-            assert not re.search(r"#[0-9a-fA-F]{3,8}\b", body), f"hex colour in {sel}"
-            assert "content: \"\"" in body or "content" not in body, sel
-            assert not re.search(r"kana|liiga", body, re.I), sel
+        for selector in (".card-back", ".card-back::before", ".card-back::after"):
+            for body in _rule(css, selector):
+                assert "url(" not in body, selector
+                assert not re.search(r"#[0-9a-fA-F]{3,8}\b", body), f"hex colour in {selector}"
+                assert "content: \"\"" in body or "content" not in body, selector
+                assert not re.search(r"kana|liiga", body, re.I), selector
         deck = _deck_markup(_read(INDEX_HTML))
         assert not re.search(r"kana|liiga", deck, re.I)
         assert css.index(".card-back {") < css.index("GUIDED TOUR (issue #144)")
