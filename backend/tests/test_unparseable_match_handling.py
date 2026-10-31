@@ -651,7 +651,8 @@ def test_top_performances_and_player_leaderboard_exclude_excluded_match(db):
     def measure(db):
         top = sorted((r["id"], r["fantasy_points"]) for r in top_performances(db=db))
         board = {r["id"]: (r["matches"], r["avg_points"]) for r in leaderboard(db=db)}
-        return {"top": [p for _, p in top],
+        # Flat dict of scalars only: pytest.approx() rejects a nested list value.
+        return {**{f"top_{i}": p for i, (_, p) in enumerate(top)},
                 **{f"{pid}_n": n for pid, (n, _) in board.items()},
                 **{f"{pid}_avg": a for pid, (_, a) in board.items()}}
 
