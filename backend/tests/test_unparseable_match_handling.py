@@ -168,9 +168,21 @@ def _assert_exclusion_removes_exactly_that_match(db, measure):
     _delete_stats(db, _UNPARSED_MATCH)
     removed = measure(db)
 
-    assert excluded == pytest.approx(removed)
-    assert excluded != pytest.approx(before)
-    assert restored == pytest.approx(before)
+    assert _close(excluded, removed)
+    assert not _close(excluded, before)
+    assert _close(restored, before)
+
+
+def _close(a, b):
+    """Approximate equality through nested dicts and lists: pytest.approx rejects
+    nested dicts from pytest 9.2 on."""
+    if isinstance(a, dict):
+        return isinstance(b, dict) and a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return isinstance(b, (list, tuple)) and len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b))
+    if isinstance(a, float) or isinstance(b, float):
+        return b == pytest.approx(a)
+    return a == b
 
 
 def _weekly(db):

@@ -1,4 +1,4 @@
-<!-- version: 14 -->
+<!-- version: 15 -->
 <!-- mode: read-write -->
 
 You are the **Security Reviewer** for this project.
@@ -20,7 +20,7 @@ Before pushing any change to `backend/routers/` or `backend/main.py`. Also run a
   2. read the diff, the changed endpoints' full functions, the `*_route` wrappers that register them, and the dependencies they use (`backend/deps.py`, `backend/rate_limit.py` as needed);
   3. trace callers of changed helpers with `grep -rn` and read only the hits;
   4. run the checks below on that set, plus any data the change writes or returns;
-  5. run the Dependabot check (5) only when `backend/requirements*.txt` changed.
+  5. run the Dependabot check (5) only when `backend/requirements*.txt` or `backend/requirements*.lock` changed.
   Report the same tables and say "change review" in the summary line.
 - `/security-reviewer fix`: see Fix mode.
 
@@ -53,6 +53,11 @@ Full review only; a change review reads the files described under Usage.
 - `backend/routers/weekly_summary.py` — weekly summary report endpoints
 - `backend/routers/admin_backups.py` — admin DB backup create/list/download endpoints (downloads contain password hashes)
 - `backend/routers/admin_token_events.py` — admin token grant event CRUD (`/admin/token-grant-events`, recent re-auth on changes)
+- `backend/routers/admin_accolades.py` — season accolade and champion endpoints (recent re-auth on changes)
+- `backend/routers/admin_finals.py` — finals status, tiebreak, pause, close and result (tiebreak, close and result need recent re-auth)
+- `backend/routers/finals.py` — public `GET /finals` (optional session; never other users' picks) and `PUT /finals/prediction` (logged in, rate-limited)
+- `backend/finals.py` — finals logic behind those routes: pick validation, the lock, revision cap, caches, the outbound fixtures-site fetch
+- `backend/routers/history.py` — public past-season history endpoints
 - `backend/rate_limit.py` — shared slowapi limiter used by rate-limited routes
 - `backend/auth.py` — `hash_password` and `verify_password` helpers
 - `backend/deps.py` — `get_current_user` and `require_admin` dependency definitions
@@ -65,7 +70,12 @@ Full review only; a change review reads the files described under Usage.
 - `backend/steam_openid.py` — Steam sign-in routes: `/auth/steam/start`, `/auth/steam/callback`, `/auth/steam/signup`, `/profile/steam/unlink`; OpenID checks, state and nonce handling, admin seeding by Steam ID
 - `backend/login_mode.py` — `LOGIN_METHOD` (password / both / steam_signup) and the route guards that answer 404 outside a mode
 - `backend/email_utils.py` — email sending helpers (check for enumeration and data-exposure risks)
-- `backend/requirements.txt`, `backend/requirements-dev.txt` — pinned package versions, for the dependency check below
+- `backend/twitch_channels.py` — channel approval for MVP selection (the allowlist behind `mvp_channel_allowed`)
+- `backend/twitch_status.py` — Admin › Twitch status data (refused origins and tokens; check what it exposes)
+- `backend/player_links.py` — Steam-verified player links (identity: one verified link per player)
+- `backend/logo_hosts.py` — team-logo host allowlist (`safe_logo_url`)
+- `backend/text_safety.py` — shared text cleaning for user-chosen names
+- `backend/requirements.txt`, `backend/requirements-dev.txt` — version ranges; `backend/requirements.lock`, `backend/requirements-dev.lock` — the exact hash-locked versions the image and CI install (`scripts/lock-deps.sh`), for the dependency check below
 - `markdown/lessons-learned.md` — read before starting; append a new entry if you encounter a novel issue not already documented
 
 ---
@@ -100,7 +110,7 @@ Run `git remote get-url origin` to get `{owner}/{repo}`, then:
 ```
 gh api repos/{owner}/{repo}/dependabot/alerts --paginate
 ```
-For every alert with `"state": "open"`, cross-reference `security_vulnerability.first_patched_version` against the actual version constraint for that package in `backend/requirements.txt` / `backend/requirements-dev.txt`. Flag any open alert whose fix version is **excluded by the current pin's upper bound** (e.g. `pillow>=11.0,<12.0` can never pick up a fix that shipped in `12.3.0`) — this is the highest-value finding, since it means the alert cannot self-resolve even via `pip install --upgrade` within the declared constraint. Also flag any open alert with no corresponding pin change yet, even if the current constraint could technically satisfy it (e.g. `>=1.0` with no upper bound) — those usually just need `pip-compile`/a version bump commit, not a constraint change. Group multiple open alerts for the same package together rather than one row each if there are many (cite the alert numbers).
+For every alert with `"state": "open"`, cross-reference `security_vulnerability.first_patched_version` against the version pinned in `backend/requirements.lock` / `backend/requirements-dev.lock` (what actually ships) and the range in `backend/requirements.txt` / `backend/requirements-dev.txt`. Flag any open alert whose fix version is **excluded by the current pin's upper bound** (e.g. `pillow>=11.0,<12.0` can never pick up a fix that shipped in `12.3.0`) — this is the highest-value finding, since it means the alert cannot self-resolve even via `pip install --upgrade` within the declared constraint. Also flag any open alert with no corresponding pin change yet, even if the current constraint could technically satisfy it (e.g. `>=1.0` with no upper bound) — those need `bash scripts/lock-deps.sh` and a commit of the lock files (the image installs only the lock, so nothing self-resolves), not a constraint change. Group multiple open alerts for the same package together rather than one row each if there are many (cite the alert numbers).
 
 ---
 

@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Exact versions with hashes (scripts/lock-deps.sh), so the image runs what CI tested.
+COPY backend/requirements.lock .
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY backend/ .
 COPY frontend/ ./frontend/
