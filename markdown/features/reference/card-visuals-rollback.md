@@ -1,5 +1,7 @@
 # Card Visuals Rollback
 
+> **Superseded by the Card Art Accolade Redesign.** New illustrated templates with purpose-built slots mean accolades are back on the card face as of `markdown/plans/plan-card-art-accolade-redesign.md` — see [Card Art Accolade Redesign](card-art-accolade-redesign.md) and [Card Image Generation](card-image-generation.md) for the current pipeline. Tags stay off the card face (the card viewer's Tags section, described below, is unchanged). This document is kept as the record of the #228 rollback itself.
+
 Returns the cards to the original illustrated art used when accolades were introduced, and moves the accolade and tag symbols off the card face into the card viewer, with their details. Players see clean cards; the symbols are one tap away. Plan: `markdown/plans/plan-issue-228-card-visuals-rollback.md` (issue #228). The rolled-back design is recorded in [Card Formatting](card-formatting.md).
 
 ---

@@ -296,6 +296,10 @@ def connect_account(db, user: User, sub: str) -> str:
     if user.twitch_account_id:
         return "connected" if user.twitch_account_id == sub else "disconnect_first"
     holder = soft_accounts.find_by_twitch_account_id(db, sub)
+    if holder is not None and holder.id == user.id:
+        # A concurrent call for this same account already committed the connect
+        # (this thread's `user` was read before the race) -- not "another account".
+        return "connected"
     if holder is not None and holder.account_type != soft_accounts.SOFT:
         return "in_use"
     pending = None

@@ -1,6 +1,8 @@
 # Card Formatting
 
 > **Rolled back by #228.** Layout A is no longer in use: the original illustrated templates and the pre-#218 renderer are back, `make_card_templates.py` and `Card_Template_Holo.png` are removed, and the accolade and tag pips left the card face for the card viewer. This page is kept as the record of the #218 design; see [Card Visuals Rollback](card-visuals-rollback.md) and `markdown/plans/plan-issue-228-card-visuals-rollback.md`. The design canvas below stays available if a new card design is tried later.
+>
+> **Superseded again, differently, by the Card Art Accolade Redesign.** #228's restored art has since been replaced by new illustrated templates with dedicated slots, including accolades back on the card face — unlike layout A, with real badge icons instead of HTML pips. See [Card Art Accolade Redesign](card-art-accolade-redesign.md) and [Card Image Generation](card-image-generation.md) for the live design.
 
 Card layout A · Classic TCG for the card PNG (issue #218). It has exact portrait and team-logo slots and shows the rarity by the frame's edge colour. Its two side pillars are where the HTML tag and accolade pips sit. Plan: `markdown/plans/plan-issue-218-card-formatting.md`. Design canvas: https://claude.ai/artifact/7EZ3WKh3GrN63FipYATfG8.
 

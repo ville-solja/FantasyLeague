@@ -35,6 +35,7 @@ Implementation details, integrations, and operator tooling.
 | [Card Draw Animations](reference/card-draw-animations.md) | The drawn card flies from a deck in the Draw panel, flips face up before the reveal fades in, and lands in its roster or bench slot; a card back is postponed |
 | [Accolades and Rank in the Player Popup](reference/player-popup-accolades-and-rank.md) | Rank as a summary tile and accolades as a detailed season timeline in the player popup; the card viewer drops its rank medal and Accolades section and keeps Tags |
 | [Card Visuals Rollback](reference/card-visuals-rollback.md) | Original card templates and renderer restored after layout A (#218); accolade and tag pips leave the card faces for Tags and Accolades sections with details in the card viewer (the accolades moved on to the player popup in #230; Tags stay) |
+| [Card Art Accolade Redesign](reference/card-art-accolade-redesign.md) | New illustrated templates with dedicated photo, logo, name, team and stats slots, plus a 6-slot accolade badge grid back on the card face; dedicated Holo template replaces the generated shine; canvas grows to 687×1024 |
 | [Card Formatting](reference/card-formatting.md) | Card layout A (#218), rolled back by #228; kept as the record of that design |
 | [Card Team Logo Placeholder](reference/card-team-logo-placeholder.md) | Solid black circular placeholder for a card's team-logo slot when no logo can be resolved yet |
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
