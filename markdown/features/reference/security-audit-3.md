@@ -35,7 +35,7 @@ At import time, `backend/main.py` checks `ENV`. When it is `production` (case-in
 - `DEBUG=true` or `TWITCH_LOCAL_DEV=true` is set, even when `SECRET_KEY` is set
 - `SECRET_KEY` is shorter than 32 characters
 
-The CI workflow `.github/workflows/unit-tests.yml` runs `pip-audit -r backend/requirements.txt` after installing dependencies. A known vulnerability fails the job.
+The CI workflow `.github/workflows/unit-tests.yml` runs `pip-audit -r backend/requirements.lock --require-hashes` (the exact versions the image installs, see `dependency-locking.md`) after installing dependencies. A known vulnerability fails the job.
 
 ## Configuration
 

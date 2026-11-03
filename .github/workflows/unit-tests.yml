@@ -4,10 +4,11 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  # Pushes to main run these tests from docker-publish.yml, which builds the image only
+  # after they pass.
+  workflow_call:
 
 jobs:
   pytest:
@@ -21,12 +22,12 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r backend/requirements-dev.txt
+        run: pip install -r backend/requirements-dev.lock --require-hashes
 
       - name: Audit dependencies for known vulnerabilities
         run: |
           pip install pip-audit
-          pip-audit -r backend/requirements.txt
+          pip-audit -r backend/requirements.lock --require-hashes
 
       - name: Run pytest (root tests)
         run: python -m pytest tests/ --ignore=tests/ui -v --tb=short

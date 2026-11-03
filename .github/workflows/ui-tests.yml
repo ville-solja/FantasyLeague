@@ -4,10 +4,11 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  # Pushes to main run these tests from docker-publish.yml, which builds the image only
+  # after they pass.
+  workflow_call:
 
 jobs:
   playwright:
@@ -21,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.lock --require-hashes
 
       - name: Seed test database
         run: python tests/ui/scripts/seed_db.py

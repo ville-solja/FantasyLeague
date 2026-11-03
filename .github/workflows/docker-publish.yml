@@ -10,7 +10,20 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # The image is built only from a commit whose unit and UI tests pass (a red main
+  # must not produce a deployable image).
+  unit-tests:
+    uses: ./.github/workflows/unit-tests.yml
+    permissions:
+      contents: read
+
+  ui-tests:
+    uses: ./.github/workflows/ui-tests.yml
+    permissions:
+      contents: read
+
   build-and-push:
+    needs: [unit-tests, ui-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read
