@@ -127,6 +127,18 @@ function _showRevealTags() {
   if (el) el.hidden = !el.innerHTML;
 }
 
+/**
+ * Plan-card-art-polish: fills the reveal's invisible click-through/tooltip hotspot
+ * overlay (same markup as the roster grid) over the reveal's own card image. A
+ * separate function, not inlined in showCard() itself, matching _renderRevealTags's
+ * pattern above — cardHotspotOverlayHtml's markup is `_escHtml`-escaped the same way
+ * tagDetailsHtml's is.
+ */
+function _renderRevealHotspots(card) {
+  const el = document.getElementById("revealCardHotspots");
+  if (el) el.innerHTML = typeof cardHotspotOverlayHtml === "function" ? cardHotspotOverlayHtml(card) : "";
+}
+
 /** @param {object} card @param {string} [footer] @param {{ drawAnimation?: boolean, showActionBtn?: boolean, deferBurst?: boolean }} [opts] */
 function showCard(card, footer, opts = {}) {
   const drawFx = Boolean(opts.drawAnimation);
@@ -141,6 +153,7 @@ function showCard(card, footer, opts = {}) {
   const placeholder = document.getElementById("revealImgPlaceholder");
 
   _stripRevealDrawFx(modal, imgWrap, placeholder, img);
+  _renderRevealHotspots(card);
 
   _openCardId = card.id || null;
   _revealDrawn = null;

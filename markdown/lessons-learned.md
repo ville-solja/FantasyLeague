@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-03 — qa-engineer — testing
+**Problem:** On this Windows sandbox, dozens of unrelated test files compare literal non-ASCII characters (em dash –, middle dot ·, minus sign −, stars ★) against text built by a Node subprocess or read from a doc file; the assertions fail because the character round-trips as `�`/mangled bytes, unrelated to any code change. This is a second, separate Windows-only noise source from the already-logged WinError 206 Node-spawn length limit (same `-n auto` runs).
+**Solution:** When a failure's diff shows `�` (or two renderings of what looks like the same character) on one side only, treat it as this known Windows encoding artifact, not a regression; confirm on Linux CI instead of chasing it locally.
+
 ### 2026-10-27 — developer — testing
 **Problem:** A step added to `main._live_poll_loop` (`_run_finals_check`, issue 237) opens `database.SessionLocal`, the real `data/fantasy.db`, in the `test_issue_161` tests that run the loop with only `_live_poll_once` stubbed; and the conftest `db` (plain `:memory:`) is invisible to TestClient's worker threads.
 **Solution:** Stub the new step in every test that runs the loop (`monkeypatch.setattr(main, "_run_finals_check", lambda: None)`). For TestClient tests, give the module its own `db` fixture on a `StaticPool` with `check_same_thread=False` (`test_issue_237_*`).

@@ -793,3 +793,122 @@ function tagDetailsHtml(tags) {
 }
 // END TAG SYMBOLS (issue 217)
 // END ACCOLADES (issue 50)
+
+// CARD FACE HOTSPOTS (plan-card-art-polish): the accolade badges, player name and
+// team name/logo are baked into the card's PNG, so hovering/clicking them needs an
+// invisible overlay laid over the rendered <img>. The overlay's geometry (percentages
+// of the 687x1024 canvas) and the accolade selection below must mirror backend/image.py
+// exactly, or the tooltip hotspots won't line up with the painted badges. Kept outside
+// the ACCOLADES (issue 50) block above (which several tests' Node harness loads in
+// full) so adding this doesn't grow that shared harness string.
+
+// Card-face priority: same tiers, same order as image.py's _ACCOLADE_PRIORITY. Kept
+// local to this block (not merged into ACCOLADE_KINDS) for the same reason image.py's
+// own _ACCOLADE_PRIORITY is kept local to it — a parity test checks the two agree.
+const _CARD_ACCOLADE_PRIORITY = {
+  div1: 0, div2: 0,
+  div1_runner_up: 1, div2_runner_up: 1,
+  div1_third: 2, div2_third: 2,
+  fantasy_winner: 3,
+  most_points: 4, best_average: 4, best_match: 4,
+  played: 5,
+};
+
+/**
+ * Up to 6 card-face accolade slots for one accolades list (already newest-season-
+ * first, as GET /accolades and playerAccolades return): dedupes by ACCOLADE_KINDS
+ * key keeping the first-seen (newest) occurrence, ranks by `_CARD_ACCOLADE_PRIORITY`
+ * (stable sort keeps same-tier keys in their newest-first order), and caps at 6 —
+ * mirroring image.py's `_select_accolade_keys`/`_accolade_counts` exactly, so the
+ * tooltip hotspots line up with the badges actually painted on the card. Each slot's
+ * tip/aria text reuses `_accoladePipText`, the same breakdown text as the pip tooltips
+ * elsewhere, naming the accolade and, when held more than once, how many times and in
+ * which seasons.
+ */
+function cardAccoladeSlotsFromList(accoladesList) {
+  const list = Array.isArray(accoladesList) ? accoladesList : [];
+  const order = [];
+  const byKey = {};
+  for (const a of list) {
+    const kind = _accoladeKind(a);
+    if (!kind) continue;
+    if (!byKey[kind.key]) { byKey[kind.key] = []; order.push(kind.key); }
+    byKey[kind.key].push(a);
+  }
+  const ranked = order.slice().sort((x, y) =>
+    (_CARD_ACCOLADE_PRIORITY[x] ?? 99) - (_CARD_ACCOLADE_PRIORITY[y] ?? 99));
+  return ranked.slice(0, 6).map((key, index) => {
+    const kind = ACCOLADE_KINDS.find(k => k.key === key);
+    const mine = byKey[key];
+    const t = _accoladePipText(kind, mine);
+    return { index, key, kind, count: mine.length, tip: t.tip, aria: t.aria };
+  });
+}
+
+/** `cardAccoladeSlotsFromList` for one player, reading the loaded GET /accolades cache. */
+function cardAccoladeSlots(playerId) {
+  return cardAccoladeSlotsFromList(playerAccolades(playerId));
+}
+
+// The card canvas (backend/image.py's _CARD_SIZE) and the slot rects the overlay
+// positions against, as percentages — kept in lock-step with image.py's _NAME_BAR /
+// _TEAM_NAME_BAR / _LOGO_BOX / _ACCOLADE_COLS / _ACCOLADE_ROWS / _ACCOLADE_CELL.
+const _CARD_CANVAS = { w: 687, h: 1024 };
+const _CARD_NAME_BAR = [125, 416, 571, 469];
+const _CARD_TEAM_NAME_BAR = [217, 499, 542, 545];
+const _CARD_LOGO_BOX = [93, 815, 338, 937];
+const _CARD_ACCOLADE_COLS = [378, 460, 542];
+const _CARD_ACCOLADE_ROWS = [804, 888];
+const _CARD_ACCOLADE_CELL = [58, 59];
+
+function _cardPctBox([x0, y0, x1, y1]) {
+  const { w, h } = _CARD_CANVAS;
+  return `left:${(x0 / w * 100).toFixed(3)}%;top:${(y0 / h * 100).toFixed(3)}%;`
+    + `width:${((x1 - x0) / w * 100).toFixed(3)}%;height:${((y1 - y0) / h * 100).toFixed(3)}%;`;
+}
+
+/** A card-face accolade slot's rect, same cell math as image.py's `_accolade_cell_rect`. */
+function _cardAccoladeCellBox(index) {
+  const col = index % 3, row = Math.floor(index / 3);
+  const [cw, ch] = _CARD_ACCOLADE_CELL;
+  const x0 = _CARD_ACCOLADE_COLS[col], y0 = _CARD_ACCOLADE_ROWS[row];
+  return [x0, y0, x0 + cw, y0 + ch];
+}
+
+/**
+ * Invisible hotspot overlay for a rendered card image (My Team roster/bench, the
+ * card viewer, the draw reveal — every place a card image shows): one focusable
+ * button over the name-bar region opening the player's profile, one each over the
+ * team name-bar and logo-box regions opening the team's profile, and one [data-tip]
+ * span per accolade slot from `cardAccoladeSlots`. Every hotspot stops the click's
+ * propagation so clicking it never also triggers the card's own "open card viewer"
+ * behaviour; clicking anywhere else on the card face (photo, stats box, margins) is
+ * untouched by the overlay and still reaches that handler. Buttons are left out when
+ * the card has no `player_id`/`team_id`. Caller places the returned markup in a
+ * `position: relative` wrapper around the `<img>`, sized to the same aspect ratio as
+ * the card canvas so the percentage boxes line up.
+ */
+function cardHotspotOverlayHtml(c) {
+  if (!c) return "";
+  const parts = [];
+  if (c.player_id != null) {
+    const label = `View ${c.player_name || "player"}'s profile`;
+    parts.push(`<button type="button" class="card-hotspot card-hotspot--name" style="${_cardPctBox(_CARD_NAME_BAR)}" aria-label="${_escHtml(label)}" onclick="event.stopPropagation();openPlayerModal(${c.player_id})"></button>`);
+  }
+  if (c.team_id != null) {
+    const label = `View ${c.team_name || "team"}'s profile`;
+    const onclick = `event.stopPropagation();openTeamModal(${c.team_id})`;
+    parts.push(`<button type="button" class="card-hotspot card-hotspot--team" style="${_cardPctBox(_CARD_TEAM_NAME_BAR)}" aria-label="${_escHtml(label)}" onclick="${onclick}"></button>`);
+    parts.push(`<button type="button" class="card-hotspot card-hotspot--team" style="${_cardPctBox(_CARD_LOGO_BOX)}" aria-label="${_escHtml(label)}" onclick="${onclick}"></button>`);
+  }
+  if (c.player_id != null) {
+    const slots = cardAccoladeSlots(c.player_id);
+    if (slots.length) {
+      for (const s of slots) {
+        parts.push(`<span class="card-hotspot card-hotspot--accolade" tabindex="0" aria-label="${_escHtml(s.aria)}" data-tip="${_escHtml(s.tip)}" style="${_cardPctBox(_cardAccoladeCellBox(s.index))}"></span>`);
+      }
+      _initAccoladeTips();
+    }
+  }
+  return parts.join("");
+}

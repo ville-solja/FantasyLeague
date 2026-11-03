@@ -298,15 +298,20 @@ function toggleCardZone(cardId) {
 // ---------------------------------------------------------------------------
 
 /** The inner markup of a card slot: image, weekly points (and a substitution label).
- * No accolade or tag pips on the card face (issue 228): the card viewer lists them. */
+ * No accolade or tag pips on the card face (issue 228): the card viewer lists them.
+ * Plan-card-art-polish: an invisible hotspot overlay sits over the image for the
+ * accolade tooltips and the player/team click-through. */
 function _cardSlotHTML(c) {
   const imgSrc = cardImageUrl(c.id);
   const pts = Number(c.total_points || 0).toFixed(1);
   return `
-      <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
-           data-player-name="${_escHtml(c.player_name)}"
-           draggable="false" tabindex="0" role="button"
-           onerror="_cardImgFallback(this)" />
+      <div class="card-img-wrap">
+        <img class="card-img" src="${imgSrc}" alt="${_escHtml(c.player_name)}"
+             data-player-name="${_escHtml(c.player_name)}"
+             draggable="false" tabindex="0" role="button"
+             onerror="_cardImgFallback(this)" />
+        ${cardHotspotOverlayHtml(c)}
+      </div>
       <div class="card-slot-pts">${pts} pts</div>${_subLabelHTML(c)}`;
 }
 

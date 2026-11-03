@@ -1255,14 +1255,13 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 .k-scroll::-webkit-scrollbar-thumb:hover { background: var(--fg-dim); }
 
 /* ============================================================
-   CARD IMAGE GRID (scrollbar from .k-scroll)
+   CARD IMAGE GRID
    ============================================================ */
 .card-grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
-  overflow-x: auto;
   padding: 6px 2px 14px;
-  scrollbar-gutter: auto;  /* horizontal scroller: no reserved vertical gutter */
 }
 
 #benchGrid {
@@ -1277,8 +1276,12 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   align-items: center;
   gap: 6px;
 }
+.card-img-wrap {
+  position: relative;
+  width: 100%;
+}
 .card-img {
-  width: 180px;
+  width: 100%;
   height: auto;
   border-radius: var(--r-lg);
   cursor: pointer;
@@ -1290,8 +1293,8 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   box-shadow: var(--sh-lg);
 }
 .card-img-loading {
-  width: 180px;
-  height: 268px;
+  aspect-ratio: 687 / 1024;
+  width: 100%;
   border-radius: var(--r-lg);
   background: var(--bg-card);
   border: var(--bw-hair) solid var(--border-soft);
@@ -1303,8 +1306,8 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 }
 .card-slot-empty {
   flex: 0 0 auto;
-  width: 180px;
-  height: 268px;
+  aspect-ratio: 687 / 1024;
+  width: 100%;
   border: 2px dashed var(--border-soft);
   border-radius: var(--r-lg);
   display: flex;
@@ -1314,6 +1317,30 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   font-size: var(--fs-xs);
   letter-spacing: var(--tr-wide);
   text-transform: uppercase;
+}
+
+/* Plan-card-art-polish: invisible click-through/tooltip hotspots laid over a
+   rendered card image (My Team roster/bench, the card viewer, the draw reveal),
+   positioned by percentage to line up with image.py's baked-in slots. */
+.card-hotspot-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.card-hotspot {
+  position: absolute;
+  pointer-events: auto;
+  background: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.card-hotspot--accolade { cursor: default; }
+.card-hotspot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .card-slot-pts { font-size: var(--fs-xs); color: var(--fg-dim); text-align: center; }
 .card-slot-note { font-size: var(--fs-xs); color: var(--fg-muted, var(--fg-dim)); text-align: center; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -1867,6 +1894,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
   #tab-leaderboard .grid,
   #tab-admin .grid {
     grid-template-columns: 1fr;
+  }
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 .tab-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
