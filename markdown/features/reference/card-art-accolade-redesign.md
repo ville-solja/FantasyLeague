@@ -2,7 +2,7 @@
 
 New illustrated card templates with purpose-built slots for everything a card shows — photo, team logo, name, team name, stats, and a 6-slot accolade badge grid — replacing the original templates restored by [Card Visuals Rollback](card-visuals-rollback.md) (#228). Unlike layout A (#218), the new design has a clean place for accolades, so they return to the card face using dedicated badge art instead of the Lucide icon pips used elsewhere on the site. Tags stay off the card face.
 
-See [Card Image Generation](card-image-generation.md) for the full compositing pipeline and current slot coordinates; this doc is the record of the change itself.
+See [Card Image Generation](card-image-generation.md) for the full compositing pipeline and current slot coordinates; this doc is the record of the change itself. [Card Art Polish](card-art-polish.md) followed up with a few refinements once this design was seen with real data: a bigger accolade count badge with a hover tooltip, click-through hotspots to the player's/team's profile, a cover-fit (not aspect-fit) team logo, and a bigger five-per-row My Team grid.
 
 ---
 

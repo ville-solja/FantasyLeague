@@ -321,7 +321,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
     card_points.refresh_card_points(db, card_ids=[card.id])
 
     team_row = db.execute(text("""
-        SELECT t.name, t.logo_url
+        SELECT t.id as team_id, t.name, t.logo_url
         FROM player_match_stats s
         JOIN teams t ON t.id = s.team_id
         WHERE s.player_id = :pid
@@ -346,6 +346,7 @@ def draw_card(db=Depends(get_db), current_user: dict = Depends(get_current_user)
         "avatar_url": player.avatar_url,
         "rank_tier": player.rank_tier,
         "leaderboard_rank": player.leaderboard_rank,
+        "team_id": team_row.team_id if team_row else None,
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "is_active": is_active,
@@ -454,7 +455,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
     card_points.refresh_card_points(db, card_ids=[card.id])
 
     team_row = db.execute(text("""
-        SELECT t.name, t.logo_url FROM player_match_stats s
+        SELECT t.id as team_id, t.name, t.logo_url FROM player_match_stats s
         JOIN teams t ON t.id = s.team_id
         WHERE s.player_id = :pid ORDER BY s.match_id DESC LIMIT 1
     """), {"pid": player.id}).first()
@@ -477,6 +478,7 @@ def draw_booster(team_id: int, db=Depends(get_db),
         "avatar_url": player.avatar_url,
         "rank_tier": player.rank_tier,
         "leaderboard_rank": player.leaderboard_rank,
+        "team_id": team_row.team_id if team_row else team.id,
         "team_name": team_row.name if team_row else team.name,
         "team_logo_url": safe_logo_url(team_row.logo_url if team_row else team.logo_url),
         "is_active": is_active,
@@ -510,7 +512,7 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
         raise HTTPException(status_code=404, detail="Card not found")
     player = db.get(Player, card.player_id)
     team_row = db.execute(text("""
-        SELECT t.name, t.logo_url
+        SELECT t.id as team_id, t.name, t.logo_url
         FROM player_match_stats s
         JOIN teams t ON t.id = s.team_id
         WHERE s.player_id = :pid
@@ -526,6 +528,7 @@ def get_card(card_id: int, db=Depends(get_db), current_user: dict = Depends(get_
         "avatar_url": player.avatar_url if player else None,
         "rank_tier": player.rank_tier if player else None,
         "leaderboard_rank": player.leaderboard_rank if player else None,
+        "team_id": team_row.team_id if team_row else None,
         "team_name": team_row.name if team_row else None,
         "team_logo_url": safe_logo_url(team_row.logo_url) if team_row else None,
         "modifiers": _format_modifiers(mods),

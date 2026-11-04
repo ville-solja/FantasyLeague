@@ -12,9 +12,17 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-03 — qa-engineer — testing
+**Problem:** On this Windows sandbox, dozens of unrelated test files compare literal non-ASCII characters (em dash –, middle dot ·, minus sign −, stars ★) against text built by a Node subprocess or read from a doc file; the assertions fail because the character round-trips as `�`/mangled bytes, unrelated to any code change. This is a second, separate Windows-only noise source from the already-logged WinError 206 Node-spawn length limit (same `-n auto` runs).
+**Solution:** When a failure's diff shows `�` (or two renderings of what looks like the same character) on one side only, treat it as this known Windows encoding artifact, not a regression; confirm on Linux CI instead of chasing it locally.
+
 ### 2026-10-31 — curated — testing
 **Problem:** Node harnesses load only slices of the frontend modules (`_js([...])`, `_fn_source`, `_fn_body`), so code calling a helper from another module, top-level `window.*` calls, moved constants, `append()`/`innerHTML` children and helpers called inside extracted renderers break far from the change; `_fn_body` drops `async`, and a stub defined before a module is replaced by the module's own function.
 **Solution:** Before touching a module, grep `backend/tests` for harnesses that load it and add the helper or stub there (or load helpers with an indirect `(0, eval)(<ACCOLADES block>)`). Pass extra markup into extracted renderers as a trailing default parameter, re-add `async` when pasting, use `appendChild`/`replaceChildren`, stub only globals the modules don't define, and print `status()` when a harness fails oddly. Reuse: `_HARNESS` (`test_issue_186`, roster drag/FLIP, `_rule(css, selector)`), `_HARNESS`/`_run` (`test_issue_205`, draws), `_ADMIN_HARNESS` (`test_issue_213`, re-auth popup), `_popup` (`test_issue_230`, player popup), `_ROSTER_HARNESS` (`test_issue_155`).
+
+### 2026-10-27 — developer — testing
+**Problem:** A step added to `main._live_poll_loop` (`_run_finals_check`, issue 237) opens `database.SessionLocal`, the real `data/fantasy.db`, in the `test_issue_161` tests that run the loop with only `_live_poll_once` stubbed; and the conftest `db` (plain `:memory:`) is invisible to TestClient's worker threads.
+**Solution:** Stub the new step in every test that runs the loop (`monkeypatch.setattr(main, "_run_finals_check", lambda: None)`). For TestClient tests, give the module its own `db` fixture on a `StaticPool` with `check_same_thread=False` (`test_issue_237_*`).
 
 ### 2026-10-31 — curated — testing
 **Problem:** Hand-built requests fail on sessions, re-auth and rate limits: the `session` cookie is a signed Starlette session that needs a `user_sessions` row and `SessionMiddleware`; destructive admin routes need a recent re-auth; slowapi checks `request`; another file reloading `rate_limit` leaves routers holding a different Limiter (a rate-limit test then passes alone and fails under `-n auto`); plain `:memory:` SQLite is invisible to TestClient's worker threads.
