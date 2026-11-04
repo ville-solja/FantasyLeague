@@ -1292,6 +1292,13 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   transform: translateY(-5px) scale(1.03);
   box-shadow: var(--sh-lg);
 }
+/* Plan-card-art-polish: the hotspot buttons sit on top of (not inside) .card-img,
+   so hovering one doesn't trigger .card-img:hover; drive the same lift from the
+   shared wrapper instead so the zoom holds while a hotspot has the pointer. */
+.card-img-wrap:hover .card-img {
+  transform: translateY(-5px) scale(1.03);
+  box-shadow: var(--sh-lg);
+}
 .card-img-loading {
   aspect-ratio: 687 / 1024;
   width: 100%;
@@ -1338,6 +1345,10 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   cursor: pointer;
 }
 .card-hotspot--accolade { cursor: default; }
+.card-hotspot:hover,
+.card-hotspot:focus {
+  background: transparent;
+}
 .card-hotspot:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -1352,6 +1363,9 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
 .card-slot[data-rarity="rare"]      .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-rare); }
 .card-slot[data-rarity="epic"]      .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-epic); }
 .card-slot[data-rarity="legendary"] .card-img:hover { box-shadow: var(--sh-lg), var(--sh-glow-amber); }
+.card-slot[data-rarity="rare"]      .card-img-wrap:hover .card-img { box-shadow: var(--sh-lg), var(--sh-glow-rare); }
+.card-slot[data-rarity="epic"]      .card-img-wrap:hover .card-img { box-shadow: var(--sh-lg), var(--sh-glow-epic); }
+.card-slot[data-rarity="legendary"] .card-img-wrap:hover .card-img { box-shadow: var(--sh-lg), var(--sh-glow-amber); }
 
 /* ── Drag-and-drop UX (pointer drag, issue #186) ──────────────────────────── */
 
