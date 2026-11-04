@@ -310,7 +310,7 @@ function _cardSlotHTML(c) {
              data-player-name="${_escHtml(c.player_name)}"
              draggable="false" tabindex="0" role="button"
              onerror="_cardImgFallback(this)" />
-        ${cardHotspotOverlayHtml(c)}
+        ${typeof cardHotspotOverlayHtml === "function" ? cardHotspotOverlayHtml(c) : ""}
       </div>
       <div class="card-slot-pts">${pts} pts</div>${_subLabelHTML(c)}`;
 }
