@@ -60,6 +60,18 @@
   .freshness.warn { color: #d29922; }
   .freshness-bar button { width: auto; margin-top: 0; padding: 4px 10px; font-size: 12px; }
 
+  .mode-row { display: flex; gap: 6px; margin: 4px 0 8px; }
+  .mode-row button { margin-top: 0; }
+  .mode-row button.selected { background: #9147ff; }
+  .vote-setup { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .vote-setup select { background: #2c2c3a; color: #efeff1; border: 1px solid #3d3d50; border-radius: 4px; padding: 4px; }
+  .vote-setup button { width: auto; margin-top: 0; }
+  .poll-status { display: flex; gap: 10px; font-weight: 700; margin: 6px 0; }
+  .poll-actions { display: flex; gap: 6px; }
+  .poll-actions button { margin-top: 0; }
+  .player-item.tied { border-color: #d29922; }
+  .player-item .pvotes { font-size: 0.7rem; color: #efeff1; }
+
   .drop-result {
     font-size: 0.75rem; color: #adadb8; margin-top: 6px; padding: 6px 8px;
     background: #1a1a24; border-radius: 4px;
@@ -103,12 +115,57 @@
 <div id="mvp-step-3" class="step">
   <button class="back-link" id="btn-back-2">← Back to matches</button>
   <p class="muted" id="step3-label" style="margin-bottom:4px">Select the MVP:</p>
-  <div class="player-grid" id="player-grid"></div>
-  <div class="confirm-bar" id="confirm-bar">
-    <span class="selected-name" id="selected-player-name"></span>
-    <button id="btn-confirm-mvp">Confirm MVP &amp; Drop Tokens</button>
+  <div class="mode-row" role="group" aria-label="How to choose the MVP">
+    <button type="button" id="btn-mode-pick" class="selected">Pick MVP</button>
+    <button type="button" id="btn-mode-vote">Start viewer vote</button>
   </div>
-  <p class="chat-preview" id="chat-preview" hidden></p>
+  <div id="pick-section">
+    <div class="player-grid" id="player-grid"></div>
+    <div class="confirm-bar" id="confirm-bar">
+      <span class="selected-name" id="selected-player-name"></span>
+      <button id="btn-confirm-mvp">Confirm MVP &amp; Drop Tokens</button>
+    </div>
+    <p class="chat-preview" id="chat-preview" hidden></p>
+  </div>
+  <div id="vote-section" hidden>
+    <p class="muted">Viewers who joined Kana Cards vote in the panel. You confirm the result.</p>
+    <div class="vote-setup">
+      <label for="poll-duration" class="muted">Vote length</label>
+      <select id="poll-duration">
+        <option value="60">1 min</option>
+        <option value="120" selected>2 min</option>
+        <option value="180">3 min</option>
+      </select>
+      <button type="button" id="btn-open-vote">Open vote</button>
+    </div>
+    <p class="chat-preview">Chat will say: "MVP vote open for &lt;team&gt; vs &lt;team&gt;, game &lt;n&gt;: vote in the Kana Cards panel."</p>
+  </div>
+</div>
+
+<!-- Step 4: viewer vote (issue #234) -->
+<div id="mvp-step-4" class="step">
+  <button class="back-link" id="btn-back-4">← Back</button>
+  <p style="font-weight:700;margin-bottom:4px" id="poll-title">Viewer vote</p>
+  <div id="poll-open">
+    <div class="poll-status" role="status">
+      <span id="poll-countdown"></span>
+      <span id="poll-votes"></span>
+    </div>
+    <p class="muted">Only the number of votes shows until the vote closes.</p>
+    <div class="poll-actions">
+      <button type="button" id="btn-poll-end">End now</button>
+      <button type="button" id="btn-poll-cancel" class="secondary">Cancel vote</button>
+    </div>
+  </div>
+  <div id="poll-result" hidden>
+    <p class="muted" id="poll-result-note" role="status"></p>
+    <div class="player-grid" id="poll-result-list"></div>
+    <div class="confirm-bar" id="poll-confirm-bar">
+      <span class="selected-name" id="poll-selected-name"></span>
+      <button type="button" id="btn-poll-confirm">Confirm MVP &amp; Drop Tokens</button>
+    </div>
+    <p class="chat-preview" id="poll-chat-preview" hidden></p>
+  </div>
 </div>
 
 <script src="live_config.js"></script>

@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-10 — developer — testing
+**Problem:** `test_issue_195`'s `_called_paths` matched only `[a-z_/]` literals and a bare `"/prefix/" + id`, so a hyphenated route (`/twitch/mvp-poll`) or a `"/x/" + id + "/vote"` call was invisible to the endpoint-disclosure check and its table row looked "never called".
+**Solution:** The regex now takes `-` and a trailing `+ "/suffix"` literal; add the route's prefix to `PARAM_BY_PREFIX` and one table row per method in the review guide's endpoint table.
+
 ### 2026-10-31 — curated — testing
 **Problem:** Node harnesses load only slices of the frontend modules (`_js([...])`, `_fn_source`, `_fn_body`), so code calling a helper from another module, top-level `window.*` calls, moved constants, `append()`/`innerHTML` children and helpers called inside extracted renderers break far from the change; `_fn_body` drops `async`, and a stub defined before a module is replaced by the module's own function.
 **Solution:** Before touching a module, grep `backend/tests` for harnesses that load it and add the helper or stub there (or load helpers with an indirect `(0, eval)(<ACCOLADES block>)`). Pass extra markup into extracted renderers as a trailing default parameter, re-add `async` when pasting, use `appendChild`/`replaceChildren`, stub only globals the modules don't define, and print `status()` when a harness fails oddly. Reuse: `_HARNESS` (`test_issue_186`, roster drag/FLIP, `_rule(css, selector)`), `_HARNESS`/`_run` (`test_issue_205`, draws), `_ADMIN_HARNESS` (`test_issue_213`, re-auth popup), `_popup` (`test_issue_230`, player popup), `_ROSTER_HARNESS` (`test_issue_155`).

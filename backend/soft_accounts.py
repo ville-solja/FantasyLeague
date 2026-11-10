@@ -28,7 +28,7 @@ import card_points
 from deps import _audit
 from models import (Card, CardModifier, CodeRedemption, NotificationDismissal,
                     PasswordResetToken, TokenGrantClaim, TwitchLinkCode, TwitchMergeLog,
-                    TwitchPresence, User, UserSession, UserTag, Week, WeeklyRosterEntry,
+                    TwitchMvpVote, TwitchPresence, User, UserSession, UserTag, Week, WeeklyRosterEntry,
                     WeeklySummaryReveal, WeeklySummarySeen)
 
 logger = logging.getLogger(__name__)
@@ -189,8 +189,8 @@ def touch_last_seen(db, user: User, now: int | None = None) -> bool:
 
 def delete_soft_account(db, soft: User) -> None:
     """Delete a soft account and every row it owns: cards (with their modifiers and
-    stored points), roster snapshots, per-user state and its presence row. Refuses a
-    website account. The caller audits and commits."""
+    stored points), roster snapshots, per-user state, its presence row and its MVP
+    votes (issue #234). Refuses a website account. The caller audits and commits."""
     if soft.account_type != SOFT:
         raise ValueError("delete_soft_account called for a website account")
     uid = soft.id
@@ -207,6 +207,8 @@ def delete_soft_account(db, soft: User) -> None:
     if soft.twitch_user_id:
         db.query(TwitchPresence).filter(
             TwitchPresence.twitch_user_id == soft.twitch_user_id).delete(synchronize_session=False)
+        db.query(TwitchMvpVote).filter(
+            TwitchMvpVote.twitch_user_id == soft.twitch_user_id).delete(synchronize_session=False)
     db.delete(soft)
     db.flush()
 

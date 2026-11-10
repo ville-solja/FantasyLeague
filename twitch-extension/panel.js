@@ -7,6 +7,7 @@
 
 var LIVE_REFRESH_MS = 60000;
 var HEARTBEAT_MS    = 55000;
+var POLL_REFRESH_MS = 15000;   // vote count while an MVP vote is open (issue #234)
 var RARITY_ORDER    = ["legendary", "epic", "rare", "common"];
 var RARITY_SHORT    = { legendary: "Leg", epic: "Epic", rare: "Rare", common: "Com" };
 
@@ -27,6 +28,11 @@ var state = {
     pickerSort: "points",
     leaveArmed: false,
     scrollTops: {},         // tab view -> scrollTop while it is hidden (issue #191)
+    poll: null,             // GET /twitch/mvp-poll: the channel's MVP vote, or null
+    pollPick: null,         // player chosen in the vote, before pressing Vote
+    pollOffset: 0,          // server clock minus local clock, in seconds
+    pollTimer: null,
+    pollTick: null,
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -107,6 +113,7 @@ function onReady() {
         state.liveTimer = setInterval(loadLive, LIVE_REFRESH_MS);
     }
     loadMe();
+    loadPoll();
 }
 
 // Issue #180: every "not available" note ends with the reason code (failReasonSuffix),
@@ -204,6 +211,7 @@ function loadMe() {
         state.meLoaded = true;
         state.meError = !!(data && data._status);
         state.me = data && data.joined ? data : null;
+        if (state.poll) loadPoll();  // who may vote follows the account
         if (isJoined()) {
             if (!state.heartbeatOn) { startHeartbeat(HEARTBEAT_MS); state.heartbeatOn = true; }
         } else if (state.heartbeatOn) {
@@ -702,11 +710,163 @@ el("btn-leave").addEventListener("click", function () {
     }).finally(function () { btn.disabled = false; disarmLeave(); });
 });
 
-// ── PubSub: MVP announcement and token drop ─────────────────────────────────
+// ── Live tab: MVP viewer vote (issue #234) ──────────────────────────────────
+
+function loadPoll() {
+    ebsGet("/twitch/mvp-poll").then(function (data) {
+        if (!data || data._status) return;  // keep what is shown
+        setPoll(data.poll || null);
+    }).catch(function () {});
+}
+
+function setPoll(poll) {
+    var prevId = state.poll && state.poll.poll_id;
+    state.poll = poll;
+    if (!poll || poll.poll_id !== prevId) state.pollPick = null;
+    if (poll && poll.now) state.pollOffset = poll.now - Date.now() / 1000;
+    var open = !!(poll && poll.status === "open");
+    if (open && !state.pollTimer) {
+        state.pollTimer = setInterval(loadPoll, POLL_REFRESH_MS);
+        state.pollTick = setInterval(renderPollCountdown, 1000);
+    } else if (!open && state.pollTimer) {
+        clearInterval(state.pollTimer);
+        clearInterval(state.pollTick);
+        state.pollTimer = null;
+        state.pollTick = null;
+    }
+    keepScroll("view-live", renderPoll);
+}
+
+function pollVotesText(n) {
+    n = Number(n || 0);
+    return n + (n === 1 ? " vote" : " votes");
+}
+
+function pollCountdownText(poll) {
+    var left = Math.max(0, Math.ceil(poll.closes_at - (Date.now() / 1000 + state.pollOffset)));
+    var s = left % 60;
+    return Math.floor(left / 60) + ":" + (s < 10 ? "0" : "") + s + " left";
+}
+
+function renderPollCountdown() {
+    var p = state.poll;
+    var line = el("poll-countdown");
+    if (!p || p.status !== "open" || !line) return;
+    line.textContent = pollCountdownText(p) + " · " + pollVotesText(p.total_votes);
+    // The backend closes the vote on the first read after closes_at.
+    if (p.closes_at <= Date.now() / 1000 + state.pollOffset) loadPoll();
+}
+
+// Who may vote (backend "voter"): joined viewers old enough for drops.
+function pollVoterNote(poll) {
+    var v = poll.voter || {};
+    if (v.reason === "login") return "Log in to Twitch to vote.";
+    if (v.reason === "join") return "Join to vote.";
+    if (v.reason === "too_new") {
+        var d = new Date((v.votes_from || 0) * 1000);
+        return "Your vote counts from " +
+            d.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ".";
+    }
+    return "";
+}
+
+function pollPlayerName(poll, id) {
+    var found = "";
+    (poll.teams || []).forEach(function (t) {
+        (t.players || []).forEach(function (p) { if (p.player_id === id) found = p.player_name; });
+    });
+    return found;
+}
+
+function renderPoll() {
+    var box = el("live-poll");
+    var p = state.poll;
+    if (!p) { box.hidden = true; box.innerHTML = ""; return; }
+    box.hidden = false;
+    var open = p.status === "open";
+    var html = '<h3 class="eyebrow">MVP vote</h3>' +
+        '<p class="poll-match">' + _escHtml(p.team1_name) + " vs " + _escHtml(p.team2_name) +
+        " · Game " + _escHtml(p.match_number) + "</p>";
+    if (open) {
+        var canVote = !!(p.voter && p.voter.can_vote);
+        var pick = state.pollPick || p.my_vote;
+        html += '<p class="note" id="poll-countdown" role="status">' + _escHtml(pollCountdownText(p) + " · " + pollVotesText(p.total_votes)) + "</p>";
+        (p.teams || []).forEach(function (t) {
+            html += '<div class="poll-team">' + _escHtml(t.team_name) + "</div>";
+            (t.players || []).forEach(function (pl) {
+                html += '<button type="button" class="poll-player" data-player="' + Number(pl.player_id) + '"' +
+                    ' aria-pressed="' + (pick === pl.player_id ? "true" : "false") + '"' + (canVote ? "" : " disabled") + ">" +
+                    "<span>" + _escHtml(pl.player_name) + "</span>" +
+                    (p.my_vote === pl.player_id ? '<span class="share">Your vote</span>' : "") + "</button>";
+            });
+        });
+        if (canVote) {
+            html += '<button type="button" class="poll-vote" id="btn-poll-vote"' + (pick ? "" : " disabled") + ">" +
+                (p.my_vote ? "Change vote" : "Vote") + "</button>" +
+                '<p class="note">' + (p.my_vote
+                    ? "You voted for " + _escHtml(pollPlayerName(p, p.my_vote)) + ". You can change it until the vote closes."
+                    : "Pick a player, then Vote. Results show when the vote closes.") + "</p>";
+        } else {
+            html += '<p class="note">' + _escHtml(pollVoterNote(p)) + "</p>";
+        }
+        html += '<p class="note err" id="poll-error" role="status"></p>';
+    } else {
+        html += '<p class="note">' + (p.status === "confirmed" ? "The vote is over." : "The vote has closed.") +
+            " " + _escHtml(pollVotesText(p.total_votes)) + ".</p>";
+        (p.results || []).forEach(function (r) {
+            var mine = p.my_vote === r.player_id;
+            html += '<div class="poll-player' + (mine ? " mine" : "") + '"><span>' + _escHtml(r.player_name) + "</span>" +
+                '<span class="share">' + (mine ? "Your pick · " : "") + Number(r.pct) + "%</span></div>";
+        });
+    }
+    box.innerHTML = html;
+    if (!open) return;
+    Array.prototype.forEach.call(box.querySelectorAll(".poll-player"), function (btn) {
+        btn.addEventListener("click", function () {
+            state.pollPick = Number(btn.getAttribute("data-player"));
+            renderPoll();
+        });
+    });
+    var voteBtn = el("btn-poll-vote");
+    if (voteBtn) voteBtn.addEventListener("click", function () { castVote(voteBtn); });
+}
+
+function castVote(btn) {
+    var p = state.poll;
+    var pick = state.pollPick || (p && p.my_vote);
+    if (!p || !pick) return;
+    btn.disabled = true;
+    ebsPost("/twitch/mvp-poll/" + encodeURIComponent(p.poll_id) + "/vote", { player_id: pick }).then(function (data) {
+        if (data && !data._status && data.poll_id === p.poll_id) {
+            p.my_vote = data.my_vote;
+            p.total_votes = data.total_votes;
+            state.pollPick = null;
+            keepScroll("view-live", renderPoll);
+            showToast("Vote saved.");
+            return;
+        }
+        var msg = {
+            not_joined: "Join to vote.",
+            too_new: "Your account is too new to vote yet.",
+            poll_closed: "The vote has closed.",
+            twitch_login_required: "Log in to Twitch to vote.",
+        }[data && data.detail] || "Voting is unavailable right now. Try again in a moment.";
+        var errEl = el("poll-error");
+        if (errEl) errEl.textContent = msg;
+        loadPoll();
+    }).catch(function () {
+        var errEl = el("poll-error");
+        if (errEl) errEl.textContent = "Voting is unavailable right now. Try again in a moment.";
+    }).finally(function () { btn.disabled = false; });
+}
+
+// ── PubSub: MVP announcement, token drop and MVP vote ───────────────────────
 
 function onPubSub(msg) {
+    if (msg && msg.type === "mvp_poll") { loadPoll(); return; }
     if (!msg || msg.type !== "mvp") return;
     loadLive();
+    loadPoll();
     if (msg.player_name) showToast("MVP: " + msg.player_name);
     var drop = msg.token_drop || {};
     if (isJoined() && drop.count > 0) {

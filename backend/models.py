@@ -516,6 +516,40 @@ class TwitchTokenDrop(Base):
     count      = Column(Integer)  # number of tokens actually distributed
 
 
+class TwitchMvpPoll(Base):
+    """A viewer MVP vote for one match on one channel (issue #234, twitch_mvp_poll.py).
+    At most one open poll per channel (the partial unique index). It closes lazily
+    at closes_at; tally_json keeps only the per-player counts."""
+    __tablename__ = "twitch_mvp_polls"
+    __table_args__ = (Index("ux_twitch_mvp_polls_open_channel", "channel_id", unique=True,
+                            sqlite_where=text("status = 'open'"),
+                            postgresql_where=text("status = 'open'")),)
+
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id          = Column(String, nullable=False, index=True)
+    match_id            = Column(Integer, nullable=False, index=True)  # no FK: a live match has no matches row yet
+    status              = Column(String, nullable=False)  # open | closed | cancelled | confirmed
+    opened_at           = Column(Integer, nullable=False)
+    closes_at           = Column(Integer, nullable=False)
+    closed_at           = Column(Integer, nullable=True)
+    confirmed_player_id = Column(Integer, nullable=True)
+    tally_json          = Column(Text, nullable=True)  # {"<player_id>": votes}, written on close
+    info_json           = Column(Text, nullable=True)  # teams, game number and players at open
+
+
+class TwitchMvpVote(Base):
+    """One viewer's vote in a TwitchMvpPoll, keyed by the opaque Twitch id. Deleted 30
+    days after the poll ends and on Leave Kana Cards."""
+    __tablename__ = "twitch_mvp_votes"
+    __table_args__ = (UniqueConstraint("poll_id", "twitch_user_id", name="uq_twitch_mvp_vote_poll_voter"),)
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    poll_id        = Column(Integer, ForeignKey("twitch_mvp_polls.id"), nullable=False, index=True)
+    twitch_user_id = Column(String, nullable=False, index=True)
+    player_id      = Column(Integer, nullable=False)
+    voted_at       = Column(Integer, nullable=False)
+
+
 class LiveMatch(Base):
     """A monitored-league game seen in Steam's live league list (steam_live), kept until
     its stats are ingested so the Twitch MVP panel can offer it early (see

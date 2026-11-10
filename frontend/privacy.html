@@ -87,8 +87,17 @@ ids are never shown to other users.</p>
 
 <p>The Extension may post a message to the broadcaster's Twitch chat when a match MVP is
 selected (e.g. "Match MVP: PlayerName! 3 viewers received a token."), using Twitch's Extension
-Chat capability. It names the MVP and how many viewers received a token, never viewer names. No
-other chat activity is read, stored, or posted by the Extension.</p>
+Chat capability. It names the MVP and how many viewers received a token, never viewer names. When
+the broadcaster opens an MVP vote it also posts that the vote is open, and the MVP message then
+gives the winner's share of the votes. No other chat activity is read, stored, or posted by the
+Extension.</p>
+
+<p><strong>MVP votes.</strong> When the broadcaster opens an MVP vote, joined viewers can vote for
+a player in the panel. We store each vote with your opaque Twitch id, the player you chose and the
+time, so that you have one vote you can change until the vote closes. Other viewers and chat see
+only vote counts and shares, never who voted for whom. Individual votes are deleted 30 days after
+the vote ends, when only the per-player totals are kept, and at once when you leave Kana Cards in
+the panel's Settings.</p>
 
 <h2>Leaving the Twitch game</h2>
 <p>Open the panel's Settings and press <em>Leave Kana Cards</em>. For a soft account this deletes
@@ -125,7 +134,8 @@ Soft accounts with no activity for 365 days are deleted automatically.</p>
 <h2>Data retention and deletion</h2>
 <p>Account data is retained for as long as your account exists. Twitch soft accounts are kept
 while you play and deleted after 365 days without activity, or at once when you leave in the
-panel's Settings. After a Twitch collection is added to a website account, the record of that
+panel's Settings. Individual MVP votes are deleted 30 days after the vote ends, or at once when
+you leave. After a Twitch collection is added to a website account, the record of that
 merge (which includes the Twitch user id) is kept for up to 30 days so a mistaken merge can be
 undone, then deleted. After Disconnect, Leave or deletion we also keep a one-way hashed record
 of the Twitch account (it can't be turned back into the Twitch user id) for as long as the

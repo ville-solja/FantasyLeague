@@ -46,7 +46,7 @@ from database import credit_tokens, get_db
 from ingest import record_timing
 from deps import _audit
 from models import (AuditLog, LiveMatch, Match, Player, PlayerMatchStats,
-                    Team, TwitchChannelApproval, TwitchMVP, TwitchPresence,
+                    Team, TwitchChannelApproval, TwitchMVP, TwitchMvpVote, TwitchPresence,
                     TwitchTokenDrop, User, Week, Weight)
 from rate_limit import key_by_twitch_viewer_or_ip, limiter
 from schedule import bust_cache
@@ -325,15 +325,23 @@ def _min_age_hours_text() -> str:
 
 
 def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
-                   drops_enabled: bool = True, only_new_accounts: bool = False) -> str:
+                   drops_enabled: bool = True, only_new_accounts: bool = False,
+                   vote: tuple[int, int] | None = None) -> str:
     """Build the MVP chat announcement within Twitch's 280-character limit.
 
     Names the MVP and, for a token drop, only how many viewers received a token:
     soft accounts have no username, and a linked player's website username is
     never revealed in chat (issue #157). `only_new_accounts`: the pool was empty
     only because every present account was too new for drops (issue #171).
+    `vote`: (percent, total votes) when the MVP is a viewer vote's sole winner
+    (issue #234); the drop sentence that follows is the same.
     """
-    base = f"Match MVP: {player_name}!"
+    if vote is not None:
+        pct, total = vote
+        noun_votes = "vote" if total == 1 else "votes"
+        base = f"Match MVP by viewer vote: {player_name} ({pct}% of {total} {noun_votes})!"
+    else:
+        base = f"Match MVP: {player_name}!"
     if not drops_enabled:
         text = base
     elif winner_count > 0:
@@ -876,6 +884,8 @@ def leave(payload: dict, db: Session) -> dict:
     user.twitch_user_id = None
     db.query(TwitchPresence).filter(TwitchPresence.twitch_user_id == opaque_id).delete(
         synchronize_session=False)
+    db.query(TwitchMvpVote).filter(TwitchMvpVote.twitch_user_id == opaque_id).delete(
+        synchronize_session=False)
     _audit(db, "twitch_account_unlinked", actor_id=uid, actor_username=user.display_name,
            detail=f"user_id={uid} reason=leave")
     db.commit()
@@ -1376,6 +1386,8 @@ def warn_if_mvp_channels_unset() -> None:
 class MVPBody(BaseModel):
     match_id: int
     player_id: int
+    # Issue #234: confirm a closed viewer vote (twitch_mvp_poll) for this match.
+    poll_id: int | None = Field(default=None, ge=1, le=2**63 - 1)
 
 
 def set_mvp(
@@ -1427,6 +1439,20 @@ def set_mvp(
             raise HTTPException(status_code=404, detail="Player not found")
         player_name = player.name
 
+    poll = None
+    vote_chat = None
+    poll_note = ""
+    if body.poll_id is not None:
+        import twitch_mvp_poll
+        poll = twitch_mvp_poll.confirmable_poll(db, body.poll_id, channel_id, body.match_id)
+        # Claim the poll before any MVP, bonus or drop is written, so a confirm that
+        # races a cancel or a second confirm writes nothing (409).
+        result = twitch_mvp_poll.mark_confirmed(db, poll, body.player_id)
+        by_vote = result["winner_player_id"] == body.player_id
+        if by_vote:
+            vote_chat = (result["winner_pct"], result["total_votes"])
+        poll_note = f" poll={poll.id}" + ("" if by_vote else " override=True")
+
     weights = {w.key: w.value for w in db.query(Weight).all()}
 
     old_player_id = upsert_mvp(db, body.match_id, body.player_id, channel_id)
@@ -1456,7 +1482,7 @@ def set_mvp(
         actor_username="twitch",
         action="twitch_mvp_set",
         detail=(f"channel={channel_id} match={body.match_id} player={player_name} re_select={bool(existing)}"
-                + (" provisional=True" if provisional else "")),
+                + (" provisional=True" if provisional else "") + poll_note),
     ))
     db.commit()
     bust_cache()
@@ -1475,7 +1501,8 @@ def set_mvp(
     chat_msg = _mvp_chat_text(announced_name, len(winner_names),
                               pool_empty=pool_empty,
                               drops_enabled=enabled,
-                              only_new_accounts=pool_empty and _excluded_new_count(db, channel_id) > 0)
+                              only_new_accounts=pool_empty and _excluded_new_count(db, channel_id) > 0,
+                              vote=vote_chat)
     _post_chat_message(channel_id, chat_msg)
 
     return {

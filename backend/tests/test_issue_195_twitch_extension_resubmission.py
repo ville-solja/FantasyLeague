@@ -160,17 +160,20 @@ PARAM_BY_PREFIX = {
     "/twitch/draw/booster/": "team_id",
     "/twitch/roster/activate/": "card_id",
     "/twitch/roster/deactivate/": "card_id",
+    "/twitch/mvp-poll/": "poll_id",
 }
 
 
 def _called_paths(js_text):
     """`/twitch/...` string literals in JS. A literal ending in `/` and followed by
-    `+ <expression>` is normalised to its `{param}` form."""
+    `+ <expression>` is normalised to its `{param}` form, and a `+ "/suffix"` literal
+    right after the expression is appended (issue #234: `/twitch/mvp-poll/{poll_id}/vote`)."""
     paths = set()
-    for m in re.finditer(r"[\"'](/twitch/[a-z_/]+)[\"']\s*(\+)?", js_text):
-        path, plus = m.group(1), m.group(2)
+    for m in re.finditer(r"[\"'](/twitch/[a-z_/-]+)[\"']\s*(\+(?:\s*[^+;]+?\s*\+\s*[\"'](/[a-z_-]+)[\"'])?)?",
+                         js_text):
+        path, plus, suffix = m.group(1), m.group(2), m.group(3)
         if path.endswith("/") and plus:
-            path += "{" + PARAM_BY_PREFIX.get(path, "param") + "}"
+            path += "{" + PARAM_BY_PREFIX.get(path, "param") + "}" + (suffix or "")
         paths.add(path)
     return paths
 

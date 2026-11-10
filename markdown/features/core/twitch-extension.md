@@ -171,7 +171,9 @@ The broadcaster adds the extension to their channel from the Twitch extension di
 
 ## Broadcaster Quick Actions (live_config.html)
 
-The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **MVP selection + token drop**.
+The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **MVP selection + token drop**. From
+extension version 1.4.0 the streamer can instead let the viewers vote for the MVP (issue #234, see
+below).
 
 ### Flow
 
@@ -190,13 +192,27 @@ The Live Config view (Twitch Stream Manager → Quick Actions) has one flow: **M
 3. Broadcaster selects the series (team1 vs team2), then the specific match (Match 1, Match 2…).
    A match without ingested stats is marked **Live** while the game runs, otherwise
    **Stats pending**
-4. Player grid is shown; broadcaster selects the MVP and clicks **"Confirm MVP & Drop Tokens"**.
+4. The match view offers **Pick MVP** (the default) and **Start viewer vote** (see
+   [Viewer vote](#viewer-vote-issue-234)). With Pick MVP the player grid is shown; broadcaster
+   selects the MVP and clicks **"Confirm MVP & Drop Tokens"**.
    Tiles of a Live / Stats pending match show the team name without points. Under the confirm bar
    a line shows the exact start of the chat message, "Chat will say: "Match MVP: {chat_name}!"",
    using the cleaned name (issue #166)
 5. MVP is saved; tokens drop automatically to the presence pool. On a Live / Stats pending match
    the banner adds that the fantasy bonus is applied when the stats arrive (see
    `reference/early-mvp-selection.md`)
+
+### Viewer vote (issue #234)
+
+**Start viewer vote** shows the vote length (1, 2 or 3 minutes, 2 by default) and **Open vote**
+(`POST /twitch/mvp-poll`). The vote opens for that match, posts one chat line ("MVP vote open for
+… Closes in 2 min.") and appears at the top of every panel's Live tab, where joined viewers who are
+eligible for drops vote. The tool shows a countdown, the vote count, **End now** and **Cancel
+vote**. When the vote closes it shows each player's share with the winner selected (a tie selects
+no one; no votes opens Pick MVP), and **Confirm MVP & Drop Tokens** calls `POST /twitch/mvp` with
+`poll_id`: the MVP, bonus, token drop and chat work as for a picked MVP, and chat says it was the
+viewers' vote unless the streamer picked someone else. One vote can be open per channel. Details:
+[MVP Poll for Watchers](../reference/twitch-mvp-viewer-poll.md).
 
 ### Token drop rules
 - Fires on MVP confirmation — no separate trigger
@@ -217,8 +233,13 @@ A panel 318 px wide, up to 500 px tall (the version's Panel Height), styled with
 1. Reads the EBS URL from `Twitch.ext.configuration.global.content` at startup
 2. Opens on the **Live** tab for every viewer: latest MVPs (`GET /twitch/matches/current`, with `(live)` markers), top performers and the next match (`GET /twitch/panel`); refreshed every 60 s and on an MVP PubSub message
 3. Calls `GET /twitch/me`: not joined shows the Join box (or "Log in to Twitch to join"); joined shows the token count, the Cards tab (draw, team draw picker, card reveal, collection with rarity filters) and the Roster tab (slot-first bench picker, lock countdown, week points). While a new soft account is too young for drops, the Live tab says "Drops start for your account on <date>." (`drops_from`)
-4. Settings: share the Twitch identity, Leave Kana Cards
-5. A section the EBS can't fill shows a short neutral message; a missing or refused EBS URL shows a "not available on this channel right now" message — never a blank panel or a login prompt. Each of these messages ends with a reason code such as `(code: E-REACH)` (issue #180); see [Panel reason codes](#panel-reason-codes)
+4. While the broadcaster runs an MVP viewer vote (issue #234, version 1.4.0), the Live tab shows it
+   at the top (`GET /twitch/mvp-poll`, on load, on PubSub `mvp_poll` and every 15 s while open):
+   the match, a countdown, the players by team and **Vote** (or "Join to vote." / "Your vote
+   counts from <date>."); only the total count until it closes, then each player's share and the
+   viewer's own pick
+5. Settings: share the Twitch identity, Leave Kana Cards
+6. A section the EBS can't fill shows a short neutral message; a missing or refused EBS URL shows a "not available on this channel right now" message — never a blank panel or a login prompt. Each of these messages ends with a reason code such as `(code: E-REACH)` (issue #180); see [Panel reason codes](#panel-reason-codes)
 
 ---
 
@@ -235,6 +256,9 @@ On MVP confirmation the EBS calls:
 POST https://api.twitch.tv/helix/extensions/pubsub
 ```
 with an `external`-role JWT signed by `TWITCH_EXTENSION_SECRET` (same role as the chat announcement below — extensions never hold the `broadcaster` role, which is reserved for incoming JWTs Twitch issues to the broadcaster's own client). When `TWITCH_LOCAL_DEV=true` the HTTP call is skipped and the message is printed to the server log.
+
+The MVP viewer vote (#234) sends `{"type": "mvp_poll", "state": "open" | "closed" | "cancelled",
+"poll_id": N}` the same way (no voter ids); panels then reload the vote.
 
 ---
 
@@ -271,6 +295,12 @@ characters, and a name that looks like a link (`://`, `www.`, or a dot followed 
 `.gg`) becomes `Player {account_id}`. The PubSub message carries the same name, and
 `GET /twitch/matches/current` returns it per player as `chat_name`, which the MVP picker shows as
 "Chat will say: …" before the broadcaster confirms.
+
+The MVP viewer vote (#234, version 1.4.0) adds two lines, counts only: `"MVP vote open for {team1}
+vs {team2}, game {n}: vote in the Kana Cards panel. Closes in {m} min."` when the vote opens, and,
+when the broadcaster confirms the vote's sole winner, `"Match MVP by viewer vote: {player_name}
+({pct}% of {votes} votes)!"` followed by the usual drop sentence. See
+[MVP Poll for Watchers](../reference/twitch-mvp-viewer-poll.md#chat).
 
 Twitch also allows **12 messages per minute per channel**; one MVP confirmation sends one message.
 
@@ -330,10 +360,20 @@ The dev harness is same-origin with the backend, so it needs no CORS entry. `/tw
 ### Panel game endpoints (issue #157)
 `GET /twitch/panel`, `POST /twitch/join`, `GET /twitch/me`, `POST /twitch/draw`, `GET /twitch/teams`,
 `POST /twitch/draw/booster/{team_id}`, `POST /twitch/roster/activate/{card_id}`,
-`POST /twitch/roster/deactivate/{card_id}`, `POST /twitch/roster/swap`, `POST /twitch/leave`. All take
+`POST /twitch/roster/deactivate/{card_id}`, `POST /twitch/roster/swap`, `POST /twitch/leave`
+(which also deletes the caller's MVP votes, #234). All take
 the Twitch JWT; the game routes answer 404 `not_joined` without an account and run the website's
 own card functions for the caller's account. Shapes, limits and errors:
 [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md#live-tab-and-game-endpoints).
+
+### MVP viewer vote (issue #234)
+`POST /twitch/mvp-poll` (broadcaster), `GET /twitch/mvp-poll`, `POST /twitch/mvp-poll/{poll_id}/vote`
+(joined viewer eligible for drops), `POST /twitch/mvp-poll/{poll_id}/end` and
+`POST /twitch/mvp-poll/{poll_id}/cancel` (broadcaster), in `backend/twitch_mvp_poll.py`. Unlike the
+panel game routes, which answer `404 not_joined` without an account, the vote route answers
+`403 not_joined` (and `403 too_new`, `403 twitch_login_required`): the viewer may see the poll but
+not vote. Shapes,
+checks and limits: [MVP Poll for Watchers](../reference/twitch-mvp-viewer-poll.md#endpoints).
 
 ### Website Twitch connection (issue #160)
 `GET /auth/twitch/start`, `GET /auth/twitch/callback`, `GET /twitch/connection`,
@@ -374,7 +414,11 @@ request; viewers still get the series. See `reference/approved-streamers-admin.m
 `twitch._current_series()`; `POST /twitch/mvp` checks eligibility against the same helper.
 
 ### `POST /twitch/mvp` *(broadcaster only)*
-Twitch JWT (broadcaster role). Body: `{match_id, player_id}`.
+Twitch JWT (broadcaster role). Body: `{match_id, player_id, poll_id?}`. `poll_id` (issue #234)
+confirms a closed MVP viewer vote: the poll must be on the caller's channel (404), for the same
+match (409) and closed (409), checked with the others before anything is written; the poll then
+becomes `confirmed` and the audit gains `poll=N` (and `override=True` when the player isn't the
+vote's winner). See [MVP Poll for Watchers](../reference/twitch-mvp-viewer-poll.md).
 
 Before anything is written (MVP row, score bonus, token drop, audit entry), the request must
 pass these checks in order (issue #135):
@@ -410,6 +454,8 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `twitch_mvp` | One MVP selection per match, broadcaster-updatable. Unique on `match_id`; both MVP paths write through `twitch.upsert_mvp()` (`INSERT ... ON CONFLICT DO UPDATE`), so simultaneous confirmations update one row |
 | `live_matches` | Monitored-league games seen in Steam's live league list (OpenDota's `/live` before #161), kept until their stats are ingested (or 24 h after last seen) so the MVP panel can offer them early. See `reference/early-mvp-selection.md` |
 | `match_timings` | Per match: when it was first seen live, ingested and given its first MVP (`mvp_provisional` when before ingest). Shown in the admin Matches table. See `reference/mvp-selection-delays.md` |
+| `twitch_mvp_polls` | MVP viewer votes (#234): channel, match, status (`open`/`closed`/`cancelled`/`confirmed`), times, per-player tally and confirmed player; one open poll per channel (partial unique index). See `reference/twitch-mvp-viewer-poll.md` |
+| `twitch_mvp_votes` | One vote per poll and viewer opaque id (#234); deleted 30 days after the poll ends and on Leave |
 | `twitch_token_drops` | Once-per-match drop records; prevents duplicate drops. Its dedup key column is named `series_id` for historical reasons but actually stores a **match ID** (`str(match_id)`) — see the dedup note above. Unique on `(channel_id, series_id)`: `_claim_drop()` inserts this row (`ON CONFLICT DO NOTHING`) before any tokens are granted, and only the request whose insert lands pays out, so two simultaneous confirmations cannot drop twice. Migration `026_twitch_mvp_drop_unique` removed pre-existing duplicates and added both unique indexes. |
 
 `users.twitch_user_id` stores the Twitch opaque user ID of a soft account or a website account the panel recognises. `users.account_type` (`full` / `twitch`), `users.last_seen_at` and `users.twitch_account_id` (real Twitch id after the identity share or Twitch sign-in, unique) were added by migration `031_users_twitch_soft_accounts`; `users.merged_soft_account_at` and `users.pending_merge_user_id` by `032_users_merged_soft_account_at` (#160).

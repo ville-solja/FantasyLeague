@@ -963,7 +963,7 @@ As a Twitch reviewer re-reviewing the extension, I want a short note on what cha
   - the broadcaster's MVP selection.
 
 
-## MVP Poll for Watchers (#234, S17; not yet implemented)
+## MVP Poll for Watchers (#234, S17; extension version 1.4.0)
 
 ### The Streamer Starts a Viewer Vote for a Match
 **User story**
@@ -978,7 +978,7 @@ As a broadcaster on an approved channel, I want to start a timed MVP vote for a 
   - a second open poll on the channel (`409`);
   - a match whose poll was already confirmed (`409`).
 - **Announce:** opening the poll posts one chat message naming the teams, the game number and the time left, and sends a PubSub "poll open" message to every panel.
-- **Control:** while it's open, the tool shows a countdown and the number of votes, with **End now** and **Cancel**. Cancel ends the poll without a result and posts no MVP.
+- **Control:** while it's open, the tool shows a countdown and the number of votes, with **End now** and **Cancel vote**. Cancel vote ends the poll without a result and posts no MVP.
 
 ### Viewers Vote in the Panel
 **User story**
@@ -1007,5 +1007,5 @@ As a viewer, I want my vote stored only briefly, so that voting doesn't build a 
 
 **Acceptance criteria**
 - **Retention:** individual votes are deleted 30 days after their poll ends (the daily cleanup). The poll keeps only per-player counts.
-- **Leave:** Leave Kana Cards deletes the soft account's votes.
+- **Leave:** Leave Kana Cards deletes the caller's votes: a soft account's when it is deleted, and a website account's when it leaves the panel.
 - **Disclosure:** the privacy page and the extension's review notes mention votes. The review walkthrough has a step for starting, voting in and confirming a poll, and the 1.4.0 change log lists the new chat messages.

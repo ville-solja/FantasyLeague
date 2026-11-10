@@ -21,6 +21,7 @@ from starlette.requests import Request
 from starlette.routing import Match
 from twitch import router as twitch_router
 import twitch as twitch_module
+import twitch_mvp_poll
 import twitch_oauth
 import twitch_status
 import steam_openid
@@ -111,6 +112,9 @@ _last_twitch_oauth_cleanup     = 0.0
 # nonces older than a day, are deleted once a day by the same loop.
 _STEAM_CLEANUP_INTERVAL = 86400
 _last_steam_cleanup     = 0.0
+# Issue #234: viewer MVP votes are deleted 30 days after their poll ends, once a day.
+_MVP_VOTE_CLEANUP_INTERVAL = 86400
+_last_mvp_vote_cleanup     = 0.0
 
 
 def _week_maintenance_loop():
@@ -124,10 +128,11 @@ def _week_maintenance_loop():
     login sessions (issue #117), Twitch soft accounts idle for
     TWITCH_SOFT_ACCOUNT_RETENTION_DAYS (issue #157), and expired Twitch sign-in
     attempts and merge undo-log rows older than 30 days (issue #160), and Steam
-    sign-in attempts, pending sign-ups and day-old OpenID nonces (issue #150).
+    sign-in attempts, pending sign-ups and day-old OpenID nonces (issue #150), and
+    viewer MVP votes 30 days after their poll ended (issue #234).
     """
     global _last_session_cleanup, _last_soft_account_purge, _last_twitch_oauth_cleanup
-    global _last_steam_cleanup
+    global _last_steam_cleanup, _last_mvp_vote_cleanup
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
@@ -151,6 +156,9 @@ def _week_maintenance_loop():
                 if time.time() - _last_steam_cleanup >= _STEAM_CLEANUP_INTERVAL:
                     steam_openid.cleanup(db, int(time.time()))
                     _last_steam_cleanup = time.time()
+                if time.time() - _last_mvp_vote_cleanup >= _MVP_VOTE_CLEANUP_INTERVAL:
+                    _run_mvp_vote_cleanup(db)
+                    _last_mvp_vote_cleanup = time.time()
             finally:
                 db.close()
         except Exception:
@@ -159,6 +167,17 @@ def _week_maintenance_loop():
         # thread doesn't run (no STEAM_API_KEY, DEMO_MODE).
         _run_finals_check()
         _stop_event.wait(timeout=_WEEK_CHECK_INTERVAL)
+
+
+def _run_mvp_vote_cleanup(db):
+    """Best-effort daily step: delete viewer MVP votes past retention (issue #234)."""
+    try:
+        deleted = twitch_mvp_poll.cleanup_votes(db, int(time.time()))
+        if deleted:
+            logger.info("Deleted %d viewer MVP vote(s) past retention", deleted)
+    except Exception:
+        db.rollback()
+        logger.exception("Viewer MVP vote cleanup failed")
 
 
 _ENRICHMENT_TIMEOUT_SECONDS = 300
@@ -870,6 +889,7 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(twitch_router)
+app.include_router(twitch_mvp_poll.router)
 app.include_router(twitch_oauth.router)
 app.include_router(steam_openid.router)
 app.include_router(players_router.router)

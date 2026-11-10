@@ -5,10 +5,18 @@ var _selectedSeries = null;
 var _selectedMatch  = null;
 var _selectedPlayer = null;
 
+// Issue #234: the viewer vote this tool started or found open (GET /twitch/mvp-poll shape).
+var POLL_REFRESH_MS = 5000;
+var _poll           = null;
+var _pollPick       = null;   // player chosen in the result view
+var _pollOffset     = 0;      // server clock minus local clock, in seconds
+var _pollTimer      = null;   // vote count refresh while open
+var _pollTick       = null;   // countdown
+
 // ── Navigation ──────────────────────────────────────────────────────────────
 
 function mvpGoTo(step) {
-    [0, 1, 2, 3].forEach(function(n) {
+    [0, 1, 2, 3, 4].forEach(function(n) {
         el("mvp-step-" + n).classList.toggle("active", n === step);
     });
     if (step === 0) { _selectedSeries = null; _selectedMatch = null; _selectedPlayer = null; }
@@ -16,16 +24,28 @@ function mvpGoTo(step) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
-el("btn-start-mvp").addEventListener("click", loadSeries);
+el("btn-start-mvp").addEventListener("click", function() {
+    // A vote left with Back is still running: go back to it.
+    if (_poll) { showPoll(_poll); refreshPoll(); } else { loadSeries(); }
+});
 el("btn-refresh-series").addEventListener("click", loadSeries);
 el("btn-confirm-mvp").addEventListener("click", confirmMVP);
 
 el("btn-back-0").addEventListener("click", function() { mvpGoTo(0); });
 el("btn-back-1").addEventListener("click", function() { mvpGoTo(1); });
 el("btn-back-2").addEventListener("click", function() { mvpGoTo(2); });
+el("btn-back-4").addEventListener("click", function() { stopPollTimers(); mvpGoTo(0); });
+
+el("btn-mode-pick").addEventListener("click", function() { showMatchMode("pick"); });
+el("btn-mode-vote").addEventListener("click", function() { showMatchMode("vote"); });
+el("btn-open-vote").addEventListener("click", startViewerVote);
+el("btn-poll-end").addEventListener("click", endViewerVote);
+el("btn-poll-cancel").addEventListener("click", cancelViewerVote);
+el("btn-poll-confirm").addEventListener("click", confirmPollMVP);
 
 function onReady() {
     el("mvp-unavailable").hidden = true;
+    resumePoll();
 }
 
 // Issue #180: no usable backend URL (E-ORIGIN at once, E-CONFIG after 8 seconds).
@@ -149,6 +169,7 @@ function selectMatch(match) {
         _selectedSeries.team1_name + " vs " + _selectedSeries.team2_name + ":";
     el("confirm-bar").classList.remove("visible");
     el("chat-preview").hidden = true;
+    showMatchMode("pick");
 
     var grid = el("player-grid");
     grid.innerHTML = "";
@@ -224,18 +245,7 @@ function confirmMVP() {
         _selectedMatch.mvp_player_id   = data.player_id;
         _selectedMatch.mvp_player_name = data.player_name;
 
-        var drop = data.token_drop || {};
-        var dropMsg = "";
-        if (drop.already_dropped) {
-            dropMsg = " (tokens already dropped for this match)";
-        } else if (drop.enabled === false) {
-            dropMsg = " · Token drops are off";
-        } else if (drop.winner_count > 0) {
-            // Winner count only (issue #157): no viewer names in the dashboard either.
-            dropMsg = " · " + drop.winner_count + (drop.winner_count === 1 ? " viewer" : " viewers") + " received a token";
-        } else if (drop.pool_size === 0) {
-            dropMsg = " · No joined viewers in the pool";
-        }
+        var dropMsg = dropNote(data.token_drop || {});
 
         var bonusMsg = _selectedMatch.provisional ? " · Fantasy bonus is applied when the stats arrive" : "";
         showBanner(el("banner"), "MVP: " + data.player_name + dropMsg + bonusMsg, false);
@@ -244,6 +254,263 @@ function confirmMVP() {
         showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
     }).finally(function() {
         el("btn-confirm-mvp").disabled = false;
+    });
+}
+
+function dropNote(drop) {
+    if (drop.already_dropped) return " (tokens already dropped for this match)";
+    if (drop.enabled === false) return " · Token drops are off";
+    // Winner count only (issue #157): no viewer names in the dashboard either.
+    if (drop.winner_count > 0) return " · " + drop.winner_count + (drop.winner_count === 1 ? " viewer" : " viewers") + " received a token";
+    if (drop.pool_size === 0) return " · No joined viewers in the pool";
+    return "";
+}
+
+function errorDetail(data, fallback) {
+    return data && typeof data.detail === "string" && data.detail ? data.detail : fallback;
+}
+
+// ── Viewer vote (issue #234) ────────────────────────────────────────────────
+
+// The match view's two modes: Pick MVP (the player grid) or Start viewer vote.
+function showMatchMode(mode) {
+    el("pick-section").hidden = mode !== "pick";
+    el("vote-section").hidden = mode !== "vote";
+    el("btn-mode-pick").classList.toggle("selected", mode === "pick");
+    el("btn-mode-vote").classList.toggle("selected", mode === "vote");
+}
+
+function startViewerVote() {
+    if (!_selectedMatch) return;
+    var btn = el("btn-open-vote");
+    btn.disabled = true;
+    ebsPost("/twitch/mvp-poll", {
+        match_id: _selectedMatch.match_id,
+        duration_seconds: Number(el("poll-duration").value) || 120,
+    }).then(function(data) {
+        if (!data || data._status || !data.poll_id) {
+            showBanner(el("banner"), errorDetail(data, "Could not start the vote"), true);
+            return;
+        }
+        showPoll(data);
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
+    }).finally(function() {
+        btn.disabled = false;
+    });
+}
+
+// A vote that is open, or closed and waiting for confirmation, comes back after a reload.
+function resumePoll() {
+    ebsGet("/twitch/mvp-poll").then(function(data) {
+        var poll = data && data.poll;
+        if (poll && (poll.status === "open" || poll.status === "closed")) showPoll(poll);
+    }).catch(function() {});
+}
+
+function showPoll(poll) {
+    _poll = poll;
+    _pollPick = null;
+    _pollOffset = poll.now ? poll.now - Date.now() / 1000 : 0;
+    stopPollTimers();
+    mvpGoTo(4);
+    renderPoll();
+    if (_poll && _poll.status === "open") {
+        _pollTimer = setInterval(refreshPoll, POLL_REFRESH_MS);
+        _pollTick = setInterval(renderCountdown, 1000);
+    }
+}
+
+function stopPollTimers() {
+    if (_pollTimer) clearInterval(_pollTimer);
+    if (_pollTick) clearInterval(_pollTick);
+    _pollTimer = null;
+    _pollTick = null;
+}
+
+function refreshPoll() {
+    if (!_poll) return;
+    var pollId = _poll.poll_id;
+    ebsGet("/twitch/mvp-poll").then(function(data) {
+        if (!data || data._status || !_poll || _poll.poll_id !== pollId) return;
+        var poll = data.poll;
+        if (!poll || poll.poll_id !== pollId) {
+            stopPollTimers();
+            _poll = null;
+            mvpGoTo(0);
+            return;
+        }
+        var wasOpen = _poll.status === "open";
+        _poll = poll;
+        if (poll.status !== "open") stopPollTimers();
+        if (wasOpen || poll.status === "open") renderPoll();
+    }).catch(function() {});
+}
+
+function pollSecondsLeft(poll, nowSec) {
+    return Math.max(0, Math.ceil(poll.closes_at - nowSec));
+}
+
+function countdownText(seconds) {
+    var s = seconds % 60;
+    return Math.floor(seconds / 60) + ":" + (s < 10 ? "0" : "") + s + " left";
+}
+
+function voteCountText(n) {
+    n = Number(n || 0);
+    return n + (n === 1 ? " vote" : " votes");
+}
+
+function renderCountdown() {
+    if (!_poll || _poll.status !== "open") return;
+    var left = pollSecondsLeft(_poll, Date.now() / 1000 + _pollOffset);
+    el("poll-countdown").textContent = countdownText(left);
+    // The backend closes the vote on the first read after closes_at.
+    if (left === 0) refreshPoll();
+}
+
+function renderPoll() {
+    var p = _poll;
+    el("poll-title").textContent = "Viewer vote · Match " + p.match_number + " · " +
+        p.team1_name + " vs " + p.team2_name;
+    var open = p.status === "open";
+    el("poll-open").hidden = !open;
+    el("poll-result").hidden = open;
+    if (open) {
+        renderCountdown();
+        el("poll-votes").textContent = voteCountText(p.total_votes);
+        return;
+    }
+    renderPollResult();
+}
+
+// What the result view preselects: the sole winner, nobody on a tie (the tied players
+// are marked), and with no votes the streamer picks instead.
+function pollResultState(poll) {
+    if (!poll || !poll.total_votes) return { kind: "none", preselect: null, tied: [] };
+    if (poll.winner_player_id) return { kind: "winner", preselect: poll.winner_player_id, tied: [] };
+    return { kind: "tie", preselect: null, tied: (poll.tied_player_ids || []).slice() };
+}
+
+function renderPollResult() {
+    var p = _poll;
+    var state = pollResultState(p);
+    var list = el("poll-result-list");
+    var note = el("poll-result-note");
+    list.innerHTML = "";
+    el("poll-confirm-bar").classList.remove("visible");
+    el("poll-chat-preview").hidden = true;
+    if (state.kind === "none") {
+        note.textContent = "No votes were cast. Pick the MVP yourself.";
+        pickAfterNoVotes();
+        return;
+    }
+    var results = p.results || [];
+    var byId = {};
+    results.forEach(function(r) { byId[r.player_id] = r; });
+    if (state.kind === "winner") {
+        var w = byId[state.preselect] || {};
+        note.textContent = "Viewers chose " + (w.player_name || "") + " (" + w.pct + "% of " + voteCountText(p.total_votes) + ").";
+    } else {
+        note.textContent = "Tie between " + state.tied.map(function(id) { return (byId[id] || {}).player_name; }).join(", ") + ": pick one.";
+    }
+    results.forEach(function(r) {
+        var div = document.createElement("div");
+        div.className = "player-item" + (state.tied.indexOf(r.player_id) >= 0 ? " tied" : "");
+        div.innerHTML =
+            '<div class="pname">' + _escHtml(r.player_name) + "</div>" +
+            '<div class="pvotes">' + voteCountText(r.votes) + " · " + r.pct + "%</div>";
+        div.addEventListener("click", function() { pickPollPlayer(r, div); });
+        list.appendChild(div);
+        if (r.player_id === state.preselect) pickPollPlayer(r, div);
+    });
+}
+
+function pickPollPlayer(result, div) {
+    _pollPick = result;
+    Array.prototype.forEach.call(el("poll-result-list").children || [], function(d) { d.classList.remove("selected"); });
+    div.classList.add("selected");
+    el("poll-selected-name").textContent = result.player_name;
+    var name = result.chat_name || result.player_name;
+    var preview = el("poll-chat-preview");
+    preview.textContent = result.player_id === _poll.winner_player_id
+        ? 'Chat will say: "Match MVP by viewer vote: ' + name + " (" + result.pct + "% of " + voteCountText(_poll.total_votes) + ')!"'
+        : 'Chat will say: "Match MVP: ' + name + '!"';
+    preview.hidden = false;
+    el("poll-confirm-bar").classList.add("visible");
+}
+
+// No votes: say so and open Pick MVP, on the same match when it is still selected.
+function pickAfterNoVotes() {
+    var pollMatch = _poll && _poll.match_id;
+    stopPollTimers();
+    _poll = null;
+    showBanner(el("banner"), "No votes were cast. Pick the MVP yourself.", false);
+    if (_selectedMatch && _selectedMatch.match_id === pollMatch) {
+        selectMatch(_selectedMatch);
+    } else {
+        loadSeries();
+    }
+}
+
+function endViewerVote() {
+    if (!_poll) return;
+    var btn = el("btn-poll-end");
+    btn.disabled = true;
+    ebsPost("/twitch/mvp-poll/" + _poll.poll_id + "/end").then(function(data) {
+        if (!data || data._status || !data.poll_id) {
+            showBanner(el("banner"), errorDetail(data, "Could not end the vote"), true);
+            refreshPoll();
+            return;
+        }
+        showPoll(data);
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
+    }).finally(function() {
+        btn.disabled = false;
+    });
+}
+
+function cancelViewerVote() {
+    if (!_poll) return;
+    var btn = el("btn-poll-cancel");
+    btn.disabled = true;
+    ebsPost("/twitch/mvp-poll/" + _poll.poll_id + "/cancel").then(function(data) {
+        if (!data || data._status) {
+            showBanner(el("banner"), errorDetail(data, "Could not cancel the vote"), true);
+            return;
+        }
+        stopPollTimers();
+        _poll = null;
+        showBanner(el("banner"), "Vote cancelled. No MVP was set.", false);
+        mvpGoTo(0);
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
+    }).finally(function() {
+        btn.disabled = false;
+    });
+}
+
+function confirmPollMVP() {
+    if (!_poll || !_pollPick) return;
+    var btn = el("btn-poll-confirm");
+    btn.disabled = true;
+    ebsPost("/twitch/mvp", {
+        match_id:  _poll.match_id,
+        player_id: _pollPick.player_id,
+        poll_id:   _poll.poll_id,
+    }).then(function(data) {
+        if (!data.player_id) {
+            showBanner(el("banner"), errorDetail(data, "Error setting MVP"), true);
+            return;
+        }
+        _poll = null;
+        showBanner(el("banner"), "MVP: " + data.player_name + dropNote(data.token_drop || {}), false);
+        mvpGoTo(0);
+    }).catch(function() {
+        showBanner(el("banner"), "Request failed" + failReasonSuffix(), true);
+    }).finally(function() {
+        btn.disabled = false;
     });
 }
 
