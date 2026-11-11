@@ -830,7 +830,7 @@ As an admin, I want pending streamer approvals at the top of their own Twitch ta
   - The count is fetched when an admin loads the page and after each Approve or Reject.
   - With nothing waiting there is no badge.
 - **Unchanged:** Approve, Reject and Remove still need the password re-check.
-- **Split-off:** notifying admins outside the site is #215.
+- **Split-off:** notifying admins outside the site is #215 ([streamer approval notifications](twitch.md#streamer-approval-notifications-215)).
 
 ### Ids Are Typed, and Names Show Before Saving
 **User story**

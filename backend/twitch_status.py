@@ -14,10 +14,13 @@ import binascii
 import importlib.util
 import os
 import re
+import time
 from urllib.parse import urlsplit
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import admin_notify
 import logo_hosts
 import steam_live
 import twitch
@@ -164,6 +167,44 @@ def _steam_key_check() -> dict:
     return _check("steam_api_key", OK, "STEAM_API_KEY", "Set: live games are listed.")
 
 
+def _utc(ts: int) -> str:
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ts))
+
+
+def _outcome(value: str) -> str:
+    return {"ok": "sent", "off": "off"}.get(value, value.removeprefix("error: "))
+
+
+def _approval_notifications_check(db: Session) -> dict:
+    """Issue #215: whether admins hear about new streamer requests. Shows only "set" for
+    the webhook and a count for the email recipients."""
+    label = "Approval notifications"
+    chans = admin_notify.channels(db)
+    ready, notes = [], []
+    if chans["discord"]["ready"]:
+        ready.append("Discord")
+    else:
+        notes.append(f"Discord webhook ({admin_notify.DISCORD_ENV}): {chans['discord']['reason']}.")
+    if chans["email"]["ready"]:
+        n = chans["email"]["recipients"]
+        ready.append(f"email to {n} recipient{'s' if n != 1 else ''}")
+    else:
+        notes.append(f"Email: {chans['email']['reason']}.")
+    last = admin_notify.last_result()
+    if last:
+        history = (f"Last message {_utc(last['at'])}: Discord {_outcome(last['discord'])}, "
+                   f"email {_outcome(last['email'])}.")
+    else:
+        latest = db.query(func.max(TwitchChannelApproval.notified_at)).scalar()
+        history = f"Last message {_utc(latest)}." if latest else "No message since the last restart."
+    if ready:
+        detail = " ".join([f"Ready: {', '.join(ready)}."] + notes + [history])
+        return _check("approval_notifications", OK, label, detail)
+    detail = " ".join(["No channel is ready, so admins hear about new streamer requests only "
+                       "in Admin."] + notes + [history])
+    return _check("approval_notifications", WARNING, label, detail)
+
+
 def _backend_origin() -> str | None:
     base = _env("APP_BASE_URL").rstrip("/")
     if not base:
@@ -216,6 +257,7 @@ def build_status(db: Session) -> dict:
             _connect_twitch_check(),
             _app_base_url_check(),
             _steam_key_check(),
+            _approval_notifications_check(db),
         ],
         "traffic": twitch.traffic_snapshot(),
         "console": _console(),

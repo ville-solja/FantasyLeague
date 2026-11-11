@@ -21,6 +21,7 @@ from starlette.requests import Request
 from starlette.routing import Match
 from twitch import router as twitch_router
 import twitch as twitch_module
+import twitch_channels
 import twitch_mvp_poll
 import twitch_oauth
 import twitch_status
@@ -148,6 +149,7 @@ def _week_maintenance_loop():
                 due_substitutions(db)  # only matters when both fall due in the same tick; otherwise the report opens first with a "substitutions pending" note
                 generate_weekly_summaries(db)
                 _run_caster_tag_sync(db, "Week maintenance")  # issue #201: safety net
+                _run_approval_notifications(db)  # issue #215
                 if time.time() - _last_session_cleanup >= _SESSION_CLEANUP_INTERVAL:
                     deleted = sessions.cleanup_expired(db)
                     _last_session_cleanup = time.time()
@@ -177,6 +179,16 @@ def _week_maintenance_loop():
         # thread doesn't run (no STEAM_API_KEY, DEMO_MODE).
         _run_finals_check()
         _stop_event.wait(timeout=_WEEK_CHECK_INTERVAL)
+
+
+def _run_approval_notifications(db):
+    """Best-effort step (issue #215): tell admins about streamers waiting for MVP approval.
+    A failure is logged and rolled back; it never stops the loop."""
+    try:
+        twitch_channels.notify_pending(db)
+    except Exception:
+        db.rollback()
+        logger.exception("Streamer approval notification failed")
 
 
 def _run_mvp_vote_cleanup(db):

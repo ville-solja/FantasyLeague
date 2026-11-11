@@ -429,6 +429,7 @@ class TwitchChannelApproval(Base):
     last_seen_at  = Column(Integer, nullable=False)
     decided_at    = Column(Integer, nullable=True)
     decided_by    = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notified_at   = Column(Integer, nullable=True)          # issue #215: admins were told
 
 
 class PasswordResetToken(Base):

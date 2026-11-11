@@ -148,6 +148,8 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SMTP_FROM` | Falls back to `SMTP_USER`, then `noreply@fantasy` | Sender address in outgoing emails |
 | `SMTP_TLS` | `true` | Use STARTTLS; set to `false` for plain SMTP |
 | `SMTP_SSL` | `false` | Use direct SSL (`smtplib.SMTP_SSL`, typically port 465); takes priority over `SMTP_TLS` |
+| `ADMIN_NOTIFY_DISCORD_WEBHOOK_URL` | *(empty)* | Discord webhook for streamer approval notifications (issue #215); only `https://discord.com/api/webhooks/…` or `discordapp.com` addresses are used. A secret: Admin › Twitch shows only "set". See `reference/streamer-approval-notifications.md` |
+| `ADMIN_NOTIFY_EMAILS` | *(empty)* | Email recipients for streamer approval notifications. Empty: every admin with an email address (needs `SMTP_HOST`); a comma-separated list replaces that; `off` turns email off |
 | `APP_NAME` | `Kana Cards` | Prefix used in email subject lines |
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Extension client ID from Twitch dev console; also the only `ext-twitch.tv` origin CORS allows (none when unset, with a start-up warning) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64-encoded extension secret from Twitch dev console |

@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-11 — developer — testing
+**Problem:** Adding a column to a table (issue 215) broke the table's original tests: `test_issue_175` pinned the exact column set and asserted the table name never appears in `migrate.py`, and `test_issue_180` pins the exact list of Twitch status check keys with every row "ok".
+**Solution:** Before adding a column or a status check, grep `backend/tests` for the table name and for `[c["key"] for c in`; extend the pinned set or list, narrow "not in migrate.py" to `CREATE TABLE <name>`, and configure the new check in `status_env`.
+
 ### 2026-11-10 — developer — models
 **Problem:** New code reading `user.player_id` (issue 220's "own verified player") passed its own tests but failed `test_issue_209`'s guard in the full suite, and test users built with only `player_id` are not verified links.
 **Solution:** Read the link through `player_links.verified_player_id(user)`; in tests give such users `steam_id=str(76561197960265728 + player_id)`.

@@ -803,6 +803,17 @@ def _m043_matches_source(conn):
     conn.commit()
 
 
+def _m044_twitch_channel_approvals_notified_at(conn):
+    """Issue #215: twitch_channel_approvals.notified_at, when admins were told about the
+    request. Existing rows keep NULL, so the waiting backlog is announced once."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(twitch_channel_approvals)")).fetchall()}
+    if not cols or "notified_at" in cols:
+        return
+    conn.execute(text("ALTER TABLE twitch_channel_approvals ADD COLUMN notified_at INTEGER"))
+    conn.commit()
+    logger.info("Migration: twitch_channel_approvals — added notified_at column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -870,6 +881,7 @@ MIGRATIONS = [
     ("041_clear_unverified_player_links", _m041_clear_unverified_player_links),
     ("042_players_rank",             _m042_players_rank),
     ("043_matches_source",           _m043_matches_source),
+    ("044_twitch_channel_approvals_notified_at", _m044_twitch_channel_approvals_notified_at),
 ]
 
 

@@ -101,6 +101,8 @@ def status_env(monkeypatch):
     monkeypatch.setenv("TWITCH_OAUTH_REDIRECT_URI", "https://league.example/auth/twitch/callback")
     monkeypatch.setenv("APP_BASE_URL", "https://league.example/")
     monkeypatch.setattr(steam_live, "STEAM_API_KEY", "steam-key")
+    # Issue #215: approval notifications through a Discord webhook.
+    monkeypatch.setenv("ADMIN_NOTIFY_DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1/t")
 
 
 def _status(db=None):
@@ -693,7 +695,8 @@ class TestAdminTwitchStatus:
         assert set(data) == {"checks", "traffic", "console"}
         assert [c["key"] for c in data["checks"]] == [
             "extension_client_id", "extension_secret", "extension_version", "local_dev",
-            "mvp_channels", "connect_twitch", "app_base_url", "steam_api_key"]
+            "mvp_channels", "connect_twitch", "app_base_url", "steam_api_key",
+            "approval_notifications"]
         for c in data["checks"]:
             assert set(c) == {"key", "state", "label", "detail"}
             assert c["state"] == "ok", c

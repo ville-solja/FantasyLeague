@@ -1009,3 +1009,47 @@ As a viewer, I want my vote stored only briefly, so that voting doesn't build a 
 - **Retention:** individual votes are deleted 30 days after their poll ends (the daily cleanup). The poll keeps only per-player counts.
 - **Leave:** Leave Kana Cards deletes the caller's votes: a soft account's when it is deleted, and a website account's when it leaves the panel.
 - **Disclosure:** the privacy page and the extension's review notes mention votes. The review walkthrough has a step for starting, voting in and confirming a poll, and the 1.4.0 change log lists the new chat messages.
+
+
+## Streamer Approval Notifications (#215)
+
+Plan: `markdown/plans/plan-issue-215-streamer-approval-notifications.md`. Feature doc: `markdown/features/reference/streamer-approval-notifications.md`.
+
+### Admins Hear About a New Streamer Request Outside the Site
+**User story**
+As an admin, I want a message by email or Discord when a streamer asks for MVP approval, so that I can approve them before their match even when I don't have the site open.
+
+**Acceptance criteria**
+- **Trigger:** a new pending request (a channel's first visit to the MVP tool) is announced by the next check, within about 5 minutes.
+- **One message for many:** pending requests not yet announced are sent together in one message. It names up to 10 channels (display name and login, or the channel id when Helix has no name), then "and N more", plus the total waiting and a link to the admin page when `APP_BASE_URL` is set.
+- **Once per channel:** an announced channel is never announced again, and neither is a channel's later visit, an approved channel or a rejected one.
+- **Spacing:** messages are at least 30 minutes apart. Requests arriving in between go into the next message.
+- **Email:** sent to every admin with an email address, or to `ADMIN_NOTIFY_EMAILS` when set. `off` turns email off, and nothing is sent without SMTP.
+- **Discord:** posted to `ADMIN_NOTIFY_DISCORD_WEBHOOK_URL` when it is a Discord webhook address, with mentions disabled.
+- **Failure:** when every channel fails, the requests stay unannounced and are retried on a later check. One channel failing doesn't stop the other.
+
+### The Operator Configures and Checks the Notifications
+**User story**
+As the operator, I want to see in Admin whether approval notifications are set up and working, and to send a test, so that I know admins will hear about requests without reading the server logs.
+
+**Acceptance criteria**
+- **Status:** Admin › Twitch status shows an **Approval notifications** check.
+  - OK names the ready channels (Discord, email to N recipients).
+  - A warning appears when none is ready, for example no webhook and no SMTP, or a webhook URL that isn't a Discord webhook.
+  - The detail shows the last message time and the last error kind.
+- **Test:** **Send test notification** sends a test message to each configured channel and shows the result per channel. It needs an admin with a recent re-authentication and is rate-limited. It is audited as `admin_twitch_notify_test`.
+- **Secrets:** the webhook URL never appears in a response, the audit log or the logs (only "set"). Recipient addresses never appear in the status or the audit log, only their count.
+- **Docs:** `.env.example` and the feature doc describe `ADMIN_NOTIFY_DISCORD_WEBHOOK_URL` and `ADMIN_NOTIFY_EMAILS`.
+
+### Notifications Can't Be Used to Spam Admins
+**User story**
+As an admin, I want notifications to stay few and harmless even if someone creates many channels, so that the alert stays useful.
+
+**Acceptance criteria**
+- **Rate:** however many requests arrive, at most one message goes out per 30 minutes, with at most 10 names in it.
+- **No pings or links from names:**
+  - channel names are cleaned of control and hidden characters;
+  - Discord markdown in a name is escaped;
+  - `@everyone`, `@here` and role or user mentions don't notify anyone;
+  - a name that looks like a link is shown as the channel id instead.
+- **Bounded:** the existing cap of 200 pending requests still applies. A dropped request is not announced.

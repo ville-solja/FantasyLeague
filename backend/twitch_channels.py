@@ -13,6 +13,7 @@ import threading
 import time
 
 import requests as _requests
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import TwitchChannelApproval, User
@@ -24,12 +25,15 @@ PENDING_CAP = 200
 HELIX_USERS_URL = "https://api.twitch.tv/helix/users"
 HELIX_TIMEOUT = 5          # seconds
 HELIX_BATCH = 100          # Helix accepts at most 100 ids per call
+NOTIFY_SPACING = 30 * 60   # issue #215: at least this long between admin notifications
+NOTIFY_NAME_LIMIT = 10     # names per notification, then "and N more"
 
 _CHANNEL_ID_RE = re.compile(r"[0-9]{1,20}")
 
 _token_lock = threading.Lock()
 _app_token: str | None = None
 _app_token_expires_at = 0.0
+_notify_failed_at: int | None = None   # issue #215: last try where every channel failed
 
 
 def env_channels() -> set[str]:
@@ -245,3 +249,68 @@ def decide(db: Session, channel_id: str, action: str, admin: dict) -> dict:
     _audit(db, audit_action, actor_id=admin["user_id"], actor_username=admin.get("username"),
            detail=f"channel={channel_id} status={old_status}->{new_status}")
     return _row_dict(row, channel_id, from_env=False)
+
+
+# ---------------------------------------------------------------------------
+# Admin notifications (issue #215)
+# ---------------------------------------------------------------------------
+
+def _reset_notify_backoff() -> None:
+    global _notify_failed_at
+    _notify_failed_at = None
+
+
+def notify_pending(db: Session, now: int | None = None) -> int:
+    """Tell admins (admin_notify: email, Discord) about pending requests not yet announced,
+    in one message, at least NOTIFY_SPACING after the last one. Rows are marked
+    notified_at only when a channel delivered; with nothing configured nothing is
+    marked, so the backlog goes out after setup. When every channel failed, the next
+    try also waits NOTIFY_SPACING (in memory). Names from Helix are committed before
+    sending, so no write transaction is open during network I/O. Returns the number
+    announced. Commits."""
+    global _notify_failed_at
+    import admin_notify
+    from deps import _audit
+    now = int(time.time()) if now is None else now
+    if _notify_failed_at is not None and now - _notify_failed_at < NOTIFY_SPACING:
+        return 0
+    if not admin_notify.any_ready(db):
+        return 0
+    last = db.query(func.max(TwitchChannelApproval.notified_at)).scalar()
+    if last is not None and now - last < NOTIFY_SPACING:
+        return 0
+    rows = (db.query(TwitchChannelApproval)
+            .filter(TwitchChannelApproval.status == PENDING, TwitchChannelApproval.notified_at.is_(None))
+            .order_by(TwitchChannelApproval.first_seen_at.asc(), TwitchChannelApproval.channel_id.asc())
+            .all())
+    if not rows:
+        db.rollback()
+        return 0
+    total = (db.query(TwitchChannelApproval)
+             .filter(TwitchChannelApproval.status == PENDING).count())
+    missing = [r.channel_id for r in rows[:NOTIFY_NAME_LIMIT] if not r.display_name]
+    if missing:
+        found = _lookup_names(missing)
+        for r in rows:
+            if r.channel_id in found:
+                r.display_name = found[r.channel_id].get("display_name")
+                r.login = found[r.channel_id].get("login")
+    ids = [r.channel_id for r in rows]
+    subject, text, discord_text = admin_notify.approval_message(rows, total, NOTIFY_NAME_LIMIT)
+    dest = admin_notify.targets(db)
+    db.commit()  # names stored; nothing is held open over the network
+    result = admin_notify.deliver(dest, subject, text, discord_text)
+    used = admin_notify.delivered(result)
+    if not used:
+        _notify_failed_at = now
+        return 0
+    _notify_failed_at = None
+    (db.query(TwitchChannelApproval)
+     .filter(TwitchChannelApproval.channel_id.in_(ids), TwitchChannelApproval.notified_at.is_(None))
+     .update({TwitchChannelApproval.notified_at: now}, synchronize_session=False))
+    _audit(db, "twitch_approval_notified", actor_id=None, actor_username="system",
+           detail=f"channels={len(ids)} via={','.join(used)}")
+    db.commit()
+    logger.info("Told admins about %d Twitch channel(s) waiting for approval (%s)",
+                len(ids), ", ".join(used))
+    return len(ids)

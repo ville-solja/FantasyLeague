@@ -1273,8 +1273,9 @@
           <h3 class="admin-panel-title">Twitch status</h3>
           <p class="admin-panel-desc">This server's Twitch settings and the panel traffic it has seen since the last restart. Fix every Problem row first; the Twitch console block lists what only the developer console can show.</p>
         </div>
-        <div class="admin-panel-actions"><button class="secondary" onclick="loadTwitchStatus()">Refresh</button></div>
+        <div class="admin-panel-actions"><button class="secondary" onclick="loadTwitchStatus()">Refresh</button><button class="secondary" id="twitchNotifyTestBtn" onclick="sendTwitchTestNotification()">Send test notification</button></div>
       </div>
+      <div class="status" id="twitchNotifyTestStatus"></div>
       <div id="adminTwitchStatus"></div>
       <div class="status" id="twitchStatusStatus"></div>
     </div>
