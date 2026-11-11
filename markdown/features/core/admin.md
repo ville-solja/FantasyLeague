@@ -370,6 +370,11 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_finals_paused` | Admin paused or resumed finals predictions |
 | `admin_finals_closed` | Admin closed finals predictions early |
 | `admin_finals_result_set` | Admin set a finals series winner |
+| `admin_team_signup_opened` | Admin opened a team signup period (`detail` has the label) |
+| `admin_team_signup_closed` | Admin closed the open team signup period |
+| `admin_team_signup_removed` | Admin removed a team signup listing (period label and team name) |
+| `admin_team_signup_cleared` | Admin cleared a period's team signup listings (recent re-auth) |
+| `team_signup_not_on_team` | A player removed their Steam-verified player from another captain's listing (the captain isn't told who) |
 | `admin_champions_set` | Admin saved a season and division's champion set (Mark champions); detail has added and removed counts |
 | `admin_accolade_added` | Admin added one or more season accolades (also written once per season by `backfill_played.py`) |
 | `admin_accolade_updated` | Admin edited a season accolade |
@@ -423,7 +428,8 @@ These features have dedicated reference documents:
 | Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
 | Player Name Lookup | `GET /admin/players/lookup?ids=…` (name preview for typed ids: pool, then OpenDota, cached 10 minutes; at most 50 ids) | `reference/admin-enhancements.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
-| League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
+| League Monitoring | `GET/POST/DELETE /admin/leagues/*`, `GET /admin/opendota-status` (OpenDota health and each league's last ingest check) | `reference/monitored-leagues-admin.md` |
+| Team signup | `GET /admin/team-signup`, `POST /admin/team-signup/period`, `POST /admin/team-signup/period/close`, `DELETE /admin/team-signup/{id}`, `GET /admin/team-signup/export.csv`, `GET /admin/team-signup/export.json`, `POST /admin/team-signup/clear` | `core/team-signup.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |

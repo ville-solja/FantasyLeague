@@ -19,6 +19,7 @@ These describe the primary user-visible surfaces of the app.
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
 | [Twitch Extension](core/twitch-extension.md) | Viewer panel game (Live, Join with the Twitch login, cards, roster), broadcaster MVP selection and token drops |
 | [Finals Predictions](core/finals-predictions.md) | Finals tab (#237): Div 1 match tree from our own results, no fixtures-site dependency; predictions open once the bracket is set (after the group stage, or an admin tiebreak) and lock at the first semi game; correct picks stored for a later accolade |
+| [Pre-Season Team Signup](core/team-signup.md) | *(#220, S17)* Team Finder tab while an admin-opened signup period runs: captains list partial teams with Dota ids, open roles and a contact, browse other teams in a fair daily-shuffled order, mark the team full; the organiser downloads a CSV |
 
 ---
 

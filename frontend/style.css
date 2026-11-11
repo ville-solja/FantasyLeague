@@ -3035,6 +3035,135 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 }
 
 /* ============================================================
+   TEAM FINDER (issue #220) — pre-season team listings as a card grid (design canvas
+   design/ui_kits/fantasy_web/team-finder.html, option A) and the captain's form.
+   Cards are .panel surfaces of the same size; badges are the shared .status-badge,
+   medals the shared .rank-medal, the own listing the shared .row-self.
+   ============================================================ */
+.tf-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
+.tf-head h2 { margin: 0; }
+.tf-eyebrow,
+.tf-label {
+  font-family: var(--font-display);
+  font-weight: var(--w-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider);
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.tf-eyebrow { color: var(--accent); }
+.tf-head-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); color: var(--fg-muted); font-size: var(--fs-sm); }
+.tf-notice { margin: 0 0 var(--s-4); color: var(--fg-muted); font-size: var(--fs-sm); }
+.tf-notice[hidden],
+.tf-filters[hidden],
+.tf-form[hidden],
+.tf-full-section[hidden] { display: none; }
+.tf-muted { color: var(--fg-muted); font-size: var(--fs-sm); }
+.tf-filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) 0 var(--s-4); margin-bottom: var(--s-4);
+  border-bottom: var(--bw-hair) solid var(--border-soft);
+}
+.tf-filters label {
+  font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted);
+}
+.tf-filters select { flex: 0 0 auto; }
+.tf-result-count { margin-left: auto; color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.tf-chips { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.tf-chip {
+  background: var(--bg-card); color: var(--fg-muted);
+  border: var(--bw-thin) solid var(--border); border-radius: var(--r-sm);
+  padding: 4px 10px;
+}
+.tf-chip:hover { background: var(--bg-card); color: var(--fg); }
+.tf-chip[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.tf-role-tag {
+  font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+  letter-spacing: var(--tr-wide); text-transform: uppercase; white-space: nowrap;
+  color: var(--accent); border: var(--bw-hair) solid currentColor; border-radius: var(--r-xs);
+  padding: 0 6px; line-height: 1.5;
+}
+.tf-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--s-4); }
+.tf-card { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; padding: var(--s-4); }
+.tf-card.row-self { font-weight: inherit; }
+.tf-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-3); }
+.tf-team-name {
+  margin: 0; font-family: var(--font-display); font-weight: var(--w-black); font-size: var(--fs-lg);
+  letter-spacing: var(--tr-wide); text-transform: uppercase; line-height: var(--lh-snug); overflow-wrap: anywhere;
+}
+.tf-team-name--sm { font-size: var(--fs-md); }
+.tf-need { text-align: right; flex-shrink: 0; }
+.tf-needed {
+  font-family: var(--font-display); font-weight: var(--w-black); font-size: var(--fs-2xl);
+  line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums;
+}
+.tf-needed--zero { color: var(--fg-muted); }
+/* Player rows: a fixed-column grid, every cell emitted (name, medal, badges). */
+.tf-players { display: grid; grid-template-columns: minmax(6rem, 1fr) auto auto; column-gap: var(--s-3); margin: var(--s-2) 0; }
+.tf-players > div { padding: 5px 0; border-top: var(--bw-hair) solid var(--border-soft); display: flex; align-items: center; min-width: 0; }
+.tf-p-name { font-size: var(--fs-sm); overflow-wrap: anywhere; flex-wrap: wrap; gap: var(--s-1); }
+.tf-p-open { color: var(--fg-muted); font-style: italic; }
+.tf-p-flags { flex-direction: column; align-items: flex-end; justify-content: center; gap: var(--s-1); }
+/* The medal name already gives the stars; the card keeps its columns narrow. */
+.tf-p-medal .rank-medal-stars { display: none; }
+.tf-p-flags > .status-badge,
+.tf-p-name > .status-badge,
+.tf-id-rows .status-badge { margin-left: 0; }
+.tf-p-medal .rank-medal,
+.tf-id-rows .rank-medal { margin-left: 0; }
+.tf-badge-warn { color: var(--k-warn); border-color: currentColor; }
+.tf-unranked { color: var(--fg-muted); font-size: var(--fs-sm); }
+.tf-id { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--fg-muted); }
+.tf-small { padding: 2px 8px; }
+.tf-note { margin: 0; font-size: var(--fs-sm); color: var(--fg); overflow-wrap: anywhere; }
+.tf-card-foot {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--s-3);
+  border-top: var(--bw-hair) solid var(--border-soft); padding-top: var(--s-2); margin-top: auto;
+}
+.tf-contact { font-size: var(--fs-sm); color: var(--fg); overflow-wrap: anywhere; }
+.tf-contact.tf-muted { color: var(--fg-muted); }
+.tf-empty { padding: var(--s-8); text-align: center; color: var(--fg-muted); border: var(--bw-hair) dashed var(--border); border-radius: var(--r-md); }
+.tf-full-section { margin-top: var(--s-6); border-top: var(--bw-hair) solid var(--border-soft); padding-top: var(--s-3); }
+.tf-full-section summary { cursor: pointer; }
+.tf-full-section summary .tf-label { color: var(--fg); }
+.tf-full-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--s-3); margin-top: var(--s-3); }
+/* Captain form */
+.tf-form { margin-top: var(--s-6); }
+.tf-form-title { margin: 0 0 var(--s-4); }
+.tf-form-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--s-5); }
+.tf-field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-4); }
+.tf-field > input { flex: 0 0 auto; width: 100%; }
+.tf-id-add { display: flex; gap: var(--s-2); }
+.tf-id-add input { min-width: 0; }
+.tf-id-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; column-gap: var(--s-3); margin-top: var(--s-2); }
+.tf-id-rows > div { padding: 6px 0; border-top: var(--bw-hair) solid var(--border-soft); display: flex; align-items: center; gap: var(--s-2); min-width: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.tf-msg-err { color: var(--k-err); font-size: var(--fs-sm); min-height: 1em; }
+.tf-helper { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: var(--s-1); }
+.tf-counter { font-size: var(--fs-xs); color: var(--fg-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.tf-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.tf-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); border-top: var(--bw-hair) solid var(--border-soft); padding-top: var(--s-4); }
+.tf-form-actions .status { margin-top: 0; }
+.tf-form button[hidden] { display: none; }
+.tf-spinner {
+  width: 12px; height: 12px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  animation: tf-spin 0.8s linear infinite;
+}
+@keyframes tf-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tf-spinner { animation: none; border-top-color: var(--fg-muted); } }
+@media (max-width: 760px) { /* team finder */
+  .tf-grid { grid-template-columns: minmax(0, 1fr); }
+  .tf-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .tf-result-count { margin-left: 0; width: 100%; }
+  /* Badges go on their own line under the name and medal. */
+  .tf-players { grid-template-columns: minmax(0, 1fr) auto; }
+  .tf-players > .tf-p-flags { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; border-top: 0; padding-top: 0; }
+  .tf-players > .tf-p-flags:empty { display: none; }
+  .tf-id-rows { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+/* ============================================================
    SHARED STATES (issue #202) — the design system's "States and emphasis"
    rules (.claude/skills/README.md). Surfaces use these instead of their own copies.
    ============================================================ */
@@ -3059,7 +3188,9 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .settings-nav-btn.active:hover,
 .settings-nav-btn.active:focus-visible,
 .finals-pick[aria-pressed="true"]:hover,
-.finals-pick[aria-pressed="true"]:focus-visible {
+.finals-pick[aria-pressed="true"]:focus-visible,
+.tf-chip[aria-pressed="true"]:hover,
+.tf-chip[aria-pressed="true"]:focus-visible {
   background: var(--state-selected-hover-bg);
   color: var(--state-selected-hover-fg);
 }
@@ -3083,7 +3214,8 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .schedule-hide-toggle[aria-pressed="true"]:focus-visible,
 .players-filter-chip.active:focus-visible,
 .settings-nav-btn.active:focus-visible,
-.finals-pick[aria-pressed="true"]:focus-visible {
+.finals-pick[aria-pressed="true"]:focus-visible,
+.tf-chip[aria-pressed="true"]:focus-visible {
   outline: var(--bw-thick) solid var(--accent);
   outline-offset: 2px;
 }

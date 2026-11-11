@@ -106,6 +106,20 @@ account, Leave only removes the panel link and keeps the website account and its
 connection; disconnect Twitch on your website Profile to remove the connection.
 Soft accounts with no activity for 365 days are deleted automatically.</p>
 
+<h2>Team Finder (pre-season team signup)</h2>
+<p>Before a season, an admin may open the Team Finder so partial teams can find each other. When
+you list a team, we store the team name, the Dota ids you type in with the player name and rank
+medal we looked up for each (from our player pool or the public OpenDota API), the open roles, your
+note, the contact detail you give (for example a Discord name), whether the team is full, your
+account as its captain and the times you saved it. A typed Dota id is a claim by the captain: it
+doesn't link that player to any account. Everyone can see the team names, player names, medals,
+open roles and notes; the contact detail is shown only to logged-in users and to the league
+organisers in their export, never to logged-out visitors. A player listed by someone else can
+remove themselves with <em>Not on this team</em> after signing in with Steam.</p>
+<p>You can delete your listing at any time while signups are open; it is deleted at once, contact
+included. All listings, contacts and players are deleted 60 days after the signup period closes,
+or earlier when an admin clears them.</p>
+
 <h2>How we use this information</h2>
 <ul>
   <li>To operate the Service: authenticate you, track your cards/tokens/roster, compute fantasy
@@ -137,7 +151,8 @@ while you play and deleted after 365 days without activity, or at once when you 
 panel's Settings. Individual MVP votes are deleted 30 days after the vote ends, or at once when
 you leave. After a Twitch collection is added to a website account, the record of that
 merge (which includes the Twitch user id) is kept for up to 30 days so a mistaken merge can be
-undone, then deleted. After Disconnect, Leave or deletion we also keep a one-way hashed record
+undone, then deleted. Team Finder listings are deleted 60 days after their signup period closes,
+or at once when you delete your listing. After Disconnect, Leave or deletion we also keep a one-way hashed record
 of the Twitch account (it can't be turned back into the Twitch user id) for as long as the
 Service runs, only so its starter tokens are not granted twice. To request deletion of your
 account and associated data, contact us using the details below.</p>

@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-10 — developer — models
+**Problem:** New code reading `user.player_id` (issue 220's "own verified player") passed its own tests but failed `test_issue_209`'s guard in the full suite, and test users built with only `player_id` are not verified links.
+**Solution:** Read the link through `player_links.verified_player_id(user)`; in tests give such users `steam_id=str(76561197960265728 + player_id)`.
+
 ### 2026-11-10 — developer — testing
 **Problem:** `test_issue_195`'s `_called_paths` matched only `[a-z_/]` literals and a bare `"/prefix/" + id`, so a hyphenated route (`/twitch/mvp-poll`) or a `"/x/" + id + "/vote"` call was invisible to the endpoint-disclosure check and its table row looked "never called".
 **Solution:** The regex now takes `-` and a trailing `+ "/suffix"` literal; add the route's prefix to `PARAM_BY_PREFIX` and one table row per method in the review guide's endpoint table.

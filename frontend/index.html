@@ -527,6 +527,7 @@
   <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
   <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
   <button class="tab" id="tab-btn-finals"      onclick="switchTab('finals')" hidden>Finals</button>
+  <button class="tab" id="tab-btn-teamfinder"  onclick="switchTab('teamfinder')" hidden>Team Finder</button>
   <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
   <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin<span class="admin-pending-badge" id="adminTabPendingBadge" role="img" hidden></span></button>
 </div>
@@ -904,6 +905,91 @@
   </section>
 </div>
 
+<!-- TAB: TEAM FINDER (issue #220): pre-season team listings; shown from GET /config team_signup_open (admins always) -->
+<div id="tab-teamfinder" class="tab-content">
+  <section class="tf-page" aria-labelledby="tfTitle">
+    <div class="tf-head">
+      <div>
+        <div class="tf-eyebrow" id="tfPeriodLabel"></div>
+        <h2 id="tfTitle">Find a team</h2>
+      </div>
+      <div class="tf-head-meta"><span id="tfPeriodMeta"></span><span id="tfCta"></span></div>
+    </div>
+    <p class="tf-notice" id="tfNotice" aria-live="polite" hidden></p>
+    <div class="tf-filters" id="tfFilters">
+      <label for="tfNeeded">Players needed</label>
+      <select id="tfNeeded" onchange="renderTeamFinder()">
+        <option value="0">Any</option><option value="1">1 or more</option><option value="2">2 or more</option>
+        <option value="3">3 or more</option><option value="4">4</option>
+      </select>
+      <span class="tf-label" id="tfRolesLabel">Open role</span>
+      <div class="tf-chips" role="group" aria-labelledby="tfRolesLabel" id="tfRoleFilter"></div>
+      <label for="tfMedalMin">Medals</label>
+      <select id="tfMedalMin" aria-label="Lowest medal" onchange="renderTeamFinder()"></select>
+      <span class="tf-muted">to</span>
+      <select id="tfMedalMax" aria-label="Highest medal" onchange="renderTeamFinder()"></select>
+      <span class="tf-result-count" id="tfResultCount" aria-live="polite"></span>
+    </div>
+    <div id="tfList"></div>
+    <details class="tf-full-section" id="tfFullSection" hidden>
+      <summary><span class="tf-label" id="tfFullLabel">Full teams</span></summary>
+      <div class="tf-full-list" id="tfFullList"></div>
+    </details>
+
+    <section class="panel tf-form" id="tfForm" hidden aria-labelledby="tfFormTitle">
+      <h3 class="tf-form-title" id="tfFormTitle">List your team</h3>
+      <div class="tf-form-grid">
+        <div>
+          <div class="tf-field">
+            <label class="tf-label" for="tfName">Team name</label>
+            <input type="text" id="tfName" maxlength="32" autocomplete="off" oninput="_tfCount('tfName', 'tfNameCount')">
+            <div class="tf-counter"><span id="tfNameCount">0</span>/32 · No links</div>
+          </div>
+          <div class="tf-field">
+            <label class="tf-label" for="tfIdInput">Players · Dota id or Steam64 id</label>
+            <div class="tf-id-add">
+              <input type="text" id="tfIdInput" inputmode="numeric" placeholder="e.g. 105 or 76561197960265833" autocomplete="off">
+              <button type="button" class="secondary" id="tfIdAdd" onclick="teamFinderAddIds()">Add</button>
+            </div>
+            <div class="tf-msg-err" id="tfIdErr" role="alert"></div>
+            <div class="tf-id-rows" id="tfIdRows"></div>
+            <div class="tf-helper"><span id="tfIdCount">0</span>/7 players. Listing an id doesn't link it to an account; only your own Steam-verified player shows as Verified.</div>
+          </div>
+        </div>
+        <div>
+          <div class="tf-field">
+            <span class="tf-label" id="tfFormRolesLabel">Open roles</span>
+            <div class="tf-chips" role="group" aria-labelledby="tfFormRolesLabel" id="tfFormRoles"></div>
+          </div>
+          <div class="tf-field">
+            <label class="tf-label" for="tfNote">Note</label>
+            <input type="text" id="tfNote" maxlength="280" autocomplete="off" oninput="_tfCount('tfNote', 'tfNoteCount')">
+            <div class="tf-counter"><span id="tfNoteCount">0</span>/280 · No links</div>
+          </div>
+          <div class="tf-field">
+            <label class="tf-label" for="tfContact">Contact · required</label>
+            <input type="text" id="tfContact" maxlength="100" autocomplete="off" placeholder="e.g. Discord: yourname">
+            <div class="tf-helper">Shown to logged-in users and in the organiser's export.</div>
+          </div>
+          <div class="tf-field">
+            <span class="tf-label">Team status</span>
+            <div class="tf-toggle">
+              <button type="button" class="tf-chip" id="tfFull" aria-pressed="false" onclick="toggleTeamFinderFull()">Team full</button>
+              <span class="tf-muted" id="tfFullHelp">Partial teams are listed; full teams move to Full teams.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tf-form-actions">
+        <button type="button" id="tfSave" onclick="saveTeamFinderListing(this)">Save listing</button>
+        <button type="button" class="danger" id="tfDelete" onclick="deleteTeamFinderListing(this)" hidden>Delete listing</button>
+        <div class="status" id="tfFormStatus" role="status"></div>
+      </div>
+    </section>
+    <div class="status" id="tfStatus" role="status"></div>
+  </section>
+</div>
+
 <!-- TAB: HOW TO PLAY -->
 <div id="tab-howtoplay" class="tab-content" x-data="{ howToPlayTab: 'users' }">
 
@@ -1032,6 +1118,9 @@
         <li>If you play in this season's league, you get your own player card once, free, when Steam verifies you.</li>
         <li>The <strong>Your Tags</strong> section of Player identity lists your tags and reminds you if you have tags but haven't linked your player.</li>
       </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin:20px 0 8px;">Team Finder</h3>
+      <p style="color:#ccc;font-size:0.9rem;line-height:1.7;">Before a season, while the league runs a team signup, the <strong>Team Finder</strong> tab lists partial teams looking for players. A captain logs in and lists the team with the Dota ids of its players, the roles it still needs and a contact; other teams and players browse the cards (shuffled once a day, so nobody is always first) and reach the captain through that contact, which only logged-in users see. A listed id is the captain's claim, not a link to an account; if a team listed you without asking and your Steam is linked, press <strong>Not on this team</strong> on your row.</p>
     </div>
 
   </div>
@@ -1336,6 +1425,18 @@
           </div>
           <div id="adminFinalsBody"></div>
           <div class="status" id="adminFinalsStatus"></div>
+        </div>
+
+        <div class="panel admin-panel" id="adminTeamSignupPanel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Team signup</h3>
+              <p class="admin-panel-desc">Pre-season Team Finder: while a period is open, captains list partial teams and the tab shows for everyone. Listings are deleted 60 days after the period closes.</p>
+            </div>
+          <div class="admin-panel-actions"><button class="secondary" onclick="loadAdminTeamSignup()">Refresh</button></div>
+          </div>
+          <div id="adminTeamSignupBody"></div>
+          <div class="status" id="adminTeamSignupStatus"></div>
         </div>
 
         <div class="panel admin-panel">
@@ -1727,6 +1828,7 @@
 <script src="/app-leaderboard.js"></script>
 <script src="/app-history.js"></script>
 <script src="/app-finals.js"></script>
+<script src="/app-team-finder.js"></script>
 <script src="/app-admin-weeks.js"></script>
 <script src="/app-admin-users.js"></script>
 <script src="/app-admin-notifications.js"></script>

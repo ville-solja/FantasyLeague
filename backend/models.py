@@ -735,6 +735,54 @@ class FinalsPrediction(Base):
     saved_at      = Column(Integer, nullable=False)
     correct_picks = Column(Integer, nullable=True)  # 0-3 on the effective row once the final is decided
 
+class TeamSignupPeriod(Base):
+    """A pre-season team signup period (issue #220, team_signup.py). At most one open
+    at a time (the partial unique index); it counts as closed once closes_at passes,
+    without a background job."""
+    __tablename__ = "team_signup_periods"
+
+    id                = Column(Integer, primary_key=True)
+    label             = Column(String, nullable=False)
+    opened_at         = Column(Integer, nullable=False)
+    closes_at         = Column(Integer, nullable=True)
+    closed_at         = Column(Integer, nullable=True)
+    opened_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class TeamSignup(Base):
+    """One captain's team listing in a signup period (issue #220). No foreign keys to
+    teams or players: a season Reset deletes those, and the listing outlives it."""
+    __tablename__ = "team_signups"
+    __table_args__ = (UniqueConstraint("period_id", "captain_user_id", name="uq_team_signup_period_captain"),)
+
+    id              = Column(Integer, primary_key=True)
+    period_id       = Column(Integer, ForeignKey("team_signup_periods.id"), nullable=False, index=True)
+    captain_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    team_name       = Column(String, nullable=False)
+    contact         = Column(String, nullable=False)
+    note            = Column(Text, nullable=True)
+    open_roles_json = Column(Text, nullable=True)   # [1-5, ...]
+    is_full         = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at      = Column(Integer, nullable=False)
+    updated_at      = Column(Integer, nullable=False)
+
+
+class TeamSignupPlayer(Base):
+    """A Dota id listed on a TeamSignup. The name and medal are stored at save time, so
+    browsing never calls OpenDota. `verified` only for the captain's Steam-verified player."""
+    __tablename__ = "team_signup_players"
+    __table_args__ = (UniqueConstraint("signup_id", "account_id", name="uq_team_signup_player"),)
+
+    id               = Column(Integer, primary_key=True)
+    signup_id        = Column(Integer, ForeignKey("team_signups.id"), nullable=False, index=True)
+    account_id       = Column(Integer, nullable=False, index=True)   # 32-bit Dota id; no FK to players
+    name             = Column(String, nullable=True)                 # None: "Unknown player"
+    rank_tier        = Column(Integer, nullable=True)
+    leaderboard_rank = Column(Integer, nullable=True)
+    verified         = Column(Boolean, nullable=False, default=False, server_default="0")
+    added_at         = Column(Integer, nullable=False)
+
+
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)
@@ -758,3 +806,8 @@ Index('ux_season_accolades_key', SeasonAccolade.season_label, SeasonAccolade.kin
       func.coalesce(SeasonAccolade.division, ''),
       func.coalesce(SeasonAccolade.player_account_id, 0),
       func.coalesce(SeasonAccolade.user_id, 0), unique=True)
+# Issue #220: at most one signup period with closed_at NULL. NULLs are distinct in a
+# unique index, so the key is COALESCE(closed_at, 0), the same 0 for every open row.
+Index('ux_team_signup_periods_open', func.coalesce(TeamSignupPeriod.closed_at, 0), unique=True,
+      sqlite_where=TeamSignupPeriod.closed_at.is_(None),
+      postgresql_where=TeamSignupPeriod.closed_at.is_(None))

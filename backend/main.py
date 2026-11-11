@@ -29,6 +29,7 @@ import login_mode
 import card_points
 import caster_tags
 import finals
+import team_signup
 import database
 import sessions
 import soft_accounts
@@ -67,6 +68,8 @@ from routers import admin_demo as admin_demo_router
 from routers import weekly_summary as weekly_summary_router
 from routers import finals as finals_router
 from routers import admin_finals as admin_finals_router
+from routers import team_signup as team_signup_router
+from routers import admin_team_signup as admin_team_signup_router
 
 logger = logging.getLogger(__name__)
 # API keys travel in query strings (STEAM_API_KEY, OPENDOTA_API_KEY), and urllib3's
@@ -115,6 +118,9 @@ _last_steam_cleanup     = 0.0
 # Issue #234: viewer MVP votes are deleted 30 days after their poll ends, once a day.
 _MVP_VOTE_CLEANUP_INTERVAL = 86400
 _last_mvp_vote_cleanup     = 0.0
+# Issue #220: team signups are deleted 60 days after their period closes, once a day.
+_TEAM_SIGNUP_CLEANUP_INTERVAL = 86400
+_last_team_signup_cleanup     = 0.0
 
 
 def _week_maintenance_loop():
@@ -129,10 +135,11 @@ def _week_maintenance_loop():
     TWITCH_SOFT_ACCOUNT_RETENTION_DAYS (issue #157), and expired Twitch sign-in
     attempts and merge undo-log rows older than 30 days (issue #160), and Steam
     sign-in attempts, pending sign-ups and day-old OpenID nonces (issue #150), and
-    viewer MVP votes 30 days after their poll ended (issue #234).
+    viewer MVP votes 30 days after their poll ended (issue #234), and team signups 60
+    days after their period closed (issue #220).
     """
     global _last_session_cleanup, _last_soft_account_purge, _last_twitch_oauth_cleanup
-    global _last_steam_cleanup, _last_mvp_vote_cleanup
+    global _last_steam_cleanup, _last_mvp_vote_cleanup, _last_team_signup_cleanup
     while not _stop_event.is_set():
         try:
             db = SessionLocal()
@@ -159,6 +166,9 @@ def _week_maintenance_loop():
                 if time.time() - _last_mvp_vote_cleanup >= _MVP_VOTE_CLEANUP_INTERVAL:
                     _run_mvp_vote_cleanup(db)
                     _last_mvp_vote_cleanup = time.time()
+                if time.time() - _last_team_signup_cleanup >= _TEAM_SIGNUP_CLEANUP_INTERVAL:
+                    _run_team_signup_cleanup(db)
+                    _last_team_signup_cleanup = time.time()
             finally:
                 db.close()
         except Exception:
@@ -178,6 +188,19 @@ def _run_mvp_vote_cleanup(db):
     except Exception:
         db.rollback()
         logger.exception("Viewer MVP vote cleanup failed")
+
+
+def _run_team_signup_cleanup(db):
+    """Best-effort daily step: delete team signup periods closed over 60 days ago, with
+    their listings and players (issue #220)."""
+    try:
+        deleted = team_signup.cleanup(db, int(time.time()))
+        db.commit()
+        if deleted:
+            logger.info("Deleted %d team signup period(s) past retention", deleted)
+    except Exception:
+        db.rollback()
+        logger.exception("Team signup cleanup failed")
 
 
 _ENRICHMENT_TIMEOUT_SECONDS = 300
@@ -915,6 +938,8 @@ app.include_router(admin_demo_router.router)
 app.include_router(weekly_summary_router.router)
 app.include_router(finals_router.router)
 app.include_router(admin_finals_router.router)
+app.include_router(team_signup_router.router)
+app.include_router(admin_team_signup_router.router)
 
 
 @app.api_route("/twitch/{rest:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
@@ -973,6 +998,8 @@ def get_config(db=Depends(get_db)):
         "twitch_connect_bonus_tokens": twitch_oauth.connect_bonus_tokens(),
         # Issue #237 — the Finals tab shows from the projected Div 1 bracket until the season ends.
         "finals_available": finals.is_available(db),
+        # Issue #220 — the Team Finder tab shows while a signup period is open.
+        "team_signup_open": team_signup.is_open(db),
     }
 
 
