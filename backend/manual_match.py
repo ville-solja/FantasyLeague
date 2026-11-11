@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import re
+import time
 from typing import Annotated
 
 from fastapi import HTTPException, Request
@@ -428,10 +429,39 @@ async def read_body(request: Request) -> ManualMatchBody:
     return body
 
 
+# An admin is waiting on Add match: two short tries (about 35 s at worst, with the back-off sleeps), not the
+# background defaults (five tries with 10-160 s back-off, several minutes).
+_INTERACTIVE_RETRIES = 2
+_INTERACTIVE_BACKOFF = 3.0
+_INTERACTIVE_TIMEOUT = 10.0
+
+
+def opendota_unavailable_message() -> str:
+    """The Add match refusal when OpenDota didn't answer, naming a rate limit when the
+    health record shows one."""
+    import opendota_client
+    health = opendota_client.health_snapshot()
+    if health["rate_limited_now"]:
+        return ("OpenDota is rate-limiting the server right now, so the match could not be fetched. "
+                "Try again in a few minutes; Settings › Season › League Management shows OpenDota's status.")
+    return ("OpenDota didn't answer in time, so the match could not be fetched. "
+            "Try again in a minute; Settings › Season › League Management shows OpenDota's status.")
+
+
+def _opendota_problem_since(started: float) -> bool:
+    """True when the OpenDota client recorded a rate limit, server error, timeout or
+    give-up during this fetch (a 404 is an answer and records nothing)."""
+    import opendota_client
+    problem = opendota_client.health_snapshot()["last_problem"]
+    return bool(problem and problem["at"] >= int(started))
+
+
 def _fetch_opendota_match(match_id: int):
     try:
         data = ingest.opendota_get_json(f"{ingest.OPEN_DOTA_URL}/matches/{match_id}",
-                                        label=f"match {match_id} (add match)")
+                                        label=f"match {match_id} (add match)",
+                                        retries=_INTERACTIVE_RETRIES, base_backoff=_INTERACTIVE_BACKOFF,
+                                        timeout=_INTERACTIVE_TIMEOUT)
     except Exception:
         logger.exception("Add match: OpenDota fetch for %d failed", match_id)
         return None
@@ -450,7 +480,12 @@ def _manual_payload(db, body: ManualMatchBody):
         check_short(replay["duration"], replay["match_id"])
         return "replay", replay_to_store_payload(replay), replay["missing_stats"]
     existing_match(db, body.match_id)  # a league duplicate needs no OpenDota call
+    started = time.time()
     data = _fetch_opendota_match(body.match_id)
+    if data is None and _opendota_problem_since(started):
+        # No answer (rate limit, outage, timeout): not the same as OpenDota not having
+        # the match, whose "no player data" refusal sends the admin to a replay import.
+        raise ManualMatchError(opendota_unavailable_message(), status_code=503)
     check_opendota_data(data, body.match_id)
     return "opendota_manual", data, []
 

@@ -326,6 +326,7 @@ As an admin, I want to add a match by its id when the lobby wasn't started as a 
 - **Refusals with a message:**
   - the match is already stored as a league match;
   - OpenDota has no player data for it ("Use a replay import instead");
+  - OpenDota didn't answer: rate-limited, failing or timed out (503, "OpenDota is rate-limiting the server right now …" or "OpenDota didn't answer in time …", pointing to League Management). The fetch gives up within about 35 s and the dialog after 60 s, never staying on "Loading…";
   - it is shorter than 15 minutes;
   - a team isn't chosen.
 - **Store:** **Add** needs a recent re-auth, stores the match through the normal ingest code with the chosen league, writes `source = opendota_manual`, and audits `admin_match_added`.

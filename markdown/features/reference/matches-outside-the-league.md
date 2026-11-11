@@ -55,7 +55,7 @@ A replay match uses the existing partial-stats marker, `matches.parse_status` (s
 
 ## Endpoints
 
-Both routes are in `backend/routers/admin_matches.py`; the request handling, validation and preview are in `backend/manual_match.py` (`read_body`, `preview`, `store`). The body is read raw and size-checked before parsing: anything over 56 KB plus 4 KB of envelope (60 KB, under the site-wide 64 KB `MAX_REQUEST_BODY_BYTES`) answers 413, and anything that isn't a JSON object answers 422 ("The request is not valid JSON"). The body is `{"match_id": int}` or `{"replay": {…}}`, never both. Unknown body keys answer 422. The OpenDota fetch and the store run in a worker thread.
+Both routes are in `backend/routers/admin_matches.py`; the request handling, validation and preview are in `backend/manual_match.py` (`read_body`, `preview`, `store`). The body is read raw and size-checked before parsing: anything over 56 KB plus 4 KB of envelope (60 KB, under the site-wide 64 KB `MAX_REQUEST_BODY_BYTES`) answers 413, and anything that isn't a JSON object answers 422 ("The request is not valid JSON"). The body is `{"match_id": int}` or `{"replay": {…}}`, never both. Unknown body keys answer 422. The OpenDota fetch and the store run in a worker thread. The fetch uses short retries (two tries, 10 s timeout, 3 s back-off, about 35 s at worst) instead of ingest's background settings, which could hold the admin's request for minutes; the browser also stops waiting after 60 s and says OpenDota may be slow or rate-limiting.
 
 ### `POST /admin/matches/manual/preview`
 Admin only (`require_admin`). Writes nothing. Refusals (`detail` is a message):
@@ -63,7 +63,8 @@ Admin only (`require_admin`). Writes nothing. Refusals (`detail` is a message):
 | Status | When |
 |---|---|
 | 409 | The match id is already stored as a league match (checked before calling OpenDota) |
-| 422 | OpenDota answers nothing or has no player data: "… Use a replay import instead." |
+| 422 | OpenDota doesn't have the match (404) or has no player data: "… Use a replay import instead." |
+| 503 | OpenDota didn't answer (rate limit, server error or timeout recorded during this fetch): "OpenDota is rate-limiting the server right now …" or "OpenDota didn't answer in time …", pointing to League Management |
 | 422 | Shorter than 15 minutes |
 | 422 | The replay summary fails validation: `"<field>: <reason>"`, e.g. `players[3].hero_id: unknown hero id` |
 

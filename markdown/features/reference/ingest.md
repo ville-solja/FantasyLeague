@@ -21,7 +21,9 @@ The store step (`ingest._store_match_payload()`) is shared with **Admin › Matc
 
 Note: the `assists`, `sen_placed`, and `tower_damage` columns are retained in the database for historical records but are no longer included in fantasy scoring.
 
-Rate limit handling: 429 responses trigger exponential backoff before retrying. Server errors (5xx) are retried up to 3 times.
+Rate limit handling: 429 responses and server errors (5xx) trigger exponential backoff (10 s doubling, five tries) before giving up.
+
+**When OpenDota doesn't answer.** If the league's match list can't be fetched (rate limit, outage, or an error object instead of a list), the pass logs "OpenDota match list unavailable; nothing ingested this pass" and records the failure; it is not read as a league with no matches. A game that throws while storing is rolled back on its own, so the rest of the pass continues. After each pass the per-league outcome is kept in memory (`ingest.league_statuses()`): when the list was last read, how many games it had, and each listed game that still isn't stored, with a reason (`fetch_failed`, `too_short`, `error`, `not_stored`). The OpenDota client keeps a similar in-memory health record (`opendota_client.health_snapshot()`: last success, last problem, problem counts for 24 h, rate-limited now). Both show in **Settings › Season › League Management** through `GET /admin/opendota-status`, so a missing game can be diagnosed without the container logs. Both start empty after a restart.
 
 If the match payload has `"version": null` (OpenDota has not parsed the replay yet, so the
 parse-only stats are still zero), the rows are stored as-is and a replay parse is requested via

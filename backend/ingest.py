@@ -176,6 +176,28 @@ def store_live_matches(entries: list[dict], monitored_league_ids, db=None, now: 
 # INGESTION ENTRYPOINT
 # -----------------------
 
+# league_id -> the last ingest pass's outcome, for Admin › Settings › Season › League Management
+# (GET /admin/opendota-status). In memory only, like the OpenDota health record.
+_league_status: dict[int, dict] = {}
+_league_status_lock = threading.Lock()
+
+
+def league_statuses() -> dict[int, dict]:
+    with _league_status_lock:
+        return {k: {**v, "not_stored": list(v.get("not_stored", []))} for k, v in _league_status.items()}
+
+
+def _set_league_status(league_id: int, **fields) -> None:
+    with _league_status_lock:
+        _league_status.setdefault(league_id, {}).update(fields)
+
+
+def reset_league_statuses() -> None:
+    """Tests only."""
+    with _league_status_lock:
+        _league_status.clear()
+
+
 def ingest_league(league_id: int):
     db = SessionLocal()
     try:
@@ -193,8 +215,17 @@ def ingest_league(league_id: int):
 
         db.commit()
 
-        match_ids = get_league_matches(league_id) or []
-        logger.info("League %d: %d matches found", league_id, len(match_ids))
+        match_ids = get_league_matches(league_id)
+        if not isinstance(match_ids, list):
+            # OpenDota didn't answer (rate limit, outage) or answered with an error
+            # object: not the same as a league with no matches, so say so.
+            logger.warning("League %d: OpenDota match list unavailable; nothing ingested this pass", league_id)
+            _set_league_status(league_id, list_failed_at=int(time.time()))
+            match_ids = []
+            list_ok = False
+        else:
+            logger.info("League %d: %d matches found", league_id, len(match_ids))
+            list_ok = True
 
         # Pre-fetch already-ingested match IDs in one query
         existing = {
@@ -208,15 +239,32 @@ def ingest_league(league_id: int):
         seen_players = set()
         seen_teams = set()
 
+        reasons: dict[int, str] = {}
         for match_id in match_ids:
             if match_id in existing:
                 continue
 
             logger.info("Ingesting match %d", match_id)
             try:
-                ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
+                outcome = ingest_match(db, match_id, league_id, seen_players, seen_teams, weights)
+                if outcome is None:
+                    reasons[match_id] = "fetch_failed"
+                elif outcome == "too_short":
+                    reasons[match_id] = "too_short"
             except Exception:
                 logger.exception("Skipping match %d — ingestion failed", match_id)
+                reasons[match_id] = "error"
+                db.rollback()
+
+        if list_ok:
+            stored = {
+                row[0] for row in
+                db.query(Match.match_id).filter(Match.match_id.in_(match_ids)).all()
+            } if match_ids else set()
+            not_stored = [{"match_id": m, "reason": reasons.get(m, "not_stored")}
+                          for m in match_ids if m not in stored]
+            _set_league_status(league_id, listed_at=int(time.time()), listed=len(match_ids),
+                               not_stored=not_stored)
     finally:
         db.close()
 
