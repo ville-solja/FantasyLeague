@@ -83,8 +83,8 @@ _NAME_FONT_SIZE = 34
 _TEAM_FONT_SIZE = 24
 _STAT_FONT_SIZE = 28
 _STAT_LINE_GAP = 44
-_ACCOLADE_COUNT_FONT_SIZE = 17
-_ACCOLADE_COUNT_BADGE_RADIUS = 11
+_ACCOLADE_COUNT_FONT_SIZE = 20
+_ACCOLADE_COUNT_BADGE_RADIUS = 13
 
 # Each ACCOLADE_KINDS key's badge icon in assets/accolades/ — distinct from the
 # Lucide icon names ACCOLADE_KINDS carries for use elsewhere on the site. Kept local
@@ -157,6 +157,23 @@ def _aspect_fit(img, w: int, h: int):
     return img.resize((nw, nh), Image.LANCZOS)
 
 
+def _cover_fit(img, w: int, h: int):
+    """Scale img to cover a w x h box, preserving aspect ratio, then centre-crop to
+    exactly w x h (may crop an edge off one axis) — unlike `_aspect_fit` (contain,
+    may leave an empty margin), this always fills the box. Used only for the
+    team-logo slot, so every team's logo fills it consistently regardless of the
+    source logo's own aspect ratio."""
+    sw, sh = img.size
+    if sw <= 0 or sh <= 0:
+        return img.resize((w, h), Image.LANCZOS)
+    scale = max(w / sw, h / sh)
+    nw, nh = max(1, round(sw * scale)), max(1, round(sh * scale))
+    scaled = img.resize((nw, nh), Image.LANCZOS)
+    left = max(0, (nw - w) // 2)
+    top = max(0, (nh - h) // 2)
+    return scaled.crop((left, top, left + w, top + h))
+
+
 def _paste_fitted(base, img, box):
     """alpha_composite `img` centred within `box` (x0, y0, x1, y1), used for anything
     already sized to fit (aspect-fit logos/icons, or a placeholder matching the box)."""
@@ -175,15 +192,16 @@ def _fetch_team_logo_image(team_logo_url: str | None, size):
 
 def _load_team_logo_for_card(team_name: str | None, team_logo_url: str | None, size):
     """Prefer PNG under {assets}/dotabuff_league_logos/ (ingest), else HTTP logo_url.
-    `size` is a (w, h) box; the logo is aspect-fit into it (plain aspect-fit of the
-    source file as-is — no padding trim, confirmed by mock-up review)."""
+    `size` is a (w, h) box; the logo is cover-fit into it (scaled to cover the box,
+    centre-cropped) so every team's logo fills the slot the same way regardless of
+    its own aspect ratio."""
     logo_dir = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
     path = resolve_local_team_logo_path(logo_dir, team_name)
     if path and PIL_AVAILABLE:
         try:
             img = Image.open(path).convert("RGBA")
             w, h = size if isinstance(size, tuple) else (size, size)
-            return _aspect_fit(img, w, h)
+            return _cover_fit(img, w, h)
         except Exception:
             pass
     return _fetch_team_logo_image(team_logo_url, size)
@@ -207,8 +225,9 @@ def _normalize_image_url(url: str | None) -> str | None:
 
 def _fetch_pil_image(url: str, size):
     """Download an image and return it decoded (RGBA), fit to `size`: a (w, h) tuple
-    is aspect-fit (no distortion); a bare int stretches to size x size (legacy square
-    behaviour, kept for the avatar). Returns None on any failure."""
+    is cover-fit (the team-logo HTTP fallback's only tuple-size caller, so every
+    team's logo fills its box the same way); a bare int stretches to size x size
+    (legacy square behaviour, kept for the avatar). Returns None on any failure."""
     url = _normalize_image_url(url)
     if not url or not PIL_AVAILABLE:
         return None
@@ -223,7 +242,7 @@ def _fetch_pil_image(url: str, size):
             return None
         img = Image.open(io.BytesIO(r.content)).convert("RGBA")
         if isinstance(size, tuple):
-            return _aspect_fit(img, *size)
+            return _cover_fit(img, *size)
         return img.resize((size, size), Image.LANCZOS)
     except Exception:
         return None

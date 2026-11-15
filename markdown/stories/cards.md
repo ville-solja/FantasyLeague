@@ -641,3 +641,54 @@ As a player, I want a Holo Legendary card to use its own illustrated holo templa
 - A Holo Legendary (`cards.is_holo`) uses the dedicated Holo template file for its base art
 - The procedurally generated rainbow sheen effect is removed; no code path falls back to a generated shine
 - All dynamic content (photo, logo, name, team, stats, accolades) composites onto the Holo template the same way as the rarity templates
+
+## Card Art Polish
+
+Plan: `markdown/plans/plan-card-art-polish.md`. Feature doc: `markdown/features/reference/card-art-polish.md`.
+
+### Legible, Informative Accolade Badges
+**User story**
+As a player, I want the accolade count numbers on my card to be easy to read and each badge to explain itself on hover, so that I can tell what I've earned without leaving the card view.
+
+**Acceptance criteria**
+- The accolade count badge's digits are at least 20% larger than before, and the badge circle grows enough that a "9+" count never clips its edge
+- Hovering, focusing or tapping any accolade badge on a rendered card shows a tooltip naming that accolade and, when held more than once, how many times and in which seasons
+- The tooltip's accolade order and count match exactly what's painted on the card face (same selection, priority and dedup rule as the backend)
+- Works on every place a card image is shown (My Team roster/bench, the card viewer, the draw reveal) — not just one view
+
+---
+
+### Jump to a Player or Team From Their Card
+**User story**
+As a player, I want to click a card's name or team region to go straight to that profile, so that I don't have to search for them separately.
+
+**Acceptance criteria**
+- Clicking or activating the player name area of a rendered card opens that player's profile popup
+- Clicking or activating the team name or team logo area opens that team's profile popup
+- These regions are reachable by keyboard (Tab, then Enter or Space) and are announced to screen readers with a descriptive label
+- Clicking anywhere else on the card (photo, stats box, accolade grid, empty margin) still opens the card viewer, exactly as today
+- Works both on the small roster/bench grid cards and on the large card-viewer/draw-reveal image
+
+---
+
+### Consistent Team Logo Fill
+**User story**
+As a player, I want every team's logo to fill its slot on the card the same way, so that cards look uniform regardless of which team a player is on.
+
+**Acceptance criteria**
+- Every team logo fully fills the card's logo box with no visible empty margin on any side, regardless of the source logo's own aspect ratio
+- A logo whose aspect ratio doesn't match the box is centre-cropped rather than letterboxed, trading a small edge crop for a consistent fill
+- Both the locally cached Dotabuff logo path and the HTTP `team_logo_url` fallback path get the same consistent fill
+
+---
+
+### Bigger Cards, Five to a Row
+**User story**
+As a player, I want my roster and bench cards shown larger, five per row, so that I can see them clearly without scrolling sideways.
+
+**Acceptance criteria**
+- The active roster grid shows all 5 roster slots in a single row filling the My Team panel's available width, with no horizontal scrollbar
+- The bench grid uses the same 5-column layout, wrapping into further rows as it grows past 5 cards
+- Cards are visibly larger than the previous fixed 180px width on typical desktop widths
+- On narrow/phone-width screens the grid drops to fewer columns so cards stay readable instead of shrinking indefinitely
+- The empty-roster-slot and loading placeholders resize the same way as the real card images, so the grid never looks mismatched mid-load

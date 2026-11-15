@@ -230,10 +230,12 @@ class TestNewCardTemplateWithAccoladeSlots:
         assert "597" not in css and "845" not in css
         assert "597" not in cards_js and "845" not in cards_js
         # The loading/placeholder boxes that stand in before the real <img> loads were
-        # sized to the old 597x845 ratio; they must follow the new one instead.
+        # sized to the old 597x845 ratio; they must follow the new one instead. Since
+        # plan-card-art-polish (responsive sizing, five cards per row), that's an
+        # `aspect-ratio` at the card's own 687:1024 ratio, not a fixed pixel box.
         for sel in (".card-img-loading", ".card-slot-empty"):
             body = _rule(css, sel)[0]
-            assert "width: 180px" in body and "height: 268px" in body, sel
+            assert "aspect-ratio: 687 / 1024" in body and "width: 100%" in body, sel
         for sel in (".reveal-img-wrap", ".reveal-img-wrap .reveal-img-placeholder",
                     ".reveal-img-wrap .reveal-card-img"):
             body = _rule(css, sel)[0]
