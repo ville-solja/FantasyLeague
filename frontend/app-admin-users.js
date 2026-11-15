@@ -568,6 +568,35 @@ function _renderTwitchStatus(data) {
     `<table><thead><tr><th>Check</th><th>Expected value</th></tr></thead><tbody>${consoleRows}</tbody></table>`;
 }
 
+// Issue #215: a test approval notification to every configured channel. Needs the admin
+// password re-check (adminFetch shows the prompt); the server returns outcomes only.
+function _notifyOutcome(value, sentText) {
+  if (value === "ok") return sentText;
+  const v = String(value || "off");
+  return v.startsWith("error: ") ? `failed (${v.slice("error: ".length)})` : v;
+}
+
+async function sendTwitchTestNotification() {
+  const btn = document.getElementById("twitchNotifyTestBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await adminFetch(`${API}/admin/twitch/notify-test`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) return setStatus("twitchNotifyTestStatus", data.detail, false);
+    const n = Number(data.email_sent) || 0;
+    const text = `Discord: ${_notifyOutcome(data.discord, "sent")} · ` +
+      `Email: ${_notifyOutcome(data.email, `sent to ${n} recipient${n === 1 ? "" : "s"}`)}`;
+    const failed = [data.discord, data.email].some(v => v !== "ok" && v !== "off");
+    const none = data.discord === "off" && data.email === "off";
+    setStatus("twitchNotifyTestStatus", none ? `${text}. No channel is configured.` : text, !failed && !none);
+    loadTwitchStatus();
+  } catch (e) {
+    setStatus("twitchNotifyTestStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // Issue #175: approved streamers. Channels from TWITCH_MVP_CHANNEL_IDS are approved
 // from server settings and have no Remove button. Approve / Reject / Remove need the
 // admin password re-check (adminFetch shows the prompt).

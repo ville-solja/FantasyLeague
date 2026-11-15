@@ -465,6 +465,24 @@ body.panel {
 .sort-row .label { color: var(--fg-muted); font-size: 12px; margin-right: 2px; }
 .sort-row .chip { flex: none; padding: 4px 10px; }
 
+/* MVP viewer vote (issue #234) */
+.poll-card { margin: 6px 0 10px; }
+.poll-card[hidden] { display: none; }
+.poll-card .poll-match { font-weight: 700; font-size: 13px; margin: 2px 0; }
+.poll-card .poll-team { color: var(--fg-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin: 8px 0 2px; }
+.poll-player {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; min-height: 36px; margin: 0 0 4px; padding: 4px 8px;
+    background: transparent; color: var(--fg);
+    border: 1px solid var(--border-soft);
+    font-family: var(--font-body); text-transform: none; letter-spacing: 0; text-align: left; font-size: 13px;
+}
+.poll-player:hover { background: var(--accent-ghost); border-color: var(--border-soft); }
+.poll-player[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-ghost); }
+.poll-player .share { font-variant-numeric: tabular-nums; color: var(--fg-muted); font-size: 12px; }
+.poll-player.mine .share { color: var(--accent); }
+.poll-vote { margin-top: 6px; }
+
 /* Settings */
 .settings-block { margin-top: 12px; }
 .privacy { margin-top: 14px; font-size: 12px; color: var(--fg-muted); }

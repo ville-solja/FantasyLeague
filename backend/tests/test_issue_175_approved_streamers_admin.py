@@ -142,9 +142,10 @@ def test_twitch_channel_approval_table_created_by_create_all(db):
     assert "twitch_channel_approvals" in insp.get_table_names()
     cols = {c["name"] for c in insp.get_columns("twitch_channel_approvals")}
     assert cols == {"channel_id", "status", "display_name", "login", "first_seen_at",
-                    "last_seen_at", "decided_at", "decided_by"}
+                    "last_seen_at", "decided_at", "decided_by",
+                    "notified_at"}  # issue #215 (migration 044)
     assert insp.get_pk_constraint("twitch_channel_approvals")["constrained_columns"] == ["channel_id"]
-    assert "twitch_channel_approvals" not in _read(REPO_ROOT / "backend" / "migrate.py")
+    assert "CREATE TABLE twitch_channel_approvals" not in _read(REPO_ROOT / "backend" / "migrate.py")
 
 
 # ---------------------------------------------------------------------------

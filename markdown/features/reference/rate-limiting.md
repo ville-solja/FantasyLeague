@@ -85,7 +85,11 @@ host, so the port is not reachable from outside at all. Covered by
   (`RATE_LIMIT_TWITCH_JOIN_IP`). `GET /twitch/panel` is limited per viewer
   (`RATE_LIMIT_TWITCH_ACTION`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`), and its body is cached
   in memory for `TWITCH_PANEL_CACHE_SECONDS` (default 30); see
-  `reference/twitch-extension-setup-followups.md`
+  `reference/twitch-extension-setup-followups.md`. The MVP viewer vote routes (issue #234):
+  `GET /twitch/mvp-poll` and `POST /twitch/mvp-poll/{poll_id}/vote` per viewer
+  (`RATE_LIMIT_TWITCH_ACTION`) and per IP (`RATE_LIMIT_TWITCH_JOIN_IP`); the broadcaster's
+  `POST /twitch/mvp-poll`, `/end` and `/cancel` per IP (`RATE_LIMIT_TWITCH_JOIN_IP`), like
+  `POST /twitch/mvp`
 - Roster activate/deactivate/swap/reorder and `PUT /roster` (#186) — per-user limit
   (`RATE_LIMIT_ROSTER_MUTATION`, issue #124)
 - `POST /draw`, `POST /draw/booster/{team_id}` and `POST /roster/{card_id}/reroll` (issue #184) —

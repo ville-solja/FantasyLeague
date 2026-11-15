@@ -1,6 +1,4 @@
 import json
-import re
-import threading
 import time
 from typing import List
 
@@ -9,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, text
 
+import player_lookup
 from database import credit_tokens, get_db
 from deps import require_admin, _audit
 from models import Card, Player, User
@@ -81,68 +80,27 @@ def list_players(db=Depends(get_db), _=Depends(require_admin)):
     ]
 
 
-# Issue 214: name preview for typed ids. OpenDota answers (a name, or None for "no
-# such player") are cached in process so retyping an id doesn't spend OpenDota quota.
-_LOOKUP_MAX_IDS = 50
-_LOOKUP_TTL_SECONDS = 600
-_LOOKUP_CACHE_MAX = 5000   # entries; expired ones are pruned first, then the oldest
-_lookup_cache: dict = {}   # account id -> (expires_at, personaname or None)
-_lookup_lock = threading.Lock()
+# Issue 214: name preview for typed ids. The parsing and the OpenDota cache live in
+# player_lookup (shared with the Team Finder since issue #220); these names stay here so
+# the admin lookup and its tests patch opendota_get_json, _lookup_now and the cap here.
+_LOOKUP_MAX_IDS = player_lookup.LOOKUP_MAX_IDS
+_LOOKUP_TTL_SECONDS = player_lookup.LOOKUP_TTL_SECONDS
+_LOOKUP_CACHE_MAX = player_lookup.LOOKUP_CACHE_MAX
+_lookup_cache = player_lookup._lookup_cache
+_parse_lookup_ids = player_lookup._parse_lookup_ids
+clear_lookup_cache = player_lookup.clear_lookup_cache
 
 
 def _lookup_now() -> float:
-    return time.monotonic()
-
-
-def clear_lookup_cache() -> None:
-    with _lookup_lock:
-        _lookup_cache.clear()
-
-
-def _parse_lookup_ids(raw: str) -> list[int]:
-    parts = [s.strip() for s in raw.split(",")]
-    if not parts or any(not s for s in parts):
-        raise HTTPException(status_code=422, detail="ids must be a comma-separated list of OpenDota ids")
-    if len(parts) > _LOOKUP_MAX_IDS:
-        raise HTTPException(status_code=422, detail=f"At most {_LOOKUP_MAX_IDS} ids per lookup")
-    ids = []
-    for s in parts:
-        if not re.fullmatch(r"\d{1,19}", s) or not 0 < int(s) <= 2**63 - 1:
-            raise HTTPException(status_code=422, detail="Each id must be a positive whole number")
-        ids.append(int(s))
-    return ids
+    return player_lookup._lookup_now()
 
 
 def _opendota_name(pid: int):
     """(found, name): the cached or fetched personaname; found is False when OpenDota
     has no such player or could not be reached."""
-    now = _lookup_now()
-    with _lookup_lock:
-        hit = _lookup_cache.get(pid)
-    if hit and hit[0] > now:
-        return hit[1] is not None, hit[1]
-    result = opendota_get_json(f"{OPEN_DOTA_URL}/players/{pid}", label=f"player {pid}",
-                               retries=_INTERACTIVE_RETRIES, base_backoff=_INTERACTIVE_BACKOFF,
-                               timeout=_INTERACTIVE_TIMEOUT)
-    if not isinstance(result, dict):
-        return False, None   # unreachable: not cached, so the next lookup retries
-    profile = result.get("profile") or None
-    name = (profile.get("personaname") or str(pid)) if profile else None
-    with _lookup_lock:
-        _lookup_cache[pid] = (now + _LOOKUP_TTL_SECONDS, name)
-        _prune_lookup_cache(now)
-    return name is not None, name
-
-
-def _prune_lookup_cache(now: float) -> None:
-    """Keep the cache bounded: drop expired entries, then the oldest beyond the cap.
-    Called with _lookup_lock held."""
-    if len(_lookup_cache) <= _LOOKUP_CACHE_MAX:
-        return
-    for key in [k for k, (exp, _) in _lookup_cache.items() if exp <= now]:
-        del _lookup_cache[key]
-    while len(_lookup_cache) > _LOOKUP_CACHE_MAX:
-        del _lookup_cache[next(iter(_lookup_cache))]   # dicts keep insertion order
+    found, name, _, _ = player_lookup.opendota_lookup(pid, fetch=opendota_get_json, now=_lookup_now(),
+                                                      cache_max=_LOOKUP_CACHE_MAX)
+    return found, name
 
 
 @router.get("/admin/players/lookup")

@@ -83,3 +83,6 @@ This feature has no dedicated endpoints — it operates transparently via the ex
 | `Connection refused` on port 465 | Try port 587 with `SMTP_SSL=false`, `SMTP_TLS=true` |
 | Email arrives in spam | Set `SMTP_FROM` to match `SMTP_USER`; consider SPF/DKIM on custom domains |
 | Log shows "SMTP_HOST not set" | `SMTP_HOST` env var is missing or empty |
+| Log shows `Failed to send '<subject>': TimeoutError` | The SMTP server didn't answer within `email_utils.SMTP_TIMEOUT` (10 s); check the host and port |
+
+Log lines from `email_utils` never carry an email address (recipient, sender or login): they show the subject, the number of refused recipients, and on failure the exception type and SMTP code.

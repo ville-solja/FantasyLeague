@@ -66,8 +66,8 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 | Variable | Default | Applies to |
 |---|---|---|
 | `RATE_LIMIT_TWITCH_JOIN` | `10/minute` | Join, per viewer |
-| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Join and both draws, per IP (also heartbeat since #171 and `/twitch/ping` since #180) |
-| `RATE_LIMIT_TWITCH_ACTION` | `30/minute` | Draws, roster changes and Leave, per viewer |
+| `RATE_LIMIT_TWITCH_JOIN_IP` | `60/minute` | Join and both draws, per IP (also heartbeat since #171, `/twitch/ping` since #180, and every `/twitch/mvp-poll` route since #234) |
+| `RATE_LIMIT_TWITCH_ACTION` | `30/minute` | Draws, roster changes and Leave, per viewer (also `GET /twitch/mvp-poll` and the vote, #234) |
 
 ## Token drops
 
@@ -137,7 +137,7 @@ There is no separate public user-search endpoint; "user search" is the admin use
 |---|---|---|
 | `TWITCH_DROPS_ENABLED` | `true` | MVP token drops to present joined viewers; `false` turns them off (MVP and bonus still set) |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is deleted by the daily job |
-| `RATE_LIMIT_TWITCH_JOIN`, `RATE_LIMIT_TWITCH_JOIN_IP`, `RATE_LIMIT_TWITCH_ACTION` | see above | Panel game route limits (heartbeat too, since #171) |
+| `RATE_LIMIT_TWITCH_JOIN`, `RATE_LIMIT_TWITCH_JOIN_IP`, `RATE_LIMIT_TWITCH_ACTION` | see above | Panel game route limits (heartbeat too, since #171; MVP vote routes since #234) |
 | `TWITCH_DROP_MIN_ACCOUNT_AGE_HOURS` | `24` | Hours before a new soft account is in drop pools; `0` turns it off (#171) |
 | `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Hosts team logos may load from (#171) |
 

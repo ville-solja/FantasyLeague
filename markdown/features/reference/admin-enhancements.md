@@ -32,7 +32,7 @@ The Admin tab reorganised around its most frequent jobs: approving streamers, se
   - an active pool player: its pool name, `source: "pool"`, `in_pool: true`, no OpenDota call;
   - otherwise the OpenDota `personaname`, `source: "opendota"`, `in_pool: false`;
   - no such OpenDota player (or OpenDota unreachable): `name: null`, `source: null`.
-- **Cache:** OpenDota answers, including "no such player", are kept in process for 10 minutes (`_lookup_cache`, `clear_lookup_cache()` for tests). A failed call isn't cached, so the next lookup retries. Calls use the interactive retry settings that Add player uses.
+- **Cache:** OpenDota answers, including "no such player", are kept in process for 10 minutes (since issue #220 in `backend/player_lookup.py`, shared with the Team Finder's captain lookup and keeping each player's medal; `admin_players` keeps `_lookup_cache` and `clear_lookup_cache()` as aliases for tests). A failed call isn't cached, so the next lookup retries. Calls use the interactive retry settings that Add player uses.
 - An inactive pool row is looked up on OpenDota and shows as new; bulk add then reports it as "already exists", as before.
 
 ### `GET /admin/matches` (extended)

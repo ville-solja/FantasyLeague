@@ -10,12 +10,16 @@ an admin; approve / reject / remove also need a recent password check.
 
 Twitch status (issue #180): a read-only checklist of the server's Twitch settings and
 recent panel traffic (twitch_status). Admin only; it holds no secrets, so no reauth.
+
+Approval notifications (issue #215): a test message to the configured channels
+(admin_notify). Admin with a recent password check, rate-limited.
 """
 import json
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+import admin_notify
 import caster_tags
 import soft_accounts
 import twitch_channels
@@ -23,8 +27,11 @@ import twitch_status
 from database import get_db
 from deps import require_admin, require_recent_reauth
 from models import TwitchMergeLog, User
+from rate_limit import key_by_user_or_ip, limiter
 
 router = APIRouter()
+
+RATE_LIMIT_NOTIFY_TEST = "3/minute"
 
 
 @router.get("/admin/twitch/merges", dependencies=[Depends(require_recent_reauth)])
@@ -78,6 +85,14 @@ def twitch_status_route(admin: dict = Depends(require_admin), db=Depends(get_db)
     """Twitch integration checklist (issue #180): {checks, traffic, console}. Never
     returns a secret, its length, a token or a viewer's Twitch id."""
     return twitch_status.build_status(db)
+
+
+@router.post("/admin/twitch/notify-test", dependencies=[Depends(require_recent_reauth)])
+@limiter.limit(RATE_LIMIT_NOTIFY_TEST, key_func=key_by_user_or_ip)
+def notify_test_route(request: Request, admin: dict = Depends(require_admin), db=Depends(get_db)):
+    """Send a test approval notification to every configured channel (issue #215):
+    {"discord", "email": "ok" | "off" | "error: <kind>", "email_sent"}. Audited."""
+    return admin_notify.send_test(db, admin)
 
 
 @router.get("/admin/twitch/channels")

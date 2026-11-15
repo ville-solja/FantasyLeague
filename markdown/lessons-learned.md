@@ -12,6 +12,18 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-11 — developer — testing
+**Problem:** Adding a column to a table (issue 215) broke the table's original tests: `test_issue_175` pinned the exact column set and asserted the table name never appears in `migrate.py`, and `test_issue_180` pins the exact list of Twitch status check keys with every row "ok".
+**Solution:** Before adding a column or a status check, grep `backend/tests` for the table name and for `[c["key"] for c in`; extend the pinned set or list, narrow "not in migrate.py" to `CREATE TABLE <name>`, and configure the new check in `status_env`.
+
+### 2026-11-10 — developer — models
+**Problem:** New code reading `user.player_id` (issue 220's "own verified player") passed its own tests but failed `test_issue_209`'s guard in the full suite, and test users built with only `player_id` are not verified links.
+**Solution:** Read the link through `player_links.verified_player_id(user)`; in tests give such users `steam_id=str(76561197960265728 + player_id)`.
+
+### 2026-11-10 — developer — testing
+**Problem:** `test_issue_195`'s `_called_paths` matched only `[a-z_/]` literals and a bare `"/prefix/" + id`, so a hyphenated route (`/twitch/mvp-poll`) or a `"/x/" + id + "/vote"` call was invisible to the endpoint-disclosure check and its table row looked "never called".
+**Solution:** The regex now takes `-` and a trailing `+ "/suffix"` literal; add the route's prefix to `PARAM_BY_PREFIX` and one table row per method in the review guide's endpoint table.
+
 ### 2026-11-03 — qa-engineer — testing
 **Problem:** On this Windows sandbox, dozens of unrelated test files compare literal non-ASCII characters (em dash –, middle dot ·, minus sign −, stars ★) against text built by a Node subprocess or read from a doc file; the assertions fail because the character round-trips as `�`/mangled bytes, unrelated to any code change. This is a second, separate Windows-only noise source from the already-logged WinError 206 Node-spawn length limit (same `-n auto` runs).
 **Solution:** When a failure's diff shows `�` (or two renderings of what looks like the same character) on one side only, treat it as this known Windows encoding artifact, not a regression; confirm on Linux CI instead of chasing it locally.

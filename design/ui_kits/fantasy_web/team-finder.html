@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team Finder — Design Canvas</title>
+<!-- Issue #220, plan Step 1: a throwaway canvas comparing layouts and orderings for the
+     Team Finder tab. Sample data only; nothing here is wired to the backend. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); }
+  img, button { user-select: none; }
+  .wrap { max-width: var(--max-width); margin: 0 auto; padding: 0 var(--gutter) var(--s-20); }
+
+  /* ---- Canvas chrome ------------------------------------------------------ */
+  .canvas-head { padding: var(--s-8) 0 var(--s-4); border-bottom: 1px solid var(--border-soft); }
+  .eyebrow { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+             letter-spacing: var(--tr-widest); text-transform: uppercase; color: var(--accent); }
+  .canvas-head h1 { font-size: var(--fs-3xl); margin: var(--s-1) 0 var(--s-2); }
+  .canvas-head p { color: var(--fg-muted); max-width: 760px; font-size: var(--fs-sm); margin: 0; }
+
+  .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-4);
+              padding: var(--s-5) 0; border-bottom: 1px solid var(--border-soft); }
+  .control-label { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+                   letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); margin-bottom: var(--s-2); }
+  .seg { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+  .seg button, .chip, .btn {
+    font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+    letter-spacing: var(--tr-wide); text-transform: uppercase; cursor: pointer;
+    background: var(--bg-card); color: var(--fg-muted); border: var(--bw-thin) solid var(--border);
+    border-radius: var(--r-sm); padding: 6px 12px; transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
+  }
+  .seg button:hover, .chip:hover { color: var(--fg); }
+  .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  .seg button[aria-pressed="true"]:hover, .seg button[aria-pressed="true"]:focus-visible,
+  .chip[aria-pressed="true"]:hover, .chip[aria-pressed="true"]:focus-visible {
+    background: var(--state-selected-hover-bg); color: var(--state-selected-hover-fg);
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn-primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: var(--sh-glow-orange); }
+  .btn-ghost { background: transparent; color: var(--fg); }
+  .btn-ghost:hover { background: var(--accent-ghost); }
+  .btn-small { padding: 3px 8px; }
+  .btn-danger { background: transparent; color: var(--k-err); border-color: var(--k-err); }
+  .btn-danger:hover { background: rgba(224, 80, 80, 0.12); }
+  .helper { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: var(--s-2); }
+  .day-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+
+  /* ---- Mock app frame ----------------------------------------------------- */
+  .frame { margin-top: var(--s-6); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--bg); }
+  .frame-tabs { display: flex; gap: var(--s-1); padding: 0 var(--s-4); border-bottom: 1px solid var(--border-soft);
+                background: var(--bg-elevated); overflow-x: auto; }
+  .frame-tab { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+               letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted);
+               padding: var(--s-3) var(--s-3); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .frame-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .frame-body { padding: var(--s-6); }
+
+  .period { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-5); }
+  .period h2 { font-size: var(--fs-xl); }
+  .period-meta { color: var(--fg-muted); font-size: var(--fs-sm); }
+
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) 0 var(--s-4); border-bottom: 1px solid var(--border-soft); margin-bottom: var(--s-4); }
+  .filters label { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+                   letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); }
+  select, input[type="text"] {
+    font-family: var(--font-body); font-size: var(--fs-sm); color: var(--fg); background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 8px;
+  }
+  input::placeholder { color: var(--fg-dim); }
+  .result-count { margin-left: auto; color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+
+  /* ---- Shared bits -------------------------------------------------------- */
+  .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--s-4); min-width: 0; }
+  .row-self { background: var(--row-self-bg); }
+  .team-name { font-family: var(--font-display); font-weight: var(--w-black); font-size: var(--fs-lg);
+               letter-spacing: var(--tr-wide); text-transform: uppercase; line-height: var(--lh-snug); margin: 0; overflow-wrap: anywhere; }
+  .status-badge { display: inline-block; font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+                  letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--badge-status);
+                  border: 1px solid var(--border); border-radius: var(--r-xs); padding: 0 6px; line-height: 1.5; white-space: nowrap; }
+  .status-badge.verified { color: var(--fg); }
+  .status-badge.warn { color: var(--k-warn); border-color: currentColor; }
+  .medal { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+           letter-spacing: var(--tr-wide); text-transform: uppercase; white-space: nowrap; }
+  .medal.none { color: var(--fg-muted); font-family: var(--font-body); font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .m-1 { color: var(--medal-herald); } .m-2 { color: var(--medal-guardian); } .m-3 { color: var(--medal-crusader); }
+  .m-4 { color: var(--medal-archon); } .m-5 { color: var(--medal-legend); } .m-6 { color: var(--medal-ancient); }
+  .m-7 { color: var(--medal-divine); } .m-8 { color: var(--medal-immortal); }
+  .roles { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+  .role-tag { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm); letter-spacing: var(--tr-wide);
+              text-transform: uppercase; color: var(--accent); border: 1px solid currentColor; border-radius: var(--r-xs); padding: 0 6px; line-height: 1.5; white-space: nowrap; }
+  .needed { font-family: var(--font-display); font-weight: var(--w-black); font-variant-numeric: tabular-nums; }
+  .note { font-size: var(--fs-sm); color: var(--fg); margin: 0; }
+  .contact { font-size: var(--fs-sm); color: var(--fg); overflow-wrap: anywhere; }
+  .contact.locked { color: var(--fg-muted); }
+  .muted { color: var(--fg-muted); font-size: var(--fs-sm); }
+  .label { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+           letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); }
+  .icon { width: 16px; height: 16px; vertical-align: -3px; }
+
+  /* Player rows: fixed-column grid, every cell emitted */
+  .players { display: grid; grid-template-columns: minmax(7rem, 1fr) auto minmax(0, 12rem); column-gap: var(--s-3); row-gap: 0; margin: var(--s-3) 0; }
+  .players > div { padding: 5px 0; border-top: 1px solid var(--border-soft); display: flex; align-items: center; min-width: 0; }
+  .players .p-name { font-size: var(--fs-sm); overflow-wrap: anywhere; gap: var(--s-2); flex-wrap: wrap; }
+  .players .p-flags { justify-content: flex-end; gap: var(--s-1); flex-wrap: wrap; }
+  .players .p-open { color: var(--fg-muted); font-style: italic; }
+
+  /* ---- Layout A: card grid ------------------------------------------------ */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--s-4); }
+  .team-card { display: flex; flex-direction: column; gap: var(--s-2); }
+  .team-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-3); }
+  .need-block { text-align: right; flex-shrink: 0; }
+  .need-block .needed { font-size: var(--fs-2xl); line-height: 1; color: var(--accent); }
+  .need-block .needed.zero { color: var(--fg-muted); }
+  .card-foot { display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; border-top: 1px solid var(--border-soft); padding-top: var(--s-2); margin-top: auto; }
+
+  /* ---- Layout B: compact table -------------------------------------------- */
+  .tbl { width: 100%; }
+  .tbl-row { display: grid; grid-template-columns: minmax(140px, 1.6fr) 70px 70px minmax(120px, 1.4fr) minmax(90px, 1fr) 90px 36px;
+             gap: var(--s-3); align-items: center; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border-soft); }
+  .tbl-head { border-bottom: 1px solid var(--border); }
+  .tbl-head > div { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-sm);
+                    letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); }
+  .tbl-row .num { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+  .tbl-row .tname { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--fs-md); letter-spacing: var(--tr-wide); text-transform: uppercase; overflow-wrap: anywhere; }
+  .tbl-detail { padding: var(--s-3) var(--s-3) var(--s-4); border-bottom: 1px solid var(--border-soft); background: var(--bg-elevated);
+                display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--s-5); }
+  .expand { background: transparent; border: 1px solid var(--border); color: var(--fg-muted); border-radius: var(--r-sm); width: 30px; height: 28px; cursor: pointer; }
+  .expand:hover { color: var(--fg); }
+  .expand[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+  /* ---- Layout C: fits us --------------------------------------------------- */
+  .fit-list { display: flex; flex-direction: column; gap: var(--s-3); }
+  .fit-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--s-4); align-items: start; }
+  .fit-score .needed { font-size: var(--fs-xl); color: var(--accent); line-height: 1.1; }
+  .fit-score .needed.weak { color: var(--fg-muted); }
+  .fit-explain { font-size: var(--fs-sm); color: var(--fg); }
+  .empty { padding: var(--s-8); text-align: center; color: var(--fg-muted); border: 1px dashed var(--border); border-radius: var(--r-md); }
+
+  /* ---- Full teams --------------------------------------------------------- */
+  details.full-section { margin-top: var(--s-6); border-top: 1px solid var(--border-soft); padding-top: var(--s-3); }
+  details.full-section summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--s-2); }
+  details.full-section summary::-webkit-details-marker { display: none; }
+  details.full-section summary .label { color: var(--fg); }
+  details.full-section[open] summary svg { transform: rotate(90deg); }
+  .full-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-3); margin-top: var(--s-3); }
+
+  /* ---- Notes and comparison ----------------------------------------------- */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--s-4); margin-top: var(--s-6); }
+  .notes h3 { font-size: var(--fs-lg); margin-bottom: var(--s-2); }
+  .notes ul { margin: 0; padding-left: var(--s-5); font-size: var(--fs-sm); color: var(--fg); }
+  .notes li { margin-bottom: var(--s-1); }
+  .pro::marker { color: var(--k-ok); } .con::marker { color: var(--k-err); }
+  .compare { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin-top: var(--s-3); }
+  .compare th, .compare td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  .compare th { font-family: var(--font-display); font-weight: var(--w-bold); letter-spacing: var(--tr-wider); text-transform: uppercase; color: var(--fg-muted); }
+  .compare td:first-child { font-family: var(--font-display); font-weight: var(--w-bold); text-transform: uppercase; letter-spacing: var(--tr-wide); white-space: nowrap; }
+  .rec { color: var(--k-ok); font-family: var(--font-display); font-weight: var(--w-bold); text-transform: uppercase; letter-spacing: var(--tr-wide); }
+  .section-title { font-size: var(--fs-2xl); margin: var(--s-10) 0 var(--s-2); }
+
+  /* ---- Captain form ------------------------------------------------------- */
+  .form-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--s-5); }
+  .field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-4); }
+  .field input[type="text"] { width: 100%; }
+  .id-add { display: flex; gap: var(--s-2); }
+  .id-add input { flex: 1; min-width: 0; }
+  .id-rows { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; column-gap: var(--s-3); margin-top: var(--s-2); }
+  .id-rows > div { padding: 6px 0; border-top: 1px solid var(--border-soft); display: flex; align-items: center; min-width: 0; font-size: var(--fs-sm); gap: var(--s-2); }
+  .id-rows .mono { font-family: var(--font-mono); color: var(--fg-muted); font-size: var(--fs-xs); }
+  .msg-err { color: var(--k-err); font-size: var(--fs-sm); }
+  .msg-ok { color: var(--k-ok); font-size: var(--fs-sm); }
+  .msg-info { color: var(--fg-muted); font-size: var(--fs-sm); }
+  .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; border-top-color: var(--fg-muted); } }
+  .role-checks { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+  .counter { font-size: var(--fs-xs); color: var(--fg-muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .form-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; border-top: 1px solid var(--border-soft); padding-top: var(--s-4); }
+  .toggle { display: inline-flex; align-items: center; gap: var(--s-2); }
+  .state-legend { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-2) var(--s-3); font-size: var(--fs-sm); align-items: center; }
+
+  /* ---- Captain flow ------------------------------------------------------ */
+  .flow-panel { overflow-x: auto; }
+  .flow-panel pre.mermaid { margin: 0; min-width: 820px; font-family: var(--font-body); color: var(--fg-muted); }
+
+  @media (max-width: 760px) {
+    .wrap { padding: 0 var(--s-4) var(--s-16); }
+    .frame-body { padding: var(--s-4); }
+    .tbl-head { display: none; }
+    .tbl-row { grid-template-columns: minmax(0, 1fr) 60px 36px; }
+    .tbl-row .hide-sm { display: none; }
+    .tbl-detail, .form-grid, .fit-row { grid-template-columns: minmax(0, 1fr); }
+    .result-count { margin-left: 0; width: 100%; }
+    .canvas-head h1 { font-size: var(--fs-2xl); }
+    /* Badges go on their own line under the name and medal */
+    .players { grid-template-columns: minmax(0, 1fr) auto; }
+    .players .p-flags { grid-column: 1 / -1; justify-content: flex-start; border-top: 0; padding-top: 0; }
+    .players .p-flags:empty { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="canvas-head">
+    <div class="eyebrow">Design canvas · Issue #220 · Plan step 1</div>
+    <h1>Team Finder</h1>
+    <p>Three layouts and three orders for the pre-season Team Finder tab, with sample data: eight partial teams, two full teams, a player listed by two teams and a team of one. Switch the options below; the notes under the frame explain each trade-off. Pick one layout and one order for the build.</p>
+  </header>
+
+  <section class="controls" aria-label="Canvas options">
+    <div>
+      <div class="control-label" id="lbl-layout">Layout</div>
+      <div class="seg" role="group" aria-labelledby="lbl-layout" data-control="layout">
+        <button type="button" data-value="grid">A · Card grid</button>
+        <button type="button" data-value="table">B · Compact table</button>
+        <button type="button" data-value="fits">C · Fits us</button>
+      </div>
+    </div>
+    <div>
+      <div class="control-label" id="lbl-order">Order of partial teams</div>
+      <div class="seg" role="group" aria-labelledby="lbl-order" data-control="order">
+        <button type="button" data-value="shuffle">Daily shuffle</button>
+        <button type="button" data-value="needed">Most needed first</button>
+        <button type="button" data-value="recent">Recently updated</button>
+      </div>
+      <div class="day-row helper">
+        <span>Shuffle day:</span>
+        <button type="button" class="btn btn-ghost btn-small" id="dayPrev" aria-label="Previous day">‹</button>
+        <span id="dayLabel" class="num">10.11.2026</span>
+        <button type="button" class="btn btn-ghost btn-small" id="dayNext" aria-label="Next day">›</button>
+        <button type="button" class="btn btn-ghost btn-small" id="simEdit">Simulate an edit to Lounasliiga</button>
+      </div>
+    </div>
+    <div>
+      <div class="control-label" id="lbl-viewer">Viewer</div>
+      <div class="seg" role="group" aria-labelledby="lbl-viewer" data-control="viewer">
+        <button type="button" data-value="anon">Logged out</button>
+        <button type="button" data-value="player">Logged in · Kiiski</button>
+        <button type="button" data-value="captain">Captain · Excel Ninjat</button>
+      </div>
+      <div class="helper" id="viewerHelp"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Mock of the tab ===================== -->
+  <div class="frame" aria-label="Team Finder tab mock">
+    <nav class="frame-tabs" aria-hidden="true">
+      <span class="frame-tab">My Team</span><span class="frame-tab">Leaderboards</span><span class="frame-tab">History</span>
+      <span class="frame-tab">Players</span><span class="frame-tab">Teams</span><span class="frame-tab">Schedule</span>
+      <span class="frame-tab active">Team Finder</span><span class="frame-tab">How to Play</span>
+    </nav>
+    <div class="frame-body">
+      <div class="period">
+        <div>
+          <div class="eyebrow">Season 17 signup</div>
+          <h2>Find a team</h2>
+        </div>
+        <div class="period-meta">Closes 15.1.2027 · <span id="listCta"></span></div>
+      </div>
+
+      <div class="filters" id="filters">
+        <label for="fNeeded">Players needed</label>
+        <select id="fNeeded">
+          <option value="0">Any</option><option value="1">1 or more</option><option value="2">2 or more</option>
+          <option value="3">3 or more</option><option value="4">4</option>
+        </select>
+        <span class="label" id="lbl-roles">Open role</span>
+        <div class="roles" role="group" aria-labelledby="lbl-roles" id="fRoles"></div>
+        <label for="fMedalMin">Medals</label>
+        <select id="fMedalMin" aria-label="Lowest medal"></select>
+        <span class="muted">to</span>
+        <select id="fMedalMax" aria-label="Highest medal"></select>
+        <span class="result-count" id="resultCount"></span>
+      </div>
+
+      <div id="list"></div>
+
+      <details class="full-section" id="fullSection">
+        <summary><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg><span class="label" id="fullLabel">Full teams</span></summary>
+        <div class="full-list" id="fullList"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ===================== Notes ===================== -->
+  <section class="notes" aria-label="Trade-offs for the current options">
+    <div class="panel" id="layoutNotes"></div>
+    <div class="panel" id="orderNotes"></div>
+  </section>
+
+  <h2 class="section-title">Comparison</h2>
+  <p class="muted">Recommendation for the build: <span class="rec">A · Card grid</span> with the <span class="rec">Daily shuffle</span>, and filters. B is the fallback if signups pass about 30 teams; C stays out of the first version.</p>
+  <div class="panel" style="overflow-x:auto">
+    <table class="compare">
+      <thead><tr><th>Option</th><th>Fairness</th><th>Finding a fit</th><th>Scale</th><th>Phone</th></tr></thead>
+      <tbody>
+        <tr><td>A · Card grid</td><td>Neutral: every card the same size</td><td>Everything visible, filters narrow it</td><td>Good to about 30 teams</td><td>One column, long scroll</td></tr>
+        <tr><td>B · Compact table</td><td>Neutral, but a column sort is a ranking</td><td>Scan first, players on expand</td><td>50+ teams</td><td>Columns collapse; detail on expand</td></tr>
+        <tr><td>C · Fits us</td><td>A ranking: teams that fit no one sink</td><td>Best for captains with a listing</td><td>Any</td><td>Fine</td></tr>
+        <tr><td>Daily shuffle</td><td>Everyone gets the top some days; edits don't bump</td><td>Same order all day, so a team is easy to find again</td><td>Any</td><td>—</td></tr>
+        <tr><td>Most needed first</td><td>Helps teams of one or two</td><td>Near-complete teams, the quickest to fill, come last</td><td>Any</td><td>—</td></tr>
+        <tr><td>Recently updated</td><td>Saving again bumps a team to the top</td><td>Shows active captains</td><td>Needs an edit cooldown</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===================== Captain form ===================== -->
+  <h2 class="section-title" id="captain-flow">Captain flow</h2>
+  <p class="muted">How a captain creates, updates and deletes a listing, with the checks on the way. A listed player can also remove themselves (Not on this team), and an admin can remove a listing; both are outside this flow. The same diagram is in <code>markdown/features/core/team-signup.md</code>.</p>
+  <div class="panel flow-panel">
+<pre class="mermaid">
+flowchart TD
+    Open([Captain opens Team Finder]) --&gt; Period{Signup period&lt;br/&gt;open?}
+    Period -- No --&gt; Hidden[Tab hidden.&lt;br/&gt;Saves refused, 409]
+    Period -- Yes --&gt; Login{Logged in with a&lt;br/&gt;website account?}
+    Login -- Logged out --&gt; LogIn[Log in to list your team]
+    Login -- Twitch soft account --&gt; Soft[No website session:&lt;br/&gt;refused, 401]
+    Login -- Yes --&gt; Has{Already listed&lt;br/&gt;this period?}
+    Has -- No --&gt; Create[List your team:&lt;br/&gt;empty form, own Steam-verified&lt;br/&gt;player added as Verified]
+    Has -- Yes --&gt; Update[Edit your listing:&lt;br/&gt;form filled in]
+    Create --&gt; Form
+    Update --&gt; Form
+
+    subgraph Form [Listing form]
+        direction TB
+        Fields[Team name, open roles,&lt;br/&gt;note, contact, Full]
+        AddId[Add a Dota id&lt;br/&gt;or Steam64 id] --&gt; IdCheck{Digits, not a duplicate,&lt;br/&gt;7 or fewer?}
+        IdCheck -- No --&gt; IdErr[Error shown,&lt;br/&gt;nothing added]
+        IdCheck -- Yes --&gt; Row[Name and medal from the pool&lt;br/&gt;or OpenDota, else Unknown player.&lt;br/&gt;Marked Listed by captain]
+    end
+
+    Form -- Delete --&gt; Confirm{Confirm&lt;br/&gt;delete?}
+    Confirm -- No --&gt; Keep[Form stays open]
+    Confirm -- Yes --&gt; Del[DELETE /team-signup/mine:&lt;br/&gt;listing, players and contact&lt;br/&gt;removed at once]
+    Del --&gt; Again[Can list again&lt;br/&gt;while the period is open]
+
+    Form -- Save --&gt; Put[PUT /team-signup/mine]
+    Put --&gt; Checks{Server checks}
+    Checks -- 422 or 429 --&gt; Errors[Errors shown on the fields,&lt;br/&gt;or wait and save again]
+    Errors --&gt; Form
+    Checks -- 409 --&gt; Closed[Signup closed meanwhile:&lt;br/&gt;form turns read-only]
+    Checks -- OK --&gt; Saved[Listing created or updated]
+    Saved --&gt; Full{Marked Full?}
+    Full -- No --&gt; Grid[Card in the grid.&lt;br/&gt;Edits never move it&lt;br/&gt;in the daily shuffle]
+    Full -- Yes --&gt; FullTeams[Card moves to&lt;br/&gt;Full teams]
+</pre>
+  </div>
+
+  <h2 class="section-title" id="captain-form">Captain form</h2>
+  <p class="muted">The listing form with the id lookup states. Try the field: digits are looked up (sample ids 101–109 are found, 404 is unknown), a Steam64 id is converted, anything else is refused.</p>
+  <div class="panel">
+    <div class="form-grid">
+      <div>
+        <div class="field">
+          <label class="label" for="cfName">Team name</label>
+          <input type="text" id="cfName" maxlength="32" value="Excel Ninjat" autocomplete="off">
+          <div class="counter"><span id="cfNameCount">12</span>/32 · No links</div>
+        </div>
+        <div class="field">
+          <label class="label" for="cfId">Players · Dota id or Steam64 id</label>
+          <div class="id-add">
+            <input type="text" id="cfId" inputmode="numeric" placeholder="e.g. 105 or 76561197960265833" autocomplete="off">
+            <button type="button" class="btn btn-ghost" id="cfAdd">Add</button>
+          </div>
+          <div class="msg-err" id="cfIdErr" role="alert" aria-live="polite"></div>
+          <div class="id-rows" id="cfRows"></div>
+          <div class="helper"><span id="cfCount">0</span>/7 players. Listing an id doesn't link it to an account; only your own Steam-verified player shows as Verified.</div>
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <span class="label" id="lbl-cfroles">Open roles</span>
+          <div class="role-checks" role="group" aria-labelledby="lbl-cfroles" id="cfRoles"></div>
+        </div>
+        <div class="field">
+          <label class="label" for="cfNote">Note</label>
+          <input type="text" id="cfNote" maxlength="280" value="Tuesdays and Thursdays after 18. Finnish or English.">
+          <div class="counter"><span id="cfNoteCount">0</span>/280 · No links</div>
+        </div>
+        <div class="field">
+          <label class="label" for="cfContact">Contact · required</label>
+          <input type="text" id="cfContact" maxlength="100" value="Discord: pivot_table">
+          <div class="helper">Shown to logged-in users and in the organiser's export.</div>
+        </div>
+        <div class="field">
+          <span class="label">Team status</span>
+          <div class="toggle">
+            <button type="button" class="chip" id="cfFull" aria-pressed="false">Team full</button>
+            <span class="muted" id="cfFullHelp">Partial teams are listed; full teams move to Full teams.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" id="cfSave">Save listing</button>
+      <button type="button" class="btn btn-danger">Delete listing</button>
+      <span class="msg-info" id="cfSaveMsg" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top: var(--s-4)">
+    <h3 style="font-size: var(--fs-lg); margin-bottom: var(--s-3)">Lookup states</h3>
+    <div class="state-legend">
+      <span class="spinner" aria-hidden="true"></span><span>Looking up: the row shows the id with a spinner until the pool or OpenDota answers.</span>
+      <span class="medal m-5">Legend 2</span><span>Found: name and medal from the player pool, otherwise OpenDota.</span>
+      <span class="medal none">Unranked</span><span>Found with no medal: OpenDota has the player but no rank.</span>
+      <span class="status-badge">Unknown player</span><span>Not found or OpenDota unreachable: still saved, shown with its id.</span>
+      <span class="msg-err">Error</span><span>"Dota ids are digits only", "Already on your team" or "Seven players at most": nothing added.</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Sample data (fictional teams and handles)
+// ---------------------------------------------------------------------------
+const MEDALS = ["", "Herald", "Guardian", "Crusader", "Archon", "Legend", "Ancient", "Divine", "Immortal"];
+const ROLES = [[1, "Carry"], [2, "Mid"], [3, "Offlane"], [4, "Soft support"], [5, "Hard support"]];
+const TODAY = Date.UTC(2026, 10, 10);
+const DAY = 86400000;
+
+const TEAMS = [
+  { id: 1, name: "Konttorirotat", roles: [1, 5], note: "Weeknights. Finnish or English.", contact: "Discord: konttorirotta", updated: TODAY - 3 * DAY,
+    players: [{ n: "Rotta", t: 52, v: true }, { n: "Juustohöylä", t: 45 }, { n: "Kiiski", t: 61, pid: 777 }] },
+  { id: 2, name: "Excel Ninjat", roles: [2, 3, 4], note: "Tuesdays and Thursdays after 18. Finnish or English.", contact: "Discord: pivot_table", updated: TODAY - 6 * DAY, mine: true,
+    players: [{ n: "Pivot", t: 34, v: true }, { n: "VLOOKUP", t: 41 }] },
+  { id: 3, name: "Kahvihuone", roles: [5], note: "Div 2 last season, aiming for Div 1.", contact: "kahvihuone.dota@example.com", updated: TODAY - 1 * DAY,
+    players: [{ n: "Moccamaster", t: 72, v: true }, { n: "Pannu", t: 65 }, { n: "Kiiski", t: 61, pid: 777 }, { n: "Termos", t: 55 }] },
+  { id: 4, name: "Lounasliiga", roles: [1, 2, 3, 4], note: "Just me so far. Happy to join another team instead.", contact: "Discord: soppa", updated: TODAY - 9 * DAY,
+    players: [{ n: "Soppa", t: 23, v: true }] },
+  { id: 5, name: "Paperinen Tiikeri", roles: [3, 4], note: "", contact: "Steam: tulostin", updated: TODAY - 2 * DAY,
+    players: [{ n: "Tulostin", t: 55, v: true }, { n: "Nitoja", t: 45 }, { n: "Kansio", t: null }] },
+  { id: 6, name: "Etätyö Esports", roles: [1, 5], note: "Remote team, players in Oulu and Tampere.", contact: "Discord: teams_puhelu", updated: TODAY - 4 * DAY,
+    players: [{ n: "Teams-puhelu", t: 63, v: true }, { n: "Mute", t: 35 }] },
+  { id: 7, name: "Palaveri 5", roles: [4], note: "One support away. Mondays.", contact: "Discord: agenda", updated: TODAY - 5 * DAY,
+    players: [{ n: "Agenda", t: 80, lb: 1450, v: true }, { n: "Muistio", t: 75 }, { n: "Esityslista", t: 71 }, { n: "Puheenjohtaja", t: 74 }] },
+  { id: 8, name: "Taukotila", roles: [2, 5], note: "", contact: "Discord: kahvikuppi", updated: TODAY - 7 * DAY,
+    players: [{ n: "Kahvikuppi", t: 44, v: true }, { n: "Pullapitko", t: 51 }, { n: "Jaffa", t: 32 }] },
+  { id: 9, name: "Sprint Retro", roles: [], note: "Full with two subs.", contact: "Discord: scrum_master", updated: TODAY - 8 * DAY, full: true,
+    players: [{ n: "Scrum", t: 65, v: true }, { n: "Backlog", t: 62 }, { n: "Velocity", t: 55 }, { n: "Burndown", t: 54 }, { n: "Standup", t: 61 }, { n: "Jira", t: 45 }] },
+  { id: 10, name: "Budjettiriihi", roles: [], note: "", contact: "Discord: talousjohtaja", updated: TODAY - 10 * DAY, full: true,
+    players: [{ n: "Talousjohtaja", t: 43, v: true }, { n: "Kvartaali", t: 45 }, { n: "Kassavirta", t: 35 }, { n: "Tase", t: 52 }, { n: "Tilintarkastaja", t: 35 }] },
+];
+
+// Kiiski (player id 777) is listed by two captains.
+const listedCount = {};
+TEAMS.forEach(t => t.players.forEach(p => { if (p.pid) listedCount[p.pid] = (listedCount[p.pid] || 0) + 1; }));
+
+const state = { layout: "grid", order: "shuffle", viewer: "anon", day: 0, roles: new Set(), needed: 0,
+                medalMin: 1, medalMax: 8, expanded: new Set(), removed: new Set() };
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function medalHtml(t, lb) {
+  if (t == null) return '<span class="medal none">Unranked</span>';
+  const m = Math.floor(t / 10), stars = t % 10;
+  if (m === 8) return `<span class="medal m-8">Immortal${lb ? " #" + lb : ""}</span>`;
+  return `<span class="medal m-${m}" title="${MEDALS[m]} ${stars}">${MEDALS[m]} ${"★".repeat(stars)}</span>`;
+}
+function fmtDate(ms) { const d = new Date(ms); return `${d.getUTCDate()}.${d.getUTCMonth() + 1}.${d.getUTCFullYear()}`; }
+function playersOf(t) { return t.players.filter((p, i) => !state.removed.has(`${t.id}:${i}`)); }
+function neededOf(t) { return Math.max(0, 5 - playersOf(t).length); }
+function avgTier(t) { const ts = playersOf(t).map(p => p.t).filter(x => x != null); return ts.length ? ts.reduce((a, b) => a + b, 0) / ts.length : null; }
+function avgMedalHtml(t) {
+  const a = avgTier(t); if (a == null) return '<span class="medal none">Unranked</span>';
+  const m = Math.min(8, Math.max(1, Math.round(a / 10))); return `<span class="medal m-${m}">~${MEDALS[m]}</span>`;
+}
+function roleTags(roles) {
+  if (!roles.length) return '<span class="muted">No open roles listed</span>';
+  return roles.map(r => `<span class="role-tag" title="Position ${r}: ${ROLES[r - 1][1]}">Pos ${r} · ${ROLES[r - 1][1]}</span>`).join("");
+}
+function contactHtml(t) {
+  if (state.viewer === "anon") return '<span class="contact locked">Log in to see contact details</span>';
+  return `<span class="contact">${esc(t.contact)}</span>`;
+}
+function selfBadge(t) { return state.viewer === "captain" && t.mine ? ' <span class="status-badge">Your team</span>' : ""; }
+
+// Seeded daily shuffle: the seed is the period and the date, so the order holds all
+// day and changes the next. Editing a listing doesn't touch the seed.
+function hashStr(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function dailyRank(teams) {
+  const rnd = mulberry32(hashStr(`period-s17|${fmtDate(TODAY + state.day * DAY)}`));
+  const keyed = teams.slice().sort((a, b) => a.id - b.id).map(t => ({ t, k: rnd() }));
+  return new Map(keyed.map(x => [x.t.id, x.k]));
+}
+
+function partialTeams() {
+  const rank = dailyRank(TEAMS);
+  let list = TEAMS.filter(t => !t.full);
+  list = list.filter(t => neededOf(t) >= state.needed);
+  if (state.roles.size) list = list.filter(t => t.roles.some(r => state.roles.has(r)));
+  list = list.filter(t => { const a = avgTier(t); if (a == null) return true; const m = Math.round(a / 10); return m >= state.medalMin && m <= state.medalMax; });
+  const byShuffle = (a, b) => rank.get(a.id) - rank.get(b.id);
+  if (state.order === "needed") list.sort((a, b) => neededOf(b) - neededOf(a) || byShuffle(a, b));
+  else if (state.order === "recent") list.sort((a, b) => b.updated - a.updated);
+  else list.sort(byShuffle);
+  return list;
+}
+
+// ---------------------------------------------------------------------------
+// Player rows (shared by every layout)
+// ---------------------------------------------------------------------------
+function playerRows(t) {
+  const rows = [];
+  t.players.forEach((p, i) => {
+    if (state.removed.has(`${t.id}:${i}`)) return;
+    const flags = [];
+    flags.push(p.v ? '<span class="status-badge verified" title="The captain\'s own Steam-verified player">Verified</span>'
+                   : '<span class="status-badge" title="Typed in by the captain; not confirmed by the player">Listed by captain</span>');
+    if (p.pid && listedCount[p.pid] > 1) flags.push('<span class="status-badge warn" title="This player is on more than one listing">Also on another team</span>');
+    let action = "";
+    if (state.viewer === "player" && p.pid === 777) {
+      action = `<button type="button" class="btn btn-ghost btn-small" data-remove="${t.id}:${i}" title="Remove yourself from this listing">Not on this team</button>`;
+    }
+    rows.push(`<div class="p-name">${esc(p.n)}${state.viewer === "player" && p.pid === 777 ? ' <span class="status-badge">(You)</span>' : ""}</div>`,
+              `<div class="p-medal">${medalHtml(p.t, p.lb)}</div>`,
+              `<div class="p-flags">${flags.join("")}${action}</div>`);
+  });
+  for (let i = playersOf(t).length; i < 5; i++) rows.push('<div class="p-name p-open">Open slot</div>', '<div class="p-medal"></div>', '<div class="p-flags"></div>');
+  return `<div class="players">${rows.join("")}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Layouts
+// ---------------------------------------------------------------------------
+function cardHtml(t) {
+  const n = neededOf(t);
+  return `<article class="panel team-card${state.viewer === "captain" && t.mine ? " row-self" : ""}">
+    <div class="team-card-head">
+      <div><h3 class="team-name">${esc(t.name)}${selfBadge(t)}</h3>
+        <div class="muted">${playersOf(t).length} listed · updated ${fmtDate(t.updated)}</div></div>
+      <div class="need-block"><div class="needed${n ? "" : " zero"}">${n}</div><div class="label">needed</div></div>
+    </div>
+    <div class="roles">${roleTags(t.roles)}</div>
+    ${playerRows(t)}
+    ${t.note ? `<p class="note">${esc(t.note)}</p>` : ""}
+    <div class="card-foot"><span class="label">Contact</span>${contactHtml(t)}</div>
+  </article>`;
+}
+
+function renderGrid(list) { return `<div class="grid">${list.map(cardHtml).join("")}</div>`; }
+
+function renderTable(list) {
+  const head = `<div class="tbl-row tbl-head"><div>Team</div><div>Listed</div><div>Needed</div><div class="hide-sm">Open roles</div><div class="hide-sm">Avg medal</div><div class="hide-sm">Updated</div><div></div></div>`;
+  const rows = list.map(t => {
+    const open = state.expanded.has(t.id);
+    return `<div class="tbl-row${state.viewer === "captain" && t.mine ? " row-self" : ""}">
+        <div class="tname">${esc(t.name)}${selfBadge(t)}</div>
+        <div class="num">${playersOf(t).length}</div>
+        <div class="num needed">${neededOf(t)}</div>
+        <div class="hide-sm roles">${t.roles.map(r => `<span class="role-tag" title="${ROLES[r - 1][1]}">${r}</span>`).join("") || '<span class="muted">—</span>'}</div>
+        <div class="hide-sm">${avgMedalHtml(t)}</div>
+        <div class="hide-sm num">${fmtDate(t.updated)}</div>
+        <div><button type="button" class="expand" data-expand="${t.id}" aria-expanded="${open}" aria-label="${open ? "Hide" : "Show"} players of ${esc(t.name)}">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></div>
+      </div>${open ? `<div class="tbl-detail"><div>${playerRows(t)}</div><div>
+        <div class="roles" style="margin-bottom:var(--s-2)">${roleTags(t.roles)}</div>
+        ${t.note ? `<p class="note" style="margin-bottom:var(--s-2)">${esc(t.note)}</p>` : ""}
+        <div><span class="label">Contact</span> ${contactHtml(t)}</div></div></div>` : ""}`;
+  }).join("");
+  return `<div class="tbl" role="table" aria-label="Partial teams">${head}${rows}</div>`;
+}
+
+function fitOf(mine, t) {
+  const total = playersOf(mine).length + playersOf(t).length;
+  const covers = mine.roles.filter(r => !t.roles.includes(r));
+  const sizeScore = total >= 5 && total <= 7 ? 2 : total < 5 ? 1 : 0;
+  return { total, covers, score: sizeScore * 10 + covers.length };
+}
+function renderFits(list) {
+  if (state.viewer !== "captain") {
+    return `<div class="empty"><div class="label" style="margin-bottom:var(--s-2)">Fits us needs your listing</div>
+      List your team to see which teams fill your open slots and roles. Switch the viewer to "Captain".</div>`;
+  }
+  const mine = TEAMS.find(t => t.mine);
+  const others = list.filter(t => !t.mine).map(t => ({ t, f: fitOf(mine, t) }));
+  const rank = dailyRank(TEAMS);
+  others.sort((a, b) => b.f.score - a.f.score || rank.get(a.t.id) - rank.get(b.t.id));
+  return `<p class="muted" style="margin-top:0">Ranked for <strong>${esc(mine.name)}</strong> (${playersOf(mine).length} players, needs pos ${mine.roles.join(", ")}). Ties use the daily shuffle.</p>
+  <div class="fit-list">${others.map(({ t, f }) => {
+    const ok = f.total >= 5 && f.total <= 7;
+    const sizeText = ok ? `${f.total} players together` : f.total < 5 ? `${f.total} together, still short` : `${f.total} together, too many`;
+    const coverText = f.covers.length ? `Likely covers pos ${f.covers.join(", ")} (not on their open list)` : "Needs the same roles as you";
+    return `<article class="panel fit-row">
+      <div class="fit-score"><div class="needed${ok ? "" : " weak"}">${f.total}</div><div class="label">Together · ${ok ? "fits" : f.total < 5 ? "short" : "too many"}</div></div>
+      <div><h3 class="team-name">${esc(t.name)}</h3><div class="fit-explain">${sizeText}. ${coverText}.</div>
+        <div class="roles" style="margin-top:var(--s-2)">${roleTags(t.roles)}</div>
+        <div style="margin-top:var(--s-2)"><span class="label">Contact</span> ${contactHtml(t)}</div></div>
+      <div>${playerRows(t)}</div>
+    </article>`; }).join("")}</div>`;
+}
+
+function renderFull() {
+  const full = TEAMS.filter(t => t.full);
+  document.getElementById("fullLabel").textContent = `Full teams (${full.length})`;
+  document.getElementById("fullList").innerHTML = full.map(t => `<div class="panel">
+    <h3 class="team-name" style="font-size:var(--fs-md)">${esc(t.name)}</h3>
+    <div class="muted">${playersOf(t).length} players · full since ${fmtDate(t.updated)}</div>
+    ${playerRows(t)}</div>`).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Notes per option
+// ---------------------------------------------------------------------------
+const LAYOUT_NOTES = {
+  grid: ["A · Card grid", [
+    ["pro", "Everything at once: players, medals, open roles, note and contact. No clicks to compare teams."],
+    ["pro", "Every card is the same size, so no team is visually promoted."],
+    ["pro", "Open slots are drawn as rows, so a team of one reads as one player and four gaps."],
+    ["con", "Long scroll past about 30 teams, and long on phones (one column)."]]],
+  table: ["B · Compact table", [
+    ["pro", "Fits 50+ teams. Players needed, roles and average medal scan down a column."],
+    ["pro", "Detail is one click away and keeps its place in the list."],
+    ["con", "Players and contact are hidden until expanded, so captains compare less."],
+    ["con", "Column sorting would be a ranking; keep the table unsortable, order from the chosen rule."]]],
+  fits: ["C · Fits us", [
+    ["pro", "The most useful view for a captain: teams whose players add up to 5–7 with yours, and who seem to cover your open roles."],
+    ["con", "It ranks teams. Teams that fit nobody, such as a team of four needing the same support, sink for everyone."],
+    ["con", "Role coverage is a guess: we only know which roles a team lists as open, not who plays what."],
+    ["con", "Needs a listing, so logged-out visitors and players without a team can't use it. A later addition, not the default."]]],
+};
+const ORDER_NOTES = {
+  shuffle: ["Daily shuffle", [
+    ["pro", "No team is first by default, and each team reaches the top on some days."],
+    ["pro", "Editing doesn't change the order, so there is no reason to re-save a listing to bump it."],
+    ["pro", "The order holds all day, so a team you saw is easy to find again."],
+    ["con", "Everyone sees the same order on a given day. A per-visit shuffle would spread attention more but makes teams hard to find again."]]],
+  needed: ["Most needed first", [
+    ["pro", "Teams of one and two, who have the hardest time, are seen first."],
+    ["con", "Teams one player short, which are the quickest to complete, come last."],
+    ["con", "Removing a player to rise in the list is possible."]]],
+  recent: ["Recently updated", [
+    ["pro", "Shows which captains are active."],
+    ["con", "Saving again bumps a team to the top: try the edit button above. It would need an edit cooldown."],
+    ["con", "Quiet but serious teams sink. Not recommended."]]],
+};
+function notesHtml([title, items], kind) {
+  return `<div class="eyebrow">${kind}</div><h3>${esc(title)}</h3><ul>${items.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("")}</ul>`;
+}
+
+// ---------------------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------------------
+const VIEWER_HELP = {
+  anon: "Logged out: contacts are hidden and the tab offers Log in to list your team.",
+  player: "Logged in as Kiiski, Steam-verified, listed by two captains: see Not on this team and the duplicate flag.",
+  captain: "Captain of Excel Ninjat: your listing is tinted, and Fits us ranks teams for you.",
+};
+
+function render() {
+  document.querySelectorAll(".seg").forEach(g => {
+    const key = g.dataset.control;
+    g.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.value === state[key])));
+  });
+  document.getElementById("viewerHelp").textContent = VIEWER_HELP[state.viewer];
+  document.getElementById("dayLabel").textContent = fmtDate(TODAY + state.day * DAY);
+  document.getElementById("listCta").innerHTML = state.viewer === "anon"
+    ? '<a href="#" onclick="return false">Log in to list your team</a>'
+    : state.viewer === "captain" ? '<a href="#captain-form" onclick="document.getElementById(\'cfName\').focus();return false">Edit your listing</a>'
+    : '<a href="#captain-form" onclick="document.getElementById(\'cfName\').focus();return false">List your team</a>';
+
+  const list = partialTeams();
+  document.getElementById("resultCount").textContent = `${list.length} partial team${list.length === 1 ? "" : "s"}`;
+  const el = document.getElementById("list");
+  if (!list.length) el.innerHTML = '<div class="empty">No partial teams match these filters.</div>';
+  else el.innerHTML = state.layout === "table" ? renderTable(list) : state.layout === "fits" ? renderFits(list) : renderGrid(list);
+  renderFull();
+  document.getElementById("layoutNotes").innerHTML = notesHtml(LAYOUT_NOTES[state.layout], "Layout");
+  document.getElementById("orderNotes").innerHTML = notesHtml(ORDER_NOTES[state.order], "Order");
+}
+
+// Controls
+document.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  state[g.dataset.control] = b.dataset.value; render();
+}));
+document.getElementById("dayPrev").onclick = () => { state.day -= 1; render(); };
+document.getElementById("dayNext").onclick = () => { state.day += 1; render(); };
+document.getElementById("simEdit").onclick = () => { TEAMS.find(t => t.id === 4).updated = TODAY + state.day * DAY + 3600000; render(); };
+document.getElementById("fNeeded").onchange = e => { state.needed = Number(e.target.value); render(); };
+const fRoles = document.getElementById("fRoles");
+fRoles.innerHTML = ROLES.map(([n, name]) => `<button type="button" class="chip" data-role="${n}" aria-pressed="false" title="${name}">Pos ${n}</button>`).join("");
+fRoles.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const r = Number(b.dataset.role);
+  state.roles.has(r) ? state.roles.delete(r) : state.roles.add(r);
+  b.setAttribute("aria-pressed", String(state.roles.has(r))); render();
+});
+["fMedalMin", "fMedalMax"].forEach((id, i) => {
+  const s = document.getElementById(id);
+  s.innerHTML = MEDALS.slice(1).map((m, j) => `<option value="${j + 1}"${(i ? j + 1 === 8 : j === 0) ? " selected" : ""}>${m}</option>`).join("");
+  s.onchange = () => { state[i ? "medalMax" : "medalMin"] = Number(s.value); render(); };
+});
+document.getElementById("list").addEventListener("click", e => {
+  const x = e.target.closest("[data-expand]");
+  if (x) { const id = Number(x.dataset.expand); state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id); render(); return; }
+  const r = e.target.closest("[data-remove]");
+  if (r) { state.removed.add(r.dataset.remove); render(); }
+});
+
+// ---------------------------------------------------------------------------
+// Captain form demo
+// ---------------------------------------------------------------------------
+const LOOKUP = { 101: ["Pivot", 34], 102: ["VLOOKUP", 41], 103: ["Makro", 45], 104: ["Solukko", 55], 105: ["Kaava", null],
+                 106: ["Taulukko", 62], 107: ["Kaavio", 25], 108: ["Suodatin", 71], 109: ["Välilehti", 80] };
+const STEAM_OFFSET = 76561197960265728n;
+const cf = { rows: [{ id: 101, name: "Pivot", t: 34, v: true, s: "found" }, { id: 102, name: "VLOOKUP", t: 41, s: "found" }],
+             roles: new Set([2, 3, 4]), full: false };
+
+function cfRender() {
+  const rows = [];
+  cf.rows.forEach((r, i) => {
+    let name, medal, flag;
+    if (r.s === "looking") { name = `<span class="spinner" aria-hidden="true"></span><span class="mono">${r.id}</span>`; medal = '<span class="muted">Looking up</span>'; flag = ""; }
+    else if (r.s === "unknown") { name = `<span class="mono">${r.id}</span>`; medal = '<span class="status-badge">Unknown player</span>'; flag = '<span class="status-badge">Listed by captain</span>'; }
+    else { name = `${esc(r.name)} <span class="mono">${r.id}</span>${r.converted ? ' <span class="muted">from Steam64</span>' : ""}`; medal = medalHtml(r.t);
+           flag = r.v ? '<span class="status-badge verified">Verified</span>' : '<span class="status-badge">Listed by captain</span>'; }
+    const rm = r.v ? '<span class="muted" title="Your own player stays on your listing">You</span>'
+                   : `<button type="button" class="btn btn-ghost btn-small" data-cfrm="${i}" aria-label="Remove ${r.id}">Remove</button>`;
+    rows.push(`<div>${name}</div>`, `<div>${medal}</div>`, `<div>${flag}</div>`, `<div>${rm}</div>`);
+  });
+  document.getElementById("cfRows").innerHTML = rows.join("");
+  document.getElementById("cfCount").textContent = cf.rows.length;
+  document.getElementById("cfFull").setAttribute("aria-pressed", String(cf.full));
+  document.getElementById("cfFullHelp").textContent = cf.full ? "Shown under Full teams; still in the organiser's export." : "Partial teams are listed; full teams move to Full teams.";
+}
+function cfAdd() {
+  const input = document.getElementById("cfId"), err = document.getElementById("cfIdErr");
+  const raw = input.value.trim(); err.textContent = "";
+  if (!raw) return;
+  if (!/^\d{1,19}$/.test(raw)) { err.textContent = "Dota ids are digits only"; return; }
+  let id = BigInt(raw), converted = false;
+  if (raw.length === 17 && id > STEAM_OFFSET) { id -= STEAM_OFFSET; converted = true; }
+  id = Number(id);
+  if (cf.rows.some(r => r.id === id)) { err.textContent = "Already on your team"; return; }
+  if (cf.rows.length >= 7) { err.textContent = "Seven players at most"; return; }
+  const row = { id, s: "looking", converted };
+  cf.rows.push(row); input.value = ""; cfRender();
+  setTimeout(() => {
+    const hit = LOOKUP[id];
+    if (hit) Object.assign(row, { s: "found", name: hit[0], t: hit[1] }); else row.s = "unknown";
+    cfRender();
+  }, 900);
+}
+document.getElementById("cfAdd").onclick = cfAdd;
+document.getElementById("cfId").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); cfAdd(); } });
+document.getElementById("cfRows").addEventListener("click", e => {
+  const b = e.target.closest("[data-cfrm]"); if (!b) return; cf.rows.splice(Number(b.dataset.cfrm), 1); cfRender();
+});
+const cfRoles = document.getElementById("cfRoles");
+cfRoles.innerHTML = ROLES.map(([n, name]) => `<button type="button" class="chip" data-role="${n}" aria-pressed="${cf.roles.has(n)}">Pos ${n} · ${name}</button>`).join("");
+cfRoles.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return; const r = Number(b.dataset.role);
+  cf.roles.has(r) ? cf.roles.delete(r) : cf.roles.add(r); b.setAttribute("aria-pressed", String(cf.roles.has(r)));
+});
+document.getElementById("cfFull").onclick = () => { cf.full = !cf.full; cfRender(); };
+[["cfName", "cfNameCount"], ["cfNote", "cfNoteCount"]].forEach(([i, c]) => {
+  const el = document.getElementById(i), upd = () => { document.getElementById(c).textContent = el.value.length; };
+  el.addEventListener("input", upd); upd();
+});
+document.getElementById("cfSave").onclick = () => {
+  const msg = document.getElementById("cfSaveMsg"), contact = document.getElementById("cfContact").value.trim();
+  const name = document.getElementById("cfName").value.trim();
+  if (/https?:\/\/|www\./i.test(name + " " + document.getElementById("cfNote").value)) { msg.className = "msg-err"; msg.textContent = "Links aren't allowed in the name or note"; return; }
+  if (name.length < 2) { msg.className = "msg-err"; msg.textContent = "Team name needs at least 2 characters"; return; }
+  if (!contact) { msg.className = "msg-err"; msg.textContent = "Add a way to contact you"; return; }
+  msg.className = "msg-ok"; msg.textContent = "Saved (prototype: nothing is sent)";
+};
+
+// Presets from the URL hash, e.g. #layout=table&order=needed&viewer=captain
+new URLSearchParams(location.hash.slice(1)).forEach((v, k) => {
+  const ok = { layout: ["grid", "table", "fits"], order: ["shuffle", "needed", "recent"], viewer: ["anon", "player", "captain"] };
+  if (ok[k] && ok[k].includes(v)) state[k] = v;
+});
+render();
+cfRender();
+</script>
+<script type="module">
+  // Brand-themed Mermaid for the captain flow (flame accent on near-black, Inter labels).
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({
+    startOnLoad: true, securityLevel: "strict", theme: "base",
+    flowchart: { curve: "basis", htmlLabels: true, padding: 12 },
+    themeVariables: {
+      fontFamily: "Inter, sans-serif", fontSize: "13px",
+      background: "#1a1a20", primaryColor: "#24242c", primaryTextColor: "#e4e4e8",
+      primaryBorderColor: "#4a4a55", lineColor: "#8f8f99", secondaryColor: "#121216",
+      tertiaryColor: "#121216", clusterBkg: "#121216", clusterBorder: "#e85d1c",
+      edgeLabelBackground: "#1a1a20", titleColor: "#e85d1c", nodeTextColor: "#e4e4e8",
+    },
+  });
+</script>
+</body>
+</html>

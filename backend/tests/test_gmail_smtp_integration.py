@@ -48,7 +48,7 @@ class TestConfigureGmailStarttls:
 
         assert result is True
         mock_smtp.starttls.assert_called_once()
-        mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587)
+        mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587, timeout=email_utils.SMTP_TIMEOUT)
 
     def test_env_example_contains_gmail_block(self):
         """The .env.example file contains a commented Gmail example block."""
@@ -108,7 +108,7 @@ class TestGmailSslConnection:
             result = email_utils.send_email("to@example.com", "Subject", "Body")
 
         assert result is True
-        mock_ssl_cls.assert_called_once_with("smtp.gmail.com", 465)
+        mock_ssl_cls.assert_called_once_with("smtp.gmail.com", 465, timeout=email_utils.SMTP_TIMEOUT)
         mock_smtp_cls.assert_not_called()
 
     def test_smtp_ssl_port_465_sends_successfully(self, monkeypatch):
@@ -151,7 +151,7 @@ class TestGmailSslConnection:
             result = email_utils.send_email("to@example.com", "Subject", "Body")
 
         assert result is True
-        mock_ssl_cls.assert_called_once_with("smtp.gmail.com", 465)
+        mock_ssl_cls.assert_called_once_with("smtp.gmail.com", 465, timeout=email_utils.SMTP_TIMEOUT)
         mock_smtp_cls.assert_not_called()
 
     def test_smtp_ssl_documented_in_env_example(self):

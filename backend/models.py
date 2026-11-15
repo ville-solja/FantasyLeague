@@ -429,6 +429,7 @@ class TwitchChannelApproval(Base):
     last_seen_at  = Column(Integer, nullable=False)
     decided_at    = Column(Integer, nullable=True)
     decided_by    = Column(Integer, ForeignKey("users.id"), nullable=True)
+    notified_at   = Column(Integer, nullable=True)          # issue #215: admins were told
 
 
 class PasswordResetToken(Base):
@@ -514,6 +515,40 @@ class TwitchTokenDrop(Base):
     series_id  = Column(String)   # broadcaster-supplied series identifier
     dropped_at = Column(Integer)  # Unix timestamp
     count      = Column(Integer)  # number of tokens actually distributed
+
+
+class TwitchMvpPoll(Base):
+    """A viewer MVP vote for one match on one channel (issue #234, twitch_mvp_poll.py).
+    At most one open poll per channel (the partial unique index). It closes lazily
+    at closes_at; tally_json keeps only the per-player counts."""
+    __tablename__ = "twitch_mvp_polls"
+    __table_args__ = (Index("ux_twitch_mvp_polls_open_channel", "channel_id", unique=True,
+                            sqlite_where=text("status = 'open'"),
+                            postgresql_where=text("status = 'open'")),)
+
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    channel_id          = Column(String, nullable=False, index=True)
+    match_id            = Column(Integer, nullable=False, index=True)  # no FK: a live match has no matches row yet
+    status              = Column(String, nullable=False)  # open | closed | cancelled | confirmed
+    opened_at           = Column(Integer, nullable=False)
+    closes_at           = Column(Integer, nullable=False)
+    closed_at           = Column(Integer, nullable=True)
+    confirmed_player_id = Column(Integer, nullable=True)
+    tally_json          = Column(Text, nullable=True)  # {"<player_id>": votes}, written on close
+    info_json           = Column(Text, nullable=True)  # teams, game number and players at open
+
+
+class TwitchMvpVote(Base):
+    """One viewer's vote in a TwitchMvpPoll, keyed by the opaque Twitch id. Deleted 30
+    days after the poll ends and on Leave Kana Cards."""
+    __tablename__ = "twitch_mvp_votes"
+    __table_args__ = (UniqueConstraint("poll_id", "twitch_user_id", name="uq_twitch_mvp_vote_poll_voter"),)
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    poll_id        = Column(Integer, ForeignKey("twitch_mvp_polls.id"), nullable=False, index=True)
+    twitch_user_id = Column(String, nullable=False, index=True)
+    player_id      = Column(Integer, nullable=False)
+    voted_at       = Column(Integer, nullable=False)
 
 
 class LiveMatch(Base):
@@ -701,6 +736,54 @@ class FinalsPrediction(Base):
     saved_at      = Column(Integer, nullable=False)
     correct_picks = Column(Integer, nullable=True)  # 0-3 on the effective row once the final is decided
 
+class TeamSignupPeriod(Base):
+    """A pre-season team signup period (issue #220, team_signup.py). At most one open
+    at a time (the partial unique index); it counts as closed once closes_at passes,
+    without a background job."""
+    __tablename__ = "team_signup_periods"
+
+    id                = Column(Integer, primary_key=True)
+    label             = Column(String, nullable=False)
+    opened_at         = Column(Integer, nullable=False)
+    closes_at         = Column(Integer, nullable=True)
+    closed_at         = Column(Integer, nullable=True)
+    opened_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class TeamSignup(Base):
+    """One captain's team listing in a signup period (issue #220). No foreign keys to
+    teams or players: a season Reset deletes those, and the listing outlives it."""
+    __tablename__ = "team_signups"
+    __table_args__ = (UniqueConstraint("period_id", "captain_user_id", name="uq_team_signup_period_captain"),)
+
+    id              = Column(Integer, primary_key=True)
+    period_id       = Column(Integer, ForeignKey("team_signup_periods.id"), nullable=False, index=True)
+    captain_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    team_name       = Column(String, nullable=False)
+    contact         = Column(String, nullable=False)
+    note            = Column(Text, nullable=True)
+    open_roles_json = Column(Text, nullable=True)   # [1-5, ...]
+    is_full         = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at      = Column(Integer, nullable=False)
+    updated_at      = Column(Integer, nullable=False)
+
+
+class TeamSignupPlayer(Base):
+    """A Dota id listed on a TeamSignup. The name and medal are stored at save time, so
+    browsing never calls OpenDota. `verified` only for the captain's Steam-verified player."""
+    __tablename__ = "team_signup_players"
+    __table_args__ = (UniqueConstraint("signup_id", "account_id", name="uq_team_signup_player"),)
+
+    id               = Column(Integer, primary_key=True)
+    signup_id        = Column(Integer, ForeignKey("team_signups.id"), nullable=False, index=True)
+    account_id       = Column(Integer, nullable=False, index=True)   # 32-bit Dota id; no FK to players
+    name             = Column(String, nullable=True)                 # None: "Unknown player"
+    rank_tier        = Column(Integer, nullable=True)
+    leaderboard_rank = Column(Integer, nullable=True)
+    verified         = Column(Boolean, nullable=False, default=False, server_default="0")
+    added_at         = Column(Integer, nullable=False)
+
+
 Index('ix_pms_player_id',    PlayerMatchStats.player_id)
 Index('ix_pms_match_id',     PlayerMatchStats.match_id)
 Index('ix_cards_owner_id',   Card.owner_id)
@@ -724,3 +807,8 @@ Index('ux_season_accolades_key', SeasonAccolade.season_label, SeasonAccolade.kin
       func.coalesce(SeasonAccolade.division, ''),
       func.coalesce(SeasonAccolade.player_account_id, 0),
       func.coalesce(SeasonAccolade.user_id, 0), unique=True)
+# Issue #220: at most one signup period with closed_at NULL. NULLs are distinct in a
+# unique index, so the key is COALESCE(closed_at, 0), the same 0 for every open row.
+Index('ux_team_signup_periods_open', func.coalesce(TeamSignupPeriod.closed_at, 0), unique=True,
+      sqlite_where=TeamSignupPeriod.closed_at.is_(None),
+      postgresql_where=TeamSignupPeriod.closed_at.is_(None))

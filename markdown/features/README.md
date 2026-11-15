@@ -19,6 +19,7 @@ These describe the primary user-visible surfaces of the app.
 | [Admin Features](core/admin.md) | Promo codes, token grants, weights, ingest, schedule, audit log |
 | [Twitch Extension](core/twitch-extension.md) | Viewer panel game (Live, Join with the Twitch login, cards, roster), broadcaster MVP selection and token drops |
 | [Finals Predictions](core/finals-predictions.md) | Finals tab (#237): Div 1 match tree from our own results, no fixtures-site dependency; predictions open once the bracket is set (after the group stage, or an admin tiebreak) and lock at the first semi game; correct picks stored for a later accolade |
+| [Pre-Season Team Signup](core/team-signup.md) | *(#220, S17)* Team Finder tab while an admin-opened signup period runs: captains list partial teams with Dota ids, open roles and a contact, browse other teams in a fair daily-shuffled order, mark the team full; the organiser downloads a CSV |
 
 ---
 
@@ -61,6 +62,7 @@ Implementation details, integrations, and operator tooling.
 | [MVP Selection Delays](reference/mvp-selection-delays.md) | Live games come from Steam's live league list (OpenDota `/live` dropped), checked in their own thread every minute; per-match timings for admins and a freshness line in the MVP picker |
 | [Twitch Panel Abuse Limits](reference/twitch-panel-abuse-limits.md) | Soft accounts join drop pools after a minimum age, pool-size spikes are flagged, logged-out heartbeats are ignored, team logos load only from allowed hosts, and CORS allows only our extension's origin (#171) |
 | [Approved Streamers Admin](reference/approved-streamers-admin.md) | Admins approve the Twitch channels allowed to set match MVPs from requests recorded when a broadcaster opens the MVP tool; `TWITCH_MVP_CHANNEL_IDS` still works alongside (#175) |
+| [Streamer Approval Notifications](reference/streamer-approval-notifications.md) | #215: new MVP approval requests reach admins outside the site: one batched email to admins and/or a Discord webhook message, at most every 30 minutes, each channel announced once; status check and test button in Admin › Twitch |
 | [Twitch Integration Status](reference/twitch-integration-status.md) | Panel reason codes, a connection check on the extension configuration page, an admin Twitch status checklist, and a version and origins stamp in each package |
 | [Twitch Extension Setup Follow-ups](reference/twitch-extension-setup-followups.md) | Twitch sign-in errors shown on Profile, demo clock for admins only, console checklist for the sign-in redirect URL and image hosts, cached and rate-limited panel live data, no-cache frontend scripts; working setup notes |
 | [Panel Fits Twitch's Height](reference/panel-fits-twitch-height.md) | Issue #191: the panel takes the iframe's height instead of a fixed 500 px, every view scrolls within it with a themed scrollbar, and the version's Panel Height setting is documented |
@@ -68,7 +70,7 @@ Implementation details, integrations, and operator tooling.
 | [Twitch Extension Review Submission](reference/twitch-extension-review-submission.md) | EBS URL/endpoint disclosure, legal page links, and guideline-compliance notes for submitting the Extension to Twitch review |
 | [Twitch Review Resubmission](reference/twitch-review-resubmission.md) | Fixes for the 2026-09 review rejection: extension 404 (console asset paths, Hosted Test), EBS fetch allowlist, and chat-capability disclosure |
 | [Twitch Extension Resubmission](reference/twitch-extension-resubmission.md) | Issue #195: version 1.3.0 for review after the policy 4.5 rejection; submission guide brought in line with the build (listing, baked backend origins, endpoint and image disclosure, testing steps), tests keeping the disclosure in step with the packaged code |
-| [MVP Poll for Watchers](reference/twitch-mvp-viewer-poll.md) | *(planned, #234, S17)* The streamer opens a timed MVP vote for one match from Quick Actions; joined viewers vote in the panel; the streamer confirms the winner, and the bonus, drop and chat work as before |
+| [MVP Poll for Watchers](reference/twitch-mvp-viewer-poll.md) | (#234; extension 1.4.0, S17) The streamer opens a timed MVP vote for one match from Quick Actions; joined viewers vote in the panel; the streamer confirms the winner, and the bonus, drop and chat work as before |
 | [Token Grant Event](reference/token-grant-event.md) | Admin-configured time-bounded token distribution; auto-claimed on next login |
 | [Notification System](reference/notification-system.md) | Admin-configured time-bounded broadcast messages; one-time popup per player |
 | [Season Participation Backfill](reference/season-participation-backfill.md) | #212: past Kanaliiga leagues S4–S15 (305 players, 866 rows) backfilled as Played accolades from a checked-in league file with one `--all` run (call budget, resume, report); counts read "since Season 4" |

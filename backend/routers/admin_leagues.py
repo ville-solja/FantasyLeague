@@ -32,6 +32,29 @@ def list_leagues(db=Depends(get_db), admin=Depends(require_admin)):
     ]
 
 
+@router.get("/admin/opendota-status")
+def opendota_status(db=Depends(get_db), admin=Depends(require_admin)):
+    """OpenDota's recent answers and each monitored league's last ingest check, so a
+    rate limit, an outage or a listed game that wasn't stored shows in League
+    Management without reading the container logs. Both records are in memory: they
+    start empty after a restart and fill on the next ingest pass."""
+    import ingest
+    import opendota_client
+    statuses = ingest.league_statuses()
+    leagues = []
+    for l in db.query(League).filter(League.is_monitored == True).order_by(League.id).all():  # noqa: E712
+        st = statuses.get(l.id, {})
+        leagues.append({
+            "id": l.id,
+            "name": l.name or "(unknown)",
+            "listed_at": st.get("listed_at"),
+            "listed": st.get("listed"),
+            "list_failed_at": st.get("list_failed_at"),
+            "not_stored": st.get("not_stored", []),
+        })
+    return {"opendota": opendota_client.health_snapshot(), "leagues": leagues}
+
+
 @router.post("/admin/leagues/{league_id}/monitor")
 def add_monitored_league(league_id: int, db=Depends(get_db), admin=Depends(require_admin)):
     league = db.get(League, league_id)

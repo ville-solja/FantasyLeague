@@ -357,3 +357,121 @@ function setFinalsResult(series, btn) {
   return _adminFinalsSend(btn, `${API}/admin/finals/result`, "PUT", { series, winner },
     () => "Result set");
 }
+
+// ---------------------------------------------------------------------------
+// Issue #220: Team signup card. The period's state, Open signup (label and optional
+// closing time) or Close now, every listing with Remove, Download CSV and Clear
+// signups (re-auth through adminFetch). Every listing field is escaped.
+// ---------------------------------------------------------------------------
+
+let _adminTeamSignup = null;
+
+async function loadAdminTeamSignup() {
+  if (!activeIsAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/team-signup`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("adminTeamSignupStatus", data.detail, false);
+    _adminTeamSignup = data;
+    renderAdminTeamSignup();
+  } catch (e) {
+    setStatus("adminTeamSignupStatus", e.message, false);
+  }
+}
+
+function _adminTsDate(ts) {
+  return ts ? new Date(ts * 1000).toLocaleString() : "";
+}
+
+function renderAdminTeamSignup() {
+  const d = _adminTeamSignup;
+  const el = document.getElementById("adminTeamSignupBody");
+  if (!d || !el) return;
+  const p = d.current;
+  let state = "No signup period yet.";
+  if (p && p.open) state = `Open: <strong>${_escHtml(p.label)}</strong>, ${p.closes_at ? `closes ${_escHtml(_adminTsDate(p.closes_at))}` : "no closing time"}.`;
+  else if (p) state = `Closed: <strong>${_escHtml(p.label)}</strong>, closed ${_escHtml(_adminTsDate(p.closed_at))}.`;
+  const controls = d.open
+    ? `<div class="admin-panel-row"><button type="button" class="danger" onclick="closeTeamSignupNow(this)">Close now</button></div>`
+    : `<div class="admin-panel-row">
+        <input type="text" id="teamSignupLabel" maxlength="40" placeholder="Label, e.g. Season 17" aria-label="Signup period label">
+        <input type="datetime-local" id="teamSignupClosesAt" aria-label="Closing time (optional)">
+        <button type="button" onclick="openTeamSignup(this)">Open signup</button></div>`;
+  const rows = (d.listings || []).map(r => `<tr><td>${_escHtml(r.team_name)}</td><td>${_escHtml(r.captain)}</td>
+      <td>${_escHtml(r.contact)}</td><td>${Number(r.player_count)}${r.duplicates ? ` <span class="status-badge" title="Players also listed by another team">${Number(r.duplicates)} shared</span>` : ""}</td>
+      <td>${r.is_full ? "Full" : "Partial"}</td><td>${_escHtml(_adminTsDate(r.updated_at))}</td>
+      <td><button type="button" class="secondary" onclick="removeTeamSignupListing(${Number(r.id)}, this)">Remove</button></td></tr>`).join("");
+  const table = rows
+    ? `<div class="admin-table-wrap"><table><thead><tr><th>Team</th><th>Captain</th><th>Contact</th><th>Players</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : (p ? `<p class="admin-panel-note">No listings in this period.</p>` : "");
+  const exportRow = p
+    ? `<div class="admin-panel-row">
+        <button type="button" class="secondary" onclick="downloadTeamSignupCsv(${Number(p.id)}, this)">Download CSV</button>
+        <button type="button" class="danger" onclick="clearTeamSignups(${Number(p.id)}, this)" ${(d.listings || []).length ? "" : "disabled"}>Clear signups</button></div>`
+    : "";
+  el.innerHTML = `<p class="admin-panel-note">${state}</p>${controls}${table}${exportRow}`;
+}
+
+async function _adminTeamSignupSend(btn, url, method, body, done) {
+  await withBusy(btn, async () => {
+    try {
+      const opts = { method };
+      if (body) { opts.headers = { "Content-Type": "application/json" }; opts.body = JSON.stringify(body); }
+      const res = await adminFetch(url, opts);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setStatus("adminTeamSignupStatus", data.detail || "Request failed", false);
+      setStatus("adminTeamSignupStatus", done(data));
+      await loadAdminTeamSignup();
+    } catch (e) {
+      setStatus("adminTeamSignupStatus", e.message, false);
+    }
+  });
+}
+
+function openTeamSignup(btn) {
+  const label = document.getElementById("teamSignupLabel").value.trim();
+  if (!label) return setStatus("adminTeamSignupStatus", "Give the period a label", false);
+  const when = document.getElementById("teamSignupClosesAt").value;
+  const closesAt = when ? Math.floor(new Date(when).getTime() / 1000) : null;
+  if (when && !Number.isFinite(closesAt)) return setStatus("adminTeamSignupStatus", "Invalid closing time", false);
+  return _adminTeamSignupSend(btn, `${API}/admin/team-signup/period`, "POST", { label, closes_at: closesAt },
+    () => "Signup opened; the Team Finder tab now shows for everyone");
+}
+
+function closeTeamSignupNow(btn) {
+  if (!confirm("Close the signup now? The Team Finder tab hides and captains can't save.")) return;
+  return _adminTeamSignupSend(btn, `${API}/admin/team-signup/period/close`, "POST", null, () => "Signup closed");
+}
+
+function removeTeamSignupListing(id, btn) {
+  if (!confirm("Remove this listing with its players and contact?")) return;
+  return _adminTeamSignupSend(btn, `${API}/admin/team-signup/${Number(id)}`, "DELETE", null, () => "Listing removed");
+}
+
+async function downloadTeamSignupCsv(periodId, btn) {
+  await withBusy(btn, async () => {
+    try {
+      const res = await fetch(`${API}/admin/team-signup/export.csv?period_id=${Number(periodId)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return setStatus("adminTeamSignupStatus", data.detail || "Download failed", false);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `team-signups-${Number(periodId)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      setStatus("adminTeamSignupStatus", e.message, false);
+    }
+  });
+}
+
+function clearTeamSignups(periodId, btn) {
+  if (!confirm("Delete every listing of this period, with players and contacts? This can't be undone.")) return;
+  return _adminTeamSignupSend(btn, `${API}/admin/team-signup/clear`, "POST", { period_id: Number(periodId) },
+    data => `Deleted ${Number(data.deleted)} listing(s)`);
+}

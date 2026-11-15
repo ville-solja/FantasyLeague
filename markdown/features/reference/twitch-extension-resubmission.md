@@ -39,3 +39,7 @@ Reviewers compare the listing, the disclosure and the testing steps with what th
 ## Changes since the last review
 
 The guide has a paste-ready "Changes since the last review" block for Notes for reviewer. It says the extension no longer requires or mentions any external login, that everything is played in the panel with the Twitch login, and that the identity share is optional, then lists the visible changes in plain words with no internal issue numbers. The 1.3.0 change log under Review history keeps the issue numbers for the team.
+
+## Next version: 1.4.0
+
+1.4.0 adds the MVP viewer vote (issue #234, [MVP Poll for Watchers](twitch-mvp-viewer-poll.md)) and is submitted only after 1.3.0 passes review. Its two new chat messages are disclosed in the guide's [chat capability section](twitch-extension-review-submission.md#from-version-140-mvp-viewer-vote), its endpoints are in the endpoint table, Flow 6 of the Testing Instructions walks through a vote, and the [1.4.0 change log](twitch-extension-review-submission.md#2026-11--version-140-change-log) has the files changed, the description to paste and the "Changes since the last review" block. The guide's header and checklist stay on 1.3.0 until then.

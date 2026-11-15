@@ -68,6 +68,9 @@ Admin only (`require_admin`; no password re-check, as it is read-only and holds 
 The `connect_twitch` detail (ok and partly-set warning) also says where the client secret comes from: the **Twitch API Client Secret** of the application or extension whose Client ID is `TWITCH_OAUTH_CLIENT_ID`, never the Extension Secret.
 | `app_base_url` | `APP_BASE_URL` set | Empty | — |
 | `steam_api_key` | `STEAM_API_KEY` set | Empty: live games are not listed before their stats arrive | — |
+| `approval_notifications` | Issue #215: at least one notification channel ready; the detail reads `Ready: Discord, email to N recipients.` | No channel ready (no Discord webhook, a URL that isn't a Discord webhook, no SMTP, no admin email, no address in `ADMIN_NOTIFY_EMAILS`, or `ADMIN_NOTIFY_EMAILS=off`) | — |
+
+The `approval_notifications` detail ends with the last message time and each channel's outcome (`sent`, `off` or the error kind such as `http 404`), or after a restart the latest `notified_at`. A test notification counts as the last message. The webhook URL is shown only as "set" and the email recipients only as a count. See `streamer-approval-notifications.md`.
 
 `traffic` since the last restart, in memory in `twitch.py` behind a lock (`traffic_snapshot()`; `reset_traffic()` for tests):
 - `last_extension_request_at`: the last `/twitch/*` request (preflight included) whose `Origin` CORS allows, recorded by `RefusedOriginMiddleware`. Old extension versions send these too, so it shows whether the panel reaches this server at all; none since the restart means the panel's requests stop before the server (`ebs_url`, URL Fetching Domains, DNS or TLS, or `E-ORIGIN` in a newer version).
@@ -88,7 +91,7 @@ No entry holds a secret, its length or a token.
 
 ## Admin UI
 
-Admin › Twitch › **Twitch status**, below Approved streamers (the Twitch sub-tab, issue 214). See `markdown/ui_description/admin.md`.
+Admin › Twitch › **Twitch status**, below Approved streamers (the Twitch sub-tab, issue 214). See `markdown/ui_description/admin.md`. Its header also has **Send test notification** (issue #215, `POST /admin/twitch/notify-test`).
 
 ## Troubleshooting
 

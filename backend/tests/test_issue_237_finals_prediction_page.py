@@ -1340,7 +1340,7 @@ class TestFrontend:
         """frontend/index.html has a Finals tab button between Schedule and How to Play, hidden by default, and loads app-finals.js."""
         p = _Tabs()
         p.feed(_read("index.html"))
-        ids = [b.get("id") for b in p.buttons]
+        ids = [b.get("id") for b in p.buttons if b.get("id") != "tab-btn-teamfinder"]   # issue #220's seasonal tab
         i = ids.index("tab-btn-finals")
         assert ids[i - 1] == "tab-btn-schedule" and ids[i + 1] == "tab-btn-howtoplay"
         assert "hidden" in p.buttons[i]

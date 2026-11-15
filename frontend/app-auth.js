@@ -9,6 +9,8 @@ function applyAuthState() {
 
   document.getElementById("tab-btn-team").style.display  = loggedIn ? "" : "none";
   document.getElementById("tab-btn-admin").style.display = (loggedIn && activeIsAdmin) ? "" : "none";
+  // Issue #220: admins see the Team Finder tab at any time.
+  if (typeof applyTeamFinderAvailability === "function") applyTeamFinderAvailability();
   document.getElementById("weeklyReportBtn").style.display = loggedIn ? "" : "none";
 
   const tokenEl = document.getElementById("tokenBalance");

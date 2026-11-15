@@ -205,6 +205,10 @@ is `https:` and its origin is one of the packaged origins. **Paste this into the
 | `/twitch/leave` | POST | `panel.js` | Leave: deletes the viewer's game data |
 | `/twitch/heartbeat` | POST | `extension.js` (`startHeartbeat`) | Keeps a joined viewer in the token-drop pool (~every 55s while the panel is open) |
 | `/twitch/mvp` | POST | `live_config.js` | Broadcaster-only: sets a match's MVP, triggers the token drop and chat announcement |
+| `/twitch/mvp-poll` | GET | `panel.js`, `live_config.js` | From 1.4.0: the channel's MVP viewer vote (players, time left, vote count; per-player shares once closed) |
+| `/twitch/mvp-poll` | POST | `live_config.js` | From 1.4.0, broadcaster-only: opens a timed MVP viewer vote for one match and posts its chat line |
+| `/twitch/mvp-poll/{poll_id}/vote` | POST | `panel.js` | From 1.4.0: a joined viewer's vote (changeable until the vote closes) |
+| `/twitch/mvp-poll/{poll_id}/end`, `/twitch/mvp-poll/{poll_id}/cancel` | POST | `live_config.js` | From 1.4.0, broadcaster-only: close the vote now, or end it with no result |
 | `/twitch/ping` | GET | `config.js` | Configuration page, Connection check: is the backend reachable (no Twitch token sent) |
 | `/twitch/check` | GET | `config.js` | Configuration page, Connection check: is the Twitch token accepted, and is the channel approved to set MVPs |
 
@@ -234,6 +238,23 @@ capped at 280 characters. No viewer names or usernames are ever posted. No other
 read, stored, or posted. This does not use Twitch Bits — "tokens" here
 are the Service's own internal, non-monetary virtual currency (see Monetization below), unrelated
 to Twitch Bits.
+
+### From version 1.4.0: MVP viewer vote
+
+Version 1.4.0 adds a viewer vote for the match MVP (see
+[MVP Poll for Watchers](twitch-mvp-viewer-poll.md)), which adds two messages, both counts only and
+never viewer names. Both are built in `backend/twitch_mvp_poll.py` (`open_chat_text`) and
+`backend/twitch.py` (`_mvp_chat_text` with `vote=`), use names cleaned by `chat_safe_name` (team
+names the same way) and are capped at 280 characters:
+
+| Case | Exact message |
+|---|---|
+| The broadcaster opens a vote | `MVP vote open for Team A vs Team B, game 1: vote in the Kana Cards panel. Closes in 2 min.` (1, 2 or 3 min) |
+| The broadcaster confirms the vote's winner | `Match MVP by viewer vote: PlayerName (60% of 5 votes)! 3 viewers received a token.` The part after `!` is the same drop sentence as in the table above |
+
+If the broadcaster confirms someone other than the vote's winner, the message is the plain
+`Match MVP: PlayerName!` one above. The 1.4.0 listing description quotes both new messages (see the
+[1.4.0 change log](#2026-11--version-140-change-log)).
 
 ## Monetization / loot-box compliance
 
@@ -351,6 +372,24 @@ progress: please contact support@kana-cards.com for a time when one is live.
    list shows "OK" for Package, Backend address, Backend reachable, Twitch token accepted and MVP
    selection; Package shows the version, 1.3.0. **Check again** reruns it.
 
+**Flow 6 — Broadcaster and viewers: MVP viewer vote (from version 1.4.0)**
+The vote posts two chat messages: one when it opens and the MVP message when the broadcaster
+confirms the result. Like Flow 2, no viewer names are posted.
+1. In the broadcaster browser, open the MVP tool (**Select match MVP**), pick a series and a match,
+   then **Start viewer vote**. Keep "2 min" and press **Open vote**.
+   **Expected:** chat shows `MVP vote open for <Team> vs <Team>, game <n>: vote in the Kana Cards panel. Closes in 2 min.`,
+   and the tool shows a countdown, the vote count, **End now** and **Cancel vote**.
+2. In the viewer browser (joined in Flow 1), the Live tab shows the "MVP vote" card with the
+   match's players. Pick a player and press **Vote**. **Expected:** "Vote saved." Pick another
+   player and press **Change vote** to change it. A viewer who has not joined sees "Join to vote."
+   and a new account sees "Your vote counts from <date>".
+3. Wait for the countdown to end, or press **End now** in the tool.
+   **Expected:** the panel shows each player's share and "Your pick"; the tool shows the result
+   with the winner selected and a chat preview.
+4. Press **Confirm MVP & Drop Tokens**. **Expected:** chat shows
+   `Match MVP by viewer vote: <PlayerName> (<pct>% of <N> votes)! N viewers received a token.`
+   **Cancel vote** instead ends the vote with no MVP and no message.
+
 ## Security fix made for this submission
 
 `live_config.js` (broadcaster MVP selection) built HTML by string-concatenating team and player
@@ -457,3 +496,38 @@ built 2026-10-26) with the new description pasted, Chat enabled on 1.3.0, and
 `TWITCH_EXTENSION_VERSION=1.3.0` on the EBS host. Open items and the paste-ready walkthrough:
 `markdown/plans/plan-issue-195-twitch-extension-resubmission.md`. Record the submission date and
 outcome here once known.
+
+### 2026-11 — Version 1.4.0 change log
+
+Planned for S17, after 1.3.0 passes review (issue #234). Not yet built or submitted: until then the
+header and checklist above stay on 1.3.0. For 1.4.0, build
+`bash twitch-extension/package.sh 1.4.0 --ebs-origin https://kana-cards.com`, set
+`TWITCH_EXTENSION_VERSION=1.4.0`, enable Chat on 1.4.0, paste the description below, and add Flow 6
+to the Testing Instructions.
+
+| File | Change |
+|---|---|
+| `live_config.html`, `live_config.js` | The match view offers **Pick MVP** or **Start viewer vote** (1, 2 or 3 minutes); the vote view shows a countdown, the vote count (refreshed every 5 s), **End now** and **Cancel vote**, then the result with the winner selected (a tie selects no one; no votes opens Pick MVP) and **Confirm MVP & Drop Tokens** |
+| `panel.html`, `panel.js` | "MVP vote" card at the top of the Live tab: the players by team, **Vote** / **Change vote**, "Join to vote." or "Your vote counts from <date>" for viewers who can't vote yet, the total count while open and each player's share once closed; PubSub `mvp_poll` messages |
+| `extension.css` | Styles for the vote card |
+
+New chat messages (both in the [chat disclosure](#from-version-140-mvp-viewer-vote)):
+
+- on open: `MVP vote open for Team A vs Team B, game 1: vote in the Kana Cards panel. Closes in 2 min.`
+- on confirming the vote's winner: `Match MVP by viewer vote: PlayerName (60% of 5 votes)! 3 viewers received a token.`
+
+**Description for 1.4.0** (replaces the one under Listing copy; under 1,000 characters):
+> **Twitch Chat:** the extension posts one message when the broadcaster confirms a match MVP, one of: "Match MVP: PlayerName! 3 viewers received a token." / "Match MVP: PlayerName! No tokens were dropped: no joined viewers were watching." / "Match MVP: PlayerName! No tokens were dropped: new accounts join drops 24 hours after joining." / "Match MVP: PlayerName!" (MVP changed, or drops off). After a viewer vote it starts "Match MVP by viewer vote: PlayerName (60% of 5 votes)!" instead. Opening a vote posts "MVP vote open for Team A vs Team B, game 1: vote in the Kana Cards panel. Closes in 2 min." No viewer names are posted. It posts nothing else and never reads, stores or moderates chat.
+>
+> Joining gives starter tokens; the MVP drop gives one token each to up to 20 joined viewers with the panel open, at random (no purchase or payment). Leave any time in Settings, which deletes your game data. Kana Cards never asks for your password.
+
+**Changes since the last review (1.4.0, paste into "Notes for reviewer"):**
+> Changes since version 1.3.0:
+> - The broadcaster can let viewers choose the match MVP: Start viewer vote in the MVP tool opens a
+>   1 to 3 minute vote, posts one chat message saying the vote is open, and shows the vote in the
+>   panel's Live tab. Joined viewers vote once and may change their vote until it closes. The
+>   broadcaster confirms the result, which posts the MVP message as before, now saying it was the
+>   viewers' vote. Flow 6 of the Testing Instructions shows it.
+> - Chat: two new messages, quoted in the description. Still no viewer names, and chat is never read.
+> - Data: a viewer's vote (their opaque Twitch id and the player) is kept 30 days, and deleted at
+>   once when they leave Kana Cards. The privacy policy says so.

@@ -126,6 +126,9 @@ claims**. See `reference/steam-login.md`.
 ### Twitch sub-tab and pending approvals badge (issue 214)
 Approved streamers, Twitch status and Twitch collection merges live in their own **Twitch** admin sub-tab, approvals first. The sub-tab button and the top-level Admin tab show the number of channels waiting for approval (`pending` from `GET /admin/twitch/channels`), fetched when an admin loads the page and after Approve or Reject; no badge at zero. See `reference/admin-enhancements.md`.
 
+### `POST /admin/twitch/notify-test` (issue 215)
+Admin with a recent re-authentication, rate-limited to 3 a minute. Sends a test streamer approval notification to every configured channel (Discord webhook, email to admins) and returns each outcome: `{"discord": "ok" | "off" | "error: <kind>", "email": …, "email_sent": n}`. The **Send test notification** button in Admin › Twitch › Twitch status calls it. Audited `admin_twitch_notify_test`. The week maintenance loop sends the real notifications on its own; see `reference/streamer-approval-notifications.md`.
+
 ---
 
 ## Token Distribution: Redeemable Codes
@@ -356,6 +359,8 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_tag_revoke` | Admin revoked a tag from a user |
 | `caster_tag_auto_grant` | The automatic Caster tag was given to a website account whose connected Twitch is an approved streamer channel (issue #201; actor `system`, `detail` is `user_id=… channel=…`) |
 | `caster_tag_auto_revoke` | An automatic Caster tag was removed (issue #201; actor `system`, `detail` is `user_id=… reason=channel_not_approved\|twitch_disconnected\|merge_reversed`) |
+| `twitch_approval_notified` | Admins were told about Twitch channels waiting for MVP approval (issue #215; actor `system`, `detail` is `channels=<count> via=discord,email`; never the webhook URL or addresses). See `reference/streamer-approval-notifications.md` |
+| `admin_twitch_notify_test` | Admin sent a test approval notification from Admin › Twitch (issue #215; `detail` has each channel's outcome and `email_sent=`; never the webhook URL or addresses) |
 | `admin_set_mvp` | Admin set match MVP via the Matches tab |
 | `admin_match_vod_set` | Admin set/edited/cleared a match's VOD link via the Matches tab |
 | `admin_match_retry_parse` | Admin retried a match's parse via the Matches tab (`detail` has the fetch result and outcome) |
@@ -370,6 +375,11 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_finals_paused` | Admin paused or resumed finals predictions |
 | `admin_finals_closed` | Admin closed finals predictions early |
 | `admin_finals_result_set` | Admin set a finals series winner |
+| `admin_team_signup_opened` | Admin opened a team signup period (`detail` has the label) |
+| `admin_team_signup_closed` | Admin closed the open team signup period |
+| `admin_team_signup_removed` | Admin removed a team signup listing (period label and team name) |
+| `admin_team_signup_cleared` | Admin cleared a period's team signup listings (recent re-auth) |
+| `team_signup_not_on_team` | A player removed their Steam-verified player from another captain's listing (the captain isn't told who) |
 | `admin_champions_set` | Admin saved a season and division's champion set (Mark champions); detail has added and removed counts |
 | `admin_accolade_added` | Admin added one or more season accolades (also written once per season by `backfill_played.py`) |
 | `admin_accolade_updated` | Admin edited a season accolade |
@@ -423,7 +433,8 @@ These features have dedicated reference documents:
 | Player Pool Management | `GET/POST /admin/players/*` | `reference/admin-player-pool.md` |
 | Player Name Lookup | `GET /admin/players/lookup?ids=…` (name preview for typed ids: pool, then OpenDota, cached 10 minutes; at most 50 ids) | `reference/admin-enhancements.md` |
 | User Tags | `GET/POST/DELETE /admin/tags`, `POST/DELETE /admin/users/{id}/tags/{tag_id}` | `reference/user-tag-system.md` |
-| League Monitoring | `GET/POST/DELETE /admin/leagues/*` | `reference/monitored-leagues-admin.md` |
+| League Monitoring | `GET/POST/DELETE /admin/leagues/*`, `GET /admin/opendota-status` (OpenDota health and each league's last ingest check) | `reference/monitored-leagues-admin.md` |
+| Team signup | `GET /admin/team-signup`, `POST /admin/team-signup/period`, `POST /admin/team-signup/period/close`, `DELETE /admin/team-signup/{id}`, `GET /admin/team-signup/export.csv`, `GET /admin/team-signup/export.json`, `POST /admin/team-signup/clear` | `core/team-signup.md` |
 | Token Grant Events | `GET/POST/DELETE /admin/token-grant-events` | `reference/token-grant-event.md` |
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |

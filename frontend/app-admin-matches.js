@@ -760,6 +760,20 @@ function renderAddMatchPreview(p) {
   document.getElementById('addMatchStoreBtn').disabled = false;
 }
 
+// The server gives up on OpenDota within about 35 s (issue: Add match stuck on Loading);
+// the browser stops waiting after 60 s in case a proxy holds the request open.
+const _ADD_MATCH_TIMEOUT_MS = 60000;
+const _ADD_MATCH_TIMEOUT_TEXT = 'No answer from the server after 60 s. OpenDota may be slow or rate-limiting; '
+  + 'Settings › Season › League Management shows its status. Try again in a minute.';
+
+function _addMatchSignal() {
+  return typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(_ADD_MATCH_TIMEOUT_MS) : undefined;
+}
+
+function _addMatchError(e) {
+  return e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? _ADD_MATCH_TIMEOUT_TEXT : (e && e.message) || 'Request failed';
+}
+
 async function previewAddMatch() {
   let body;
   try {
@@ -778,6 +792,7 @@ async function previewAddMatch() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: _addMatchSignal(),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -788,7 +803,7 @@ async function previewAddMatch() {
     renderAddMatchPreview(data);
     setStatus('addMatchStatus', '');
   } catch (e) {
-    setStatus('addMatchStatus', e.message, false);
+    setStatus('addMatchStatus', _addMatchError(e), false);
   }
 }
 
@@ -815,6 +830,7 @@ async function storeAddMatch(confirmReplace = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ..._addMatchBody, league_id: leagueId, radiant_team_id: radiantId,
                              dire_team_id: direId, confirm: confirmReplace }),
+      signal: _addMatchSignal(),
     });
     const data = await res.json().catch(() => ({}));
     if (res.status === 409 && !confirmReplace && /Confirm to replace/.test(data.detail || '')) {
@@ -833,6 +849,6 @@ async function storeAddMatch(confirmReplace = false) {
       `Match ${data.match_id} ${data.replaced ? 'replaced' : 'added'} as ${_SOURCE_CHIPS[data.source] || data.source}${partial}`);
   } catch (e) {
     btn.disabled = false;
-    setStatus('addMatchStatus', e.message, false);
+    setStatus('addMatchStatus', _addMatchError(e), false);
   }
 }
