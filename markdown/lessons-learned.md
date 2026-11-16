@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-16 — ship — testing
+**Problem:** A barrier-released threaded test (`test_issue_185`'s concurrent soft-account merges) passed every local run but failed twice in a row on CI: on a slow runner the second thread started after the first one committed, so `s.get(User, soft_id)` was `None` and the helper crashed with `AttributeError` instead of the expected `SoftAccountGone`.
+**Solution:** In a concurrency test, handle the "other thread already finished" state the way the production caller does (here `merge_confirm`'s 404 for a missing soft account). To reproduce, add a random `time.sleep` before each thread's first read.
+
 ### 2026-11-15 — developer — testing
 **Problem:** Adding a panel to Admin › Settings (issue 250's Check Points) failed only in the full suite: `test_issue_214` pins each section's panel titles, the total panel count, and that the danger action (Recalculate, Reset Season) is the last button of its section.
 **Solution:** Put a new Settings panel before the section's danger panel, and extend the title set and the panel count in `test_issue_214_admin_enhancements.py` together.

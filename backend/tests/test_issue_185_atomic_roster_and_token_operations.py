@@ -1383,6 +1383,10 @@ class TestSecurityReviewFollowUps:
             s = Factory()
             try:
                 soft_row, full_row = s.get(User, soft_id), s.get(User, full_id)
+                if soft_row is None:
+                    # This thread started after the other merge committed (a slow CI
+                    # runner); merge_confirm answers 404 here, before merge_soft_into.
+                    return "gone"
                 try:
                     soft_accounts.merge_soft_into(s, soft_row, full_row)
                     s.commit()
