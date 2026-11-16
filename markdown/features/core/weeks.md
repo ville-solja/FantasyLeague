@@ -70,10 +70,10 @@ Only matches assigned to the week contribute: those played during the week's win
 ## Leaderboards
 
 ### Season Leaderboard (`GET /leaderboard/season`)
-Aggregates points from the counted roster entries of every locked week across the season (after bench substitution: active entries not subbed out, plus subbed-in bench entries). Each user's score is the sum of their weekly points from all locked weeks combined. Each card chip carries `"scope": "season"` and shows the card's total over every locked week in which it was counted; the frontend labels it as season points.
+Aggregates points from the counted roster entries of every locked week across the season (after bench substitution: active entries not subbed out, plus subbed-in bench entries). Each user's score is the sum of their weekly points from all locked weeks combined. Each card chip carries `"scope": "season"` and `games` (the number of games behind its points, #250), and shows the card's total over every locked week in which it was counted; the frontend labels it as season points.
 
 ### Weekly Leaderboard (`GET /leaderboard/weekly?week_id=N`)
-Points for a single specified week only, using the counted entries of that week's snapshot (after any bench substitution).
+Points for a single specified week only, using the counted entries of that week's snapshot (after any bench substitution). Each card chip has `games`, the number of games its week points add up; the frontend shows `86.3 · 4 games` (see `reference/weekly-points-clarity.md`).
 
 ### Player Performance Leaderboard (`GET /leaderboard`)
 Shows individual Dota players ranked by average fantasy points per match, across all ingested matches in the season. Not tied to user rosters.
@@ -81,8 +81,8 @@ Shows individual Dota players ranked by average fantasy points per match, across
 ### Roster Value Leaderboard (`GET /leaderboard/roster`)
 Shows users ranked by the total all-time fantasy points of their currently active cards. Unlike the season leaderboard, this uses the current active roster rather than locked snapshots and is not scoped to any week.
 
-### Top Single-Match Performances (`GET /top`)
-Returns the 10 highest individual fantasy point scores from a single match across all ingested data, regardless of week or user roster. Each entry shows the player, their avatar, and the raw `fantasy_points` value for that match. No authentication required. Used by the frontend to surface standout performances on the leaderboard tab.
+### Best Single Games (`GET /top`)
+Returns the 10 highest individual fantasy point scores from a single match across all ingested data, regardless of week or user roster. Each entry has the player, their avatar, the raw `fantasy_points` for that match, and (since #250) `match_id`, `start_time` and `opponent` (the other team's name, or null). No authentication required. Shown as **Best single games** on the Players tab, with each game's date and opponent; see `reference/weekly-points-clarity.md`.
 
 ## Week Override
 

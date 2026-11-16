@@ -17,10 +17,10 @@ Tester accounts and Twitch viewer soft accounts (players who joined in the Twitc
 
 Card rarity modifiers are applied to points in both views (e.g. a Legendary card gets +3% on top of raw stats).
 
-In the Weekly view, clicking a row expands that user's card chips: rarity, player name and the card's points for that week, the same stored week value My Team shows. The Season view shows totals only and does not expand into chips. The API rounds each card value and each user total once, to 1 decimal, each from its own exact sum (see `markdown/features/reference/points-rounding.md`), and the page shows that value as is. So the chips can add up to a slightly different number than the total (typically 0.1); a one-line note under the chips says "Totals are rounded from exact points, so card values may differ by 0.1 in sum."
+In the Weekly view, clicking a row expands that user's card chips: rarity, player name, the card's points for that week (the same stored week value My Team shows) and the number of games behind them, e.g. `86.3 · 4 games` or `21.1 · 1 game` (issue #250). The chip's tooltip reads "Glete (common): 86.3 points from 4 games this week". The Season view shows totals only and does not expand into chips. The API rounds each card value and each user total once, to 1 decimal, each from its own exact sum (see `markdown/features/reference/points-rounding.md`), and the page shows that value as is. A one-line note under the chips says "Card points are the week's total over every game the player played, rounded from exact points."
 
 ## Past seasons panel
 
 Panel `#pastSeasonsPanel` with the heading "Past Seasons" and a season dropdown (`#pastSeasonSelect`) listing archived seasons. Shows the selected season's final standings. Columns: Rank, User, Points. Hidden when there are no archived seasons or when loading the list fails. The selected season stays selected when the tab refreshes. A failed standings load shows the error in `#pastSeasonStatus`.
 
-The Player average performance and Single match performance panels are on the Players tab; see `players.md`.
+The Player average performance and Best single games panels are on the Players tab; see `players.md`.

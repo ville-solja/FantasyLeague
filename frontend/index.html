@@ -830,7 +830,8 @@
       </div>
 
       <div class="panel">
-        <h2>Single match performance</h2>
+        <h2>Best single games</h2>
+        <p class="panel-subline">One game each, this season</p>
         <button class="secondary" onclick="loadTop()" style="margin-bottom:12px;">Refresh</button>
         <table>
           <thead><tr><th>Rank</th><th>Player</th><th>Fantasy pts</th></tr></thead>
@@ -1483,6 +1484,21 @@
             <tbody id="weightsBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
           </table>
           <div class="status" id="weightsStatus"></div>
+        </div>
+
+        <div class="panel admin-panel">
+          <div class="admin-panel-head">
+            <div class="admin-panel-heading">
+              <h3 class="admin-panel-title">Check Points</h3>
+              <p class="admin-panel-desc">Recomputes a week's card points from the stored stats and compares them with the stored values. Writes nothing.</p>
+            </div>
+          <div class="admin-panel-actions">
+            <select id="pointsCheckWeekSelect" aria-label="Week to check"></select>
+            <button id="pointsCheckBtn" class="secondary" onclick="checkPoints()">Check points</button>
+          </div>
+          </div>
+          <div id="pointsCheckResult"></div>
+          <div class="status" id="pointsCheckStatus"></div>
         </div>
 
         <div class="panel admin-panel">

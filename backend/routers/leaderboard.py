@@ -74,6 +74,7 @@ def _leaderboard_rows(db, rows, scope: str | None = None) -> list[dict]:
             "card_type": r.card_type,
             "player_name": r.player_name or "",
             "points": display_points(card_pts),
+            "games": int(r.match_count),
         }
         if scope:
             chip["scope"] = scope
@@ -97,7 +98,9 @@ _STORED_POINT_SUMS = (
 
 def top_performance_rows(db, limit: int = 10, match_ids: list[int] | None = None) -> list[dict]:
     """Best single-match fantasy performances, best first. Shared by GET /top and the
-    Twitch panel's GET /twitch/panel, which passes the latest matches' ids (issue #157)."""
+    Twitch panel's GET /twitch/panel, which passes the latest matches' ids (issue #157).
+    Each row carries its match_id, start_time and opponent: the name of the team on the
+    other side from the stat row's team_id, or None when either team is unknown (#250)."""
     if match_ids is not None and not match_ids:
         return []
     params: dict = {"limit": limit}
@@ -107,9 +110,14 @@ def top_performance_rows(db, limit: int = 10, match_ids: list[int] | None = None
         params.update({k: int(v) for k, v in zip(keys, match_ids)})
         match_filter = f"AND s.match_id IN ({', '.join(':' + k for k in keys)})"
     results = db.execute(text(f"""
-        SELECT p.id, p.name, p.avatar_url, s.fantasy_points
+        SELECT p.id, p.name, p.avatar_url, s.fantasy_points, s.match_id, m.start_time,
+               ot.name AS opponent
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
+        LEFT JOIN matches m ON m.match_id = s.match_id
+        LEFT JOIN teams ot ON ot.id = CASE
+            WHEN s.team_id = m.radiant_team_id THEN m.dire_team_id
+            WHEN s.team_id = m.dire_team_id THEN m.radiant_team_id END
         WHERE {scored_stat_sql()} {match_filter}
         ORDER BY s.fantasy_points DESC
         LIMIT :limit

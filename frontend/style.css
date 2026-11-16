@@ -365,6 +365,9 @@ tr:has(+ .lb-card-detail:not(.hidden)) .lb-chevron {
   font-size: var(--fs-xs);
 }
 .lb-chip-pts { font-weight: var(--w-bold); opacity: 0.9; }
+.lb-chip-games { opacity: 0.75; font-size: var(--fs-xs); }
+.panel-subline { margin: -6px 0 12px; font-size: var(--fs-xs); color: var(--fg-dim); }
+.top-game-meta { font-size: var(--fs-xs); color: var(--fg-dim); margin-top: 2px; }
 .lb-rounding-note { margin-top: 6px; font-size: var(--fs-xs); color: var(--fg-dim); }
 .lb-chip-rarity {
   font-weight: var(--w-bold);

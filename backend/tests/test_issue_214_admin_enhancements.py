@@ -1259,7 +1259,7 @@ def test_settings_sections_hold_listed_panels():
     expected = {
         "season": {"League Management", "Season Lifecycle", "Refresh Schedule Cache",
                    "Season Finals", "Team signup"},  # issues #237, #220
-        "scoring": {"Scoring Weights", "Recalculate Fantasy Points"},
+        "scoring": {"Scoring Weights", "Check Points", "Recalculate Fantasy Points"},  # #250: Check Points
         "tokens": {"Promo Codes", "Token Grant Events"},
         "announcements": {"Notifications"},
         "players": {"Tag Definitions", "Re-enrich Player Profiles"},
@@ -1320,7 +1320,7 @@ def test_settings_panels_have_consistent_header():
     """Source-reading: every Settings panel has a title, a one-line description and its primary action in a shared header element."""
     tab = _settings()
     panels = re.split(r'<div class="panel admin-panel"', tab)[1:]
-    assert len(panels) == 13  # issue #237 added Season Finals, issue #220 Team signup
+    assert len(panels) == 14  # issue #237 added Season Finals, issue #220 Team signup, #250 Check Points
     for p in panels:
         head = p[p.index('<div class="admin-panel-head">'):p.index('<div class="admin-panel-head">') + 1500]
         assert re.search(r'<h3 class="admin-panel-title">[^<]+</h3>\s*<p class="admin-panel-desc">[^\n]+</p>', head), p[:200]

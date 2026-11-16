@@ -27,6 +27,14 @@ Six destructive actions also ask the admin to type the action's name (issue #150
 
 - **Refresh** button — busts the in-memory schedule cache and re-fetches the Google Sheets CSV. Use after the sheet is updated between match weeks.
 
+## Check Points panel
+
+- Week picker (`#pointsCheckWeekSelect`): the locked weeks, defaulting to the latest. **Check points** (`#pointsCheckBtn`) calls `GET /admin/points-check?week_id=…` (issue #250).
+- Recomputes each rostered card's points for the week's games and compares them with the stored card points. Writes nothing.
+- All match: the status line reads "All N card points match. C cards, G games checked in <week>."
+- Mismatches: a table (User, Card as player and rarity, Match, Stored, Fresh; "—" for a missing value) and a red status line pointing to **Recalculate Fantasy Points** to fix them.
+- No locked weeks: the button is disabled and the status line says so.
+
 ## Recalculate Fantasy Points panel
 
 - **Recalculate** button — re-applies the current scoring weights to all stored player match stats without re-fetching from OpenDota, then rebuilds every stored per-match card point (`card_match_points`). The response includes `recalculated` (stat rows) and `card_points` (stored card-point rows written), and the status line shows both counts. If the card-point rebuild fails, the recalculated stats are kept, the previous card points stay, and the status line shows the error. Use after adjusting weights.
@@ -74,7 +82,7 @@ Opening, closing, removing and clearing are audited (`admin_team_signup_opened`,
 
 ## Settings tab (issue 214)
 
-Six sections, each a heading with its panels: **Season** (League Management, Refresh Schedule Cache, Season Finals, Team signup, Season Lifecycle), **Scoring** (Scoring Weights, Recalculate Fantasy Points), **Tokens and rewards** (Promo Codes, Token Grant Events), **Announcements** (Notifications), **Players and tags** (Tag Definitions, Re-enrich Player Profiles) and **Maintenance** (Database Backups, Demo Mode).
+Six sections, each a heading with its panels: **Season** (League Management, Refresh Schedule Cache, Season Finals, Team signup, Season Lifecycle), **Scoring** (Scoring Weights, Check Points, Recalculate Fantasy Points), **Tokens and rewards** (Promo Codes, Token Grant Events), **Announcements** (Notifications), **Players and tags** (Tag Definitions, Re-enrich Player Profiles) and **Maintenance** (Database Backups, Demo Mode).
 
 - A section nav sits on the left and stays in view while scrolling (sticky); at phone width it becomes a row of chips above the sections. Selecting a section scrolls to it and marks it selected; the browser remembers the last one and Settings opens there next time.
 - Every panel has the same header: title, a one-line description and its primary action on the right (Refresh where the panel has no other action).

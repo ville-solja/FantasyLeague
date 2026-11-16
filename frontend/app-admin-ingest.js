@@ -71,6 +71,72 @@ async function recalculate() {
   }
 }
 
+// Issue #250: read-only check of a week's stored card points (GET /admin/points-check).
+async function loadPointsCheckWeeks() {
+  const sel = document.getElementById("pointsCheckWeekSelect");
+  if (!sel) return;
+  try {
+    const res = await fetch(`${API}/weeks`);
+    const weeks = await res.json();
+    if (!res.ok) return setStatus("pointsCheckStatus", weeks.detail || "Failed to load weeks", false);
+    const locked = weeks.filter(w => w.is_locked);
+    const prev = sel.value;
+    sel.innerHTML = locked.map(w => `<option value="${Number(w.id)}">${_escHtml(w.label)}</option>`).join("");
+    if (prev && locked.some(w => String(w.id) === prev)) sel.value = prev;
+    else if (locked.length) sel.value = String(locked[locked.length - 1].id);  // latest locked week
+    const btn = document.getElementById("pointsCheckBtn");
+    if (btn) btn.disabled = !locked.length;
+    if (!locked.length) setStatus("pointsCheckStatus", "No locked weeks to check yet", false);
+  } catch (e) {
+    setStatus("pointsCheckStatus", e.message, false);
+  }
+}
+
+function _pointsCheckValue(v) {
+  return v === null || v === undefined ? "—" : _escHtml(String(v));
+}
+
+function _renderPointsCheck(data) {
+  const box = document.getElementById("pointsCheckResult");
+  const summary = `${data.cards} cards, ${data.games} games checked in ${data.week.label}.`;  // shown via setStatus (textContent)
+  if (!data.mismatches.length) {
+    box.innerHTML = "";
+    setStatus("pointsCheckStatus", `All ${data.checked} card points match. ${summary}`, true);
+    return;
+  }
+  const rows = data.mismatches.map(m => `<tr>
+      <td>${_escHtml(m.user || "")}</td>
+      <td>${_escHtml(m.player || "")} (${_escHtml(m.card_type || "")})</td>
+      <td>${Number(m.match_id)}</td>
+      <td>${_pointsCheckValue(m.stored)}</td>
+      <td>${_pointsCheckValue(m.fresh)}</td>
+    </tr>`).join("");
+  box.innerHTML = `<table>
+      <thead><tr><th>User</th><th>Card</th><th>Match</th><th>Stored</th><th>Fresh</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  setStatus("pointsCheckStatus", `${data.mismatches.length} of ${data.checked} card points differ. ${summary} Run Recalculate Fantasy Points to fix them.`, false);
+}
+
+async function checkPoints() {
+  const sel = document.getElementById("pointsCheckWeekSelect");
+  const weekId = parseInt(sel && sel.value, 10);
+  if (!Number.isFinite(weekId)) return setStatus("pointsCheckStatus", "Pick a week first", false);
+  const btn = document.getElementById("pointsCheckBtn");
+  if (btn) btn.disabled = true;
+  setStatus("pointsCheckStatus", "Checking...");
+  try {
+    const res = await fetch(`${API}/admin/points-check?week_id=${weekId}`);
+    const data = await res.json();
+    if (!res.ok) return setStatus("pointsCheckStatus", data.detail || "Check failed", false);
+    _renderPointsCheck(data);
+  } catch (e) {
+    setStatus("pointsCheckStatus", e.message, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function enrichProfiles() {
   const btn = document.getElementById("enrichBtn");
   if (btn) btn.disabled = true;

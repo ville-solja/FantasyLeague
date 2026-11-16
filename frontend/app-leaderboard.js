@@ -33,12 +33,17 @@ function _lbStandingsRow(r, i, ptsKey, showCards = true) {
   </tr>`;
   if (!hasCards) return mainRow;
   const rarityAbbrev = { common: "C", rare: "R", epic: "E", legendary: "L" };
-  const breakdown = cards.map(c =>
-    `<span class="lb-card-chip ${_escHtml(c.card_type)}"><span class="lb-chip-rarity" title="${_escHtml(c.card_type)}">${rarityAbbrev[c.card_type] || "?"}</span> ${_escHtml(c.player_name)} <span class="lb-chip-pts">${Number(c.points).toFixed(1)}</span></span>`
-  ).join("");
+  // Issue #250: each chip says how many games its week total covers.
+  const breakdown = cards.map(c => {
+    const cardPts = Number(c.points).toFixed(1);
+    const games = Number(c.games) || 0;
+    const gamesText = `${games} ${games === 1 ? "game" : "games"}`;
+    const tip = `${c.player_name} (${c.card_type}): ${cardPts} points from ${gamesText} this week`;
+    return `<span class="lb-card-chip ${_escHtml(c.card_type)}" title="${_escHtml(tip)}"><span class="lb-chip-rarity" title="${_escHtml(c.card_type)}">${rarityAbbrev[c.card_type] || "?"}</span> ${_escHtml(c.player_name)} <span class="lb-chip-pts">${cardPts}</span> <span class="lb-chip-games">· ${gamesText}</span></span>`;
+  }).join("");
   const detailRow = `<tr class="lb-card-detail hidden${isMe ? " row-self" : ""}" id="lb-detail-${r.id}">
     <td colspan="3"><div class="lb-card-breakdown">${breakdown}</div>
-      <div class="lb-rounding-note">Totals are rounded from exact points, so card values may differ by 0.1 in sum.</div></td>
+      <div class="lb-rounding-note">Card points are the week's total over every game the player played, rounded from exact points.</div></td>
   </tr>`;
   return mainRow + detailRow;
 }
@@ -181,12 +186,19 @@ async function loadTop() {
     const res = await fetch(`${API}/top`);
     const rows = await res.json();
     if (!res.ok) throw new Error(rows.detail || "Failed to load");
-    renderIfChanged(document.getElementById("topBody"), rows.map((r, i) => `
+    // Issue #250: each row is one game, so it shows that game's date and opponent.
+    renderIfChanged(document.getElementById("topBody"), rows.map((r, i) => {
+      const d = r.start_time ? new Date(r.start_time * 1000) : null;
+      const date = d ? `${d.getDate()}.${d.getMonth() + 1}.` : "";
+      const vs = r.opponent ? `vs ${_escHtml(r.opponent)}` : "";
+      const game = [date, vs].filter(Boolean).join(" ");
+      return `
       <tr>
         <td>${i + 1}</td>
-        <td><img draggable="false" src="${_imgSrc(r.avatar_url)}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}</td>
+        <td><img draggable="false" src="${_imgSrc(r.avatar_url)}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'" />${playerLink(r.id, r.name)}${game ? `<div class="top-game-meta">${game}</div>` : ""}</td>
         <td>${Number(r.fantasy_points).toFixed(1)}</td>
-      </tr>`).join(""));
+      </tr>`;
+    }).join(""));
     setStatus("topStatus", "");
   } catch (e) {
     setStatus("topStatus", e.message, false);

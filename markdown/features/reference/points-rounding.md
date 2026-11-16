@@ -10,7 +10,7 @@ Every points number the app shows is rounded once, on the server, by one rule, s
 
 - Stored values (`card_match_points.points`, `player_match_stats.fantasy_points`) stay exact. The one exception is `season_archive.points`: End Season stores the already-rounded one-decimal standings. Archives made before this change hold two-decimal values and are re-rounded when read.
 - `GET /leaderboard/roster` (`roster_value`) is deliberately left unrounded: no page reads it.
-- A total is rounded from its exact sum, not added up from rounded card values. A list of card values can therefore differ from its total, typically by 0.1. The weekly leaderboard says so in a note under each user's card chips, and the How to Play scoring section says it once.
+- A total is rounded from its exact sum, not added up from rounded card values. A list of card values can therefore differ from its total, typically by 0.1. The How to Play scoring section says so once. The weekly leaderboard's note under each user's card chips now reads "Card points are the week's total over every game the player played, rounded from exact points." (#250), and each chip shows its number of games.
 - The frontend formats the server's value with `Number(x).toFixed(1)` and never rounds it any other way. On an already-rounded number, `toFixed(1)` only formats.
 
 ## Where it is applied

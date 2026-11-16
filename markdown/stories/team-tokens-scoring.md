@@ -566,7 +566,7 @@ As a player, I want every points number in the app and the Twitch panel rounded 
 As a player, I want to know why my cards' values don't always add up exactly to my total so that a 0.1 difference isn't confusing.
 
 **Acceptance criteria**
-- Where the leaderboard lists a user's cards under their total, a one-line note reads "Totals are rounded from exact points, so card values may differ by 0.1 in sum"
+- Where the leaderboard lists a user's cards under their total, a one-line note reads "Totals are rounded from exact points, so card values may differ by 0.1 in sum" (issue #250 rewords this note to "Card points are the week's total over every game the player played, rounded from exact points."; the How to Play note keeps the original wording)
 - The How to Play scoring section has the same note once
 
 ## Weekly Report Roster Panel and Aesthetics

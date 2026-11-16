@@ -14,7 +14,7 @@ When a broadcaster selects the MVP of a match via the Twitch extension, the desi
 
 The bonus affects `player_match_stats.fantasy_points` directly, so it propagates automatically
 into queries that read that column: player match history (`GET /players/{player_id}`), the
-player-performance browser and Top Single-Match Performances (`GET /leaderboard`, `GET /top`).
+player-performance browser and Best single games (formerly Top Single-Match Performances; `GET /leaderboard`, `GET /top`).
 
 **It also reaches card, roster, weekly-leaderboard, and season-leaderboard totals.** Since
 issue #141 those totals are sums of stored per-match card points (`card_match_points`, see

@@ -48,6 +48,7 @@ can spot which players are having exceptional games.
 - `GET /top` returns the 10 highest single-match fantasy point scores across all ingested
   data, regardless of week or user roster
 - Each entry shows the player, avatar, and the raw fantasy points for that match
+- Since #250 the panel is titled **Best single games** and each entry also shows the game's date and opponent (see "Weekly Points Clarity and a Points Check" below)
 - No authentication required
 
 ---
@@ -303,3 +304,41 @@ As a player, I want a player's accolades listed with their details in the player
 - **Seasons played:** a line "Played 7 seasons · S4–S16" with the per-season list (and the live season's match count) behind a disclosure.
 - **Empty:** a player with no accolades shows no section, as today.
 - **Phone width:** no sideways scroll.
+
+
+## Weekly Points Clarity and a Points Check (#250)
+
+Plan: `markdown/plans/plan-issue-250-weekly-points-clarity.md`. Production check (2026-11-15): counting is correct; a week total sums several games.
+
+### A Card's Week Points Say How Many Games They Cover
+**User story**
+As a player looking at the weekly standings, I want each card's points to show how many games they add up, so that a week total higher than any single game doesn't look like a mistake.
+
+**Acceptance criteria**
+- **Count:** each card chip in the weekly standings shows its points and its number of games in the week, for example `86.3 · 4 games` or `21.1 · 1 game`. A card with no games isn't shown, as today.
+- **Tooltip:** the chip's tooltip reads "<player> (<rarity>): <points> points from <N> games this week" ("1 game" for a single game).
+- **Footnote:** the expanded row's note reads "Card points are the week's total over every game the player played, rounded from exact points."
+- **API:** `GET /leaderboard/weekly` returns `games` on each card (the existing `match_count`), and the numbers are unchanged.
+
+### The Single-Game Panel Reads as Single Games
+**User story**
+As a player, I want the single-match leaderboard to show which game each score came from, so that I don't compare it with week totals.
+
+**Acceptance criteria**
+- **Heading:** the panel's heading is **Best single games**, with the sub-line "One game each, this season".
+- **Rows:** each row shows rank, player, the date (`14.11.`) and the opponent ("vs Elisa Oyj"), and the points.
+- **API:** `GET /top` adds `match_id`, `start_time` and `opponent` (the other team's name, or null) to each row, and the order and points are unchanged. The Twitch panel, which uses the same function, keeps working.
+
+### An Admin Can Check That Stored Points Add Up
+**User story**
+As an admin, I want to check a week's stored card points against a fresh calculation, so that I can answer "is the counting right?" without reading the database.
+
+**Acceptance criteria**
+- **Run:** Admin › Settings › Scoring has **Check points** with a week picker (default: the latest locked week). It calls `GET /admin/points-check?week_id=…`.
+- **Result:**
+  - the number of rostered cards and games checked;
+  - each card and game where the stored value and the fresh calculation differ by more than 0.05: user, card (player, rarity), match id, stored and fresh values;
+  - or "All N card points match", where N counts the card-and-game values compared.
+- **Writes nothing:** a mismatch is only reported. The panel points to **Recalculate Fantasy Points** to fix it.
+- **Admin only:** `403` for non-admins. Rate-limited like other admin reads.
+- **Bounded:** it checks only cards on that week's rosters. An unknown week returns `404`.

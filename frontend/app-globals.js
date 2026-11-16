@@ -218,7 +218,7 @@ function switchTab(name) {
   if (name === "finals")        loadFinals();
   if (name === "teamfinder")    loadTeamFinder();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); if (typeof loadAdminTeamSignup === "function") loadAdminTeamSignup(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadPointsCheckWeeks(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); if (typeof loadAdminTeamSignup === "function") loadAdminTeamSignup(); }
 }
 
 /**

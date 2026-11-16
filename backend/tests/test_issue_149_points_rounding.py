@@ -449,6 +449,8 @@ def test_frontend_has_no_other_points_rounding():
 # ---------------------------------------------------------------------------
 
 _FOOTNOTE = "Totals are rounded from exact points, so card values may differ by 0.1 in sum"
+# Issue #250 reworded the leaderboard card-list note; the How to Play note keeps _FOOTNOTE.
+_LB_FOOTNOTE = "Card points are the week's total over every game the player played, rounded from exact points."
 
 
 def _standings_row_source() -> str:
@@ -468,16 +470,16 @@ def test_leaderboard_card_list_has_rounding_footnote():
     """AC: where app-leaderboard.js lists a user's cards under their total (the card detail row), the one-line footnote text appears."""
     src = _standings_row_source()
     detail = src[src.index("const detailRow"):]
-    assert _FOOTNOTE in detail
+    assert _LB_FOOTNOTE in detail
 
 
 def test_leaderboard_footnote_not_shown_without_card_list():
     """AC (failure path): the footnote is only in the card-list branch (after `if (!hasCards) return mainRow;`), so rows without cards, e.g. the season standings, show no note."""
     src = _standings_row_source()
     guard = src.index("if (!hasCards) return mainRow;")
-    assert _FOOTNOTE not in src[:guard]
+    assert _LB_FOOTNOTE not in src[:guard]
     lb = (FRONTEND / "app-leaderboard.js").read_text()
-    assert lb.count(_FOOTNOTE) == 1
+    assert lb.count(_LB_FOOTNOTE) == 1
     # Season standings pass showCards=false, so their rows never reach the card list.
     assert '_lbStandingsRow(r, i, "season_points", false)' in lb
 

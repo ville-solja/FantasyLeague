@@ -67,6 +67,12 @@ Rounding: stored `points` and all sums are unrounded. Every reader (weekly and s
 
 Each reader runs a fixed number of queries regardless of users and cards: weekly 3, season 2, My Team 5.
 
+Card chips from both leaderboards also carry `games`, the number of scored games behind the chip's points (issue #250).
+
+### Checking: `card_points.check_week`
+
+`check_week(db, week_id)` recomputes the points of every card counted on the week's rosters, for the week's scored games, with `_compute`, and compares them with the stored rows. Differences above 0.05, and pairs present on only one side, are reported; it writes nothing. Admins run it from Admin › Settings › Scoring › **Check Points** (`GET /admin/points-check?week_id=…`). See [Weekly Points Clarity](weekly-points-clarity.md).
+
 ## Endpoints
 
 ### `POST /recalculate` (admin)
@@ -79,6 +85,9 @@ Recomputes every `player_match_stats.fantasy_points` and commits them, then call
 `card_points` is the number of stored rows written. The `admin_recalculate` audit entry records both counts. The Admin panel's status line shows both.
 
 If `rebuild_all` fails, the recalculated `fantasy_points` stay committed, the previous stored card points are kept (the rebuild rolls back its own transaction), the audit entry records `card_points=failed`, and the endpoint returns 500 with a message saying so. Run Recalculate again once the cause is fixed.
+
+### `GET /admin/points-check?week_id=…` (admin)
+Read-only comparison of a week's stored card points with a fresh calculation; `404` for an unknown week. See [Weekly Points Clarity](weekly-points-clarity.md#endpoints).
 
 ## Startup check and logs
 

@@ -25,7 +25,7 @@ Table of all players who have participated in any ingested league. Sortable colu
 ## Right-hand panels
 
 - **Player average performance** — top 10 by average fantasy points, with a "Show all" toggle. The toggle state and the main table's sort column stay when the tab refreshes.
-- **Single match performance** — top 10 single-match fantasy point scores.
+- **Best single games** — sub-line "One game each, this season"; the top 10 single-game fantasy point scores of the season. Each row shows rank, player, the game's date (`14.11.`) and opponent ("vs Elisa Oyj", omitted when the team is unknown) under the name, and the points (issue #250).
 - **MVP leaderboard** — players ranked by `mvp_count` (highest first), players with zero MVPs
   omitted. Derived client-side from the same data already fetched for the main Players panel
   (no separate endpoint or Refresh button — refreshing the Players panel refreshes this too).
