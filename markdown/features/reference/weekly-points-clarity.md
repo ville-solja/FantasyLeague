@@ -8,7 +8,7 @@ Makes it clear that a card's weekly points are a total over several games, label
 
 Issue #250 asked whether points count correctly. A production check on 2026-11-15 showed they do:
 - **Four games per player:** the Final week held four games for each player. Glete's common card, 86.3, is 13.9 + 15.2 + 30.8 + 26.5 from exact points.
-- **Single Match Performance** is each player's best single game; Glete's is 30.8.
+- **Single Match Performance** lists the season's top 10 single games (one stat row each, so a player can appear more than once); Glete's best is 30.8.
 
 Nothing in the UI said so, which made the two views look inconsistent.
 
