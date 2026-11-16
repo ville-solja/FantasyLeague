@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-16 — developer — frontend
+**Problem:** Resetting My Team's week pick in code (`_rosterWeekId = null`, then `_renderWeekSelector()`, issue 249) left the `<select>` on the old week: the markup was unchanged, so `renderIfChanged` wrote nothing and the DOM kept the player's selection.
+**Solution:** When code changes which option should be selected, set `sel.value` as well; `selected` in markup passed to `renderIfChanged` only applies when the markup differs.
+
 ### 2026-11-16 — ship — testing
 **Problem:** A barrier-released threaded test (`test_issue_185`'s concurrent soft-account merges) passed every local run but failed twice in a row on CI: on a slow runner the second thread started after the first one committed, so `s.get(User, soft_id)` was `None` and the helper crashed with `AttributeError` instead of the expected `SoftAccountGone`.
 **Solution:** In a concurrency test, handle the "other thread already finished" state the way the production caller does (here `merge_confirm`'s 404 for a missing soft account). To reproduce, add a random `time.sleep` before each thread's first read.

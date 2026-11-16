@@ -28,7 +28,7 @@ Frontend only: no endpoint, env var or database change.
 | Loader | Elements | Notes |
 |---|---|---|
 | `loadRoster` (`app-roster.js`) | `#rosterActiveGrid`, `#benchGrid`, `#rosterCombined` | Settle animation only on grids that were redrawn |
-| `loadWeeks` → `_renderWeekSelector` | `#rosterWeekSelect` | Keeps the player's own pick; with none, the upcoming week is the default |
+| `loadWeeks` → `_renderWeekSelector` | `#rosterWeekSelect` | Keeps the player's own pick; with none, the upcoming week is the default, or **Next week (not scheduled)** when no week is upcoming. With no pick it also sets the select's value itself, since unchanged markup isn't rewritten (#249) |
 | `loadDeck` (`app-cards.js`) | `#deck-{rarity}` | |
 | `loadBoosterTeams` | `#boosterTeamGrid` | "Loading…" only when empty; clears a kept tile's selection |
 | `loadSeasonLeaderboard`, `loadWeeklyLeaderboard`, `loadPastSeasons` / `loadPastSeasonStandings` (`app-leaderboard.js`) | standings bodies, `#pastSeasonSelect` | Past-season choice kept and reloaded |

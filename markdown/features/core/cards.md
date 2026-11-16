@@ -191,10 +191,11 @@ To add a new modifier type, add a new row to the `card_modifiers` table with the
 
 Returns the calling user's cards split into `active` and `bench` lists, with per-card fantasy points scoped to the requested week.
 
-**Query parameter:** `week_id` (optional integer). Omit to use the current editable week.
+**Query parameter:** `week_id` (optional integer). Omit to use the current editable week, if there is one (see the no-upcoming-week case below).
 
 - For a **locked** week: returns the `WeeklyRosterEntry` snapshot for that week with points from matches played during the week's window. `active` holds the counted entries (active not subbed out, plus subbed-in bench cards, each shown in the `slot_index` of the card it replaced). `bench` holds the rest: subbed-out cards first, then the saved bench in its lock-time `bench_order`. A week locked before the bench was saved (issue #129) has an empty `bench`.
 - For the **current editable** week: returns all owned cards of active players from the `cards` table, split by `is_active`, with running points accumulated so far.
+- With **no `week_id` and no upcoming week** (#249): the same owned cards, with `week: null`, every `total_points` 0 and `combined_value` 0.0. No week points are made up; see [Roster After a Draw](../reference/roster-after-draw.md).
 
 Every card also carries `rank_tier` and `leaderboard_rank` (the player's last known rank medal, null when unranked; see [Player Rank Medals](../reference/player-rank-medals.md)) and `team_id`, `team_name` and `team_logo_url` (the player's most recent team; `team_logo_url` is null when the stored logo's host isn't in `LOGO_HOST_ALLOWLIST`, #171). Every card carries `subbed_in`, `subbed_out` (booleans) and `subbed_in_for` (the replaced card's player name on a subbed-in card, otherwise null); all are false/null outside a locked week. `substitutions_done` is true once the week's substitutions have run (also inside `week`), and `substitution_delay_hours` is the `SUBSTITUTION_DELAY_HOURS` value. See [Automatic Bench Substitution](../reference/automatic-bench-substitution.md).
 
@@ -235,7 +236,7 @@ Stores the caller's whole roster layout in one transaction (#186); My Team saves
 - 404 `"Card not found"` for a card the caller doesn't own, as the single-card routes answer.
 - 422 for a malformed body; 401 without a session; 429 over `RATE_LIMIT_ROSTER_MUTATION`.
 
-A layout identical to the stored one writes nothing. The answer is the `GET /roster/{user_id}` response for the next editable week, with the new `version`; after a week's lock a save counts from the next week, and `week` names it. Details: [My Team Fluid Roster](../reference/my-team-save-roster.md).
+A layout identical to the stored one writes nothing. The answer is the `GET /roster/{user_id}` response for the next editable week, with the new `version`; after a week's lock a save counts from the next week, and `week` names it. With no upcoming week, `week` is null and the week points are zero, as for `GET /roster`. Details: [My Team Fluid Roster](../reference/my-team-save-roster.md).
 
 ---
 

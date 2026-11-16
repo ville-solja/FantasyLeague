@@ -1027,3 +1027,32 @@ As a player, I want the schedule and the bracket to show which stage each playof
 **Acceptance criteria**
 - The Schedule tab and the tournament bracket (#94) label playoff series with their stage
 - Needs the bracket view from #94
+
+## Roster After a Draw (issue #249)
+
+### A Drawn Card Shows Up in My Roster
+**User story**
+As a player, I want a card I draw to appear in my roster or bench straight away, even if I was looking at a locked week, so that a draw never seems to lose my cards.
+
+**Acceptance criteria**
+- **Switch back:** after a successful draw or team draw on the web, if My Team showed a locked week, it switches to the editable roster (the picker shows the upcoming week, or **Next week (not scheduled)**), then reloads.
+- **Visible:** the drawn card is in its active slot or on the bench, the bench section is visible, and the landing flight ends on the card's slot (desktop) or the "Added to …" notice shows (phone).
+- **Unchanged otherwise:** with the editable roster already shown, a draw behaves as today. A failed draw (no tokens, empty deck) doesn't change the week shown.
+
+### The Week Picker Says Which Roster Is Shown
+**User story**
+As a player, I want the week picker to match the roster on screen when no week is scheduled yet, so that I don't pick a locked week by mistake.
+
+**Acceptance criteria**
+- **No upcoming week:** the picker's first option is **Next week (not scheduled)**, selected when no week is chosen; the past and live weeks follow, as today.
+- **Upcoming week exists:** no extra option; the upcoming week is selected, as today.
+- **Choosing it:** selecting **Next week (not scheduled)** shows the editable roster (`_rosterWeekId = null`), never a `NaN` week id.
+
+### No Week Points Without a Week
+**User story**
+As a player, I want My Team to show no week points when no week is scheduled, so that season-long totals don't look like this week's score.
+
+**Acceptance criteria**
+- **API:** `GET /roster/{user_id}` without `week_id`, when no week starts in the future, returns `week: null`, every card's `total_points` 0.0 and `combined_value` 0.0; `season_points` and the card list are unchanged.
+- **UI:** the week status reads "No upcoming week"; "This week" shows 0.0.
+- **With a week:** an upcoming week, or an explicit `week_id`, is scored as today.

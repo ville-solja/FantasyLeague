@@ -533,7 +533,7 @@ As a player, I want switching between tabs to be smooth so that the page doesn't
   
   A refresh with unchanged data leaves those elements' DOM nodes untouched: same node identity, no image reload, the selected dropdown option and the scroll position kept.
 - **Placeholders:** `loadSchedule` and `loadBoosterTeams` show their "Loading…" text only while their container is still empty. Otherwise the old content stays until the new data replaces it.
-- **Select boxes** rebuilt with changed options keep the previously selected value when it still exists. The My Team week select keeps the player's own pick; with none, the upcoming week stays the default.
+- **Select boxes** rebuilt with changed options keep the previously selected value when it still exists. The My Team week select keeps the player's own pick; with none, the upcoming week stays the default (or **Next week (not scheduled)** when no week is upcoming, #249).
 - **View state:** the Players table sort and the "Show all" toggle of Top players by avg stay across a refresh, and a kept team-draw tile loses its selection like a rebuilt one.
 - **Failure path:** when a refresh fails (network error, non-OK response), the content already on screen stays (except Past seasons, which hides its panel on error). The error appears in the tab's existing status line, as today, instead of replacing the content. A block that had never loaded shows the error as before.
 

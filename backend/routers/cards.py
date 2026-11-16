@@ -1,7 +1,6 @@
 import io
 import os
 import random
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -113,7 +112,6 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
     Card points are sums of stored per-match rows (card_match_points, issue #141) over
     the scored matches in the week window; nothing is recalculated here."""
     week = db.get(Week, week_id) if week_id is not None else get_next_editable_week(db)
-    now = int(time.time())
 
     week_sums = (
         f"COUNT(m.match_id) as match_count, "
@@ -168,8 +166,10 @@ def _build_roster_response(db, user_id: int, week_id: int | None) -> dict:
         for c in cards:
             del c["entry_id"], c["bench_order"]
     else:
-        ws = week.start_time if week else 0
-        we = week.end_time if week else now
+        # Issue #249: with no week (none upcoming) the window is empty, so no week
+        # points are made up from a 0..now sum.
+        ws = week.start_time if week else 1
+        we = week.end_time if week else 0
         results = db.execute(text(f"""
             SELECT c.id, c.card_type, c.is_holo, c.is_active, c.slot_index,
                    p.id as player_id, p.name as player_name, p.avatar_url,

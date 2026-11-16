@@ -28,7 +28,7 @@ Displays the user's current active cards (up to 5) and bench cards for a selecte
 
 ### Week selector
 
-A dropdown listing all season weeks. Locked past weeks are labelled with a checkmark (✓). The current active week is labelled "(upcoming)" when it hasn't started yet. Selecting a past week shows the immutable snapshot from that week. The chosen week stays selected when the tab refreshes; with no choice made, the upcoming week (the first week that has not started) is selected.
+A dropdown listing all season weeks. Locked past weeks are labelled with a checkmark (✓). The current active week is labelled "(upcoming)" when it hasn't started yet. Selecting a past week shows the immutable snapshot from that week. The chosen week stays selected when the tab refreshes; with no choice made, the upcoming week (the first week that has not started) is selected. When no week is upcoming (#249), the first option is **Next week (not scheduled)**, selected when no choice was made: it shows the editable roster, which the next week will use. After a successful draw, a locked week switches back to the editable roster (the upcoming week or **Next week (not scheduled)**), so the drawn card shows in its slot or on the bench; a failed draw and a modifier reroll keep the week shown. See `markdown/features/reference/roster-after-draw.md`.
 
 ### Roster locked banner
 
@@ -46,7 +46,7 @@ Five fixed card positions (`#rosterActiveGrid`), each showing the card image wit
 
 A line under the grid (`#rosterTotals`):
 
-- **This week** — sum of fantasy points earned by the roster cards during the selected week's matches.
+- **This week** — sum of fantasy points earned by the roster cards during the selected week's matches. 0.0 under **Next week (not scheduled)**, where the cards also show 0.0 (#249).
 - **Season** — cumulative fantasy points earned across all locked weeks (only counting cards that were in the active roster snapshot for each week, after any bench substitution).
 - **Status** (`#rosterStatus`) — "{n}/5 active" for the editable week; empty for locked weeks. Autosave (600 ms after the last move, at once when the page is hidden, the tab or week changes, or the week locks within 2 minutes): "Saving…" while a save runs, then "Saved" for 2 seconds. On a network error: "Couldn't save." with a **Retry** button (`#rosterRetryBtn`), and the layout stays as arranged. When the roster changed elsewhere (another tab, the Twitch panel): the cards glide to the latest layout and it says "Your roster changed elsewhere. Showing the latest." A refused move or save names the rule. When the shown week locked before the save: "Week N locked; this change counts from Week N+1". Leaving the tab never prompts.
 - **Substitution note** (`#rosterSubsNote`) — for a locked week whose substitutions haven't run yet: "Substitutions are made {N} hours after the week ends" (N from `substitution_delay_hours`). Hidden otherwise.
@@ -59,7 +59,7 @@ A card grid (`#benchGrid`) under a **Bench** heading, in the same card style as 
 
 ### Week status label
 
-Shown next to the week selector. For the editable week: "Locks [weekday, date]" in amber. For locked weeks: "In progress" or "Locked" in grey.
+Shown next to the week selector. For the editable week: "Locks [weekday, date]" in amber. For locked weeks: "In progress" or "Locked" in grey. With no upcoming week and none chosen: "No upcoming week" in grey (#249).
 
 ## Guided tour
 
