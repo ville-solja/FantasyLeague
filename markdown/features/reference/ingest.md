@@ -11,7 +11,7 @@ Source: `GET https://api.opendota.com/api/leagues/{league_id}/matchIds`
 For each match ID not already in the database:
 - Fetches full match data via `GET /api/matches/{match_id}`
 - Stores team IDs, match result (`radiant_win`), and start timestamp
-- Stores per-player stats: kills, deaths, GPM, observer wards, last hits, denies, towers destroyed, Roshan kills, teamfight participation, camps stacked, rune pickups, first blood, stuns
+- Stores per-player stats: kills, deaths, assists, GPM, observer wards, last hits, denies, towers destroyed, Roshan kills, courier kills (from season 17, issue #134), teamfight participation, camps stacked, rune pickups, first blood, stuns
 - Calculates and stores fantasy points for each player using current scoring weights
 - Seeds the player's display name (`personaname`) into the `players` table if the player is new or had no name yet
 - Matches shorter than 15 minutes (900 seconds) are skipped as invalid

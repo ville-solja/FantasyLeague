@@ -42,6 +42,7 @@ import models  # noqa: E402,F401  (registers tables)
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (Card, CardModifier, League, Match, Player, PlayerMatchStats,  # noqa: E402
                     Team, User, Week, WeeklyRosterEntry)
+from card_utils import _SCORED_STAT_COLS  # noqa: E402
 from scoring import SCORING_STATS  # noqa: E402
 
 
@@ -119,7 +120,7 @@ def seed(users: int, weeks: int, teams: int, players_per_team: int, games_per_te
 
         rarities = ["common"] * 60 + ["rare"] * 25 + ["epic"] * 10 + ["legendary"] * 5
         mod_count = {"common": 0, "rare": 1, "epic": 2, "legendary": 3}
-        stat_keys = list(SCORING_STATS) + ["deaths"]
+        stat_keys = list(_SCORED_STAT_COLS)  # the draw pool: no courier_kills (issue 134)
         card_total = 0
         roster_total = 0
         for u in range(users):

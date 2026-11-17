@@ -25,12 +25,14 @@ Runs a fantasy score simulation for every player in the specified match.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `kills` | float | DB default | Points awarded per kill |
+| `assists` | float | DB default | Points per assist |
 | `last_hits` | float | DB default | Points per last hit |
 | `denies` | float | DB default | Points per deny |
 | `gold_per_min` | float | DB default | Points per GPM |
 | `obs_placed` | float | DB default | Points per observer ward placed |
 | `towers_killed` | float | DB default | Points per tower destroyed |
 | `roshan_kills` | float | DB default | Points per Roshan kill |
+| `courier_kills` | float | DB default | Points per courier kill (season 17, issue #134) |
 | `teamfight_participation` | float | DB default | Participation scalar where `1.0 = 100%` |
 | `camps_stacked` | float | DB default | Points per camp stacked |
 | `rune_pickups` | float | DB default | Points per rune picked up |
@@ -39,7 +41,9 @@ Runs a fantasy score simulation for every player in the specified match.
 | `death_pool` | float | DB default | Base points awarded for 0 deaths |
 | `death_deduction` | float | DB default | Points deducted per death (floored at 0) |
 
-Any field that is omitted falls back to the current season weight stored in the database. Only the stats you want to test need to be included.
+Any field that is omitted falls back to the current season weight stored in the database. Only the stats you want to test need to be included. The body holds weights only; each player's stats come from the stored match.
+
+Until issue #134 the simulator left `assists` out of the request model, its query and `stats`, so it scored assists as 0 whatever the weight; it now reads, reports and scores them like live scoring.
 
 **Response**
 
@@ -48,12 +52,14 @@ Any field that is omitted falls back to the current season weight stored in the 
   "match_id": 8123456789,
   "weights_used": {
     "kills": 0.3,
+    "assists": 0.15,
     "last_hits": 0.003,
     "denies": 0.0003,
     "gold_per_min": 0.002,
     "obs_placed": 0.5,
     "towers_killed": 1.0,
     "roshan_kills": 1.0,
+    "courier_kills": 1.0,
     "teamfight_participation": 3.0,
     "camps_stacked": 0.5,
     "rune_pickups": 0.25,
@@ -71,12 +77,14 @@ Any field that is omitted falls back to the current season weight stored in the 
       "stats": {
         "kills": 8,
         "deaths": 2,
+        "assists": 7,
         "last_hits": 260,
         "denies": 10,
         "gold_per_min": 650.0,
         "obs_placed": 3,
         "towers_killed": 1,
         "roshan_kills": 0,
+        "courier_kills": 1,
         "teamfight_participation": 0.6,
         "camps_stacked": 2,
         "rune_pickups": 4,
@@ -108,12 +116,14 @@ Players are returned sorted by `fantasy_points` descending. The `weights_used` o
 
 ```
 fantasy_points = kills × kills_weight
+               + assists × assists_weight
                + last_hits × last_hits_weight
                + denies × denies_weight
                + gold_per_min × gpm_weight
                + obs_placed × obs_weight
                + towers_killed × tower_weight
                + roshan_kills × roshan_weight
+               + courier_kills × courier_weight
                + teamfight_participation × participation_weight   (where 1.0 = 100%)
                + camps_stacked × stack_weight
                + rune_pickups × rune_weight

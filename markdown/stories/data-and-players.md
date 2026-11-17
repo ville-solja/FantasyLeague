@@ -226,7 +226,7 @@ As a fantasy player, I want matches with incomplete stats to be marked so that I
 
 **Acceptance criteria**
 - A player's match history, in the player popup, shows a "Partial stats" marker on every match the app considers unparsed
-- The marker's tooltip says the replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0
+- The marker's tooltip says the replay has not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0
 - A match marked excluded from scoring shows "Not scored" instead, and its points display as a dash
 - Parsed matches show no marker
 

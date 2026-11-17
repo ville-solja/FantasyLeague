@@ -12,6 +12,14 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-17 — developer — models
+**Problem:** A migrated database's `card_modifiers` CHECK lists the stat keys from migration 025, so a stat added to `SCORING_STATS` later is refused there; `scripts/bench_leaderboards.py` drew modifiers from `SCORING_STATS + deaths` and failed `test_issue_149`'s benchmark tests only in the full suite.
+**Solution:** Draw modifier keys from `card_utils._SCORED_STAT_COLS` (the pool without `NO_MODIFIER_STATS`) everywhere, including scripts; a new scored stat that should be a modifier target needs a `card_modifiers` rebuild migration.
+
+### 2026-11-17 — test-planner — models
+**Problem:** A new scored stat touches the replay import too: every `manual_match.STAT_FIELDS` key is required per player, `scripts/replay_to_match.py` lists any stat its parser events can't give under `missing_stats`, and a replay with missing stats is stored as Partial stats.
+**Solution:** When adding a stat to `SCORING_STATS`, decide how `replay_to_match.py` produces it (or why it may be absent) and update `STAT_ORDER`, the issue 224 test helpers and the fixture together.
+
 ### 2026-11-17 — developer — testing
 **Problem:** A `style.css` comment `/* Issue #245 … */` failed `test_issue_211` and `test_issue_224`, whose "tokens only" checks search CSS slices for `#[0-9a-fA-F]{3,8}\b` and read `#245` as a hex colour.
 **Solution:** Write "issue 245" (no `#`) in CSS comments.

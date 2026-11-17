@@ -9,7 +9,12 @@ from scoring import (
 )
 
 
-_SCORED_STAT_COLS = list(SCORING_STATS) + ["deaths"]
+# Scored stats a card modifier can never target (issue #134: courier kills are too rare
+# for a +% modifier to be worth anything).
+NO_MODIFIER_STATS = {"courier_kills"}
+
+# The modifier pool: every scored stat except NO_MODIFIER_STATS, plus deaths.
+_SCORED_STAT_COLS = [k for k in SCORING_STATS if k not in NO_MODIFIER_STATS] + ["deaths"]
 
 
 def _load_weights(db) -> tuple[dict, dict]:

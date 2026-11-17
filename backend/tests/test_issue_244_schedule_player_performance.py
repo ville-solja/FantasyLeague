@@ -17,7 +17,7 @@ Developer notes
       no MVP bonus; the death pool is `weights["death_pool"]` minus
       `death_deduction` per death, floored at 0), `stat_dict_from_row(row)` (ORM
       object or Core Row; missing / NULL stats become 0, so an unparsed replay's
-      wards, stuns, teamfight, runes and camps simply contribute 0, the same as
+      wards, stuns, teamfight, runes, camps and courier kills simply contribute 0, the same as
       the player popup), `display_points(x)` (one-decimal half-up rounding, use
       it exactly once on the exact raw value), `apply_mvp_bonus_to_row`
       (weight key `mvp_bonus_pct`, default 10).
@@ -202,7 +202,7 @@ from tests.test_issue_211_team_view_enhancements import _client, _match, _seed_t
 
 _PLAYER_KEYS = {"player_id", "player_name", "hero_id", "hero_icon", "kills", "deaths", "assists",
                 "raw_points", "is_mvp", "top"}
-_PARTIAL_TIP = "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0."
+_PARTIAL_TIP = "The replay has not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0."
 _NOT_SCORED_TIP = "An admin excluded this match from scoring. It adds no fantasy points."
 _NOTE = "Raw points: from the player's own stats, before card rarity, modifiers and the MVP bonus."
 _EVIL = "<img src=x onerror=alert(1)>"
@@ -727,7 +727,7 @@ class TestPartialAndUnscoredGamesAreLabelled:
         """Node harness: a response with `parse_status` "unparsed" (and one with
         "unparseable") renders the "Partial stats" badge on the table with
         `title` equal to the escaped `_PARTIAL_STATS_TOOLTIP` text ("The replay has
-        not been parsed, so wards, stuns, teamfight, runes and camps count as 0.")."""
+        not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0.")."""
         out = _run(_shown_open("""
   await toggleSchedulePlayers(201);
   await toggleSchedulePlayers(203);

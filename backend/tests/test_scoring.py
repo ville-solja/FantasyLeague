@@ -76,10 +76,11 @@ class TestFantasyScore:
     def test_scoring_stats_excludes_deaths(self):
         assert "deaths" not in SCORING_STATS
 
-    def test_scoring_stats_has_thirteen_entries(self):
+    def test_scoring_stats_has_fourteen_entries(self):
         # 12 original stats + "assists" (issue #130 —
-        # markdown/plans/plan-issue-130-assists-scoring-fix.md).
-        assert len(SCORING_STATS) == 13
+        # markdown/plans/plan-issue-130-assists-scoring-fix.md) + "courier_kills"
+        # (issue #134).
+        assert len(SCORING_STATS) == 14
 
     def test_firstblood_scores_correctly(self):
         score = fantasy_score({"firstblood_claimed": 1, "deaths": 0}, WEIGHTS)

@@ -44,6 +44,7 @@ Implementation details, integrations, and operator tooling.
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
 | [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown as the player popup's Rank tile (#230; no longer in the card viewer or the popup header); on the card PNG deferred (#218) |
+| [Courier Kills Scoring](reference/courier-kills-scoring.md) | *(#134)* Courier kills from OpenDota's parsed match data become a scored stat (weight 1.0) from season 17; not a card modifier, past matches not backfilled |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Automated Testing](reference/automated-testing.md) | Playwright UI suite and GitHub Actions CI setup |
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |

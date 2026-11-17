@@ -362,7 +362,7 @@ As a user, I want to spend a token to re-roll a card's stat modifiers so that I 
 - Uses Dota 2 match data from OpenDota
 - Only active (locked) cards score
 - No double counting of matches
-- Scored stats (weight × value loop): `kills`, `assists`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
+- Scored stats (weight × value loop): `kills`, `assists`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `courier_kills` (from season 17, #134), `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
 - Death scoring: separate clamped pool contribution (defaults: `death_pool = 3.0`, `death_deduction = 0.3`, floored at 0 — i.e. 0 deaths = 3.0 pts, then −0.3 per death)
 - Death formula params (`death_pool`, `death_deduction`) and all stat weights are configurable via the `weights` table (defaults/overrides from `backend/seed.py` + optional `WEIGHTS_JSON` on startup)
 
@@ -410,7 +410,7 @@ other scored stat, so I understand what actually earns me points without needing
 - Per-stat modifiers applied at scoring time based on the card's assigned modifiers
 - Rarity modifier percentages are configurable
 - Modifiers can only target stats in `SCORING_STATS` plus `deaths` (DB-enforced); they amplify that stat's contribution (including amplifying the death-pool contribution when `stat_key = deaths`)
-- New draws and rerolls only assign modifiers from the current valid stat pool (13 stats: 12 scored stats + `deaths`)
+- New draws and rerolls only assign modifiers from the current valid stat pool (14 stats: every scored stat except `courier_kills`, plus `deaths`; `card_utils._SCORED_STAT_COLS`)
 
 ---
 
@@ -1056,3 +1056,43 @@ As a player, I want My Team to show no week points when no week is scheduled, so
 - **API:** `GET /roster/{user_id}` without `week_id`, when no week starts in the future, returns `week: null`, every card's `total_points` 0.0 and `combined_value` 0.0; `season_points` and the card list are unchanged.
 - **UI:** the week status reads "No upcoming week"; "This week" shows 0.0.
 - **With a week:** an upcoming week, or an explicit `week_id`, is scored as today.
+
+## Courier Kills as a Scoring Stat (#134)
+
+### Courier Kills Earn Fantasy Points
+**User story**
+As a fantasy player, I want a player who kills the enemy courier to earn points for it, so that the score rewards a play that matters in the game.
+
+**Acceptance criteria**
+- **Stored:** ingest stores each player's `courier_kills` from OpenDota's match data in a new `player_match_stats.courier_kills` column (integer, default 0); a match without the field (unparsed, or OpenDota leaves it out) stores 0.
+- **Scored:** `courier_kills` is one of `scoring.SCORING_STATS`, so `fantasy_score` adds `courier_kills × weight` to every per-game score: card points, leaderboards, raw points (#244), the Weekly Report and the Twitch panel all include it.
+- **Weight:** a new weight `courier_kills` ("Courier kills", default 1.0) is seeded for new and existing databases and can be overridden by `WEIGHTS_JSON`; the Admin Scoring Weights table lists it (read-only, like every weight).
+- **Re-parse:** when a match first stored unparsed is stored again parsed (the parse retry), its courier kills are stored and its points updated, like the other parse-only stats.
+- **Manual matches:** a match added from OpenDota stores courier kills like a league match. A replay JSON (from `scripts/replay_to_match.py`, which counts each player's courier kills from the combat log's courier deaths) accepts `courier_kills` per player (0 to 10), like Roshan kills. An older replay JSON without it is still accepted: it stores 0, lists `courier_kills` under `missing_stats` and is marked Partial stats.
+
+### Past Points Stay the Same
+**User story**
+As a player looking back at season 16, I want past scores to stay as they were, so that a change for next season does not rewrite the last one.
+
+**Acceptance criteria**
+- After the migration and the new weight, every stored match's `courier_kills` is 0, and every season 16 card point, leaderboard total, raw point and accolade value is unchanged (the startup card-point rebuild that runs when weights change produces the same numbers).
+- Nothing refetches past matches from OpenDota.
+
+### See Courier Kills in the Stats and the Rules
+**User story**
+As a fantasy player, I want to see courier kills in a player's game stats and in the scoring rules, so that I know where points came from.
+
+**Acceptance criteria**
+- **Player popup:** each game in a player's match history shows courier kills with the other objective stats (next to towers and Roshan); the popup's stat groups include it.
+- **How to Play:** the scoring list shows "Courier kills" with its current weight, read from the weights like the others.
+- **Point simulator:** `POST /simulate/{match_id}` accepts `courier_kills` as a weight override, returns each player's stored courier kills in `stats`, and its documentation (`GET /simulate`) lists it. (The simulator takes weight overrides only; stats come from the stored match.)
+- **Partial stats:** the tooltip names courier kills among the stats an unparsed replay counts as 0.
+
+### Card Modifiers Leave Courier Kills Out
+**User story**
+As a player drawing cards, I want modifiers only on stats that come up often enough to matter, so that a rare or better card is never wasted on a near-useless modifier.
+
+**Acceptance criteria**
+- A card drawn after this change never gets a `courier_kills` modifier, at any rarity, while every other scored stat (and deaths) can still be chosen.
+- Existing cards and their modifiers are unchanged.
+- The card rules list of modifier targets does not include courier kills.

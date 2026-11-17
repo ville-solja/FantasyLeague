@@ -13,12 +13,14 @@ router = APIRouter()
 
 class SimulateBody(BaseModel):
     kills: float | None = None
+    assists: float | None = None
     last_hits: float | None = None
     denies: float | None = None
     gold_per_min: float | None = None
     obs_placed: float | None = None
     towers_killed: float | None = None
     roshan_kills: float | None = None
+    courier_kills: float | None = None
     teamfight_participation: float | None = None
     camps_stacked: float | None = None
     rune_pickups: float | None = None
@@ -311,12 +313,14 @@ _SIMULATE_DOCS = {
         "content_type": "application/json",
         "fields": {
             "kills":                    "float | omit — points per kill (default from DB)",
+            "assists":                  "float | omit — points per assist (default from DB)",
             "last_hits":                "float | omit — points per last hit (default from DB)",
             "denies":                   "float | omit — points per deny (default from DB)",
             "gold_per_min":             "float | omit — points per GPM (default from DB)",
             "obs_placed":               "float | omit — points per observer ward placed (default from DB)",
             "towers_killed":            "float | omit — points per tower destroyed (default from DB)",
             "roshan_kills":             "float | omit — points per Roshan kill (default from DB)",
+            "courier_kills":            "float | omit — points per courier kill (default from DB)",
             "teamfight_participation":  "float | omit — points for 100% teamfight participation (default from DB)",
             "camps_stacked":            "float | omit — points per camp stacked (default from DB)",
             "rune_pickups":             "float | omit — points per rune picked up (default from DB)",
@@ -343,12 +347,14 @@ _SIMULATE_DOCS = {
                 "stats": {
                     "kills": "integer",
                     "deaths": "integer",
+                    "assists": "integer",
                     "last_hits": "integer",
                     "denies": "integer",
                     "gold_per_min": "float",
                     "obs_placed": "integer",
                     "towers_killed": "integer",
                     "roshan_kills": "integer",
+                    "courier_kills": "integer",
                     "teamfight_participation": "float",
                     "camps_stacked": "integer",
                     "rune_pickups": "integer",
@@ -392,9 +398,9 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
     rows = db.execute(text("""
         SELECT s.player_id, p.name as player_name,
                t.name as team_name,
-               s.kills, s.deaths, s.gold_per_min, s.obs_placed,
+               s.kills, s.deaths, s.assists, s.gold_per_min, s.obs_placed,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
-               s.teamfight_participation, s.camps_stacked, s.rune_pickups,
+               s.courier_kills, s.teamfight_participation, s.camps_stacked, s.rune_pickups,
                s.firstblood_claimed, s.stuns
         FROM player_match_stats s
         JOIN players p ON p.id = s.player_id
@@ -407,12 +413,14 @@ def simulate_match(match_id: int, db=Depends(get_db), body: SimulateBody = None)
         stats = {
             "kills": r.kills or 0,
             "deaths": r.deaths or 0,
+            "assists": r.assists or 0,
             "gold_per_min": r.gold_per_min or 0,
             "obs_placed": r.obs_placed or 0,
             "last_hits": r.last_hits or 0,
             "denies": r.denies or 0,
             "towers_killed": r.towers_killed or 0,
             "roshan_kills": r.roshan_kills or 0,
+            "courier_kills": r.courier_kills or 0,
             "teamfight_participation": r.teamfight_participation or 0.0,
             "camps_stacked": r.camps_stacked or 0,
             "rune_pickups": r.rune_pickups or 0,

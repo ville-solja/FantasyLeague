@@ -488,6 +488,8 @@ def _build_stat_row(p: dict, match_id: int, radiant_team_id, dire_team_id, weigh
         is_radiant = player_slot < 128
 
     team_id = radiant_team_id if is_radiant else dire_team_id
+    # Parse-only stat: absent (unparsed match) or null reads as 0, also in fantasy_score.
+    courier_kills = int(p.get("courier_kills") or 0)
 
     logger.debug("Player %d -> team %s", account_id, team_id)
 
@@ -507,12 +509,13 @@ def _build_stat_row(p: dict, match_id: int, radiant_team_id, dire_team_id, weigh
         denies=p.get("denies", 0),
         towers_killed=p.get("towers_killed", 0),
         roshan_kills=p.get("roshan_kills", 0),
+        courier_kills=courier_kills,
         teamfight_participation=float(p.get("teamfight_participation") or 0),
         camps_stacked=p.get("camps_stacked", 0),
         rune_pickups=p.get("rune_pickups", 0),
         firstblood_claimed=int(bool(p.get("firstblood_claimed"))),
         stuns=float(p.get("stuns") or 0),
-        fantasy_points=fantasy_score(p, weights)
+        fantasy_points=fantasy_score({**p, "courier_kills": courier_kills}, weights)
     )
 
 
@@ -543,8 +546,8 @@ def _reapply_mvp_bonus(db, match_id: int) -> None:
 # -----------------------
 #
 # OpenDota only fills teamfight_participation / stuns / obs_placed / camps_stacked /
-# rune_pickups / towers_killed / roshan_kills / firstblood_claimed once it has parsed
-# the replay, and reports "version": null on GET /matches/{id} until then. First-pass
+# rune_pickups / towers_killed / roshan_kills / courier_kills / firstblood_claimed once
+# it has parsed the replay, and reports "version": null on GET /matches/{id} until then. First-pass
 # ingest stores whatever it gets so results show up immediately; the functions below
 # re-check recent matches that still look unparsed and replace their rows once the
 # parsed payload exists.

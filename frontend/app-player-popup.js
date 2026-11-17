@@ -480,6 +480,7 @@ function _popupMatchStats(m) {
     ["Tower damage", m.tower_damage ?? 0],
     ["Towers", m.towers_killed ?? 0],
     ["Roshan", m.roshan_kills ?? 0],
+    ["Courier kills", m.courier_kills ?? 0],
     ["Teamfight", `${Math.round((Number(m.teamfight_participation) || 0) * 100)} %`],
     ["Camps stacked", m.camps_stacked ?? 0],
     ["Runes", m.rune_pickups ?? 0],

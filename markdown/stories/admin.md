@@ -47,7 +47,7 @@ As an admin, I want to configure the scoring weights for match stats.
 **Acceptance criteria**
 - Weights are stored in the database (`weights` table) and surfaced read-only in the Admin tab (`GET /weights`)
 - Default values come from `backend/seed.py` (`DEFAULT_WEIGHTS`); optional startup overrides via `WEIGHTS_JSON` merge into DB on restart
-- Tunables include per-stat weights for the scoring stat set (`kills`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`), death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_*`), modifier tuning (`modifier_count_*`, `modifier_bonus_pct`), and MVP bonus (`mvp_bonus_pct`)
+- Tunables include per-stat weights for the scoring stat set (`kills`, `assists`, `last_hits`, `denies`, `gold_per_min`, `obs_placed`, `towers_killed`, `roshan_kills`, `courier_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`), death formula params (`death_pool`, `death_deduction`), rarity bonuses (`rarity_*`), modifier tuning (`modifier_count_*`, `modifier_bonus_pct`), and MVP bonus (`mvp_bonus_pct`)
 - Rarity modifier percentages are also configurable (same weight system)
 - Changing DB weights affects scoring going forward; use **Recalculate** to recompute stored `player_match_stats.fantasy_points` (and downstream card/week totals) from the same stored raw stats
 

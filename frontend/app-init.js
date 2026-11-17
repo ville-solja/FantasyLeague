@@ -17,7 +17,7 @@ async function loadHowToPlay() {
 
   const statsKeys = [
     'kills', 'assists', 'last_hits', 'denies', 'gold_per_min', 'obs_placed',
-    'towers_killed', 'roshan_kills', 'teamfight_participation',
+    'towers_killed', 'roshan_kills', 'courier_kills', 'teamfight_participation',
     'camps_stacked', 'rune_pickups', 'firstblood_claimed', 'stuns',
   ];
   const statsLabels = {
@@ -29,6 +29,7 @@ async function loadHowToPlay() {
     obs_placed:              'Observer wards',
     towers_killed:           'Towers killed',
     roshan_kills:            'Roshan kills',
+    courier_kills:           'Courier kills',
     teamfight_participation: 'Teamfight participation (0–1)',
     camps_stacked:           'Camps stacked',
     rune_pickups:            'Rune pickups',

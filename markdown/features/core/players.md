@@ -69,6 +69,7 @@ Returns full detail for a single player, including a complete per-match history 
       "denies": 10,
       "towers_killed": 1,
       "roshan_kills": 0,
+      "courier_kills": 0,
       "teamfight_participation": 0.6,
       "camps_stacked": 2,
       "rune_pickups": 4,
@@ -112,6 +113,11 @@ Returns full detail for a single player, including a complete per-match history 
 `opponent_team_id`/`opponent_team_name` are resolved from whichever of the match's
 `radiant_team_id`/`dire_team_id` is not the player's own `team_id` for that row — both are
 `null` if the opponent team hasn't been ingested.
+
+`courier_kills` (season 17, issue #134) counts in the `objectives` part of
+`points_breakdown`, with towers and Roshan; the popup's Details panel shows it as "Courier kills"
+after Roshan. `modifier_values` lists only the stats a card can draw a modifier on, so it never has
+a `courier_kills` row (see [Courier Kills Scoring](../reference/courier-kills-scoring.md)).
 
 `parse_status` is `parsed`, `unparsed`, `unparseable` or `null`. `match_history` lists every
 match, including excluded ones (`excluded_from_scoring: true`). `matches` counts every match.

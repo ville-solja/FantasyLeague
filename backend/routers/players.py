@@ -79,6 +79,7 @@ def get_player(player_id: int, db=Depends(get_db)):
                s.kills, s.assists, s.deaths, s.gold_per_min, s.obs_placed,
                s.sen_placed, s.tower_damage, s.hero_id,
                s.last_hits, s.denies, s.towers_killed, s.roshan_kills,
+               s.courier_kills,
                s.teamfight_participation, s.camps_stacked, s.rune_pickups,
                s.firstblood_claimed, s.stuns,
                m.duration, m.radiant_team_id, m.dire_team_id, m.radiant_win,

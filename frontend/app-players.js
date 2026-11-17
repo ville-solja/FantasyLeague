@@ -291,7 +291,7 @@ function renderTeams(rows) {
 const _NOT_SCORED_TOOLTIP = "An admin excluded this match from scoring. It adds no fantasy points.";
 // "Partial stats" badge tooltip and check, shared by the Schedule's player tables
 // (issue 244) and the player popup.
-const _PARTIAL_STATS_TOOLTIP = "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.";
+const _PARTIAL_STATS_TOOLTIP = "The replay has not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0.";
 
 function _popupIsPartial(m) {
   return m.parse_status === "unparsed" || m.parse_status === "unparseable";

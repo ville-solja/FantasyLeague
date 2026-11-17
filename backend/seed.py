@@ -133,6 +133,7 @@ DEFAULT_WEIGHTS = [
     {"key": "obs_placed",               "label": "Observer wards placed",          "value": 0.5},
     {"key": "towers_killed",            "label": "Towers destroyed",               "value": 1.0},
     {"key": "roshan_kills",             "label": "Roshan kills",                   "value": 1.0},
+    {"key": "courier_kills",            "label": "Courier kills",                  "value": 1.0},
     {"key": "teamfight_participation",  "label": "Participation (100% = 1.0)",     "value": 3.0},
     {"key": "camps_stacked",            "label": "Camps stacked",                  "value": 0.5},
     {"key": "rune_pickups",             "label": "Runes picked up",                "value": 0.25},
@@ -169,7 +170,8 @@ def seed_weights():
     """Seed weights from DEFAULT_WEIGHTS, then apply any WEIGHTS_JSON overrides.
 
     WEIGHTS_JSON is a JSON object mapping weight keys to float values, e.g.:
-        WEIGHTS_JSON={"kills": 3.0, "deaths": -1.5}
+        WEIGHTS_JSON={"kills": 0.4, "courier_kills": 2.0}
+    Deaths are weighted through death_pool and death_deduction; an unknown key is ignored.
     Only keys present in the env var are overridden; the rest keep their defaults.
     Values are upserted so env var changes take effect on restart.
     """

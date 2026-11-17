@@ -836,6 +836,17 @@ def _m046_twitch_mvp_votes_account_hash(conn):
     logger.info("Migration: twitch_mvp_votes — added account_hash column")
 
 
+def _m047_pms_courier_kills(conn):
+    """Issue #134: player_match_stats.courier_kills, a scored stat from season 17.
+    Existing rows read 0; past matches are not re-fetched."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(player_match_stats)")).fetchall()}
+    if not cols or "courier_kills" in cols:
+        return
+    conn.execute(text("ALTER TABLE player_match_stats ADD COLUMN courier_kills INTEGER DEFAULT 0"))
+    conn.commit()
+    logger.info("Migration: player_match_stats — added courier_kills column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -906,6 +917,7 @@ MIGRATIONS = [
     ("044_twitch_channel_approvals_notified_at", _m044_twitch_channel_approvals_notified_at),
     ("045_twitch_mvp_polls_extension", _m045_twitch_mvp_polls_extension),
     ("046_twitch_mvp_votes_account_hash", _m046_twitch_mvp_votes_account_hash),
+    ("047_pms_courier_kills",        _m047_pms_courier_kills),
 ]
 
 

@@ -58,6 +58,7 @@ class PlayerMatchStats(Base):
     denies                  = Column(Integer, default=0)
     towers_killed           = Column(Integer, default=0)
     roshan_kills            = Column(Integer, default=0)
+    courier_kills           = Column(Integer, default=0, server_default="0")  # issue 134
     teamfight_participation = Column(Float,   default=0.0)
     camps_stacked           = Column(Integer, default=0)
     rune_pickups            = Column(Integer, default=0)
