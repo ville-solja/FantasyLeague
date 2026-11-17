@@ -434,6 +434,7 @@ class _Stub:
     def __init__(self, fail=(), slow=None):
         self.requests = []          # (method, path without query, full path, user from cookie)
         self.registered, self.logins = [], []
+        self.sessions = {}          # cookie value -> username; the cookie never carries request data
         self._lock = threading.Lock()
         stub = self
 
@@ -447,11 +448,15 @@ class _Stub:
                 raw = self.rfile.read(length) if length else b""
                 path = urlparse(self.path).path
                 cookie = self.headers.get("Cookie") or ""
-                who = cookie.split("uid=", 1)[1].split(";")[0] if "uid=" in cookie else None
+                sid = cookie.split("sid=", 1)[1].split(";")[0] if "sid=" in cookie else None
                 set_cookie = None
-                if self.command == "POST" and path in ("/register", "/login"):
-                    who = json.loads(raw)["username"]
-                    set_cookie = f"uid={who}; Path=/"
+                with stub._lock:
+                    who = stub.sessions.get(sid)
+                    if self.command == "POST" and path in ("/register", "/login"):
+                        who = json.loads(raw)["username"]
+                        sid = f"s{len(stub.sessions) + 1}"
+                        stub.sessions[sid] = who
+                        set_cookie = f"sid={sid}; Path=/"
                 with stub._lock:
                     stub.requests.append((self.command, path, self.path, who))
                     if path == "/register":
