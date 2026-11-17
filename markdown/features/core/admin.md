@@ -178,6 +178,9 @@ Weights are configured via the `WEIGHTS_JSON` environment variable (a JSON objec
 ### `POST /recalculate`
 Recalculates fantasy points for every `PlayerMatchStats` row using the current weights, then rebuilds every stored card point row (`card_match_points`). Returns `{"status": "ok", "recalculated": <stat rows>, "card_points": <stored rows written>}`. Run this after changing weights to update historical scores. Takes several seconds on large datasets.
 
+### `GET /admin/points-check?week_id=<id>`
+Read-only: recomputes the points of every card on the week's rosters for the week's games and compares them with the stored `card_match_points` rows, reporting differences above 0.05 and missing rows. `404` for an unknown week. Shown in Settings › Scoring › Check Points. See [Weekly Points Clarity](../reference/weekly-points-clarity.md).
+
 ---
 
 ## Match & Week Management
@@ -439,6 +442,7 @@ These features have dedicated reference documents:
 | Notifications | `GET/POST/DELETE /admin/notifications/*` | `reference/notification-system.md` |
 | Week Management | `GET/POST/PATCH/DELETE /admin/weeks/*` (date-only `start_date`/`end_date` inputs) | `reference/admin-week-management.md` |
 | Bench Substitution Re-run | `POST /admin/weeks/{week_id}/substitutions` | `reference/automatic-bench-substitution.md` |
+| Points Check | `GET /admin/points-check?week_id=…` (read-only comparison of a week's stored card points with a fresh calculation) | `reference/weekly-points-clarity.md` |
 | Match Scoring Week | `PUT /matches/{match_id}/week`, `GET /admin/matches/out-of-week`, `POST /admin/sync-match-weeks` | `core/weeks.md#week-override`, `reference/automatic-bench-substitution.md` |
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |

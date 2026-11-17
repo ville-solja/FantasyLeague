@@ -100,6 +100,8 @@ _ACCOLADE_ICON_FILES = {
     "most_points":    "Accolade_Most_Points.png",
     "best_average":   "Accolade_Best_Average.png",
     "best_match":     "Accolade_Best_Single_Match.png",
+    # Issue 248: a placeholder (a recoloured Best Single Match badge) until the final art.
+    "most_mvps":      "Accolade_Most_MVPs.png",
     "fantasy_winner": "Accolade_Season_Winner.png",
     "played":         "Accolade_Played.png",
 }
@@ -115,7 +117,7 @@ _ACCOLADE_PRIORITY = {
     "div1_runner_up": 1, "div2_runner_up": 1,
     "div1_third": 2, "div2_third": 2,
     "fantasy_winner": 3,
-    "most_points": 4, "best_average": 4, "best_match": 4,
+    "most_points": 4, "best_average": 4, "best_match": 4, "most_mvps": 4,
     "played": 5,
 }
 

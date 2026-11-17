@@ -814,6 +814,28 @@ def _m044_twitch_channel_approvals_notified_at(conn):
     logger.info("Migration: twitch_channel_approvals — added notified_at column")
 
 
+def _m045_twitch_mvp_polls_extension(conn):
+    """Issue #253: twitch_mvp_polls.extension, the extension that opened the poll.
+    Existing polls were all opened by the full extension ("game")."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(twitch_mvp_polls)")).fetchall()}
+    if not cols or "extension" in cols:
+        return
+    conn.execute(text("ALTER TABLE twitch_mvp_polls ADD COLUMN extension VARCHAR NOT NULL DEFAULT 'game'"))
+    conn.commit()
+    logger.info("Migration: twitch_mvp_polls — added extension column")
+
+
+def _m046_twitch_mvp_votes_account_hash(conn):
+    """Issue #253: twitch_mvp_votes.account_hash, the keyed hash of a voter's Twitch id
+    after the identity share in the vote extension. Existing votes keep NULL."""
+    cols = {r[1] for r in conn.execute(text("PRAGMA table_info(twitch_mvp_votes)")).fetchall()}
+    if not cols or "account_hash" in cols:
+        return
+    conn.execute(text("ALTER TABLE twitch_mvp_votes ADD COLUMN account_hash VARCHAR"))
+    conn.commit()
+    logger.info("Migration: twitch_mvp_votes — added account_hash column")
+
+
 def _m018_new_indexes(conn):
     stmts = [
         "CREATE INDEX IF NOT EXISTS ix_matches_league_id ON matches (league_id)",
@@ -882,6 +904,8 @@ MIGRATIONS = [
     ("042_players_rank",             _m042_players_rank),
     ("043_matches_source",           _m043_matches_source),
     ("044_twitch_channel_approvals_notified_at", _m044_twitch_channel_approvals_notified_at),
+    ("045_twitch_mvp_polls_extension", _m045_twitch_mvp_polls_extension),
+    ("046_twitch_mvp_votes_account_hash", _m046_twitch_mvp_votes_account_hash),
 ]
 
 

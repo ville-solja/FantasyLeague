@@ -35,17 +35,18 @@ ACCOLADE_KINDS = [
     {"key": "most_points",    "kind": "most_points",    "division": None,   "name": "Most Points",       "icon": "flame",          "plate": "outlined", "token": "--accolade-points"},
     {"key": "best_average",   "kind": "best_average",   "division": None,   "name": "Best Average",      "icon": "gauge",          "plate": "outlined", "token": "--accolade-average"},
     {"key": "best_match",     "kind": "best_match",     "division": None,   "name": "Best Single Match", "icon": "zap",            "plate": "outlined", "token": "--accolade-match"},
+    {"key": "most_mvps",      "kind": "most_mvps",      "division": None,   "name": "Most MVPs",         "icon": "star",           "plate": "outlined", "token": "--accolade-mvp"},
     {"key": "fantasy_winner", "kind": "fantasy_winner", "division": None,   "name": "Fantasy Winner",    "icon": "medal",          "plate": "outlined", "token": "--accolade-fantasy"},
     {"key": "played",         "kind": "played",         "division": None,   "name": "Played",            "icon": "calendar-check", "plate": "muted",    "token": "--accolade-played"},
 ]
 
 KINDS = ("champion", "runner_up", "third_place", "most_points", "best_average", "best_match",
-         "fantasy_winner", "played")
+         "most_mvps", "fantasy_winner", "played")
 # Team placements (issue 233): one per season, division and team, like champions. Only
 # champions unlock Holo; runner_up and third_place are display only.
 PLACEMENT_KINDS = ("runner_up", "third_place")
 TEAM_KINDS = ("champion",) + PLACEMENT_KINDS
-AWARD_KINDS = ("most_points", "best_average", "best_match")
+AWARD_KINDS = ("most_points", "best_average", "best_match", "most_mvps")
 PLAYER_AWARD_KINDS = AWARD_KINDS
 DIVISIONS = ("div1", "div2")
 SOURCE_SEASON_END = "season_end"
@@ -149,7 +150,8 @@ def _player_names(db, ids) -> dict[int, str]:
 
 def _scored_rows(db):
     return db.execute(text(f"""
-        SELECT s.player_id, s.match_id, COALESCE(s.fantasy_points, 0) AS pts
+        SELECT s.player_id, s.match_id, COALESCE(s.fantasy_points, 0) AS pts,
+               COALESCE(s.is_mvp, 0) AS is_mvp
         FROM player_match_stats s
         WHERE s.player_id IS NOT NULL AND {scored_stat_sql()}
     """)).fetchall()
@@ -163,15 +165,18 @@ def _ties(items: list, key) -> list:
 
 
 def compute_awards(db) -> dict:
-    """The season's four awards from raw fantasy_points of scored matches; every tied
+    """The season's awards from raw fantasy_points of scored matches; every tied
     winner is listed. best_average needs at least half as many scored matches as the
-    most-played player (rounded up)."""
+    most-played player (rounded up). most_mvps (issue 248) counts is_mvp rows of the
+    same matches: its value is a whole MVP count, and nobody wins it with none."""
     rows = _scored_rows(db)
     per: dict[int, dict] = {}
     for r in rows:
-        p = per.setdefault(r.player_id, {"total": 0.0, "count": 0, "best": None, "best_match": None})
+        p = per.setdefault(r.player_id, {"total": 0.0, "count": 0, "best": None, "best_match": None,
+                                         "mvps": 0})
         p["total"] += r.pts
         p["count"] += 1
+        p["mvps"] += 1 if r.is_mvp else 0
         if p["best"] is None or r.pts > p["best"]:
             p["best"], p["best_match"] = r.pts, r.match_id
     names = _player_names(db, per.keys())
@@ -190,11 +195,13 @@ def compute_awards(db) -> dict:
     qualified = [i for i in items if i[1]["count"] >= min_count and i[1]["count"] > 0]
     avg = _ties(qualified, lambda i: i[1]["total"] / i[1]["count"])
     best = _ties(items, lambda i: i[1]["best"])
+    mvps = _ties([i for i in items if i[1]["mvps"] > 0], lambda i: i[1]["mvps"])
 
     awards = {
         "most_points": [entry(pid, p["total"]) for pid, p in most],
         "best_average": [entry(pid, p["total"] / p["count"]) for pid, p in avg],
         "best_match": [entry(pid, p["best"], p["best_match"]) for pid, p in best],
+        "most_mvps": [{**entry(pid, 0), "value": p["mvps"]} for pid, p in mvps],
         "fantasy_winner": [],
     }
     for key in AWARD_KINDS:
@@ -568,7 +575,7 @@ def player_seasons(accolades: list[dict]) -> dict:
 def history(db, current: str | None = None) -> dict:
     """GET /history/seasons: the live season's label, one entry per season newest first
     with the champion teams, the runner-up and third place teams (issue 233) and the
-    four awards (ties included), plus the hall of fame.
+    season awards (ties included), plus the hall of fame.
     No user ids."""
     rows = db.query(SeasonAccolade).all()
     by_season: dict[str, list] = {}

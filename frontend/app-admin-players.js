@@ -420,7 +420,8 @@ function _renderAccoladeTable(rows) {
     }
     const r = item.row;
     const winner = r.kind === "fantasy_winner" ? _escHtml(r.username || "") : `${_escHtml(r.player_name || "")} <span class="accolade-admin-id">${_escHtml(String(r.player_account_id ?? ""))}</span>`;
-    const value = r.value == null ? "" : _escHtml(Number(r.value).toFixed(1));
+    const value = r.value == null ? ""
+      : _escHtml(r.kind === "most_mvps" ? accoladeValueText(r.kind, r.value) : Number(r.value).toFixed(1));
     return `<tr data-accolade-id="${r.id}">
       <td>${_escHtml(r.season_label)}</td>
       <td><span class="accolade-swap">${_accoladeChipFor(r)}</span></td>

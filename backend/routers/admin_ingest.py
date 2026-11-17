@@ -343,3 +343,8 @@ def admin_enrich_profiles(db=Depends(get_db), admin: dict = Depends(require_admi
                   f"rank_updated={result.get('rank_updated', 0)}")
     db.commit()
     return result
+
+
+@router.get("/admin/points-check")
+def points_check(week_id: int = Query(ge=1, le=2**63 - 1), db=Depends(get_db), _: dict = Depends(require_admin)):
+    return card_points.check_week(db, week_id)  # read-only; 404 for an unknown week

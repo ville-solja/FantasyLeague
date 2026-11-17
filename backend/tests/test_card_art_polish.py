@@ -151,6 +151,7 @@ console.log(JSON.stringify(cardAccoladeSlotsFromList({json.dumps(accolades_list)
             _a("champion", "Season 15", "div2", "Blues"), _a("most_points", "Season 13"),
             _a("fantasy_winner", "Season 12"), _a("champion", "Season 16", "div1", "Reds"),
             _a("best_average", "Season 11"), _a("runner_up", "Season 10", "div1", "Olds"),
+            _a("most_mvps", "Season 9"),  # issue 248: same tier as the other awards
         ]
         from accolades import kind_key
         backend_keys = image._select_accolade_keys([kind_key(a) for a in accolades_list])

@@ -2,6 +2,8 @@
 
 A Twitch Panel Extension that brings Kana Cards into the stream as a complete game on Twitch (issue #157, version 1.2.0). Every viewer sees live fantasy results; a viewer logged in to Twitch joins with one button (a **soft account**, no sign-up), then draws cards, keeps a collection, sets a weekly roster and receives MVP token drops, all inside the panel. The broadcaster names match MVPs from Quick Actions. The extension never requires, mentions or links to the website. Details: [Twitch Extension Policy Compliance](../reference/twitch-extension-policy-compliance.md).
 
+A second, vote-only extension, **Kana Cards MVP Vote** (`twitch-vote-extension/`, issue #253), runs against the same backend with its own client id and secret: see [Twitch MVP Vote Extension](../reference/twitch-mvp-vote-extension.md). This document describes the full extension.
+
 ---
 
 ## Architecture
@@ -469,6 +471,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_EXTENSION_CLIENT_ID` | *(empty)* | Client ID from Extension Settings (top-right corner). Also the only `ext-twitch.tv` origin CORS allows; unset, no extension origin is allowed (#171) |
 | `TWITCH_EXTENSION_SECRET` | *(empty)* | Base64 key from Extension Secrets table (bottom of Extension Settings). Not the Twitch API Client Secret. |
 | `TWITCH_EXTENSION_VERSION` | *(empty)* | Extension version installed on the channel, e.g. `1.3.0`. Required for chat announcements (sent as `extension_version`); chat is skipped with one warning when empty. Must have the Chat capability enabled. |
+| `TWITCH_VOTE_EXTENSION_CLIENT_ID` / `TWITCH_VOTE_EXTENSION_SECRET` / `TWITCH_VOTE_EXTENSION_VERSION` / `TWITCH_VOTE_TOKENS_ENABLED` | *(empty)* / *(empty)* / *(empty)* / `true` | The second, vote-only extension (#253). See [Twitch MVP Vote Extension](../reference/twitch-mvp-vote-extension.md#configuration) |
 | `TWITCH_DROP_MAX` | `20` | Max viewers per token drop |
 | `TWITCH_DROPS_ENABLED` | `true` | Kill switch for MVP token drops; `false` sets the MVP and bonus only |
 | `TWITCH_SOFT_ACCOUNT_RETENTION_DAYS` | `365` | Days without activity before a soft account is purged by the daily job |
@@ -482,7 +485,7 @@ On success it upserts the MVP, triggers one-time token drop (skipped if match al
 | `TWITCH_OAUTH_CLIENT_ID` / `TWITCH_OAUTH_CLIENT_SECRET` / `TWITCH_OAUTH_REDIRECT_URI` | *(empty)* | Twitch sign-in for Connect Twitch on Profile (#160); any missing turns it off. The extension's own Client ID and its Twitch API Client Secret are the supported client. See [Twitch Account Connection](../reference/twitch-account-connection.md#configuration) |
 | `RATE_LIMIT_TWITCH_OAUTH` | `10/minute` | Per-IP limit on each of `GET /auth/twitch/start` and `/auth/twitch/callback` |
 | `TWITCH_LOCAL_DEV` | *(unset)* | `true` bypasses JWT validation, and logs PubSub and chat messages instead of calling Twitch. Never set in production. |
-| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`; `http://localhost:8080` for Local Test |
+| `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins on top of `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv` and the vote extension's origin; `http://localhost:8080` for Local Test |
 | `ENV` | *(unset)* | Set `production` in production. Startup then refuses `TWITCH_LOCAL_DEV=true` (and `DEBUG=true`, or a `SECRET_KEY` under 32 characters). As a second line of defence the JWT bypass also refuses to run (500). |
 
 ---

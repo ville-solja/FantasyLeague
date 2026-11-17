@@ -114,6 +114,29 @@ _chat_version_warned   = False  # TWITCH_EXTENSION_VERSION warning logged once p
 # Process-local and in memory (like the login lockout stores); no token, secret or
 # viewer id is ever kept here.
 FAILURE_KINDS = ("expired", "invalid", "not_configured")
+
+# Issue #253: two extensions run against this backend. "game" is the full Kana Cards
+# extension; "vote" is Kana Cards MVP Vote, with its own client id and secret. The
+# tag on a verified payload (payload["ext"]) comes from the secret that verified the
+# token, never from the token itself.
+GAME, VOTE = "game", "vote"
+_EXT_ENV = {
+    GAME: {"client_id": "TWITCH_EXTENSION_CLIENT_ID", "secret": "TWITCH_EXTENSION_SECRET",
+           "version": "TWITCH_EXTENSION_VERSION"},
+    VOTE: {"client_id": "TWITCH_VOTE_EXTENSION_CLIENT_ID", "secret": "TWITCH_VOTE_EXTENSION_SECRET",
+           "version": "TWITCH_VOTE_EXTENSION_VERSION"},
+}
+
+
+def _ext_setting(ext: str, name: str) -> str:
+    """One of an extension's settings (client_id, secret, version), cleaned of quotes."""
+    return os.getenv(_EXT_ENV[ext][name], "").strip().strip('"').strip("'")
+
+
+def payload_ext(payload: dict) -> str:
+    """The extension a verified payload came from; a payload without the tag (local
+    dev, older callers) counts as the full extension."""
+    return VOTE if payload.get("ext") == VOTE else GAME
 _REFUSED_ORIGINS_MAX = 5
 _REFUSED_HOST_MAX = 100
 _traffic_lock = threading.Lock()
@@ -130,21 +153,26 @@ def reset_traffic() -> None:
             "last_failure_at": None,
             "last_extension_request_at": None,
             "refused_origins": deque(maxlen=_REFUSED_ORIGINS_MAX),
+            # Issue #253: the vote extension's token results, apart from the full extension's.
+            "vote": {"last_ok_at": None, "failures": {k: 0 for k in FAILURE_KINDS},
+                     "last_failure_at": None},
         })
 
 
 reset_traffic()
 
 
-def _record_ok() -> None:
+def _record_ok(ext: str = GAME) -> None:
     with _traffic_lock:
-        _traffic["last_ok_at"] = int(time.time())
+        bucket = _traffic["vote"] if ext == VOTE else _traffic
+        bucket["last_ok_at"] = int(time.time())
 
 
-def _record_failure(kind: str) -> None:
+def _record_failure(kind: str, ext: str = GAME) -> None:
     with _traffic_lock:
-        _traffic["failures"][kind] += 1
-        _traffic["last_failure_at"] = int(time.time())
+        bucket = _traffic["vote"] if ext == VOTE else _traffic
+        bucket["failures"][kind] += 1
+        bucket["last_failure_at"] = int(time.time())
 
 
 def record_extension_request() -> None:
@@ -187,6 +215,11 @@ def traffic_snapshot() -> dict:
             "last_failure_at": _traffic["last_failure_at"],
             "last_extension_request_at": _traffic["last_extension_request_at"],
             "refused_origins": list(_traffic["refused_origins"]),
+            "vote": {
+                "last_ok_at": _traffic["vote"]["last_ok_at"],
+                "failures": dict(_traffic["vote"]["failures"]),
+                "last_failure_at": _traffic["vote"]["last_failure_at"],
+            },
         }
 
 
@@ -200,6 +233,25 @@ def _remember_viewer(request: Request | None, payload: dict) -> dict:
     return payload
 
 
+def _secret_bytes(secret_b64: str) -> bytes:
+    """Twitch extension secrets are URL-safe base64; add padding and decode."""
+    return base64.urlsafe_b64decode(secret_b64 + "=" * (-len(secret_b64) % 4))
+
+
+def _origin_ext(request: Request | None) -> str:
+    """The extension a refused token most likely came from: the vote extension when the
+    request's Origin is that extension's own, else the full extension. Used only to
+    file a failure under the right counter."""
+    client_id = _ext_setting(VOTE, "client_id")
+    try:
+        origin = request.headers.get("origin") if request is not None else None
+    except AttributeError:
+        origin = None
+    if client_id and origin == f"https://{client_id}.ext-twitch.tv":
+        return VOTE
+    return GAME
+
+
 def verify_twitch_jwt(request: Request = None, authorization: str = Header(...)) -> dict:
     """Validate Twitch extension JWT. Returns the decoded payload.
 
@@ -208,6 +260,9 @@ def verify_twitch_jwt(request: Request = None, authorization: str = Header(...))
       opaque_user_id  — Twitch's anonymised user identifier (starts with U for a viewer logged in to Twitch, A for logged out)
       user_id         — the real Twitch user id, only after the viewer accepted the identity share
       role            — "viewer", "broadcaster", "moderator" or "external"
+      ext             — set here (issue #253): "game" when TWITCH_EXTENSION_SECRET verified the
+                        token, "vote" when TWITCH_VOTE_EXTENSION_SECRET did. A claim of that
+                        name inside the token is overwritten.
     """
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         if os.getenv("ENV", "").lower() == "production":
@@ -221,40 +276,62 @@ def verify_twitch_jwt(request: Request = None, authorization: str = Header(...))
             "role": "broadcaster",
         })
     token = authorization.removeprefix("Bearer ")
-    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "").strip().strip('"').strip("'")
-    if not secret_b64:
+    secrets = [(ext, _ext_setting(ext, "secret")) for ext in (GAME, VOTE)]
+    secrets = [(ext, raw) for ext, raw in secrets if raw]
+    if not secrets:
         _record_failure("not_configured")
         raise HTTPException(status_code=500, detail="TWITCH_EXTENSION_SECRET not configured")
-    try:
-        # Twitch extension secrets are URL-safe base64; add padding and use urlsafe decoder
-        padded = secret_b64 + "=" * (-len(secret_b64) % 4)
-        secret_bytes = base64.urlsafe_b64decode(padded)
-        payload = pyjwt.decode(
-            token,
-            secret_bytes,
-            algorithms=["HS256"],
-            options={"require": ["exp"]},
-        )
-    except pyjwt.ExpiredSignatureError:
-        logger.error("Twitch JWT expired")
-        _record_failure("expired")
-        raise HTTPException(status_code=401, detail="Twitch token expired")
-    except pyjwt.InvalidTokenError as exc:
-        # Exception class only (issue #165): nothing about the secret or the token.
-        logger.error("Twitch JWT invalid: %s", type(exc).__name__)
-        _record_failure("invalid")
-        raise HTTPException(status_code=401, detail="Invalid Twitch token")
-    except Exception as exc:
-        logger.error("Twitch JWT decode unexpected error: %s", type(exc).__name__)
-        # Almost always a TWITCH_EXTENSION_SECRET that isn't valid base64.
-        _record_failure("not_configured")
+    payload = None
+    verified_by = None
+    refused: list[tuple[str, str]] = []   # (extension, exception class) for a token it refused
+    unusable: list[tuple[str, str]] = []  # (extension, exception class) for a secret that can't be used
+    for ext, raw in secrets:
+        try:
+            payload = pyjwt.decode(
+                token,
+                _secret_bytes(raw),
+                algorithms=["HS256"],
+                options={"require": ["exp"]},
+            )
+        except pyjwt.ExpiredSignatureError:
+            # The signature matched this extension's secret; only the time is past.
+            logger.error("Twitch JWT expired")
+            _record_failure("expired", ext)
+            raise HTTPException(status_code=401, detail="Twitch token expired")
+        except pyjwt.InvalidTokenError as exc:
+            refused.append((ext, type(exc).__name__))
+            continue
+        except Exception as exc:
+            # Almost always a secret that isn't valid base64.
+            unusable.append((ext, type(exc).__name__))
+            continue
+        verified_by = ext
+        break
+    if verified_by is None:
+        if refused:
+            # Exception class only (issue #165): nothing about the secret or the token.
+            logger.error("Twitch JWT invalid: %s", refused[0][1])
+            _record_failure("invalid", _origin_ext(request))
+            raise HTTPException(status_code=401, detail="Invalid Twitch token")
+        for ext, name in unusable:
+            logger.error("Twitch JWT decode unexpected error: %s", name)
+            _record_failure("not_configured", ext)
         raise HTTPException(status_code=500, detail="JWT decode error")
     # role "external" is what this server signs for Twitch's own APIs (PubSub, chat);
     # no viewer or broadcaster route ever needs one (issue #165).
     if payload.get("role") == "external":
         raise HTTPException(status_code=403, detail="Viewer token required")
-    _record_ok()
+    payload["ext"] = verified_by
+    _record_ok(verified_by)
     return _remember_viewer(request, payload)
+
+
+def require_game_extension(payload: dict = Depends(verify_twitch_jwt)) -> dict:
+    """The game routes (Join, draws, teams, roster, heartbeat, Leave) belong to the
+    full extension: a token from the vote extension is refused (issue #253)."""
+    if payload.get("ext") == VOTE:
+        raise HTTPException(status_code=403, detail="This route is not available to the MVP Vote extension")
+    return payload
 
 
 def _require_broadcaster(payload: dict):
@@ -262,13 +339,16 @@ def _require_broadcaster(payload: dict):
         raise HTTPException(status_code=403, detail="Broadcaster role required")
 
 
-def _pubsub_broadcast(channel_id: str, message: dict):
-    """Send a broadcast PubSub message to all open extension panels on a channel."""
+def _pubsub_broadcast(channel_id: str, message: dict, ext: str = GAME):
+    """Send a broadcast PubSub message to all open panels of one extension on a channel.
+    `ext` picks the extension whose credentials sign and send it (issue #253); without
+    that extension's client id and secret nothing is sent, and the other extension's
+    credentials are never used instead."""
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         logger.info("Twitch PubSub (dev): %s", json.dumps(message))
         return
-    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
-    client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
+    secret_b64 = _ext_setting(ext, "secret")
+    client_id  = _ext_setting(ext, "client_id")
     if not secret_b64 or not client_id:
         return
     padded = secret_b64 + "=" * (-len(secret_b64) % 4)
@@ -326,7 +406,7 @@ def _min_age_hours_text() -> str:
 
 def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
                    drops_enabled: bool = True, only_new_accounts: bool = False,
-                   vote: tuple[int, int] | None = None) -> str:
+                   vote: tuple[int, int] | None = None, voters: bool = False) -> str:
     """Build the MVP chat announcement within Twitch's 280-character limit.
 
     Names the MVP and, for a token drop, only how many viewers received a token:
@@ -335,6 +415,8 @@ def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
     only because every present account was too new for drops (issue #171).
     `vote`: (percent, total votes) when the MVP is a viewer vote's sole winner
     (issue #234); the drop sentence that follows is the same.
+    `voters`: the drop went to voters of a vote-extension poll (issue #253), some of
+    whom claim the token later, so the sentence says they won one.
     """
     if vote is not None:
         pct, total = vote
@@ -344,6 +426,9 @@ def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
         base = f"Match MVP: {player_name}!"
     if not drops_enabled:
         text = base
+    elif voters:
+        noun = "voter" if winner_count == 1 else "voters"
+        text = f"{base} {winner_count} {noun} won a token." if winner_count > 0 else base
     elif winner_count > 0:
         noun = "viewer" if winner_count == 1 else "viewers"
         text = f"{base} {winner_count} {noun} received a token."
@@ -357,7 +442,24 @@ def _mvp_chat_text(player_name: str, winner_count: int, pool_empty: bool,
     return text[:_CHAT_TEXT_MAX]
 
 
-def _post_chat_message(channel_id: str, message: str):
+def broadcast_as(ext: str, channel_id: str, message: dict) -> None:
+    """PubSub through the given extension. The full extension keeps the two-argument
+    call it has always had."""
+    if ext == VOTE:
+        _pubsub_broadcast(channel_id, message, ext=VOTE)
+    else:
+        _pubsub_broadcast(channel_id, message)
+
+
+def chat_as(ext: str, channel_id: str, message: str) -> None:
+    """Chat message through the given extension (see broadcast_as)."""
+    if ext == VOTE:
+        _post_chat_message(channel_id, message, ext=VOTE)
+    else:
+        _post_chat_message(channel_id, message)
+
+
+def _post_chat_message(channel_id: str, message: str, ext: str = GAME):
     """Post a message to Twitch chat using the Extension Chat capability.
 
     Uses an extension-signed JWT (role=external) — no bot account required.
@@ -366,20 +468,23 @@ def _post_chat_message(channel_id: str, message: str):
     console. Logs instead of posting in local dev; skips when extension
     credentials are absent, and skips with one warning per process when
     TWITCH_EXTENSION_VERSION is unset. Never raises.
+
+    `ext` picks the extension that posts (issue #253): its client id, secret and
+    version. The other extension's credentials are never used instead.
     """
     global _chat_version_warned
     if os.getenv("TWITCH_LOCAL_DEV") == "true":
         logger.info("Twitch chat (dev): %s", message)
         return
-    secret_b64 = os.getenv("TWITCH_EXTENSION_SECRET", "")
-    client_id  = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "")
+    secret_b64 = _ext_setting(ext, "secret")
+    client_id  = _ext_setting(ext, "client_id")
     if not secret_b64 or not client_id:
         return
-    version = os.getenv("TWITCH_EXTENSION_VERSION", "").strip()
+    version = _ext_setting(ext, "version")
     if not version:
         if not _chat_version_warned:
             _chat_version_warned = True
-            logger.warning("Twitch chat skipped: TWITCH_EXTENSION_VERSION is not set")
+            logger.warning("Twitch chat skipped: %s is not set", _EXT_ENV[ext]["version"])
         return
     padded = secret_b64 + "=" * (-len(secret_b64) % 4)
     token = pyjwt.encode(
@@ -444,7 +549,7 @@ def heartbeat(payload: dict, db: Session) -> dict:
 @limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
 def heartbeat_route(
     request: Request,
-    payload: dict = Depends(verify_twitch_jwt),
+    payload: dict = Depends(require_game_extension),
     db: Session = Depends(get_db),
 ):
     """Called by the extension panel every few minutes while the viewer is joined."""
@@ -738,7 +843,7 @@ def join(payload: dict, db: Session) -> dict:
 @limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
 def join_route(
     request: Request,
-    payload: dict = Depends(verify_twitch_jwt),
+    payload: dict = Depends(require_game_extension),
     db: Session = Depends(get_db),
 ):
     return join(payload, db)
@@ -746,7 +851,7 @@ def join_route(
 
 @router.get("/me")
 def me(
-    payload: dict = Depends(verify_twitch_jwt),
+    payload: dict = Depends(require_game_extension),
     db: Session = Depends(get_db),
 ):
     """The caller's own game state, or {joined: false} without an account."""
@@ -769,7 +874,7 @@ def draw(payload: dict, db: Session) -> dict:
 @router.post("/draw")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
 @limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
-def draw_route(request: Request, payload: dict = Depends(verify_twitch_jwt),
+def draw_route(request: Request, payload: dict = Depends(require_game_extension),
                db: Session = Depends(get_db)):
     return draw(payload, db)
 
@@ -788,14 +893,14 @@ def draw_team(team_id: int, payload: dict, db: Session) -> dict:
 @router.post("/draw/booster/{team_id}")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
 @limiter.limit(RATE_LIMIT_TWITCH_JOIN_IP)
-def draw_team_route(request: Request, team_id: int, payload: dict = Depends(verify_twitch_jwt),
+def draw_team_route(request: Request, team_id: int, payload: dict = Depends(require_game_extension),
                     db: Session = Depends(get_db)):
     return draw_team(team_id, payload, db)
 
 
 @router.get("/teams")
 def teams(
-    payload: dict = Depends(verify_twitch_jwt),
+    payload: dict = Depends(require_game_extension),
     db: Session = Depends(get_db),
 ):
     """Team draw picker: the website's GET /deck/booster data for the caller."""
@@ -827,7 +932,7 @@ def roster_activate(card_id: int, payload: dict, db: Session, slot: int | None =
 @router.post("/roster/activate/{card_id}")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
 def roster_activate_route(request: Request, card_id: int, slot: int | None = None,
-                          payload: dict = Depends(verify_twitch_jwt),
+                          payload: dict = Depends(require_game_extension),
                           db: Session = Depends(get_db)):
     return roster_activate(card_id, payload, db, slot)
 
@@ -841,7 +946,7 @@ def roster_deactivate(card_id: int, payload: dict, db: Session) -> dict:
 
 @router.post("/roster/deactivate/{card_id}")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
-def roster_deactivate_route(request: Request, card_id: int, payload: dict = Depends(verify_twitch_jwt),
+def roster_deactivate_route(request: Request, card_id: int, payload: dict = Depends(require_game_extension),
                             db: Session = Depends(get_db)):
     return roster_deactivate(card_id, payload, db)
 
@@ -859,7 +964,7 @@ def roster_swap(body, payload: dict, db: Session) -> dict:
 @router.post("/roster/swap")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
 def roster_swap_route(request: Request, body: SwapRequest,
-                      payload: dict = Depends(verify_twitch_jwt),
+                      payload: dict = Depends(require_game_extension),
                       db: Session = Depends(get_db)):
     return roster_swap(body, payload, db)
 
@@ -894,7 +999,7 @@ def leave(payload: dict, db: Session) -> dict:
 
 @router.post("/leave")
 @limiter.limit(RATE_LIMIT_TWITCH_ACTION, key_func=key_by_twitch_viewer_or_ip)
-def leave_route(request: Request, payload: dict = Depends(verify_twitch_jwt),
+def leave_route(request: Request, payload: dict = Depends(require_game_extension),
                 db: Session = Depends(get_db)):
     return leave(payload, db)
 
@@ -1383,6 +1488,21 @@ def warn_if_mvp_channels_unset() -> None:
                        "approved there either, no channel can")
 
 
+def warn_if_vote_extension_incomplete() -> None:
+    """Startup warning (main.lifespan, issue #253): only one of the vote extension's
+    client id and secret is set, so its panel can't work. Names only, never values."""
+    have_id, have_secret = bool(_ext_setting(VOTE, "client_id")), bool(_ext_setting(VOTE, "secret"))
+    # Fixed messages: nothing read from the settings reaches the log.
+    if have_id and not have_secret:
+        logger.warning("The MVP Vote extension is half configured: TWITCH_VOTE_EXTENSION_SECRET is "
+                       "not set. Set both TWITCH_VOTE_EXTENSION_CLIENT_ID and "
+                       "TWITCH_VOTE_EXTENSION_SECRET, or neither.")
+    elif have_secret and not have_id:
+        logger.warning("The MVP Vote extension is half configured: TWITCH_VOTE_EXTENSION_CLIENT_ID is "
+                       "not set. Set both TWITCH_VOTE_EXTENSION_CLIENT_ID and "
+                       "TWITCH_VOTE_EXTENSION_SECRET, or neither.")
+
+
 class MVPBody(BaseModel):
     match_id: int
     player_id: int
@@ -1467,14 +1587,31 @@ def set_mvp(
         _apply_mvp_bonus(db, body.player_id, body.match_id, apply=True, weights=weights)
         card_points.refresh_card_points(db, match_ids=[body.match_id])
 
+    # Issue #253: the extension the messages go out through, and whose drop rules apply:
+    # the one that opened the poll, or the caller's for a hand-picked MVP.
+    ext = (poll.extension or GAME) if poll is not None else payload_ext(payload)
+    by_voters = ext == VOTE
+
     # Token drop — once per match, unless the kill switch is off
-    enabled = drops_enabled()
-    if enabled:
-        winner_names, pool_size, already_dropped = _execute_token_drop(
-            db, channel_id, body.match_id, weights
-        )
+    if by_voters:
+        # The vote extension has no presence pool: the drop goes to the poll's voters
+        # who shared their Twitch identity, so a hand-picked MVP with no poll drops nothing.
+        import twitch_vote_rewards
+        enabled = drops_enabled() and twitch_vote_rewards.tokens_enabled() and poll is not None
+        if enabled:
+            winner_names, pending_count, pool_size, already_dropped = twitch_vote_rewards.drop_for_poll(db, poll)
+        else:
+            winner_names, pending_count, pool_size, already_dropped = [], 0, 0, False
+        dropped_count = len(winner_names) + pending_count
     else:
-        winner_names, pool_size, already_dropped = [], 0, False
+        enabled = drops_enabled()
+        if enabled:
+            winner_names, pool_size, already_dropped = _execute_token_drop(
+                db, channel_id, body.match_id, weights
+            )
+        else:
+            winner_names, pool_size, already_dropped = [], 0, False
+        dropped_count = len(winner_names)
 
     db.add(AuditLog(
         timestamp=int(time.time()),
@@ -1490,20 +1627,21 @@ def set_mvp(
     # No winner names or ids go to the channel: every joined panel re-reads its own
     # balance from GET /twitch/me and shows the drop when it went up.
     announced_name = chat_safe_name(player_name, body.player_id)
-    _pubsub_broadcast(channel_id, {
+    broadcast_as(ext, channel_id, {
         "type": "mvp",
         "player_name": announced_name,
         "match_id": body.match_id,
-        "token_drop": {"count": len(winner_names), "refresh": bool(winner_names)},
+        "token_drop": {"count": dropped_count, "refresh": bool(dropped_count)},
     })
 
     pool_empty = enabled and not already_dropped and pool_size == 0
-    chat_msg = _mvp_chat_text(announced_name, len(winner_names),
+    chat_msg = _mvp_chat_text(announced_name, dropped_count,
                               pool_empty=pool_empty,
                               drops_enabled=enabled,
-                              only_new_accounts=pool_empty and _excluded_new_count(db, channel_id) > 0,
-                              vote=vote_chat)
-    _post_chat_message(channel_id, chat_msg)
+                              only_new_accounts=(not by_voters and pool_empty
+                                                 and _excluded_new_count(db, channel_id) > 0),
+                              vote=vote_chat, voters=by_voters)
+    chat_as(ext, channel_id, chat_msg)
 
     return {
         "match_id": body.match_id,
@@ -1513,7 +1651,7 @@ def set_mvp(
             "enabled": enabled,
             # Count only: a winner's display name is a website username for a
             # connected viewer, and is not shown to the channel (issue #157).
-            "winner_count": len(winner_names),
+            "winner_count": dropped_count,
             "pool_size": pool_size,
             "already_dropped": already_dropped,
         },

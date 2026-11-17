@@ -25,6 +25,7 @@ import twitch_channels
 import twitch_mvp_poll
 import twitch_oauth
 import twitch_status
+import twitch_vote_rewards
 import steam_openid
 import login_mode
 import card_points
@@ -167,6 +168,7 @@ def _week_maintenance_loop():
                     _last_steam_cleanup = time.time()
                 if time.time() - _last_mvp_vote_cleanup >= _MVP_VOTE_CLEANUP_INTERVAL:
                     _run_mvp_vote_cleanup(db)
+                    _run_pending_token_cleanup(db)
                     _last_mvp_vote_cleanup = time.time()
                 if time.time() - _last_team_signup_cleanup >= _TEAM_SIGNUP_CLEANUP_INTERVAL:
                     _run_team_signup_cleanup(db)
@@ -189,6 +191,18 @@ def _run_approval_notifications(db):
     except Exception:
         db.rollback()
         logger.exception("Streamer approval notification failed")
+
+
+def _run_pending_token_cleanup(db):
+    """Best-effort daily step: delete pending vote-extension tokens past their 60 days
+    (issue #253)."""
+    try:
+        expired = twitch_vote_rewards.purge_expired(db, int(time.time()))
+        if expired:
+            logger.info("Deleted %d expired pending Twitch token(s)", expired)
+    except Exception:
+        db.rollback()
+        logger.exception("Pending Twitch token cleanup failed")
 
 
 def _run_mvp_vote_cleanup(db):
@@ -537,6 +551,7 @@ async def lifespan(app: FastAPI):
                 "this bypass must never run in production"
             )
     twitch_module.warn_if_mvp_channels_unset()
+    twitch_module.warn_if_vote_extension_incomplete()
     if _DEMO_MODE:
         logger.warning(
             "[DEMO MODE] DEMO_MODE=true — clock override and demo account seeding "
@@ -716,11 +731,15 @@ app.add_middleware(OriginCheckMiddleware)
 _cors_extra_origins = [
     o.strip() for o in os.getenv("CORS_EXTRA_ORIGINS", "").split(",") if o.strip()
 ]
+# Issue #253: the MVP Vote extension (TWITCH_VOTE_EXTENSION_CLIENT_ID) is allowed next
+# to the full extension, and nothing else.
 _ext_client_id = os.getenv("TWITCH_EXTENSION_CLIENT_ID", "").strip()
-_ext_origin_regex = (rf"^https://{re.escape(_ext_client_id)}\.ext-twitch\.tv$"
-                     if _ext_client_id else None)
+_vote_ext_client_id = os.getenv("TWITCH_VOTE_EXTENSION_CLIENT_ID", "").strip()
+_ext_origin_regex = twitch_status.extension_origin_regex([_ext_client_id, _vote_ext_client_id])
 if not _ext_client_id:
-    logger.warning("TWITCH_EXTENSION_CLIENT_ID unset: no Twitch extension origin is allowed by CORS")
+    logger.warning("TWITCH_EXTENSION_CLIENT_ID unset: "
+                   + ("only the MVP Vote extension's origin is allowed by CORS" if _vote_ext_client_id
+                      else "no Twitch extension origin is allowed by CORS"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_extra_origins,

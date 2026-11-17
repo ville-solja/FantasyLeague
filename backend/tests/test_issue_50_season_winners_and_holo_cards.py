@@ -1340,7 +1340,7 @@ def test_cards_ui_no_pips_on_card_faces_viewer_lists_no_accolades():
 # ===========================================================================
 
 def test_accolade_kinds_backend_order_names_icons_tokens():
-    """accolades.ACCOLADE_KINDS lists div1 champion, div2 champion, the runner-up and third place entries per division (issue 233), most_points, best_average, best_match, fantasy_winner, played in that order with the planned names, Lucide icons, plates and --accolade-* tokens."""
+    """accolades.ACCOLADE_KINDS lists div1 champion, div2 champion, the runner-up and third place entries per division (issue 233), most_points, best_average, best_match, most_mvps (issue 248), fantasy_winner, played in that order with the planned names, Lucide icons, plates and --accolade-* tokens."""
     got = [(k["key"], k["name"], k["icon"], k["plate"], k["token"]) for k in accolades.ACCOLADE_KINDS]
     assert got == [
         ("div1", "Div 1 Champion", "crown", "filled", "--accolade-div1"),
@@ -1353,6 +1353,8 @@ def test_accolade_kinds_backend_order_names_icons_tokens():
         ("most_points", "Most Points", "flame", "outlined", "--accolade-points"),
         ("best_average", "Best Average", "gauge", "outlined", "--accolade-average"),
         ("best_match", "Best Single Match", "zap", "outlined", "--accolade-match"),
+        # Issue 248: Most MVPs, after the other player awards.
+        ("most_mvps", "Most MVPs", "star", "outlined", "--accolade-mvp"),
         ("fantasy_winner", "Fantasy Winner", "medal", "outlined", "--accolade-fantasy"),
         ("played", "Played", "calendar-check", "muted", "--accolade-played"),
     ]

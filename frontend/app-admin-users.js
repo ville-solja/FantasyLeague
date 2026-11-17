@@ -555,6 +555,19 @@ function _renderTwitchStatus(data) {
     _twitchStatusRow(origins.length ? "warning" : "ok", "Cross-origin hosts refused on /twitch/*",
       origins.length ? `${origins.join(", ")}. If one is the extension's host, check TWITCH_EXTENSION_CLIENT_ID.` : "None."),
   ];
+  // Issue #253: the MVP Vote extension's tokens are counted apart from the full extension's.
+  const v = t.vote;
+  if (v) {
+    const vf = v.failures || {};
+    const voteRefused = (vf.expired || 0) + (vf.invalid || 0) + (vf.not_configured || 0);
+    traffic.push(
+      _twitchStatusRow(v.last_ok_at ? "ok" : "warning", "MVP Vote: last request with an accepted token",
+        v.last_ok_at ? _twitchAgo(v.last_ok_at) : "None since the last restart."),
+      _twitchStatusRow(voteRefused ? "problem" : "ok", "MVP Vote: refused Twitch tokens",
+        `${vf.expired || 0} expired, ${vf.invalid || 0} invalid, ${vf.not_configured || 0} server not configured` +
+        (v.last_failure_at ? `; last ${_twitchAgo(v.last_failure_at)}` : "") +
+        (vf.invalid ? ". Invalid tokens usually mean TWITCH_VOTE_EXTENSION_SECRET belongs to another extension." : ".")));
+  }
   const head = `<thead><tr><th>State</th><th>Check</th><th>What to do</th></tr></thead>`;
   const checks = (data.checks || []).map(c => _twitchStatusRow(c.state, c.label, c.detail)).join("");
   const consoleRows = (data.console || []).map(c =>

@@ -45,6 +45,7 @@ const _END_SEASON_AWARDS = [
   { kind: "most_points", name: "Most Points" },
   { kind: "best_average", name: "Best Average" },
   { kind: "best_match", name: "Best Single Match" },
+  { kind: "most_mvps", name: "Most MVPs" },
   { kind: "fantasy_winner", name: "Fantasy Winner" },
 ];
 
@@ -68,7 +69,9 @@ async function endSeason() {
     const who = winners.length
       ? winners.map(w => _escHtml(w.player_name || w.username || "")).join(", ")
       : "None";
-    const value = winners.length && winners[0].value != null ? `${Number(winners[0].value).toFixed(1)}` : "";
+    // Issue 248: Most MVPs shows a whole count ("3 MVPs"); the others are points.
+    const value = !winners.length || winners[0].value == null ? ""
+      : (kind === "most_mvps" ? accoladeValueText(kind, winners[0].value) : `${Number(winners[0].value).toFixed(1)}`);
     return `<div class="end-season-award-row"><span>${name}</span><span>${who}</span><span class="end-season-num">${_escHtml(value)}</span></div>`;
   }).join("");
   document.getElementById("endSeasonPlayed").textContent = p.played_count

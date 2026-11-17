@@ -16,6 +16,8 @@ A chat command (`!mvp`) isn't possible: an extension can post to chat but can't 
 
 ## Who can vote
 
+This section describes the full extension. In the vote-only extension (issue #253) a Twitch login is enough, and the drop goes to voters who shared their identity: see [Twitch MVP Vote Extension](twitch-mvp-vote-extension.md).
+
 The same rules as the token drop (`twitch.py`):
 
 | Viewer | Panel shows | Vote |

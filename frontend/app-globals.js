@@ -218,7 +218,7 @@ function switchTab(name) {
   if (name === "finals")        loadFinals();
   if (name === "teamfinder")    loadTeamFinder();
   if (name === "howtoplay")     loadHowToPlay();
-  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); if (typeof loadAdminTeamSignup === "function") loadAdminTeamSignup(); }
+  if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadPointsCheckWeeks(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); if (typeof loadAdminTeamSignup === "function") loadAdminTeamSignup(); }
 }
 
 /**
@@ -462,6 +462,7 @@ const ACCOLADE_KINDS = [
   { key: "most_points", kind: "most_points", division: null, name: "Most Points", icon: "flame", plate: "outlined", token: "--accolade-points" },
   { key: "best_average", kind: "best_average", division: null, name: "Best Average", icon: "gauge", plate: "outlined", token: "--accolade-average" },
   { key: "best_match", kind: "best_match", division: null, name: "Best Single Match", icon: "zap", plate: "outlined", token: "--accolade-match" },
+  { key: "most_mvps", kind: "most_mvps", division: null, name: "Most MVPs", icon: "star", plate: "outlined", token: "--accolade-mvp" },
   { key: "fantasy_winner", kind: "fantasy_winner", division: null, name: "Fantasy Winner", icon: "medal", plate: "outlined", token: "--accolade-fantasy" },
   { key: "played", kind: "played", division: null, name: "Played", icon: "calendar-check", plate: "muted", token: "--accolade-played" },
 ];
@@ -475,6 +476,15 @@ function _accoladeKind(a) {
   const division = a.division || null;
   return ACCOLADE_KINDS.find(k => k.kind === a.kind
     && (ACCOLADE_TEAM_KINDS.includes(k.kind) ? k.division === division : true)) || null;
+}
+
+/** An award's value as text: "812.3 pts", or a whole count for Most MVPs ("3 MVPs",
+ * "1 MVP", issue 248). "" when there is no value. */
+function accoladeValueText(kindKey, value) {
+  if (value == null || !Number.isFinite(Number(value))) return "";
+  if (kindKey !== "most_mvps") return `${Number(value).toFixed(1)} pts`;
+  const n = Math.round(Number(value));
+  return `${n} MVP${n === 1 ? "" : "s"}`;
 }
 
 function _accoladeIsTeamKind(kind) {
@@ -572,7 +582,7 @@ function accoladeChipsHtml(accolades) {
   return `<span class="accolade-chips">${list.map(a => {
     const kind = _accoladeKind(a);
     const detail = _accoladeIsTeamKind(kind) && a.team_name ? `with ${a.team_name}`
-      : (a.value != null && Number.isFinite(Number(a.value)) ? `${Number(a.value).toFixed(1)} pts` : "");
+      : accoladeValueText(kind.key, a.value);
     const tip = detail ? ` title="${_escHtml(detail)}"` : "";
     return `<span class="accolade-chip accolade-chip--${kind.plate} accolade-chip--${kind.key}"${tip}><i data-lucide="${kind.icon}" aria-hidden="true"></i>${_escHtml(_accoladeChipLabel(a, kind))}</span>`;
   }).join("")}</span>`;
@@ -597,15 +607,17 @@ function _cardDetailsSection(kind, title, lines) {
 /**
  * Issue 228, used by the player popup's Accolades timeline since issue 230: one
  * accolade as a detail line, "S15 Div 1 Champion · with Team",
- * "S15 Div 1 Runner-up · with Team" (issue 233) or "S15 Most Points · 812.3 pts". "" for Played (see accoladePlayedLine) or an
+ * "S15 Div 1 Runner-up · with Team" (issue 233), "S15 Most Points · 812.3 pts" or
+ * "S16 Most MVPs · 3 MVPs" (issue 248). "" for Played (see accoladePlayedLine) or an
  * unknown kind.
  */
 function accoladeDetailLine(a) {
   const kind = _accoladeKind(a);
   if (!kind || kind.key === "played") return "";
+  const value = accoladeValueText(kind.key, a.value);
   const detail = _accoladeIsTeamKind(kind)
     ? (a.team_name ? ` · with ${a.team_name}` : "")
-    : (a.value != null && Number.isFinite(Number(a.value)) ? ` · ${Number(a.value).toFixed(1)} pts` : "");
+    : (value ? ` · ${value}` : "");
   const text = `${_seasonShort(a)} ${kind.name}${detail}`;
   return _cardDetailLine(`accolade-pip accolade-pip--${kind.plate} accolade-pip--${kind.key}`, kind.icon,
     `<span class="card-detail-text">${_escHtml(text)}</span>`);
@@ -813,7 +825,7 @@ const _CARD_ACCOLADE_PRIORITY = {
   div1_runner_up: 1, div2_runner_up: 1,
   div1_third: 2, div2_third: 2,
   fantasy_winner: 3,
-  most_points: 4, best_average: 4, best_match: 4,
+  most_points: 4, best_average: 4, best_match: 4, most_mvps: 4,
   played: 5,
 };
 

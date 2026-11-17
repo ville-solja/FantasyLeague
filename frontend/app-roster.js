@@ -51,7 +51,10 @@ function _renderWeekSelector() {
   // Keep the player's own pick; with none (_rosterWeekId null) the markup's
   // default (the upcoming week) wins.
   const prev = _rosterWeekId !== null ? sel.value : "";
-  const html = _weeks.map(w => {
+  // Issue #249: with no upcoming week the editable roster gets its own first option.
+  const noWeek = nextWeek ? "" :
+    `<option value=""${_rosterWeekId === null ? " selected" : ""}>Next week (not scheduled)</option>`;
+  const html = noWeek + _weeks.map(w => {
     const isLive   = w.is_locked && w.start_time <= now && w.end_time >= now;
     const isNext   = nextWeek && w.id === nextWeek.id;
     const label = w.is_locked
@@ -61,12 +64,17 @@ function _renderWeekSelector() {
     return `<option value="${w.id}"${isSelected ? " selected" : ""}>${_escHtml(label)}</option>`;
   }).join("");
   if (renderIfChanged(sel, html) && prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  // Unchanged markup is not rewritten, so going back to no pick (after a draw, issue
+  // #249) has to move the selection itself.
+  if (_rosterWeekId === null) sel.value = nextWeek ? String(nextWeek.id) : "";
 }
 
 /** A week change sends a waiting save first (loadRoster flushes it). */
 function onRosterWeekChange() {
   const sel = document.getElementById("rosterWeekSelect");
-  _rosterWeekId = sel ? parseInt(sel.value) : null;
+  // "Next week (not scheduled)" has an empty value: the editable roster (issue #249).
+  const id = sel ? parseInt(sel.value, 10) : NaN;
+  _rosterWeekId = Number.isFinite(id) ? id : null;
   return loadRoster(_rosterWeekId);
 }
 
@@ -103,7 +111,10 @@ async function loadRoster(weekId = null, opts = {}) {
     if (counter) counter.textContent = tokens !== undefined ? `${tokens} ${_tokenName} remaining` : "";
 
     const weekStatusEl = document.getElementById("rosterWeekStatus");
-    if (weekStatusEl && week) {
+    if (weekStatusEl && !week) {
+      weekStatusEl.textContent = "No upcoming week";
+      weekStatusEl.style.color = "var(--fg-muted)";
+    } else if (weekStatusEl) {
       if (isLocked) {
         const now = Date.now() / 1000;
         const isLive = week.start_time <= now && week.end_time >= now;

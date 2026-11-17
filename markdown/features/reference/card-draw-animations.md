@@ -18,7 +18,7 @@ Frontend only: no endpoints, tables or env vars change. The draw endpoints (`POS
 
    The clone's back face gets `font-size` = 16px × reveal width ÷ deck width (a leftover of the pre-redesign CSS-pattern back; harmless now that the back face is a fixed image). The back face shows `assets/card_templates/Card_Back.png` (`background-size: contain`), which reads as the same object as the deck it just left.
 4. **Details:** the clone is removed where the real reveal card now shows, and `.reveal-overlay--details-in` fades in the frame, rarity label, destination ("Added to active roster" / "Added to bench"), Reroll and Continue (400 ms, the details 120 ms after the frame). The finished modal is the same reveal as before.
-5. **Roster reload:** `loadRoster` runs after the flight (kept in `_drawRosterReload`), so the new card doesn't appear in its slot while the card is still on its way.
+5. **Roster reload:** `loadRoster` runs after the flight (kept in `_drawRosterReload`), so the new card doesn't appear in its slot while the card is still on its way. Right before the reload, `_showEditableRosterForDraw()` switches My Team back to the editable roster when a locked week was shown, so the card has a slot to land in ([Roster After a Draw](roster-after-draw.md), #249).
 
 The Draw button (`withBusy`) and the team draw's `_boosterDrawInFlight` flag stay set until the reveal shows, so a second press sends no second draw (#185). `revealAction()` (Continue, Draw another card, Enter) does nothing while the reveal is still entering.
 

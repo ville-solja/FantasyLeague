@@ -1053,3 +1053,59 @@ As an admin, I want notifications to stay few and harmless even if someone creat
   - `@everyone`, `@here` and role or user mentions don't notify anyone;
   - a name that looks like a link is shown as the channel id instead.
 - **Bounded:** the existing cap of 200 pending requests still applies. A dropped request is not announced.
+
+## Twitch MVP Vote Extension (#253)
+
+### The Streamer Runs an MVP Vote After the Match
+**User story**
+As a streamer, I want to start a viewer vote for the match MVP from a small extension, so that my viewers choose the MVP without me running the whole card game on my channel.
+
+**Acceptance criteria**
+- **Tool:** the vote extension's live configuration view lists the current series and its matches, as the MVP tool does today. A finished match (or a live one with known players) has **Start viewer vote** with a length of 1, 2 or 3 minutes.
+- **Open:** opening the vote posts one chat message and updates every open panel. One poll can be open per channel; an unapproved channel gets the existing approval message.
+- **Close and confirm:** the poll closes on its timer or with **End now**. The tool shows each player's votes with the sole winner selected; a tie or no votes lets the streamer pick. **Confirm MVP** sets the MVP exactly as today (MVP row, fantasy bonus, chat message, audit).
+- **Cancel:** **Cancel vote** ends the poll with no MVP.
+
+### A Viewer Votes With Only a Twitch Login
+**User story**
+As a viewer, I want to vote for the MVP in the panel without joining or logging in anywhere else, so that taking part is one click.
+
+**Acceptance criteria**
+- **Panel:** with no poll, the panel shows the channel's last MVP (if any) and "The streamer starts the vote after the match". With an open poll it shows the two teams' players, a countdown and **Vote**.
+- **Who:** any viewer logged in to Twitch can vote; a logged-out viewer sees "Log in to Twitch to vote." and the API answers `403 twitch_login_required`.
+- **One vote:** one vote per viewer per poll, changeable until it closes. While open, only the total number of votes is shown. After closing, everyone sees the result and the confirmed MVP.
+- **No game:** the panel has no Join, cards, roster or link that is needed to vote.
+- **Privacy:** no response contains another viewer's id or vote.
+
+### Voters Can Win Tokens
+**User story**
+As a viewer who voted, I want a chance at a token, so that voting is rewarded the way watching is today.
+
+**Acceptance criteria**
+- **Enter:** after voting, the panel offers the identity share with one sentence on why. A viewer who shares is in the drop for that poll; one who doesn't can still vote.
+- **Drop:** on **Confirm MVP**, up to `TWITCH_DROP_MAX` voters who shared are picked at random and get one token each. The chat message says how many tokens dropped.
+- **Known account:** a picked voter whose Twitch id is on a Kana Cards account gets the token at once (`credit_tokens`), audited like today's drops.
+- **No account yet:** a picked voter with no account gets a pending token. The panel says "You won a token. Claim it at kana-cards.com by signing in with Twitch." Connecting Twitch on the website, or joining the full extension with the identity share, credits every unexpired pending token once.
+- **Limits:** one token per viewer per poll; pending tokens expire after 60 days; the stored key is a keyed hash, never the Twitch id.
+- **Switch:** with `TWITCH_VOTE_TOKENS_ENABLED=false`, the share prompt and the drop are off and voting still works.
+
+### The Operator Sets Up the Second Extension
+**User story**
+As the operator, I want the backend to accept the vote extension next to the full one, so that both can run against one service.
+
+**Acceptance criteria**
+- **Tokens:** `verify_twitch_jwt` accepts a token signed with either extension's secret and records which extension it came from. Game endpoints (join, draws, roster) refuse the vote extension's tokens with 403.
+- **Messages:** PubSub and chat messages for a poll go out through the extension that opened it.
+- **CORS:** the vote extension's origin is allowed, and no other.
+- **Status:** Admin › Twitch › Twitch status shows the vote extension's configuration and its last token failures, separately from the full extension.
+- **Package:** `bash twitch-vote-extension/package.sh <version> --ebs-origin <url>` builds its zip with the fixed EBS origins, like the full extension.
+
+### The Extension Is Ready for Twitch Review
+**User story**
+As the maintainer, I want a submission guide for the vote extension, so that the review doesn't repeat the 1.1.7 rejection.
+
+**Acceptance criteria**
+- **Guide:** a submission document with the listing text, the endpoint disclosure, the chat messages, the identity-share explanation and testing steps for a reviewer.
+- **Honest listing:** the listing says tokens are for the Kana Cards game and how they are claimed; the vote is described as usable without it.
+- **Drift test:** every `/twitch/...` path the packaged files call is in the disclosure table, as for the full extension.
+- **Vote-only fallback:** the guide has a variant for submitting with tokens switched off.

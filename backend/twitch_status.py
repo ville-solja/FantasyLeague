@@ -56,6 +56,59 @@ def _secret_decodes(raw: str) -> bool:
         return False
 
 
+def extension_origin_regex(client_ids) -> str | None:
+    """The CORS origin pattern for the extensions' iframes: exactly
+    https://<client id>.ext-twitch.tv for each client id given, and nothing else.
+    None when no id is set, so no ext-twitch.tv origin is allowed (issue #171, #253)."""
+    ids = [re.escape(c) for c in dict.fromkeys(c.strip() for c in client_ids if c and c.strip())]
+    if not ids:
+        return None
+    hosts = ids[0] if len(ids) == 1 else "(?:" + "|".join(ids) + ")"
+    return rf"^https://{hosts}\.ext-twitch\.tv$"
+
+
+def _vote_extension_checks() -> list[dict]:
+    """Issue #253: the MVP Vote extension's own settings, apart from the full extension's.
+    Unset is a warning, not a problem: a league may run only the full extension."""
+    client_id = _env("TWITCH_VOTE_EXTENSION_CLIENT_ID").strip('"').strip("'")
+    raw_secret = os.getenv("TWITCH_VOTE_EXTENSION_SECRET", "")
+    has_secret = bool(raw_secret.strip().strip('"').strip("'"))
+    version = _env("TWITCH_VOTE_EXTENSION_VERSION")
+    off = "Not set: the MVP Vote extension is off."
+    if client_id:
+        id_row = _check("vote_extension_client_id", OK, "TWITCH_VOTE_EXTENSION_CLIENT_ID",
+                        f"Set. CORS allows the MVP Vote extension origin https://{client_id}.ext-twitch.tv; "
+                        "it must match the Client ID of the installed MVP Vote extension.")
+    elif has_secret:
+        id_row = _check("vote_extension_client_id", PROBLEM, "TWITCH_VOTE_EXTENSION_CLIENT_ID",
+                        "Not set, but the secret is: CORS refuses the MVP Vote panel. Set it to that "
+                        "extension's Client ID from the Twitch console.")
+    else:
+        id_row = _check("vote_extension_client_id", WARNING, "TWITCH_VOTE_EXTENSION_CLIENT_ID", off)
+    if has_secret and not _secret_decodes(raw_secret):
+        secret_row = _check("vote_extension_secret", PROBLEM, "TWITCH_VOTE_EXTENSION_SECRET",
+                            "Set but not valid base64: every MVP Vote panel request is refused. Copy "
+                            "the key from that extension's Extension Secrets in the Twitch console again.")
+    elif has_secret:
+        secret_row = _check("vote_extension_secret", OK, "TWITCH_VOTE_EXTENSION_SECRET",
+                            "Set and decodes as base64. It must be the MVP Vote extension's own key, "
+                            "not the full extension's.")
+    elif client_id:
+        secret_row = _check("vote_extension_secret", PROBLEM, "TWITCH_VOTE_EXTENSION_SECRET",
+                            "Not set, but the client id is: every MVP Vote panel request is refused. "
+                            "Copy the key from that extension's Extension Secrets in the Twitch console.")
+    else:
+        secret_row = _check("vote_extension_secret", WARNING, "TWITCH_VOTE_EXTENSION_SECRET", off)
+    if version:
+        version_row = _check("vote_extension_version", OK, "TWITCH_VOTE_EXTENSION_VERSION",
+                             "Set. It must match the installed MVP Vote version for chat announcements.")
+    else:
+        version_row = _check("vote_extension_version", WARNING, "TWITCH_VOTE_EXTENSION_VERSION",
+                             "Not set: chat messages for votes opened from the MVP Vote extension "
+                             "are skipped. Set it to the installed MVP Vote version.")
+    return [id_row, secret_row, version_row]
+
+
 def _client_id_check() -> dict:
     client_id = _env("TWITCH_EXTENSION_CLIENT_ID")
     label = "TWITCH_EXTENSION_CLIENT_ID"
@@ -252,6 +305,7 @@ def build_status(db: Session) -> dict:
             _client_id_check(),
             _secret_check(),
             _version_check(),
+            *_vote_extension_checks(),
             _local_dev_check(),
             _mvp_channels_check(db),
             _connect_twitch_check(),

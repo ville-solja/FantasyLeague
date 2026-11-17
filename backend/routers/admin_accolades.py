@@ -98,10 +98,18 @@ def set_season_champions(body: ChampionSetBody, db=Depends(get_db),
 _TEAM_KIND_NAMES = {"champion": "champion", "runner_up": "runner-up", "third_place": "third place"}
 
 
+_MVP_COUNT_MSG = "A Most MVPs value is a whole number of MVPs, 1 or more"
+
+
+def _whole_count(v) -> bool:
+    """True for no value or a whole number >= 1 (a most_mvps value is an MVP count)."""
+    return v is None or (v >= 1 and float(v).is_integer())
+
+
 class AccoladeIn(BaseModel):
     season_label: Label
     kind: Literal["champion", "runner_up", "third_place", "most_points", "best_average",
-                  "best_match", "fantasy_winner", "played"]
+                  "best_match", "most_mvps", "fantasy_winner", "played"]
     division: Literal["div1", "div2"] | None = None
     team_name: Name | None = None
     player_account_id: AccountId | None = None
@@ -138,6 +146,8 @@ class AccoladeIn(BaseModel):
                 raise ValueError("This accolade needs a player (OpenDota id)")
             if self.user_id is not None or self.username:
                 raise ValueError("Only a fantasy winner names a user")
+        if self.kind == "most_mvps" and not _whole_count(self.value):
+            raise ValueError(_MVP_COUNT_MSG)
         return self
 
 
@@ -251,6 +261,8 @@ def update_season_accolade(row_id: RowId, body: AccoladePatch, db=Depends(get_db
             if not v:
                 raise HTTPException(status_code=422, detail=f"{field} cannot be empty")
             changes[field] = v
+    if row.kind == "most_mvps" and not _whole_count(changes.get("value")):
+        raise HTTPException(status_code=422, detail=_MVP_COUNT_MSG)
     for field, v in changes.items():
         setattr(row, field, v)
     _audit(db, "admin_accolade_updated", actor_id=admin["user_id"], actor_username=admin["username"],

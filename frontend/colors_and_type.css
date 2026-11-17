@@ -113,6 +113,7 @@
   --accolade-points:  var(--k-orange-500);
   --accolade-average: var(--k-orange-300);
   --accolade-match:   var(--k-amber-300);
+  --accolade-mvp:     var(--k-rarity-epic);   /* Most MVPs (issue 248): violet, apart from the warm point awards */
   --accolade-fantasy: var(--k-orange-100);
   --accolade-played:  var(--fg-muted);
   /* Team placements (issue 233): silver runner-up and bronze third place, on outlined

@@ -312,6 +312,10 @@ def connect_account(db, user: User, sub: str) -> str:
     _audit(db, "twitch_connected", actor_id=user.id, actor_username=user.display_name,
            detail=f"user_id={user.id}" + (f" pending_merge_user_id={pending}" if pending else ""))
     caster_tags.sync_safely(db)  # issue #201: approved streamers get the Caster tag
+    # Issue #253: tokens this Twitch id won in vote-extension polls before it had an
+    # account, credited in the same commit as the connection.
+    import twitch_vote_rewards
+    claimed = twitch_vote_rewards.claim_pending(db, user, sub)
     if pending:
         db.commit()
         return "merge_ready"
@@ -325,7 +329,7 @@ def connect_account(db, user: User, sub: str) -> str:
         _audit(db, "twitch_starter_bonus", actor_id=user.id, actor_username=user.display_name,
                detail=f"user_id={user.id} amount={bonus}")
     db.commit()
-    if granted:
+    if granted or claimed:
         db.refresh(user)
     return "connected_bonus" if granted else "connected"
 

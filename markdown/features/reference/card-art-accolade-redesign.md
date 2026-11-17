@@ -27,7 +27,7 @@ When a player holds more than 6 accolades, the card shows the highest-priority 6
 2. Division runner-up
 3. Division third place
 4. Fantasy winner
-5. Performance awards (Most Points, Best Average, Best Single Match)
+5. Performance awards (Most Points, Best Average, Best Single Match, and Most MVPs since #248)
 6. Seasons played
 
 ## Assets

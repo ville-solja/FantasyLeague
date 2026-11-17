@@ -619,7 +619,9 @@ async function _playDrawFlight(card, prep) {
     inner.appendChild(back);
     flight.appendChild(inner);
     const start = _rectTransform(from, to);
-    const lifted = _rectTransform({ ...from, top: from.top - 24 }, to, " rotate(-3deg)");
+    // A DOMRect's fields are prototype getters, so a spread copies none of them (issue #249).
+    const lifted = _rectTransform(
+      { left: from.left, top: from.top - 24, width: from.width, height: from.height }, to, " rotate(-3deg)");
     flight.style.transform = start;
     document.body.appendChild(flight);
 
@@ -852,6 +854,15 @@ function closeBoosterModal() {
   if (drawBtn) drawBtn.disabled = true;
 }
 
+/** Issue #249: a draw lands on the editable roster, so show it if a locked week is up. */
+function _showEditableRosterForDraw() {
+  if (_rosterWeekId === null) return;
+  const shown = (_weeks || []).find(w => w.id === _rosterWeekId);
+  if (shown && !shown.is_locked) return;
+  _rosterWeekId = null;
+  if (typeof _renderWeekSelector === "function") _renderWeekSelector();
+}
+
 // Issue #185: the reveal's "Draw another card" (button or Enter) repeats a team draw
 // without the modal's button, so this flag keeps it to one request at a time.
 let _boosterDrawInFlight = false;
@@ -874,6 +885,7 @@ async function _drawBoosterForTeam(teamId) {
     showReveal(data, teamId);
     loadDeck();
     await _playDrawFlight(data, prep);
+    _showEditableRosterForDraw();
     _drawRosterReload = loadRoster(_rosterWeekId);
   } catch (e) {
     setStatus("deckStatus", e.message, false);
@@ -916,6 +928,7 @@ async function drawCard() {
       showReveal(data);
       loadDeck();
       await _playDrawFlight(data, prep);
+      _showEditableRosterForDraw();
       _drawRosterReload = loadRoster(_rosterWeekId);
     } catch (e) {
       setStatus("deckStatus", e.message, false);

@@ -7,6 +7,7 @@ const _HISTORY_AWARDS = [
   { kind: "most_points", unit: "pts" },
   { kind: "best_average", unit: "avg" },
   { kind: "best_match", unit: "pts" },
+  { kind: "most_mvps", unit: "MVPs" },
   { kind: "fantasy_winner", unit: "pts" },
 ];
 
@@ -37,7 +38,10 @@ async function loadHistory() {
 }
 
 function _historyValue(v, unit) {
-  return v == null || !Number.isFinite(Number(v)) ? "" : `${Number(v).toFixed(1)} ${unit}`;
+  if (v == null || !Number.isFinite(Number(v))) return "";
+  // Issue 248: Most MVPs is a whole count ("3 MVPs", "1 MVP"), not points.
+  if (unit === "MVPs") return accoladeValueText("most_mvps", v);
+  return `${Number(v).toFixed(1)} ${unit}`;
 }
 
 /** Issue 233: the division's runner-up and third place teams, "" when none is recorded. */

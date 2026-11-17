@@ -23,16 +23,19 @@ import hashlib
 import json
 import logging
 
-from sqlalchemy import delete
+from fastapi import HTTPException
+from sqlalchemy import delete, text
 from sqlalchemy.dialects.postgresql import insert as _pg_insert
 from sqlalchemy.dialects.sqlite import insert as _sqlite_insert
 
 from card_utils import _compute_card_points, _load_weights, _mvp_bonus_delta
-from models import Card, CardMatchPoints, CardModifier, PlayerMatchStats, ScoringState
+from match_scoring import counted_roster_entry_sql, scored_match_sql
+from models import Card, CardMatchPoints, CardModifier, PlayerMatchStats, ScoringState, Week
 from scoring import stat_dict_from_row
 
 logger = logging.getLogger(__name__)
 
+CHECK_TOLERANCE = 0.05
 FINGERPRINT_KEY = "card_points_weights_fingerprint"
 
 
@@ -197,3 +200,63 @@ def ensure_card_points_current(db) -> int | None:
     reason = "table empty" if not has_rows else "weights changed"
     logger.info("Card points: rebuilding (%s)", reason)
     return rebuild_all(db)
+
+
+def check_week(db, week_id: int) -> dict:
+    """Read-only points check (issue #250): recompute the points of every card counted on
+    the week's rosters, for the week's scored games, and compare them with the stored
+    card_match_points rows. A pair differing by more than CHECK_TOLERANCE, or present on
+    only one side (stored or fresh None), is a mismatch. Writes nothing; POST /recalculate
+    fixes what it finds. Unknown week: 404."""
+    week = db.get(Week, week_id)
+    if week is None:
+        raise HTTPException(status_code=404, detail="Week not found")
+    entries = db.execute(text(f"""
+        SELECT DISTINCT wre.user_id, u.username, wre.card_id, c.card_type, p.name AS player_name
+        FROM weekly_roster_entries wre
+        JOIN cards c ON c.id = wre.card_id
+        LEFT JOIN users u ON u.id = wre.user_id
+        LEFT JOIN players p ON p.id = c.player_id
+        WHERE wre.week_id = :week_id AND {counted_roster_entry_sql()}
+    """), {"week_id": week_id}).fetchall()
+    match_ids = [r[0] for r in db.execute(text(f"""
+        SELECT m.match_id FROM matches m
+        WHERE {scored_match_sql()}
+          AND (m.week_override_id = :week_id
+               OR (m.week_override_id IS NULL AND m.start_time BETWEEN :ws AND :we))
+    """), {"week_id": week_id, "ws": week.start_time, "we": week.end_time}).fetchall()]
+    card_ids = sorted({e.card_id for e in entries})
+
+    fresh, stored = {}, {}
+    if card_ids and match_ids:
+        fresh = {k: v["points"] for k, v in
+                 _compute(db, card_ids=card_ids, match_ids=match_ids).items()}
+        stored = {(c, m): pts for c, m, pts in
+                  db.query(CardMatchPoints.card_id, CardMatchPoints.match_id, CardMatchPoints.points)
+                  .filter(CardMatchPoints.card_id.in_(card_ids),
+                          CardMatchPoints.match_id.in_(match_ids)).all()}
+
+    pairs = sorted(set(fresh) | set(stored))
+    games_by_card: dict[int, list] = {}
+    for card_id, match_id in pairs:
+        games_by_card.setdefault(card_id, []).append(match_id)
+    mismatches = []
+    for e in sorted(entries, key=lambda e: ((e.username or "").lower(), e.card_id)):
+        card_id = e.card_id
+        for match_id in games_by_card.get(card_id, ()):
+            s, f = stored.get((card_id, match_id)), fresh.get((card_id, match_id))
+            if s is not None and f is not None and abs(s - f) <= CHECK_TOLERANCE:
+                continue
+            mismatches.append({
+                "user_id": e.user_id, "user": e.username, "card_id": card_id,
+                "player": e.player_name, "card_type": e.card_type, "match_id": match_id,
+                "stored": None if s is None else round(s, 2),
+                "fresh": None if f is None else round(f, 2),
+            })
+    return {
+        "week": {"id": week.id, "label": week.label},
+        "cards": len(card_ids),
+        "games": len({m for _, m in pairs}),
+        "checked": len(pairs),
+        "mismatches": mismatches,
+    }

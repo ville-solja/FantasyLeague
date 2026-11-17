@@ -12,6 +12,22 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-17 — developer — testing
+**Problem:** Adding a keyword to `twitch._post_chat_message` / `_pubsub_broadcast` calls (issue 253's `ext=`) broke older tests: their recorders (`_chat_recorder` in `test_issue_157`, `_pubsub` in `test_issue_234`) are two-argument lambdas. Separately, `twitch_channels.record_request` ignores a non-numeric channel id, so the tests' `test_channel` never gets an approval row.
+**Solution:** Send through `twitch.chat_as(ext, …)` / `broadcast_as(ext, …)`, which keep the two-argument call for the full extension; in a new test that needs the keyword, patch with a recorder that takes `ext="game"`. Use a numeric channel id when a test expects a `TwitchChannelApproval` row.
+
+### 2026-11-16 — developer — frontend
+**Problem:** Resetting My Team's week pick in code (`_rosterWeekId = null`, then `_renderWeekSelector()`, issue 249) left the `<select>` on the old week: the markup was unchanged, so `renderIfChanged` wrote nothing and the DOM kept the player's selection.
+**Solution:** When code changes which option should be selected, set `sel.value` as well; `selected` in markup passed to `renderIfChanged` only applies when the markup differs.
+
+### 2026-11-16 — ship — testing
+**Problem:** A barrier-released threaded test (`test_issue_185`'s concurrent soft-account merges) passed every local run but failed twice in a row on CI: on a slow runner the second thread started after the first one committed, so `s.get(User, soft_id)` was `None` and the helper crashed with `AttributeError` instead of the expected `SoftAccountGone`.
+**Solution:** In a concurrency test, handle the "other thread already finished" state the way the production caller does (here `merge_confirm`'s 404 for a missing soft account). To reproduce, add a random `time.sleep` before each thread's first read.
+
+### 2026-11-15 — developer — testing
+**Problem:** Adding a panel to Admin › Settings (issue 250's Check Points) failed only in the full suite: `test_issue_214` pins each section's panel titles, the total panel count, and that the danger action (Recalculate, Reset Season) is the last button of its section.
+**Solution:** Put a new Settings panel before the section's danger panel, and extend the title set and the panel count in `test_issue_214_admin_enhancements.py` together.
+
 ### 2026-11-11 — developer — testing
 **Problem:** Adding a column to a table (issue 215) broke the table's original tests: `test_issue_175` pinned the exact column set and asserted the table name never appears in `migrate.py`, and `test_issue_180` pins the exact list of Twitch status check keys with every row "ok".
 **Solution:** Before adding a column or a status check, grep `backend/tests` for the table name and for `[c["key"] for c in`; extend the pinned set or list, narrow "not in migrate.py" to `CREATE TABLE <name>`, and configure the new check in `status_env`.

@@ -132,6 +132,14 @@ def record_twitch_account_id(db, user: User, real_id: str | None) -> None:
     user.twitch_account_id = real_id
     if user.account_type == SOFT and user.id is not None:
         record_starter_grant(db, real_id, user.id, "join")
+    _claim_pending_tokens(db, user, real_id)
+
+
+def _claim_pending_tokens(db, user: User, real_id) -> None:
+    """Issue #253: tokens this Twitch id won in vote-extension MVP polls before it had
+    an account are credited once the id is on one (the caller commits)."""
+    import twitch_vote_rewards
+    twitch_vote_rewards.claim_pending(db, user, real_id)
 
 
 def get_or_create_soft_account(db, opaque_id: str, real_id: str | None) -> tuple[User, bool]:
@@ -171,6 +179,7 @@ def get_or_create_soft_account(db, opaque_id: str, real_id: str | None) -> tuple
         return existing, False
     if user.twitch_account_id:
         record_starter_grant(db, user.twitch_account_id, user.id, "join")
+        _claim_pending_tokens(db, user, user.twitch_account_id)
     _audit(db, "twitch_soft_account_created", actor_id=user.id,
            actor_username=user.display_name, detail=f"user_id={user.id}")
     db.commit()

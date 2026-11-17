@@ -271,10 +271,11 @@ def test_compute_season_standings_card_chips_carry_season_scope(db):
     chips = [c for r in season for c in r["cards"]]
     assert chips
     assert all(c["scope"] == "season" for c in chips)
-    assert all(set(c) == {"card_id", "card_type", "player_name", "points", "scope"} for c in chips)
+    # Issue #250 added "games" (the card's game count in scope) to every chip.
+    assert all(set(c) == {"card_id", "card_type", "player_name", "points", "games", "scope"} for c in chips)
     assert all(set(r) == {"id", "username", "is_admin", "points", "tags", "cards"} for r in season)
     weekly_chips = [c for r in weekly_leaderboard(week_id=1, db=db) for c in r["cards"]]
-    assert all(set(c) == {"card_id", "card_type", "player_name", "points"} for c in weekly_chips)
+    assert all(set(c) == {"card_id", "card_type", "player_name", "points", "games"} for c in weekly_chips)
     endpoint = leaderboard_router.season_leaderboard(db=db)
     assert all(c["scope"] == "season" for r in endpoint for c in r["cards"])
 

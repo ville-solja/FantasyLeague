@@ -53,7 +53,7 @@ All `/twitch/*` endpoints validate the extension JWT (`verify_twitch_jwt`). The 
 
 **Collection** (`routers.cards.collection_for_user`): every owned card with player, team, rarity (`card_type`), modifiers, `is_active` and `season_points` (the card's stored points over all scored matches), rarest first then by name. No paging: a 40-card collection is one response.
 
-**Roster:** `_build_roster_response` for the next editable week. When there is no editable week and a locked week is in progress, the panel shows that week's snapshot read-only (`roster_locked: true`) and the three roster endpoints answer 409 "Roster locked for this week". The website has no such server-side check (its locked weeks are read-only snapshots and edits apply to the next week); the panel adds it so a viewer can't change cards that would only count for a week nobody has created yet.
+**Roster:** `_build_roster_response` for the next editable week. With no editable week and no week in progress (between seasons), the roster rows show 0.0 week points (#249). When there is no editable week and a locked week is in progress, the panel shows that week's snapshot read-only (`roster_locked: true`) and the three roster endpoints answer 409 "Roster locked for this week". The website has no such server-side check (its locked weeks are read-only snapshots and edits apply to the next week); the panel adds it so a viewer can't change cards that would only count for a week nobody has created yet.
 
 **Week points:** `{week_id, label, points}` for the locked week in progress (its `combined_value`), else `null`.
 

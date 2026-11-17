@@ -304,6 +304,7 @@ class TestAccoladesPrintedOnCardFace:
             path = os.path.join(image._ASSETS_DIR, "accolades", filename)
             assert os.path.isfile(path), key
         assert image._ACCOLADE_ICON_FILES["div1"] == "Accolade_Div1_Champion.png"
+        assert image._ACCOLADE_ICON_FILES["most_mvps"] == "Accolade_Most_MVPs.png"  # issue 248
         lucide_icons = {k["icon"] for k in accolades.ACCOLADE_KINDS}
         assert not (set(image._ACCOLADE_ICON_FILES.values()) & lucide_icons)
 
@@ -328,7 +329,7 @@ class TestAccoladesPrintedOnCardFace:
             "div1_runner_up",                 # runner-up
             "div1_third",                     # third place
             "fantasy_winner",
-            "most_points", "best_average", "best_match",   # performance awards
+            "most_points", "best_average", "best_match", "most_mvps",   # performance awards
             "played", "played", "played",     # three seasons played
         ]
         selected = image._select_accolade_keys(keys)
@@ -337,6 +338,7 @@ class TestAccoladesPrintedOnCardFace:
         assert len(selected) == 6
         assert "played" not in selected
         assert "best_average" not in selected and "best_match" not in selected
+        assert "most_mvps" not in selected  # issue 248: same tier as the other awards
         # A stable sort preserves "newest season first" within a tier: the caller
         # (accolades.accolades_for) already lists newest season first.
         assert image._select_accolade_keys(["div2", "div1", "played"])[:2] == ["div2", "div1"]

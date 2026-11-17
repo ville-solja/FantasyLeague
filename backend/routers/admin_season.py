@@ -62,7 +62,7 @@ class SeasonResetBody(BaseModel):
 
 @router.get("/admin/season/accolades-preview")
 def accolades_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
-    """What End Season will record (issue #50): the four awards (ties included), how
+    """What End Season will record (issue #50): the five awards (ties included), how
     many players get a played row, and the season's teams with their players for the
     champion picker. season_label is the live season's label."""
     label = accolades.current_season_label(db)
@@ -87,7 +87,7 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
     Run this BEFORE a season reset — standings are computed live from match
     stats and are destroyed by the reset.
 
-    In the same transaction it records the season's accolades (issue #50): the four
+    In the same transaction it records the season's accolades (issue #50): the five
     awards, the optional champions and one played row per player with a scored match.
     If recording fails nothing is committed.
     """

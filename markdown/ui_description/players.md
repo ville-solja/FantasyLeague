@@ -25,7 +25,7 @@ Table of all players who have participated in any ingested league. Sortable colu
 ## Right-hand panels
 
 - **Player average performance** — top 10 by average fantasy points, with a "Show all" toggle. The toggle state and the main table's sort column stay when the tab refreshes.
-- **Single match performance** — top 10 single-match fantasy point scores.
+- **Best single games** — sub-line "One game each, this season"; the top 10 single-game fantasy point scores of the season. Each row shows rank, player, the game's date (`14.11.`) and opponent ("vs Elisa Oyj", omitted when the team is unknown) under the name, and the points (issue #250).
 - **MVP leaderboard** — players ranked by `mvp_count` (highest first), players with zero MVPs
   omitted. Derived client-side from the same data already fetched for the main Players panel
   (no separate endpoint or Refresh button — refreshing the Players panel refreshes this too).
@@ -66,7 +66,7 @@ Opened by clicking any player name or card (in this tab or elsewhere); the code 
   seasons · S4–S16", whose disclosure lists the seasons, with the current season's matches ("S16 ·
   7 matches"); and a timeline by season, newest first. Each season lists its accolades as detail
   lines, each with its symbol: "S15 Div 1 Champion · with Team Name", "S15 Div 1 Runner-up · with
-  Team Name" (issue 233), "S15 Most Points · 812.3 pts" (issue #230). Runner-up and third place are
+  Team Name" (issue 233), "S15 Most Points · 812.3 pts" (issue #230), "S16 Most MVPs · 3 MVPs" (issue 248). Runner-up and third place are
   not counted as season awards.
 - **Match history table** — one row per match, columns (in order): MVP star, Date, Hero (icon),
   Result (W or L as text, blank when unknown), Fantasy pts, K/A/D, GPM, Wards, Tower dmg, Opponent

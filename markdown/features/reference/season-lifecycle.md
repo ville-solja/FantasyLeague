@@ -31,7 +31,7 @@ is already archived. Logged as `admin_season_archived`. The stored `points` are 
 
 Issue #50: the body also takes optional `champions: [{division, team_name, player_account_ids}]`.
 In the same transaction the call records the season's accolades in `season_accolades`: the
-four awards, the champions and one `played` row per player with a scored match. If that fails,
+five awards (Most Points, Best Average, Best Single Match, Most MVPs, Fantasy Winner), the champions and one `played` row per player with a scored match. If that fails,
 nothing is committed (500). The audit detail adds `accolades=N champions=M`. The admin UI shows
 a preview first (`GET /admin/season/accolades-preview`), with the label prefilled from the
 current season: "Season N" parsed from the monitored leagues' OpenDota names ("Kanaliiga Season

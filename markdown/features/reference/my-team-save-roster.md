@@ -58,7 +58,7 @@ Logged in; `RATE_LIMIT_ROSTER_MUTATION` per user (`key_by_user_or_ip`). Card ids
 3. A layout identical to the stored one writes nothing.
 4. Every card not listed as active is benched (`is_active = 0`, `slot_index = NULL`) before any card is activated, so the partial unique index `ux_cards_owner_player_active` (#185) holds after each statement; then roster cards get `slot_index` = their slot and bench cards their position. An `IntegrityError` answers the duplicate-player 409.
 
-The answer is the `GET /roster/{user_id}` response for the next editable week plus `version`. The live cards are the roster of the next editable week, so after a week's lock a save counts from the next week (as the single-card routes do), and `week` names it.
+The answer is the `GET /roster/{user_id}` response for the next editable week plus `version`. The live cards are the roster of the next editable week, so after a week's lock a save counts from the next week (as the single-card routes do), and `week` names it. With no upcoming week, `week` is null and the week points are zero ([Roster After a Draw](roster-after-draw.md)).
 
 ### `GET /roster/{user_id}`
 Adds `version`: `roster_version()`, the first 16 hex characters of SHA-256 over `active:<ids>|bench:<ids>` for the stored layout (the cards of active players, as the page shows them). Roster ids are in slot order with `-` for an empty slot between cards (trailing empty slots left out); bench ids in order.
