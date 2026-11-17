@@ -172,4 +172,5 @@ One-off studies live in `markdown/research/`. They are decision records, not pro
 
 | Study | Summary |
 |---|---|
+| [Architecture Maturity Review](../research/architecture-maturity-review.md) | Issue #251, after season 16: the one-process, one-SQLite-file setup has about four times the headroom season 17 needs; backups must be copied off the server before season 17, and Twitch viewer load is the part to watch |
 | [Kana Hub Integration Feasibility](../research/kana-hub-integration-feasibility.md) | Decision document: feasibility, blockers and options for folding Kana Cards into Kana Hub (Eggosystem) as its Dota fantasy, alongside the separate CS2 fantasy; where Dota fits in the hub's per-game structure, what a Steam-only login removes from Kana Cards, and an in-depth evaluation of a full port (architecture, data model, effort, phases, decision criteria) |

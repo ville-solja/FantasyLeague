@@ -11,7 +11,7 @@
 
 "use strict";
 
-var POLL_REFRESH_MS = 5000;    // while a vote is open
+var POLL_REFRESH_MS = 15000;   // while a vote is open, as in the full extension (issue #251 review)
 var IDLE_REFRESH_MS = 60000;   // otherwise (PubSub brings changes sooner)
 
 var WAITING_TEXT = "The streamer starts the vote after the match";

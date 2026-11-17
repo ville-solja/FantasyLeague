@@ -71,6 +71,6 @@ The limit depends on the machine and the size of the database, so compare runs o
 
 ## Review
 
-`markdown/research/architecture-maturity-review.md` will hold the measured load of season 16, the target load for season 17 (3× the measured peak), the headroom, a verdict per area and a ranked list of off-season improvements with their GitHub issues.
+`markdown/research/architecture-maturity-review.md` holds season 16's load, the target for season 17 (3× season 16's peak), the headroom, a verdict per area and a ranked list of off-season improvements.
 
-**Status:** not written yet. It needs the usage report from a production backup of season 16, and the ramp run on a copy of that backup.
+Season 16's figures came from the operator and the server's backup list, not from a production copy, so request peaks are not measured. Running the usage report on a production backup, and the ramp on a production-sized machine, would replace those estimates.
