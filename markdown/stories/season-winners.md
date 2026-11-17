@@ -242,3 +242,33 @@ As a visitor, I want to see when a player finished second or third in a season, 
   - text always names the place, so meaning never depends on colour.
 - **No Holo:** neither kind unlocks Holo (`holo_eligible` counts only `champion`).
 - **Admin:** Player management can add, edit and delete them like other accolades.
+
+## Most MVPs Accolade (issue #248)
+
+### Most MVPs Is Recorded at the End of the Season
+**User story**
+As an admin ending a season, I want the player with the most MVPs to get an accolade, so that MVPs count for something after the season.
+
+**Acceptance criteria**
+- **Preview:** the End Season preview lists **Most MVPs** with the winner or winners and their MVP count, next to the other awards.
+- **Recorded:** End Season inserts one `most_mvps` row per winner in `season_accolades` (`value` = the count, `source` `season_end`); a row that already exists is kept.
+- **Ties and none:** every player tied for the most MVPs gets the award. With no MVPs in the season, there is no award and End Season still works.
+- **Scored matches only:** MVPs on matches excluded from scoring don't count.
+
+### Most MVPs Shows With the Other Accolades
+**User story**
+As a player, I want to see the Most MVPs award on the History tab, in the player popup and on cards, so that it is as visible as the other awards.
+
+**Acceptance criteria**
+- **History:** the season's awards list **Most MVPs** with the player and "N MVPs".
+- **Player popup:** the accolade timeline shows it with its icon and the count.
+- **Cards:** the player's cards show the Most MVPs badge in the accolade grid, with the same priority as the other awards and a tooltip.
+- **Registry:** `ACCOLADE_KINDS` in `backend/accolades.py` and `frontend/app-globals.js` list `most_mvps` identically (the parity test passes).
+
+### An Admin Can Add Most MVPs by Hand
+**User story**
+As an admin, I want to add or remove a Most MVPs accolade for a past season, so that seasons ended before this change can have it.
+
+**Acceptance criteria**
+- **Add:** Admin › Player management › Add accolade offers **Most MVPs** as a kind, with a player and a value, like the other awards.
+- **Remove:** it can be removed like any other accolade.

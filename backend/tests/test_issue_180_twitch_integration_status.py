@@ -93,6 +93,10 @@ def status_env(monkeypatch):
     monkeypatch.setenv("TWITCH_EXTENSION_CLIENT_ID", _CLIENT_ID)
     monkeypatch.setenv("TWITCH_EXTENSION_SECRET", _SECRET_B64)
     monkeypatch.setenv("TWITCH_EXTENSION_VERSION", "1.2.1")
+    # Issue #253: the MVP Vote extension, configured next to the full one.
+    monkeypatch.setenv("TWITCH_VOTE_EXTENSION_CLIENT_ID", "vote456clientid")
+    monkeypatch.setenv("TWITCH_VOTE_EXTENSION_SECRET", _SECRET_B64)
+    monkeypatch.setenv("TWITCH_VOTE_EXTENSION_VERSION", "1.0.0")
     monkeypatch.delenv("TWITCH_LOCAL_DEV", raising=False)
     monkeypatch.delenv("ENV", raising=False)
     monkeypatch.setenv("TWITCH_MVP_CHANNEL_IDS", "111")
@@ -694,7 +698,8 @@ class TestAdminTwitchStatus:
         data = resp.json()
         assert set(data) == {"checks", "traffic", "console"}
         assert [c["key"] for c in data["checks"]] == [
-            "extension_client_id", "extension_secret", "extension_version", "local_dev",
+            "extension_client_id", "extension_secret", "extension_version",
+            "vote_extension_client_id", "vote_extension_secret", "vote_extension_version", "local_dev",
             "mvp_channels", "connect_twitch", "app_base_url", "steam_api_key",
             "approval_notifications"]
         for c in data["checks"]:
@@ -702,7 +707,7 @@ class TestAdminTwitchStatus:
             assert c["state"] == "ok", c
             assert c["label"] and c["detail"]
         assert set(data["traffic"]) == {"last_ok_at", "failures", "last_failure_at",
-                                     "last_extension_request_at", "refused_origins"}
+                                     "last_extension_request_at", "refused_origins", "vote"}
         assert data["console"] and all(set(c) == {"label", "expected"} for c in data["console"])
         from tests.test_issue_163_twitch_steam_account_hardening import _needs_reauth, _route
         from routers import admin_twitch
@@ -840,7 +845,9 @@ class TestAdminTwitchStatus:
         client, _ = _admin_client()
         assert client.get("/admin/twitch/status").json()["traffic"] == {
             "last_ok_at": None, "failures": {"expired": 0, "invalid": 0, "not_configured": 0},
-            "last_failure_at": None, "last_extension_request_at": None, "refused_origins": []}
+            "last_failure_at": None, "last_extension_request_at": None, "refused_origins": [],
+            "vote": {"last_ok_at": None, "failures": {"expired": 0, "invalid": 0, "not_configured": 0},
+                     "last_failure_at": None}}
         twitch.verify_twitch_jwt(None, _signed(_viewer_claims()))
         with pytest.raises(HTTPException):
             twitch.verify_twitch_jwt(None, "Bearer junk")

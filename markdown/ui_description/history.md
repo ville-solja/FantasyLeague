@@ -7,7 +7,7 @@ Visible to everyone, after Leaderboards in the tab bar (issue #50). Served by `G
 One panel per season, newest first:
 
 - **Champions** — two blocks, Div 1 and Div 2, each headed by its chip ("S16 Div 1 Champion"), then the team name and its players, each with a **Holo** status badge (past champions' Legendaries can be drawn as Holo). Champions of the current season show **Holo from next season** instead: they become Holo-eligible once the season has ended. A division without a record reads "No champion recorded". Under it, the division's **Runner-up** and **Third place** teams (issue 233), each as its chip ("S15 Div 1 Runner-up") and the team name, when recorded.
-- **Awards** — Most Points, Best Average, Best Single Match and Fantasy Winner as data rows: the chip, the winners' names (all tied winners) and the value in tabular numbers.
+- **Awards** — Most Points, Best Average, Best Single Match, Most MVPs (issue 248) and Fantasy Winner as data rows: the chip, the winners' names (all tied winners) and the value in tabular numbers. Most MVPs shows a whole count ("3 MVPs", "1 MVP"), the others points; an award without a winner has no row.
 - **Played** — "N players played" when the season has played records.
 
 ## Hall of fame (sidebar)

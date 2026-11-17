@@ -119,6 +119,8 @@ def _build_main_client(monkeypatch, env=None):
     monkeypatch.delenv("CORS_EXTRA_ORIGINS", raising=False)
     # Issue #171: CORS allows only this client id's ext-twitch.tv origin.
     monkeypatch.delenv("TWITCH_EXTENSION_CLIENT_ID", raising=False)
+    # Issue #253: and the MVP Vote extension's.
+    monkeypatch.delenv("TWITCH_VOTE_EXTENSION_CLIENT_ID", raising=False)
     for key, value in (env or {}).items():
         monkeypatch.setenv(key, value)
 

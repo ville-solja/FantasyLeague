@@ -10,6 +10,12 @@ fantasy bonus and the token drop work exactly as for a picked MVP.
 
 Chat and PubSub carry counts only, never voter ids. Votes are deleted 30 days after
 their poll ends (cleanup_votes, from main's daily maintenance) and on Leave.
+
+Issue #253: the MVP Vote extension uses the same routes. A poll remembers which
+extension opened it (`extension`), and its messages go out through that one. In the
+vote extension any viewer logged in to Twitch votes, with no account; a vote in a
+vote-extension poll also keeps a keyed hash of the voter's Twitch id when the viewer
+shared it, which enters the vote in that poll's token drop (twitch_vote_rewards).
 """
 import json
 import logging
@@ -27,7 +33,8 @@ import twitch
 import twitch_channels
 from database import get_db
 from deps import _audit
-from models import LiveMatch, Match, TwitchMvpPoll, TwitchMvpVote
+import twitch_vote_rewards
+from models import LiveMatch, Match, Player, TwitchMVP, TwitchMvpPoll, TwitchMvpVote
 from rate_limit import key_by_twitch_viewer_or_ip, limiter
 
 logger = logging.getLogger(__name__)
@@ -71,12 +78,22 @@ def _chat_team_name(name) -> str:
     return cleaned
 
 
-def open_chat_text(team1: str, team2: str, match_number: int, duration_seconds: int) -> str:
-    """The chat line posted when a poll opens: teams, game number and time left only."""
+PANEL_NAMES = {twitch.GAME: "Kana Cards", twitch.VOTE: "Kana Cards MVP Vote"}
+
+
+def open_chat_text(team1: str, team2: str, match_number: int, duration_seconds: int,
+                   ext: str = twitch.GAME) -> str:
+    """The chat line posted when a poll opens: teams, game number and time left only.
+    It names the panel of the extension that opened the poll."""
     minutes = max(1, duration_seconds // 60)
     text = (f"MVP vote open for {_chat_team_name(team1)} vs {_chat_team_name(team2)}, "
-            f"game {match_number}: vote in the Kana Cards panel. Closes in {minutes} min.")
+            f"game {match_number}: vote in the {PANEL_NAMES.get(ext, PANEL_NAMES[twitch.GAME])} panel. "
+            f"Closes in {minutes} min.")
     return text[:twitch._CHAT_TEXT_MAX]
+
+
+def _poll_ext(poll: TwitchMvpPoll) -> str:
+    return twitch.VOTE if poll.extension == twitch.VOTE else twitch.GAME
 
 
 def _info(poll: TwitchMvpPoll) -> dict:
@@ -177,7 +194,8 @@ def _close(db: Session, poll: TwitchMvpPoll, closed_at: int, broadcast: bool = T
     db.commit()
     db.refresh(poll)
     if broadcast:
-        twitch._pubsub_broadcast(poll.channel_id, {"type": "mvp_poll", "state": CLOSED, "poll_id": poll.id})
+        twitch.broadcast_as(_poll_ext(poll), poll.channel_id,
+                            {"type": "mvp_poll", "state": CLOSED, "poll_id": poll.id})
     return True
 
 
@@ -204,9 +222,12 @@ def _channel_poll(db: Session, channel_id: str, poll_id: int) -> TwitchMvpPoll:
 
 def _voter_state(db: Session, payload: dict, now: int) -> dict:
     """Whether the caller may vote: ok, login (logged out of Twitch), join (no
-    account) or too_new (a soft account younger than the drop age, with votes_from)."""
+    account) or too_new (a soft account younger than the drop age, with votes_from).
+    In the vote extension a Twitch login is enough (issue #253)."""
     if not twitch._opaque_id(payload).startswith("U"):
         return {"can_vote": False, "reason": "login", "votes_from": None}
+    if twitch.payload_ext(payload) == twitch.VOTE:
+        return {"can_vote": True, "reason": "ok", "votes_from": None}
     user = twitch._panel_account(db, payload)
     if user is None:
         return {"can_vote": False, "reason": "join", "votes_from": None}
@@ -264,7 +285,40 @@ def poll_view(db: Session, poll: TwitchMvpPoll, payload: dict, now: int | None =
         own = row[0] if row else None
     view["my_vote"] = own
     view["voter"] = _voter_state(db, payload, now)
+    if _poll_ext(poll) == twitch.VOTE:
+        view["token_drop"] = _token_drop_view(db, poll, payload, opaque_id)
     return view
+
+
+def _token_drop_view(db: Session, poll: TwitchMvpPoll, payload: dict, opaque_id: str) -> dict:
+    """A vote-extension poll's token step, for this viewer only: whether tokens are on,
+    whether the viewer's vote is in the drop, and whether they won a token that is
+    waiting to be claimed. Never an id or a hash."""
+    enabled = twitch.drops_enabled() and twitch_vote_rewards.tokens_enabled()
+    if not enabled:
+        return {"enabled": False, "entered": False, "pending_win": False}
+    entered = False
+    if opaque_id.startswith("U"):
+        entered = (db.query(TwitchMvpVote.id)
+                     .filter(TwitchMvpVote.poll_id == poll.id, TwitchMvpVote.twitch_user_id == opaque_id,
+                             TwitchMvpVote.account_hash.isnot(None))
+                     .first()) is not None
+    pending_win = (poll.status == CONFIRMED
+                   and twitch_vote_rewards.has_pending_win(db, poll.id, payload.get("user_id")))
+    return {"enabled": True, "entered": entered, "pending_win": pending_win}
+
+
+def _last_mvp(db: Session, channel_id: str) -> dict | None:
+    """The channel's most recently confirmed MVP, for the vote panel's idle state."""
+    row = (db.query(TwitchMVP)
+             .filter(TwitchMVP.channel_id == channel_id)
+             .order_by(TwitchMVP.selected_at.desc(), TwitchMVP.id.desc())
+             .first())
+    if row is None:
+        return None
+    name = db.query(Player.name).filter(Player.id == row.player_id).scalar()
+    return {"match_id": row.match_id, "player_id": row.player_id,
+            "player_name": twitch.chat_safe_name(name, row.player_id)}
 
 
 # ---------------------------------------------------------------------------
@@ -299,9 +353,10 @@ def open_poll(body: PollOpenBody, payload: dict, db: Session) -> dict:
     if not info or not any(t["players"] for t in info["teams"]):
         raise HTTPException(status_code=409, detail="No players found for this match yet")
 
+    ext = twitch.payload_ext(payload)
     poll = TwitchMvpPoll(channel_id=channel_id, match_id=body.match_id, status=OPEN,
                          opened_at=now, closes_at=now + body.duration_seconds,
-                         info_json=json.dumps(info))
+                         info_json=json.dumps(info), extension=ext)
     db.add(poll)
     try:
         db.flush()
@@ -310,12 +365,17 @@ def open_poll(body: PollOpenBody, payload: dict, db: Session) -> dict:
         raise HTTPException(status_code=409, detail="A viewer vote is already open on this channel")
     _audit(db, "twitch_mvp_poll_opened", actor_id=None, actor_username="twitch",
            detail=(f"channel={channel_id} match={body.match_id} poll={poll.id}"
-                   f" duration={body.duration_seconds}"))
+                   f" duration={body.duration_seconds}" + (" ext=vote" if ext == twitch.VOTE else "")))
     db.commit()
     db.refresh(poll)
-    twitch._pubsub_broadcast(channel_id, {"type": "mvp_poll", "state": OPEN, "poll_id": poll.id})
-    twitch._post_chat_message(channel_id, open_chat_text(
-        info["team1_name"], info["team2_name"], info["match_number"], body.duration_seconds))
+    twitch.broadcast_as(ext, channel_id, {"type": "mvp_poll", "state": OPEN, "poll_id": poll.id})
+    if ext == twitch.VOTE:
+        chat_text = open_chat_text(info["team1_name"], info["team2_name"], info["match_number"],
+                                   body.duration_seconds, ext=ext)
+    else:
+        chat_text = open_chat_text(info["team1_name"], info["team2_name"], info["match_number"],
+                                   body.duration_seconds)
+    twitch.chat_as(ext, channel_id, chat_text)
     return poll_view(db, poll, payload, now)
 
 
@@ -338,11 +398,14 @@ def get_poll(payload: dict, db: Session) -> dict:
               .filter(TwitchMvpPoll.channel_id == channel_id)
               .order_by(TwitchMvpPoll.id.desc())
               .first())
-    if poll is None or poll.status == CANCELLED:
-        return {"poll": None}
-    if poll.status != OPEN and (poll.closed_at or 0) < now - RESULT_SHOWN_SECONDS:
-        return {"poll": None}
-    return {"poll": poll_view(db, poll, payload, now)}
+    shown = (poll is not None and poll.status != CANCELLED
+             and (poll.status == OPEN or (poll.closed_at or 0) >= now - RESULT_SHOWN_SECONDS))
+    if shown:
+        return {"poll": poll_view(db, poll, payload, now)}
+    if twitch.payload_ext(payload) == twitch.VOTE:
+        # The vote panel's idle state shows the channel's last MVP (issue #253).
+        return {"poll": None, "last_mvp": _last_mvp(db, channel_id)}
+    return {"poll": None}
 
 
 @router.get("/mvp-poll")
@@ -378,12 +441,24 @@ def vote(poll_id: int, body: VoteBody, payload: dict, db: Session) -> dict:
     if still_open != 1:
         db.rollback()
         raise HTTPException(status_code=409, detail="poll_closed")
+    # Issue #253: in a vote-extension poll, a viewer who shared their Twitch identity
+    # enters the token drop: the vote keeps a keyed hash of the id. A later vote
+    # without the id never clears it.
+    shared = None
+    if (_poll_ext(poll) == twitch.VOTE and twitch.drops_enabled()
+            and twitch_vote_rewards.tokens_enabled()):
+        shared = twitch_vote_rewards.account_hash(payload.get("user_id"))
     insert = twitch._dialect_insert(db)
     stmt = insert(TwitchMvpVote).values(
         poll_id=poll.id, twitch_user_id=opaque_id, player_id=body.player_id, voted_at=now,
-    ).on_conflict_do_update(
+        account_hash=shared,
+    )
+    changes = {"player_id": body.player_id, "voted_at": now}
+    if shared is not None:
+        changes["account_hash"] = shared
+    stmt = stmt.on_conflict_do_update(
         index_elements=[TwitchMvpVote.poll_id, TwitchMvpVote.twitch_user_id],
-        set_={"player_id": body.player_id, "voted_at": now},
+        set_=changes,
     )
     db.execute(stmt)
     db.commit()
@@ -437,7 +512,8 @@ def cancel_poll(poll_id: int, payload: dict, db: Session) -> dict:
            detail=f"channel={poll.channel_id} match={poll.match_id} poll={poll.id}")
     db.commit()
     db.refresh(poll)
-    twitch._pubsub_broadcast(poll.channel_id, {"type": "mvp_poll", "state": CANCELLED, "poll_id": poll.id})
+    twitch.broadcast_as(_poll_ext(poll), poll.channel_id,
+                        {"type": "mvp_poll", "state": CANCELLED, "poll_id": poll.id})
     return {"poll_id": poll.id, "status": poll.status}
 
 

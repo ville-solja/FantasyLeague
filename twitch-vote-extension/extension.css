@@ -1,0 +1,226 @@
+/* Kana Cards MVP Vote — styles (Kanaliiga design system, issue #253).
+   Tokens copied from design/colors_and_type.css: the package is self-contained. */
+
+@font-face {
+    font-family: "Big Shoulders Text";
+    src: url("fonts/BigShouldersText-VariableFont_wght.ttf") format("truetype-variations");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    --k-orange-500: #e85d1c;
+    --k-orange-600: #d24e13;
+    --k-amber-500:  #f0a83a;
+    --k-ink-950: #0a0a0c;
+    --k-ink-900: #121216;
+    --k-ink-800: #1a1a20;
+    --k-ink-700: #24242c;
+    --k-ink-600: #33333d;
+    --k-ink-400: #6a6a75;
+    --k-ink-300: #8f8f99;
+    --k-ink-100: #e4e4e8;
+    --k-rarity-common:    #9a9aa2;
+    --k-rarity-rare:      #5aa0e8;
+    --k-rarity-epic:      #b06ae0;
+    --k-rarity-legendary: #f0a83a;
+    --k-ok:  #3ecf6a;
+    --k-err: #e05050;
+
+    --bg:          var(--k-ink-950);
+    --bg-card:     var(--k-ink-800);
+    --bg-card-hi:  var(--k-ink-700);
+    --fg:          var(--k-ink-100);
+    --fg-muted:    var(--k-ink-300);
+    --fg-dim:      var(--k-ink-400);  /* borders and disabled states only, never readable text */
+    --border:      var(--k-ink-600);
+    --border-soft: var(--k-ink-700);
+    --accent:       var(--k-orange-500);
+    --accent-hover: var(--k-orange-600);
+    --accent-ghost: rgba(232, 93, 28, 0.12);
+
+    --font-display: "Big Shoulders Text", "Oswald", "Impact", sans-serif;
+    --font-body:    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+
+    --fs-xs: 11px;
+    --fs-sm: 13px;
+    --fs-base: 14px;
+    --r-xs: 2px;
+    --r-sm: 4px;
+    --r-md: 6px;
+    --sh-glow-rare:   0 0 12px rgba(90, 160, 232, 0.45);
+    --sh-glow-epic:   0 0 12px rgba(176, 106, 224, 0.45);
+    --sh-glow-amber:  0 0 14px rgba(240, 168, 58, 0.55);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+
+body {
+    font-family: var(--font-body);
+    font-size: var(--fs-sm);
+    line-height: 1.45;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 12px;
+    min-height: 100vh;
+}
+
+h2 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    color: var(--fg);
+}
+
+h3 {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 700;
+    margin: 12px 0 6px;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+p { margin-bottom: 8px; line-height: 1.5; }
+
+button {
+    display: block;
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 12px;
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 120ms, border-color 120ms;
+}
+
+button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+button:disabled {
+    background: var(--bg-card-hi); border-color: var(--border);
+    color: var(--fg-muted); cursor: not-allowed;
+}
+button:focus-visible, [tabindex]:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+button.secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+button.secondary:hover { background: var(--accent-ghost); border-color: var(--accent); }
+button.ghost {
+    background: transparent; color: var(--fg-muted); border-color: transparent;
+    width: auto; min-height: 32px; margin-top: 0; padding: 4px 8px; font-size: 13px;
+}
+button.ghost:hover { color: var(--fg); background: var(--accent-ghost); }
+button.danger { background: transparent; color: var(--k-err); border-color: var(--k-err); }
+button.danger:hover { background: rgba(224, 80, 80, 0.12); }
+
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--fg);
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.banner {
+    display: none;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    margin-bottom: 10px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.banner.success { background: #13261b; color: var(--k-ok); border: 1px solid #2a7a44; }
+.banner.error   { background: #2a1414; color: var(--k-err); border: 1px solid #8a2e2e; }
+
+.stat-block {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px;
+    margin-bottom: 8px;
+}
+
+.stat-label { color: var(--fg-muted); font-size: 11px; }
+.stat-value { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--accent); }
+
+.player-list { list-style: none; }
+
+.team-tag {
+    font-size: 11px;
+    color: var(--fg-muted);
+    background: var(--bg-card-hi);
+    padding: 2px 5px;
+    border-radius: var(--r-xs);
+}
+
+.match-header {
+    font-size: 11px;
+    color: var(--fg-muted);
+    margin: 10px 0 4px;
+}
+
+.muted { color: var(--fg-muted); font-size: 11px; }
+
+.muted { color: var(--fg-muted); }
+.note { color: var(--fg-muted); font-size: 12px; margin: 6px 0; }
+.note.err { color: var(--k-err); }
+.box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px;
+}
+
+/* ── Viewer panel (318 px wide, up to 500 px tall) ── */
+body.panel { padding: 10px; min-height: 0; }
+.p-brand {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+}
+.p-brand span { color: var(--accent); }
+.eyebrow { margin-top: 0; }
+.last-mvp { margin-bottom: 8px; }
+.last-mvp strong { font-family: var(--font-display); font-size: 18px; font-weight: 800; }
+.poll-match { font-weight: 700; font-size: 13px; margin: 2px 0; }
+.poll-team { color: var(--fg-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin: 8px 0 2px; }
+.poll-player {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    width: 100%; min-height: 34px; margin: 3px 0 0; padding: 5px 9px;
+    background: var(--bg-card-hi); color: var(--fg);
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    font-family: var(--font-body); font-size: 13px; font-weight: 600;
+    letter-spacing: 0; text-transform: none; text-align: left;
+}
+button.poll-player:hover { background: var(--accent-ghost); border-color: var(--border-soft); }
+.poll-player[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-ghost); }
+.poll-player .share { font-variant-numeric: tabular-nums; color: var(--fg-muted); font-size: 12px; }
+.poll-player.mine .share { color: var(--accent); }
+.poll-player.mvp { border-color: var(--k-amber-500); }
+.poll-vote { margin-top: 8px; }
+.drop-step { margin-top: 10px; border-color: var(--border-soft); }
+.drop-step p { margin-bottom: 4px; }
+.drop-step .drop-title { font-weight: 700; }
+.drop-won { margin-top: 10px; border-color: var(--k-amber-500); font-weight: 700; }

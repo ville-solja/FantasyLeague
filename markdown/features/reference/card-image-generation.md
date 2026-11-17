@@ -88,6 +88,7 @@ If new template art is dropped in, re-measure these rects against the new files 
 | `most_points` | `Accolade_Most_Points.png` |
 | `best_average` | `Accolade_Best_Average.png` |
 | `best_match` | `Accolade_Best_Single_Match.png` |
+| `most_mvps` | `Accolade_Most_MVPs.png` (#248; a placeholder awaiting final art, a recoloured copy of the Best Single Match badge) |
 | `fantasy_winner` | `Accolade_Season_Winner.png` |
 | `played` | `Accolade_Played.png` |
 
@@ -99,7 +100,7 @@ If new template art is dropped in, re-measure these rects against the new files 
 2. Division runner-up (`div1_runner_up`, `div2_runner_up`)
 3. Division third place (`div1_third`, `div2_third`)
 4. Fantasy winner (`fantasy_winner`)
-5. Performance awards (`most_points`, `best_average`, `best_match`)
+5. Performance awards (`most_points`, `best_average`, `best_match`, `most_mvps`)
 6. Seasons played (`played`)
 
 Because the sort is stable and `accolades.accolades_for` already lists each player's accolades newest-season-first, this keeps each tier's entries in newest-first order without the card-face code needing to know about seasons itself. A kind earned in multiple seasons (e.g. "played" for 7 seasons, or `div1` champion twice) still takes only one grid slot.

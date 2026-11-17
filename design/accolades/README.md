@@ -15,6 +15,7 @@ Reference art for the card artist: every accolade as Kana Cards draws it today. 
 | Most Points | `most_points` | flame | outlined | `#e85d1c` |
 | Best Average | `best_average` | gauge | outlined | `#f59256` |
 | Best Single Match | `best_match` | zap | outlined | `#ffc96a` |
+| Most MVPs | `most_mvps` | star | outlined | `#b06ae0` |
 | Fantasy Winner | `fantasy_winner` | medal | outlined | `#ffd8b8` |
 | Played | `played` | calendar-check | muted | `#8f8f99` |
 
@@ -27,4 +28,4 @@ All plates have 4 px corners at the app's size, and icons use stroke width 2.25.
 
 The Div 1 and Div 2 versions of Runner-up and Third place look identical, and Fantasy Winner shares the medal icon with Runner-up. Text, not the symbol, tells them apart in the app.
 
-Rendered 2026-10-31 from the code as it stood then. If accolades change, the images need re-rendering.
+Rendered 2026-10-31 from the code as it stood then. If accolades change, the images need re-rendering. Most MVPs (issue 248) was added after that: it has no images here yet, and its card badge `assets/accolades/Accolade_Most_MVPs.png` is a placeholder awaiting final art.

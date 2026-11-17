@@ -355,3 +355,38 @@ As a developer, I want to know how Kana Cards accounts would map to hub identiti
 - The document explains the Steam32 ↔ Steam64 relation (OpenDota account id + 76561197960265728)
 - It states that the number of users with a linked player ID is not decisive: the architecture is the same whatever the count. No count is required, and no personal data appears in the document
 - It describes what happens to users without a linked ID (for example, a one-time Steam link step) and to Twitch links
+
+## Architecture Maturity Review (issue #251)
+
+### See the Season's Real Load
+**User story**
+As the operator, I want a report of season 16's usage from the database, so that the architecture is judged against real numbers.
+
+**Acceptance criteria**
+- **Run:** `python scripts/usage_report.py --db <path>` reads a database file (a backup works) and prints a report; `--json` writes the same numbers as JSON. It writes nothing to the database.
+- **Accounts:** website accounts, Twitch soft accounts, accounts with at least one card, and accounts with a roster in each week.
+- **Activity:** per week, the number of draws, roster saves and logins found in `audit_logs`, and the busiest hour and busiest minute of the season with their action counts.
+- **Twitch:** channels, MVPs set, token drops and the largest presence pool.
+- **Data:** row counts of the largest tables and the database file size, with growth per week.
+- **Privacy:** only counts; no usernames, emails or ids in the output.
+
+### Know the Headroom
+**User story**
+As the operator, I want a repeatable load test of the hot endpoints, so that I know how far the current setup is from its limit.
+
+**Acceptance criteria**
+- **Run:** `python scripts/load_test.py --base-url http://localhost:8000 --users N --seconds S` drives a local instance with a mix of the hot read endpoints (leaderboards, roster, schedule, players, Twitch panel) and writes (draw, roster save) with test users it registers itself.
+- **Refuses production:** it stops unless the base URL is localhost or `--allow-remote` is given.
+- **Reports:** requests per second, error rate, and p50, p95 and p99 latency per endpoint; `--json` for the same numbers.
+- **Steps:** a `--ramp` mode raises the users step by step and reports the level at which p95 passes 1 second or errors pass 1%.
+
+### A Ranked List of Off-Season Improvements
+**User story**
+As the maintainer, I want a review that says which parts of the architecture are fine, which need work before season 17 and which can wait, so that the off-season goes to what matters.
+
+**Acceptance criteria**
+- **Document:** `markdown/research/architecture-maturity-review.md` holds the measured load, the target load and the headroom found.
+- **Verdict per area:** process model and the single-process rule, SQLite (write contention, backups, size), background jobs, external services (OpenDota, Steam, Twitch, Toornament), caching and rate limits, deployment and recovery, observability, frontend delivery, and test and release tooling. Each gets "fine at target load", "fix before season 17" or "watch", with the evidence.
+- **Ranked:** improvements are listed by risk and effort, each with the load at which it becomes necessary.
+- **Issues:** each "fix before season 17" item has a GitHub issue, linked from the document.
+- **Indexed:** the document is listed in `markdown/features/README.md`'s research row and the plan index.

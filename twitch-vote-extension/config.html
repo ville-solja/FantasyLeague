@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kana Cards MVP Vote — Config</title>
+<link rel="stylesheet" href="extension.css">
+<style>
+  .conn-check { list-style: none; padding: 0; margin: 0; }
+  .conn-check li { padding: 6px 0; border-bottom: 1px solid var(--border-soft); font-size: 0.8rem; }
+  .conn-check .conn-state { display: inline-block; min-width: 86px; font-weight: 700; }
+  .conn-check .conn-ok { color: var(--k-ok); }
+  .conn-check .conn-failed { color: var(--k-err); }
+  .conn-check .conn-not-checked { color: var(--fg-muted); }
+  .conn-check .conn-detail { display: block; color: var(--fg-muted); margin-top: 2px; word-break: break-all; }
+  .conn-code { margin-top: 8px; font-weight: 700; }
+</style>
+<script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+<script src="ebs-origins.js"></script>
+<script src="extension.js"></script>
+</head>
+<body>
+
+<h2>Kana Cards MVP Vote — Setup</h2>
+
+<div id="banner" class="banner"></div>
+
+<p>This extension lets your viewers vote for the <strong>match MVP</strong> after each game.</p>
+
+<h3 style="margin-top:14px">For viewers</h3>
+<p class="muted" style="margin-bottom:4px">The <strong>panel below your stream</strong> shows the vote while it is open, and the result afterwards. Any viewer logged in to Twitch can vote with one click. A voter who chooses to share their Twitch identity enters a token drop for the Kana Cards game.</p>
+
+<h3 style="margin-top:14px">For broadcasters — starting the vote</h3>
+<p class="muted" style="margin-bottom:6px">The vote is started and confirmed in <strong>Stream Manager → Quick Actions</strong>.</p>
+<ol style="padding-left:16px;line-height:2;font-size:0.85rem">
+  <li>Open <strong>Stream Manager</strong>
+      <span class="muted">(dashboard.twitch.tv → Stream Manager)</span></li>
+  <li>Find the <strong>Kana Cards MVP Vote</strong> tile in the Quick Actions bar at the bottom</li>
+  <li>Pick the match, start the viewer vote, then confirm the MVP when it closes</li>
+</ol>
+<p class="muted" style="margin-top:6px;font-size:0.8rem">The extension posts two chat messages: one when a vote opens, and one when you confirm the MVP, with the MVP's name and how many voters won a token. No viewer names are posted. The extension posts nothing else and never reads chat.</p>
+<p class="muted" style="margin-top:6px;font-size:0.8rem">Quick Actions are only visible while you are live or in Stream Manager.</p>
+
+<h3 style="margin-top:14px">EBS URL</h3>
+<p class="muted">Set via the Twitch Extensions Configuration Service (global segment). Contact the extension developer to change it.</p>
+<p style="font-family:monospace;background:#2c2c3a;padding:6px 8px;border-radius:4px;font-size:11px;word-break:break-all" id="ebs-display">Loading…</p>
+
+<!-- Issue #180: step-by-step connection check (config.js; values set with textContent). -->
+<h3 style="margin-top:14px">Connection check</h3>
+<p class="muted" style="margin-bottom:6px">Checks each step between this extension and the backend. Send the reason code and any Failed row to the league when the panel is not available.</p>
+<ul id="conn-check" class="conn-check"></ul>
+<p id="conn-code" class="conn-code" role="status" hidden></p>
+<button type="button" id="btn-check-again">Check again</button>
+
+<script src="config.js"></script>
+</body>
+</html>

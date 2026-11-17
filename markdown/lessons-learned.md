@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-17 — developer — testing
+**Problem:** Adding a keyword to `twitch._post_chat_message` / `_pubsub_broadcast` calls (issue 253's `ext=`) broke older tests: their recorders (`_chat_recorder` in `test_issue_157`, `_pubsub` in `test_issue_234`) are two-argument lambdas. Separately, `twitch_channels.record_request` ignores a non-numeric channel id, so the tests' `test_channel` never gets an approval row.
+**Solution:** Send through `twitch.chat_as(ext, …)` / `broadcast_as(ext, …)`, which keep the two-argument call for the full extension; in a new test that needs the keyword, patch with a recorder that takes `ext="game"`. Use a numeric channel id when a test expects a `TwitchChannelApproval` row.
+
 ### 2026-11-16 — developer — frontend
 **Problem:** Resetting My Team's week pick in code (`_rosterWeekId = null`, then `_renderWeekSelector()`, issue 249) left the `<select>` on the old week: the markup was unchanged, so `renderIfChanged` wrote nothing and the DOM kept the player's selection.
 **Solution:** When code changes which option should be selected, set `sel.value` as well; `selected` in markup passed to `renderIfChanged` only applies when the markup differs.

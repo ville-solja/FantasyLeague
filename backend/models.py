@@ -250,7 +250,7 @@ class SeasonArchive(Base):
 
 class SeasonAccolade(Base):
     """A season title (issues #50, #53, #105): a Div 1 / Div 2 champion, a season award
-    (most_points, best_average, best_match), the fantasy winner (a user) or one season
+    (most_points, best_average, best_match, most_mvps), the fantasy winner (a user) or one season
     played. Season Reset never touches this table, and names are stored on the row, so
     every reader works after the season's players, teams, cards or users are gone. See
     accolades.py and markdown/features/reference/season-winners-and-holo-cards.md."""
@@ -258,7 +258,7 @@ class SeasonAccolade(Base):
 
     id                = Column(Integer, primary_key=True, autoincrement=True)
     season_label      = Column(String, nullable=False)
-    kind              = Column(String, nullable=False)   # champion | runner_up | third_place | most_points | best_average | best_match | fantasy_winner | played
+    kind              = Column(String, nullable=False)   # champion | runner_up | third_place | most_points | best_average | best_match | most_mvps | fantasy_winner | played
     division          = Column(String, nullable=True)    # div1 | div2 (champion, runner_up, third_place)
     team_name         = Column(String, nullable=True)    # denormalised (champion, runner_up, third_place)
     player_account_id = Column(Integer, nullable=True, index=True)  # OpenDota account id
@@ -536,6 +536,9 @@ class TwitchMvpPoll(Base):
     confirmed_player_id = Column(Integer, nullable=True)
     tally_json          = Column(Text, nullable=True)  # {"<player_id>": votes}, written on close
     info_json           = Column(Text, nullable=True)  # teams, game number and players at open
+    # Issue #253: the extension that opened the poll ("game" or "vote"); its PubSub and
+    # chat messages go out through that extension, and it decides the drop's pool.
+    extension           = Column(String, nullable=False, default="game", server_default="game")
 
 
 class TwitchMvpVote(Base):
@@ -549,6 +552,27 @@ class TwitchMvpVote(Base):
     twitch_user_id = Column(String, nullable=False, index=True)
     player_id      = Column(Integer, nullable=False)
     voted_at       = Column(Integer, nullable=False)
+    # Issue #253: keyed hash of the voter's real Twitch id (soft_accounts.starter_grant_hash),
+    # set only in a vote-extension poll when the viewer shared their identity. It enters
+    # the vote in that poll's token drop; the id itself is never stored here.
+    account_hash   = Column(String, nullable=True)
+
+
+class TwitchPendingToken(Base):
+    """A token won in a vote-extension MVP poll by a viewer with no Kana Cards account
+    (issue #253, twitch_vote_rewards.py). Keyed by the keyed hash of the Twitch id,
+    never the id. Claimed once, when that Twitch id is attached to an account (Connect
+    Twitch, or the identity share in the full extension), until expires_at."""
+    __tablename__ = "twitch_pending_tokens"
+    __table_args__ = (UniqueConstraint("account_hash", "poll_id", name="uq_twitch_pending_token_hash_poll"),)
+
+    id                 = Column(Integer, primary_key=True, autoincrement=True)
+    account_hash       = Column(String, nullable=False, index=True)
+    poll_id            = Column(Integer, ForeignKey("twitch_mvp_polls.id"), nullable=False)
+    created_at         = Column(Integer, nullable=False)
+    expires_at         = Column(Integer, nullable=False)
+    claimed_by_user_id = Column(Integer, nullable=True)  # no FK: the account may be deleted later
+    claimed_at         = Column(Integer, nullable=True)
 
 
 class LiveMatch(Base):

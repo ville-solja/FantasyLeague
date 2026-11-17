@@ -626,7 +626,7 @@ As a player, I want my card's accolades shown as icons on the card itself so tha
 - `GET /cards/{id}/image` composites up to 6 accolade icons into the template's accolade grid, one icon per accolade the player holds
 - Each accolade kind uses its matching badge icon asset (e.g. Division 1 Champion → crown badge), not the Lucide icon used elsewhere on the site
 - A player with no accolades shows an empty grid (no placeholder icons)
-- A player with more than 6 accolades shows the 6 highest-priority ones: champion > runner-up > third place > fantasy winner > performance awards (Most Points, Best Average, Best Single Match) > seasons played, newest season first within a tier
+- A player with more than 6 accolades shows the 6 highest-priority ones: champion > runner-up > third place > fantasy winner > performance awards (Most Points, Best Average, Best Single Match, Most MVPs) > seasons played, newest season first within a tier
 - A kind earned more than once (e.g. division champion in two seasons) takes one grid slot, not several, with a small count badge in the icon's corner; a kind held once shows no badge
 - Accolades still show as detailed HTML pips/timeline elsewhere (Players list, Teams tab, team popup, Hall of Fame, player popup) — the card face icons are additive, not a replacement
 - Accolade icons update on the very next card image request after an accolade is granted or changed, since the image has no server-side cache (same as the rest of the card)

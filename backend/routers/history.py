@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.get("/history/seasons")
 def history_seasons(db=Depends(get_db)):
-    """One entry per season, newest first (champion teams, the four awards with ties,
+    """One entry per season, newest first (champion teams, the season awards with ties,
     the played count), and the hall of fame (players ranked by titles; played is not
     a title)."""
     return accolades.history(db, accolades.current_season_label(db))

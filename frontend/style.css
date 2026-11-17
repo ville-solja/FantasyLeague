@@ -3408,6 +3408,7 @@ button {
 .accolade-pip--most_points,    .accolade-chip--most_points    { --pip-color: var(--accolade-points); }
 .accolade-pip--best_average,   .accolade-chip--best_average   { --pip-color: var(--accolade-average); }
 .accolade-pip--best_match,     .accolade-chip--best_match     { --pip-color: var(--accolade-match); }
+.accolade-pip--most_mvps,      .accolade-chip--most_mvps      { --pip-color: var(--accolade-mvp); }
 .accolade-pip--fantasy_winner, .accolade-chip--fantasy_winner { --pip-color: var(--accolade-fantasy); }
 .accolade-pip--played,         .accolade-chip--played         { --pip-color: var(--accolade-played); }
 /* Issue 233: runner-up and third place, one rule per division key. */
