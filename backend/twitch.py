@@ -1492,11 +1492,15 @@ def warn_if_vote_extension_incomplete() -> None:
     """Startup warning (main.lifespan, issue #253): only one of the vote extension's
     client id and secret is set, so its panel can't work. Names only, never values."""
     have_id, have_secret = bool(_ext_setting(VOTE, "client_id")), bool(_ext_setting(VOTE, "secret"))
-    if have_id != have_secret:
-        missing = _EXT_ENV[VOTE]["secret" if have_id else "client_id"]
-        logger.warning("The MVP Vote extension is half configured: %s is not set. Set both "
-                       "TWITCH_VOTE_EXTENSION_CLIENT_ID and TWITCH_VOTE_EXTENSION_SECRET, or neither.",
-                       missing)
+    # Fixed messages: nothing read from the settings reaches the log.
+    if have_id and not have_secret:
+        logger.warning("The MVP Vote extension is half configured: TWITCH_VOTE_EXTENSION_SECRET is "
+                       "not set. Set both TWITCH_VOTE_EXTENSION_CLIENT_ID and "
+                       "TWITCH_VOTE_EXTENSION_SECRET, or neither.")
+    elif have_secret and not have_id:
+        logger.warning("The MVP Vote extension is half configured: TWITCH_VOTE_EXTENSION_CLIENT_ID is "
+                       "not set. Set both TWITCH_VOTE_EXTENSION_CLIENT_ID and "
+                       "TWITCH_VOTE_EXTENSION_SECRET, or neither.")
 
 
 class MVPBody(BaseModel):
