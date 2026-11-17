@@ -19,6 +19,10 @@ SCHEDULE_SHEET_URL = os.getenv("SCHEDULE_SHEET_URL", "")
 SCHEDULE_FIXTURES_URL = os.getenv("SCHEDULE_FIXTURES_URL", "")
 CACHE_TTL = 3600
 LIVE_FRESH_SECONDS = 15 * 60
+# Games between the same two teams starting at most this far apart (start to start,
+# inclusive) form one series. Shared by the schedule, Weekly Report, admin ingest and
+# the OBS overlay (issue 246); app-admin-matches.js keeps its own copy.
+SERIES_GAP_SECONDS = 6 * 3600
 # Fixture times are league (Finnish) wall-clock times. The container runs on UTC, so
 # feed timestamps are converted to this zone, and "now" for upcoming/past is taken
 # in it, rather than relying on the server's local time.
@@ -670,7 +674,7 @@ def _build_unscheduled_results(db, claimed_match_ids, div1_team_ids, div2_team_i
         ORDER BY start_time ASC
     """)).fetchall()
 
-    GAP = 6 * 3600  # seconds — see plan Assumptions
+    GAP = SERIES_GAP_SECONDS
     open_clusters = {}  # pair -> list of rows (currently-open series for that pair)
     clusters = []       # finished clusters, plus the still-open ones appended at the end
 

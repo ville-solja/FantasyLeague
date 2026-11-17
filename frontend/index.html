@@ -1132,36 +1132,98 @@
   <div id="howtoplay-panel-streamers" x-cloak x-show="howToPlayTab === 'streamers'" class="grid">
 
     <div class="panel" style="grid-column: span 2;">
-      <h2>Applying &amp; Installing</h2>
-
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Getting access</h3>
-      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Kana Cards is still in Twitch testing (<strong>Local Test</strong>), so your channel must be added as a tester first. Ask a Kana Cards developer for a <strong>test install link</strong>.</li>
-        <li>Once the extension is publicly released, anyone can install it from the Twitch Extension Manager.</li>
+      <h2>Streamer Tools</h2>
+      <p style="margin-bottom:12px;color:#ccc;font-size:0.9rem;line-height:1.7;">What Kana Cards offers a stream casting league games:</p>
+      <ul class="htp-tool-list">
+        <li><a href="#htp-streamers-overlay">Pause screen overlay</a>: the last game's player stats as an OBS browser source; no extension needed.</li>
+        <li><a href="#htp-streamers-extension">Kana Cards extension</a>: the full Twitch panel game, with match MVP and token drops.</li>
+        <li><a href="#htp-streamers-viewer-vote">Viewer MVP vote</a>: let your viewers vote for the match MVP in the Kana Cards extension.</li>
+        <li><a href="#htp-streamers-mvp-vote">Kana Cards MVP Vote</a>: a small vote-only Twitch extension, without the card game.</li>
       </ul>
+    </div>
 
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Installing</h3>
-      <ol style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
-        <li>Add the <strong>Kana Cards</strong> extension to your channel from the Twitch Extension Manager, or with the test install link.</li>
-        <li>No URL configuration is needed. A <strong>Quick Actions</strong> panel appears in your Stream Manager's Live Config view.</li>
+    <div class="panel" id="htp-streamers-overlay" style="grid-column: span 2;">
+      <h2>Pause screen overlay</h2>
+      <p style="margin-bottom:12px;color:#ccc;font-size:0.9rem;line-height:1.7;">Between the games of a series, show the last game on your pause screen: the result, the series score and each player's hero, K / D / A and raw fantasy points. The overlay follows the series by itself: a few minutes after each game ends it shows that game. It needs no extension, no account and no approval.</p>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Build your URL</h3>
+      <div class="obs-builder">
+        <label class="obs-builder-field">Team 1
+          <select id="obs-team-a" onchange="updateObsOverlayUrl()"><option value="">Loading teams…</option></select>
+        </label>
+        <label class="obs-builder-field">Team 2
+          <select id="obs-team-b" onchange="updateObsOverlayUrl()"><option value="">Loading teams…</option></select>
+        </label>
+        <label class="obs-builder-check"><input type="checkbox" id="obs-transparent" onchange="updateObsOverlayUrl()"> Transparent background</label>
+        <div class="obs-builder-url">
+          <input type="text" id="obs-url" readonly aria-label="Overlay URL" placeholder="Pick two different teams">
+          <button type="button" id="obs-copy" onclick="copyObsOverlayUrl()" disabled>Copy</button>
+          <a id="obs-preview" class="obs-builder-preview" target="_blank" rel="noopener" aria-disabled="true">Open preview</a>
+        </div>
+        <p id="obs-copy-status" class="obs-builder-status" aria-live="polite"></p>
+      </div>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin:16px 0 8px;">Add it to OBS</h3>
+      <ol class="obs-steps" style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>In OBS, add a <strong>Browser Source</strong> to your pause scene.</li>
+        <li>Paste the URL above.</li>
+        <li>Set width <strong>1920</strong> and height <strong>1080</strong>.</li>
       </ol>
     </div>
 
-    <div class="panel" style="grid-column: span 2;">
-      <h2>Selecting a Match MVP</h2>
+    <div class="panel" id="htp-streamers-extension" style="grid-column: span 2;">
+      <h2>Kana Cards extension</h2>
+      <p style="margin-bottom:16px;color:#ccc;font-size:0.9rem;line-height:1.7;">The full Twitch panel game: viewers join with their Twitch login, draw cards and build a roster, and you pick the match MVP, which drops tokens to your viewers.</p>
 
-      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Using Quick Actions</h3>
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Getting access</h3>
+      <ul style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>The extension is not yet approved by Twitch, so it is <strong>not yet available on Twitch</strong>. Until then a channel can install it only as a tester: ask the league for a <strong>test install link</strong>.</li>
+        <li>Once Twitch accepts it and the extension is publicly released, anyone can install it from the Twitch Extension Manager.</li>
+        <li>Your channel needs the league's approval before it can set MVPs; until then the MVP tool says it is waiting for approval.</li>
+      </ul>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Installing</h3>
+      <ol style="margin-bottom:20px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>Add the <strong>Kana Cards</strong> extension to your channel with the test install link (from the Twitch Extension Manager once it is released).</li>
+        <li>No URL configuration is needed. A <strong>Quick Actions</strong> panel appears in your Stream Manager's Live Config view.</li>
+      </ol>
+
+      <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">Selecting a match MVP</h3>
       <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>After a match, open <strong>Quick Actions</strong> in Twitch Stream Manager and click <strong>Select match MVP</strong>.</li>
-        <li>Pick the series (team vs team), then the match (Match 1, Match 2…), then the player, and confirm.</li>
+        <li>Pick the series (team vs team), then the match (Match 1, Match 2…), then the player, and confirm with <strong>Confirm MVP &amp; Drop Tokens</strong>.</li>
       </ol>
       <p style="margin-bottom:8px;color:#ccc;font-size:0.9rem;line-height:1.7;">Matches appear as soon as they start, so you can pick the MVP right after the game. Until the full match data arrives, the match is marked <strong>Live</strong> or <strong>Stats pending</strong>, and the MVP bonus is added once it does.</p>
-      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">Only matches from the 5 most recent series are listed. Your channel needs the league's approval before it can confirm MVPs; until then the MVP tool says it is waiting for approval.</p>
+      <p style="margin-bottom:20px;color:#ccc;font-size:0.9rem;line-height:1.7;">Only matches from the 5 most recent series are listed.</p>
 
       <h3 style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#888;margin-bottom:8px;">What confirming does</h3>
       <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
         <li>Viewers who joined in the Kana Cards panel and are watching your stream get a one-time token drop (the chat names the MVP and how many viewers received a token). Changing the MVP for the same match later doesn't drop tokens again.</li>
         <li>The MVP gets a fantasy score bonus for that match, which shows in every leaderboard and roster total.</li>
+      </ul>
+    </div>
+
+    <div class="panel" id="htp-streamers-viewer-vote" style="grid-column: span 2;">
+      <h2>Viewer MVP vote</h2>
+      <p style="margin-bottom:16px;color:#ccc;font-size:0.9rem;line-height:1.7;">Hand the MVP pick to your viewers. The vote is part of the Kana Cards extension and is <strong>coming with version 1.4.0</strong>, which is not yet released, so it is not yet available on Twitch. As with a hand pick, your channel needs the league's approval before it can set MVPs.</p>
+      <ol style="margin-bottom:8px;padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>In <strong>Quick Actions</strong>, click <strong>Select match MVP</strong>, then pick the series and the match.</li>
+        <li>Click <strong>Start viewer vote</strong>, choose 1, 2 or 3 minutes and press <strong>Open vote</strong>. The chat announces it.</li>
+        <li>Joined viewers vote in the Kana Cards panel and can change their vote until it closes.</li>
+        <li>The vote closes when the time runs out, or press <strong>End now</strong>. <strong>Cancel vote</strong> ends it with no MVP.</li>
+        <li>The winner is selected (on a tie, pick one of the tied players). <strong>Confirm MVP &amp; Drop Tokens</strong> sets the MVP and drops tokens just like a hand pick.</li>
+      </ol>
+    </div>
+
+    <div class="panel" id="htp-streamers-mvp-vote" style="grid-column: span 2;">
+      <h2>Kana Cards MVP Vote</h2>
+      <p style="margin-bottom:16px;color:#ccc;font-size:0.9rem;line-height:1.7;">A small, separate Twitch extension for a channel that wants an MVP vote without the card game. It has <strong>not yet been submitted for Twitch review</strong>, so it is not yet available on Twitch.</p>
+      <ul style="padding-left:18px;color:#ccc;font-size:0.9rem;line-height:1.7;">
+        <li>You start, end and confirm a vote from its Quick Actions panel the same way (<strong>Select match MVP</strong>, <strong>Start viewer vote</strong>, <strong>End now</strong>, <strong>Cancel vote</strong>, <strong>Confirm MVP</strong>).</li>
+        <li>Any viewer logged in to Twitch can vote; there is no Join, cards or roster.</li>
+        <li>Voters who share their Twitch identity in the panel can win a token, which they claim at kana-cards.com by connecting that Twitch account.</li>
+        <li>A channel normally installs one of the two extensions, not both.</li>
+        <li>Your channel needs the league's approval before it can set MVPs.</li>
       </ul>
     </div>
 

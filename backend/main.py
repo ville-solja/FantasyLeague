@@ -48,6 +48,7 @@ from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
 from routers import players as players_router
+from routers import obs as obs_router
 from routers import auth as auth_router
 from routers import profile as profile_router
 from routers import leaderboard as leaderboard_router
@@ -947,6 +948,7 @@ app.include_router(twitch_mvp_poll.router)
 app.include_router(twitch_oauth.router)
 app.include_router(steam_openid.router)
 app.include_router(players_router.router)
+app.include_router(obs_router.router)
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(leaderboard_router.router)

@@ -3,6 +3,7 @@
 // markdown/features/reference/frontend-framework-evaluation.md.
 
 async function loadHowToPlay() {
+  loadObsOverlayBuilder();
   const res = await fetch(`${API}/weights`);
   if (!res.ok) {
     ["howtoplay-stats-tbody", "howtoplay-rarity-tbody", "howtoplay-mods-tbody"].forEach(id => {
@@ -72,6 +73,76 @@ async function loadHowToPlay() {
   if (mvpEl) {
     const mvpPct = byKey['mvp_bonus_pct']?.value ?? 10;
     mvpEl.textContent = `+${mvpPct}%`;
+  }
+}
+
+// Issue 246: How to Play › Streamers › Pause screen overlay URL builder.
+function obsOverlayCopyEnabled(teamA, teamB) {
+  const a = String(teamA ?? ''), b = String(teamB ?? '');
+  return /^[1-9][0-9]*$/.test(a) && /^[1-9][0-9]*$/.test(b) && a !== b;
+}
+
+function obsOverlayUrl(origin, teamA, teamB, transparent) {
+  if (!obsOverlayCopyEnabled(teamA, teamB)) return '';
+  return `${origin}/obs/last-game.html?teams=${teamA},${teamB}` + (transparent ? '&theme=transparent' : '');
+}
+
+function obsOverlayTeamOptions(teams) {
+  const rows = (teams || []).filter(t => Number.isFinite(Number(t.id)) && Number(t.id) > 0);
+  rows.sort((x, y) => String(x.name || '').localeCompare(String(y.name || '')) || Number(x.id) - Number(y.id));
+  return '<option value="">Pick a team</option>' +
+    rows.map(t => `<option value="${Number(t.id)}">${_escHtml(t.name || `Team ${Number(t.id)}`)}</option>`).join('');
+}
+
+async function loadObsOverlayBuilder() {
+  const a = document.getElementById('obs-team-a');
+  const b = document.getElementById('obs-team-b');
+  if (!a || !b || a.dataset.loaded) return;
+  try {
+    const res = await fetch(`${API}/teams`);
+    if (!res.ok) return;
+    const options = obsOverlayTeamOptions(await res.json());
+    a.innerHTML = options;
+    b.innerHTML = options;
+    a.dataset.loaded = '1';
+  } catch (e) {
+    return;
+  }
+  updateObsOverlayUrl();
+}
+
+function updateObsOverlayUrl() {
+  const a = document.getElementById('obs-team-a');
+  const b = document.getElementById('obs-team-b');
+  const field = document.getElementById('obs-url');
+  const copy = document.getElementById('obs-copy');
+  const preview = document.getElementById('obs-preview');
+  const transparent = document.getElementById('obs-transparent');
+  if (!a || !b || !field || !copy || !preview) return;
+  const url = obsOverlayUrl(location.origin, a.value, b.value, !!(transparent && transparent.checked));
+  field.value = url;
+  copy.disabled = !url;
+  if (url) {
+    preview.setAttribute('href', url);
+    preview.removeAttribute('aria-disabled');
+  } else {
+    preview.removeAttribute('href');
+    preview.setAttribute('aria-disabled', 'true');
+  }
+  const status = document.getElementById('obs-copy-status');
+  if (status) status.textContent = '';
+}
+
+async function copyObsOverlayUrl() {
+  const field = document.getElementById('obs-url');
+  const status = document.getElementById('obs-copy-status');
+  if (!field || !field.value) return;
+  try {
+    await navigator.clipboard.writeText(field.value);
+    if (status) status.textContent = 'Copied.';
+  } catch (e) {
+    field.select();
+    if (status) status.textContent = 'Press Ctrl+C to copy the selected URL.';
   }
 }
 

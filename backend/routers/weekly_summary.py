@@ -14,6 +14,7 @@ from logo_hosts import safe_logo_url
 from rate_limit import limiter, key_by_user_or_ip, RATE_LIMIT_USER_ACTION
 from match_scoring import counted_roster_entry_sql, scored_match_sql
 from routers.cards import _build_roster_response
+from schedule import SERIES_GAP_SECONDS
 from scoring import STAT_LABELS, display_points, stat_dict_from_row
 from weeks import substitution_delay_hours
 from models import (
@@ -23,7 +24,7 @@ from models import (
 
 router = APIRouter()
 
-_SERIES_GAP = 6 * 3600  # seconds — matches the clustering window backend/schedule.py uses
+_SERIES_GAP = SERIES_GAP_SECONDS  # seconds; the clustering window backend/schedule.py uses
 _LOGO_DIR = os.path.join(_ASSETS_DIR, "dotabuff_league_logos")
 
 

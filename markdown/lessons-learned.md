@@ -12,6 +12,14 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-17 — developer — security
+**Problem:** SlowAPIMiddleware's default limit (`RATE_LIMIT_GLOBAL`) never applies to routes added with `include_router`: this FastAPI wraps them in `_IncludedRouter`, the middleware finds no handler and treats the request as exempt, so a "covered by the global limit" test with a fresh `Limiter(default_limits=...)` sees no 429.
+**Solution:** Put `@limiter.limit(RATE_LIMIT_GLOBAL)` on a public route that must be limited (`routers/obs.py`, issue 246) and test it with the router's own Limiter (`limiter.reset()` first). Routes that rely only on the global limit are unlimited today.
+
+### 2026-11-17 — test-planner — models
+**Problem:** Plans say "reuse `weekly_summary._SERIES_GAP`", but the 6-hour series gap has four copies (`weekly_summary._SERIES_GAP`, a local `GAP` in `schedule._build_unscheduled_results`, `admin_ingest.SERIES_GAP_SECONDS`, `_SERIES_GAP_SECONDS` in app-admin-matches.js, pinned by test_issue_193), and env settings such as `INGEST_POST_MATCH_FAST_POLL_MINUTES` are parsed only in `main.py`.
+**Solution:** Put a shared constant in the service module (`schedule.py`) and import it in the routers, never import a router's private constant into a service. Don't import `main` from a service to read a setting: read the env var with the same default in the service or move it to a small shared module.
+
 ### 2026-11-17 — developer — testing
 **Problem:** Adding a keyword to `twitch._post_chat_message` / `_pubsub_broadcast` calls (issue 253's `ext=`) broke older tests: their recorders (`_chat_recorder` in `test_issue_157`, `_pubsub` in `test_issue_234`) are two-argument lambdas. Separately, `twitch_channels.record_request` ignores a non-numeric channel id, so the tests' `test_channel` never gets an approval row.
 **Solution:** Send through `twitch.chat_as(ext, …)` / `broadcast_as(ext, …)`, which keep the two-argument call for the full extension; in a new test that needs the keyword, patch with a recorder that takes `ext="game"`. Use a numeric channel id when a test expects a `TwitchChannelApproval` row.
