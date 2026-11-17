@@ -1098,6 +1098,36 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   display: inline-block;
 }
 
+/* Issue 244: a game's player table, opened by the Players button of its game row. */
+.game-players-btn { padding: 0 8px; font-size: var(--fs-xs); }
+.game-players {
+  padding: 8px 12px 10px;
+  border-bottom: var(--bw-hair) solid var(--k-ink-900);
+  background: var(--bg-card-hi);
+  font-size: var(--fs-xs);
+}
+.game-players-badges { display: flex; gap: 6px; margin-bottom: 6px; }
+.game-players-table { width: 100%; max-width: 100%; border-collapse: collapse; table-layout: auto; }
+.game-players-table th,
+.game-players-table td { padding: 3px 6px; text-align: left; border-bottom: var(--bw-hair) solid var(--k-ink-900); }
+.game-players-table thead th { color: var(--fg-muted); font-weight: var(--w-bold); }
+.game-players-team th { padding-top: 8px; color: var(--fg-muted); font-weight: var(--w-bold); }
+.game-players-name { overflow-wrap: anywhere; }
+.game-players-mvp { color: var(--k-amber-300); }
+.game-players-hero { width: 28px; }
+.game-players-kda,
+.game-players-pts { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.game-players-table th.game-players-kda,
+.game-players-table th.game-players-pts,
+.game-players-table td.game-players-kda,
+.game-players-table td.game-players-pts { text-align: right; }
+.game-players-note,
+.game-players-msg { margin: 6px 0 0; color: var(--fg-muted); }
+@media (max-width: 479px) {
+  .game-players { padding: 6px 4px 8px; }
+  .game-players-hero { display: none; }
+}
+
 @media (max-width: 700px) {
   .schedule-now { grid-template-columns: 1fr; }
   .schedule-week-arrow { display: none; }

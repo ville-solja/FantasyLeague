@@ -289,6 +289,13 @@ function renderTeams(rows) {
 
 // "Not scored" badge tooltip, shared by the Schedule and the player popup.
 const _NOT_SCORED_TOOLTIP = "An admin excluded this match from scoring. It adds no fantasy points.";
+// "Partial stats" badge tooltip and check, shared by the Schedule's player tables
+// (issue 244) and the player popup.
+const _PARTIAL_STATS_TOOLTIP = "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.";
+
+function _popupIsPartial(m) {
+  return m.parse_status === "unparsed" || m.parse_status === "unparseable";
+}
 
 // The team popup (openTeamModal, closeTeamModal) is in app-team-popup.js (issue 211).
 
@@ -323,6 +330,13 @@ let _schedRevealedMem = null;  // Set of revealed series keys, read on first use
 // Markup carries a short hash of each series key, not the key itself: a key made
 // of match ids would give away a hidden series' game count in view-source.
 let _schedKeyById = new Map();
+// Issue 244: per-game player tables. Open match ids and fetched responses live here,
+// so a re-render (quiet refresh, any handler) keeps an open table. Only games in a
+// shown, unfolded series are listed in _schedPlayersShown, so a hidden result never
+// loads player data.
+const _schedPlayersOpen = new Set();
+const _schedPlayersData = new Map();   // match id -> response, "loading" or "error"
+let _schedPlayersShown = new Set();
 
 const _SCHED_REVEALED_MAX = 500;
 // A live game marks a series only when it started within this window of the
@@ -403,7 +417,11 @@ function revealScheduleWeek(i) {
 }
 
 function hideScheduleWeekAgain(i) {
-  _schedUnreveal(_schedRevealedKeysByWeek[i] || []);
+  const keys = _schedRevealedKeysByWeek[i] || [];
+  // A played series' key is its match ids: close those games' player tables too,
+  // so a later Reveal doesn't reopen them.
+  for (const k of keys) for (const mid of String(k).split(",")) _schedPlayersOpen.delete(Number(mid));
+  _schedUnreveal(keys);
 }
 
 // A redraw replaces the buttons, so focus would fall back to the page. Controls
@@ -457,6 +475,78 @@ function toggleScheduleGames(id) {
   if (_schedOpenGames.has(key)) _schedOpenGames.delete(key);
   else _schedOpenGames.add(key);
   if (_schedRerender) _schedRerender();
+}
+
+// Issue 244: the Players button of a game row opens or closes that game's table,
+// fetching it once per match.
+async function toggleSchedulePlayers(matchId) {
+  const mid = Number(matchId);
+  if (!Number.isSafeInteger(mid) || mid < 1 || !_schedPlayersShown.has(mid)) return;
+  if (_schedPlayersOpen.has(mid)) {
+    _schedPlayersOpen.delete(mid);
+    if (_schedRerender) _schedRerender();
+    return;
+  }
+  _schedPlayersOpen.add(mid);
+  const cached = _schedPlayersData.get(mid);
+  if (cached && cached !== "error") {
+    if (_schedRerender) _schedRerender();
+    return;
+  }
+  _schedPlayersData.set(mid, "loading");
+  if (_schedRerender) _schedRerender();
+  try {
+    const res = await fetch(`${API}/matches/${mid}/players`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _schedPlayersData.set(mid, await res.json());
+  } catch (e) {
+    console.error("player table failed:", e);
+    _schedPlayersData.set(mid, "error");
+  }
+  if (_schedRerender) _schedRerender();
+}
+
+const _SCHED_RAW_NOTE = "Raw points: from the player's own stats, before card rarity, modifiers and the MVP bonus.";
+
+// One game's player table (issue 244), rendered after its game row. Every name is
+// escaped; ids are interpolated only as numbers.
+function _schedPlayersHtml(mid, data) {
+  const open = `<div class="game-players" id="game-players-${Number(mid)}">`;
+  if (data === "loading" || data == null) return `${open}<p class="game-players-msg">Loading player stats…</p></div>`;
+  if (data === "error") return `${open}<p class="game-players-msg">Couldn't load player stats. Press Players again to retry.</p></div>`;
+  const teams = Array.isArray(data.teams) ? data.teams : [];
+  if (!teams.some(t => Array.isArray(t.players) && t.players.length)) {
+    return `${open}<p class="game-players-msg">No player stats for this game yet.</p></div>`;
+  }
+  const badges = [
+    data.excluded_from_scoring ? `<span class="badge common" title="${_escHtml(_NOT_SCORED_TOOLTIP)}">Not scored</span>` : "",
+    _popupIsPartial(data) ? `<span class="badge common" title="${_escHtml(_PARTIAL_STATS_TOOLTIP)}">Partial stats</span>` : "",
+  ].filter(Boolean).join(" ");
+  const rows = p => {
+    const icon = p.hero_icon
+      ? `<img draggable="false" class="hero-icon" src="${_escHtml(_safeUrl(p.hero_icon))}" alt="" onerror="this.style.display='none'" />`
+      : `<span class="hero-icon hero-icon-placeholder"></span>`;
+    const name = p.player_id ? playerLink(Number(p.player_id), p.player_name) : _escHtml(p.player_name || "—");
+    const star = p.is_mvp ? `<span class="game-players-mvp" aria-label="MVP">★</span> ` : "";
+    const pts = Number(p.raw_points || 0).toFixed(1);
+    return `<tr class="game-players-row${p.top ? " top" : ""}">
+          <td class="game-players-name">${star}${name}</td>
+          <td class="game-players-hero">${icon}</td>
+          <td class="game-players-kda">${_escHtml(p.kills)}/${_escHtml(p.deaths)}/${_escHtml(p.assists)}</td>
+          <td class="game-players-pts">${p.top ? `<span class="mark-winner" title="Top raw score in this game">${pts}</span><span class="visually-hidden"> (top performer)</span>` : pts}</td>
+        </tr>`;
+  };
+  const bodies = teams.map(t => `<tbody>
+        <tr class="game-players-team"><th colspan="4" scope="colgroup">${_escHtml(t.team_name || "Unknown team")}</th></tr>
+        ${(t.players || []).map(rows).join("")}
+      </tbody>`).join("");
+  return `${open}${badges ? `<div class="game-players-badges">${badges}</div>` : ""}
+      <table class="game-players-table">
+        <thead><tr><th scope="col">Player</th><th scope="col" class="game-players-hero">Hero</th><th scope="col" class="game-players-kda">K/D/A</th><th scope="col" class="game-players-pts">Raw</th></tr></thead>
+        ${bodies}
+      </table>
+      <p class="game-players-note">${_escHtml(_SCHED_RAW_NOTE)}</p>
+    </div>`;
 }
 
 // Latest result card: open the series' week with its games unfolded.
@@ -768,7 +858,11 @@ async function loadSchedule() {
       return t != null ? `<span class="series-time">${_escHtml(_schedClock(t))}</span>` : "";
     };
 
-    const gameRowsHtml = games => `<div class="series-games">${games.map((g, i) => `
+    const gameRowsHtml = games => `<div class="series-games">${games.map((g, i) => {
+        const mid = Number(g.match_id);
+        _schedPlayersShown.add(mid);
+        const pOpen = _schedPlayersOpen.has(mid);
+        return `
         <div class="game-row">
           <span class="game-row-num">G${i + 1}${g.excluded_from_scoring ? ` <span class="badge common" title="${_escHtml(_NOT_SCORED_TOOLTIP)}">Not scored</span>` : ""}</span>
           <span class="game-row-heroes">${_gameHeroIconsHtml(g.team1_heroes)}</span>
@@ -777,9 +871,11 @@ async function loadSchedule() {
           <span class="game-row-meta">
             ${g.mvp_player_id ? `<span class="game-row-mvp-star" aria-label="MVP">★</span> ${playerLink(g.mvp_player_id, g.mvp_player_name)}` : ""}
             <span class="game-row-duration">${_formatGameDuration(g.duration)}</span>
-            <a class="stream-link" href="https://www.opendota.com/matches/${Number(g.match_id)}" target="_blank" rel="noopener noreferrer" aria-label="Game ${i + 1} on OpenDota">↗</a>
+            <button type="button" class="secondary game-players-btn" aria-expanded="${pOpen}" aria-controls="game-players-${mid}" aria-label="Game ${i + 1} players" data-focus="players-${mid}" onclick="toggleSchedulePlayers(${mid})">Players</button>
+            <a class="stream-link" href="https://www.opendota.com/matches/${mid}" target="_blank" rel="noopener noreferrer" aria-label="Game ${i + 1} on OpenDota">↗</a>
           </span>
-        </div>`).join("")}</div>`;
+        </div>${pOpen ? _schedPlayersHtml(mid, _schedPlayersData.get(mid)) : ""}`;
+      }).join("")}</div>`;
 
     // Hidden rows output no score, game count or game markup at all, so nothing
     // leaks to view-source or screen readers. Team names are plain text here: the
@@ -1046,6 +1142,7 @@ async function loadSchedule() {
       const prevFocus = _schedFocusTarget();
       const now = Math.floor(Date.now() / 1000);
       _schedKeyById = new Map();
+      _schedPlayersShown = new Set();
       const hide = _schedHideOn();
       const revealed = _schedRevealedKeys();
       const weekNum = w => {

@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import threading
+from time import monotonic as _monotonic
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -31,6 +32,14 @@ def _league_now():
 _DIVISION_MAP = {"upper": "div1", "lower": "div2"}
 
 _cache = {"data": None, "fetched_at": None}
+# Issue 244: {match_id: (built_at monotonic seconds, game_players payload)}. An entry
+# expires after CACHE_TTL, like the schedule: league ingest, parse retries, enrichment
+# and season reset don't call bust_cache(), so the TTL bounds how long a re-ingested,
+# newly parsed or deleted match is served stale. bust_cache() (manual match store, MVP
+# changes, retry-parse, scoring toggle, schedule refresh) clears it at once. Weights
+# change only at startup (seed.py applies WEIGHTS_JSON; there is no weights write
+# route), and a restart empties this, so the key needs no weights fingerprint.
+_game_players_cache: dict = {}
 
 # {hero_id: full icon URL}, fetched once per process lifetime — hero constants
 # are effectively static within a patch, so there is no need to refresh this on
@@ -321,6 +330,7 @@ def parse_fixtures_json(payload):
 def bust_cache():
     _cache["data"] = None
     _cache["fetched_at"] = None
+    _game_players_cache.clear()
 
 
 def get_live_pairs(db, now: int) -> list[dict]:
@@ -559,6 +569,75 @@ def _build_games(db, match_ids, team1_id, team2_id):
             "excluded_from_scoring": match_id in excluded_match_ids,
         })
     return games
+
+
+def game_players(db, match_id):
+    """One game's player lines with raw points (issue 244), or None for an unknown
+    match. Raw points are fantasy_score of the row's own stats with the current
+    weights: no rarity, no card modifiers, no MVP bonus (fantasy_points includes
+    the bonus, so it is never read). Teams come radiant, then dire, each sorted by
+    raw points; `top` marks the game's highest raw score (all ties). Hero icons come
+    from the cache only, so a request never waits on OpenDota."""
+    hit = _game_players_cache.get(match_id)
+    if hit is not None and _monotonic() - hit[0] < CACHE_TTL:
+        return hit[1]
+    from models import Match, Player, PlayerMatchStats, Team, Weight
+    from scoring import display_points, fantasy_score, stat_dict_from_row
+
+    match = db.get(Match, match_id)
+    if match is None:
+        return None
+    weights = {w.key: w.value for w in db.query(Weight)}
+    icons, _names = cached_hero_maps()
+    warm = _hero_icon_cache is not None
+
+    rows = (db.query(PlayerMatchStats, Player.name)
+              .outerjoin(Player, Player.id == PlayerMatchStats.player_id)
+              .filter(PlayerMatchStats.match_id == match_id)
+              .all())
+    lines = []
+    for row, name in rows:
+        raw = fantasy_score(stat_dict_from_row(row), weights)
+        lines.append((row.team_id, raw, {
+            "player_id": row.player_id,
+            "player_name": name,
+            "hero_id": row.hero_id,
+            "hero_icon": icons.get(row.hero_id) if row.hero_id is not None else None,
+            "kills": row.kills or 0,
+            "deaths": row.deaths or 0,
+            "assists": row.assists or 0,
+            "raw_points": display_points(raw),
+            "is_mvp": bool(row.is_mvp),
+            "top": False,
+        }))
+    best = max((raw for _, raw, _ in lines), default=None)
+    for _, raw, line in lines:
+        line["top"] = raw == best
+
+    # Radiant, then dire; a manual match may lack them, so fall back to the order
+    # the team ids appear in its stats.
+    team_ids = [t for t in (match.radiant_team_id, match.dire_team_id) if t is not None]
+    for team_id, _, _ in lines:
+        if team_id not in team_ids:
+            team_ids.append(team_id)
+    names = {t.id: t.name for t in db.query(Team).filter(Team.id.in_([t for t in team_ids if t is not None]))}
+    teams = []
+    for team_id in team_ids:
+        members = sorted((ln for ln in lines if ln[0] == team_id),
+                         key=lambda ln: (-ln[1], ln[2]["player_name"] or "", ln[2]["player_id"] or 0))
+        teams.append({"team_id": team_id, "team_name": names.get(team_id),
+                      "players": [ln[2] for ln in members]})
+
+    data = {
+        "match_id": match.match_id,
+        "parse_status": match.parse_status,
+        "excluded_from_scoring": bool(match.excluded_from_scoring),
+        "teams": teams,
+    }
+    # On a cold hero cache the icons are missing; don't keep that answer.
+    if warm:
+        _game_players_cache[match_id] = (_monotonic(), data)
+    return data
 
 
 def _tally_wins(rows, team1_id):

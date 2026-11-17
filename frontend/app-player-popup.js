@@ -7,9 +7,8 @@
 // load afterwards from GET /players/{id}/profile.
 // ---------------------------------------------------------------------------
 
-const _PARTIAL_STATS_TOOLTIP =
-  "The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.";
-// _NOT_SCORED_TOOLTIP is in app-players.js (the Schedule uses it too).
+// _NOT_SCORED_TOOLTIP, _PARTIAL_STATS_TOOLTIP and _popupIsPartial are in
+// app-players.js (the Schedule uses them too).
 const _POPUP_TOP_HEROES = 6;
 const _POPUP_SERIES = 5;         // stacked-bar colours before "Other"
 const _POPUP_HISTORY_COLS = 12;
@@ -112,10 +111,6 @@ function renderPlayerPopup(p) {
 
 function _popupScored(p) {
   return (Array.isArray(p.match_history) ? p.match_history : []).filter(m => !m.excluded_from_scoring);
-}
-
-function _popupIsPartial(m) {
-  return m.parse_status === "unparsed" || m.parse_status === "unparseable";
 }
 
 function _popupDate(ts) {

@@ -235,3 +235,11 @@ The team popup's data.
 The `GET /teams` list is cached in-process (`team_insights.cached_team_list`) until the stats, matches, teams, champion accolades, weights or the feed's `cached_at` change, at most 60 s. League figures (average team sources and ownership counts) are cached in-process by `team_insights.cached_league_numbers`, keyed on the weights, the stats fingerprint (`player_insights._data_version`) and the active cards; `team_insights.clear_league_cache()` empties it.
 
 Returns 404 `"Team not found"` if the team has not been ingested.
+
+---
+
+## Matches
+
+### `GET /matches/{match_id}/players`
+
+One game's player lines with raw points (before card rarity, modifiers and the MVP bonus), hero and K/D/A, for the Schedule tab's player table (issue 244). Public. 404 `"Match not found"` for an unknown match; 422 for an id outside `1..2**63-1`. Cached per match until `schedule.bust_cache()`. See `markdown/features/reference/schedule-player-performance.md`.

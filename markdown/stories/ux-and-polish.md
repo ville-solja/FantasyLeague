@@ -910,3 +910,45 @@ As a player, I want the Weekly Report to open instantly and stay still when its 
 - **Same tab:** clicking the active week tab does nothing.
 - **Recap:** a week's recap plays at most once per page visit. One interrupted by a week switch or by closing the popup does not play again on reopening (the week is cached); the **Replay** button plays it.
 - **"Seen":** `POST /weekly-summary/seen` is sent only when the week list reported `has_unseen: true`.
+
+## Schedule Player Performance (issue #244)
+
+### See How Each Player Performed in a Game
+**User story**
+As a fantasy player, I want to see every player's raw points in a game on the Schedule, so that I can judge who performed well regardless of whose cards I hold.
+
+**Acceptance criteria**
+- **Toggle:** each game row of an unfolded series has a **Players** button (`aria-expanded`). Pressing it opens that game's player table below the row; pressing it again closes it.
+- **Table:** one row per player of the game, grouped under the two team names, each team sorted by raw points (highest first). Columns: player name, hero icon, kills / deaths / assists, raw points to one decimal (`display_points`).
+- **Raw points:** `fantasy_score` of the player's stats in that game with the current weights: no rarity, no card modifiers, no MVP bonus. A short note under the table says so: "Raw points: from the player's own stats, before card rarity, modifiers and the MVP bonus."
+- **Emphasis:** the player with the game's highest raw score is marked as the top performer (ties all marked). The MVP keeps the star.
+- **Links:** a player's name opens the player popup.
+- **Phone:** the table fits the screen width without sideways scrolling; the hero column may be dropped on narrow screens.
+
+### Player Tables Keep Results Hidden
+**User story**
+As a player who hasn't watched the games yet, I want the player tables to stay out of hidden results, so that turning on hide mode still keeps me spoiler-free.
+
+**Acceptance criteria**
+- A hidden series row (hide mode on, not revealed) has no Players button and loads no player data; the page source of a hidden row holds no player names, stats or points.
+- Revealing a series makes its games' Players buttons available; **Hide week again** closes any open player tables in that week.
+- The Latest result card is unchanged: its **Games** button opens the week, where the tables work as above.
+
+### Partial and Unscored Games Are Labelled
+**User story**
+As a fantasy player, I want to know when a game's figures are incomplete or don't count, so that I don't misread a low or ignored score.
+
+**Acceptance criteria**
+- A game whose replay is unparsed or unparseable shows the existing "Partial stats" badge on its player table, with the existing tooltip.
+- A game excluded from scoring shows its players and raw points, and the table repeats the existing "Not scored" badge.
+- A game with no stored player stats yet (a series still resolving) shows "No player stats for this game yet." instead of a table.
+
+### Public Endpoint for One Game's Players
+**User story**
+As the frontend, I want one game's player lines from the API, so that the Schedule loads them only when asked.
+
+**Acceptance criteria**
+- `GET /matches/{match_id}/players` is public (no login), like `GET /schedule`, and returns `match_id`, `parse_status`, `excluded_from_scoring` and `teams`: two entries with `team_id`, `team_name` and `players`, each player with `player_id`, `player_name`, `hero_id`, `hero_icon`, `kills`, `deaths`, `assists`, `raw_points`, `is_mvp` and `top`.
+- An unknown match answers 404; a match id outside the database id range answers 422.
+- It returns no user, card or ownership data, only league data already public in the player popup.
+- Responses are cached in memory per match and cleared with the schedule cache (`schedule.bust_cache`), so a new MVP or a re-ingested match shows at once.

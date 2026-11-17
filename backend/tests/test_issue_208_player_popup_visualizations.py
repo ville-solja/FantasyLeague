@@ -474,6 +474,9 @@ def _popup_src():
     players = _fe("app-players.js")
     dur = _fn_source(players, "_formatGameDuration")
     dur += "\n" + re.search(r"^const _NOT_SCORED_TOOLTIP = .*$", players, re.M).group(0)
+    # Issue 244: the Partial stats tooltip and check moved to app-players.js.
+    dur += "\n" + re.search(r"^const _PARTIAL_STATS_TOOLTIP = .*$", players, re.M).group(0)
+    dur += "\n" + _fn_source(players, "_popupIsPartial")
     return _FAKE_DOM + helpers + "\n" + acc + "\n" + dur + "\n" + _fe("app-player-popup.js")
 
 

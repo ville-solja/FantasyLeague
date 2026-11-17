@@ -16,7 +16,7 @@ to appear.
 `POST /admin/matches/{match_id}/mvp` and `POST /twitch/mvp` — correctly update that field via
 the shared `_apply_mvp_bonus` helper, so the underlying data is right immediately. Neither
 endpoint called `schedule.bust_cache()` afterward, unlike `POST /schedule/refresh` and the
-ingest pipeline, which already do — so the Schedule tab kept serving the pre-MVP cached response
+manual-match store in `ingest.py`, which already do — so the Schedule tab kept serving the pre-MVP cached response
 until the TTL naturally expired.
 
 ## Behaviour
@@ -31,7 +31,8 @@ next `GET /schedule` request recomputes fresh rather than waiting out the cache:
 
 Calling it when the cache is already empty/expired is a no-op (it's a plain dict clear:
 `_cache["data"] = None; _cache["fetched_at"] = None`), matching the existing
-`POST /schedule/refresh` behaviour. A failed MVP-set request (e.g. unknown `player_id`, which
+`POST /schedule/refresh` behaviour. Since issue 244 it also empties the per-match player-table cache
+(`_game_players_cache`, `GET /matches/{match_id}/players`), so a new MVP's star shows there at once too; its entries also expire after an hour (`CACHE_TTL`), like the schedule. A failed MVP-set request (e.g. unknown `player_id`, which
 raises `HTTPException(404)` before `db.commit()` is reached) never calls `bust_cache()`, so a
 still-warm cache is left untouched.
 
@@ -39,4 +40,4 @@ Only cache invalidation was added — MVP storage (`TwitchMVP` upsert), the fant
 bonus (`_apply_mvp_bonus`), and the Twitch token-drop logic are unaffected.
 
 See `backend/schedule.py` for the cache itself (`_cache`, `CACHE_TTL = 3600`) and its other
-existing callers (`POST /schedule/refresh`, the ingest pipeline).
+existing callers (`POST /schedule/refresh`, the manual-match store in `ingest.py`, the admin retry-parse and scoring-toggle routes). League ingest, parse retries, enrichment and season reset don't call it; both caches expire after `CACHE_TTL` instead.

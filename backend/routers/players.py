@@ -2,7 +2,7 @@ import json
 import logging
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy import text
 
 import accolades
@@ -211,3 +211,13 @@ def get_team(team_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Team not found")
     # Issue 211: the team popup's header, tiles, series, roster, sources and heroes.
     return team_insights.team_detail(db, team, _current_weights(db))
+
+
+@router.get("/matches/{match_id}/players")
+def get_match_players(match_id: int = Path(ge=1, le=2**63 - 1), db=Depends(get_db)):
+    # Issue 244: one game's player lines with raw points, for the Schedule's player
+    # table. Public league data only: no user, card or ownership fields.
+    data = schedule.game_players(db, match_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Match not found")
+    return data
