@@ -952,3 +952,46 @@ As the frontend, I want one game's player lines from the API, so that the Schedu
 - An unknown match answers 404; a match id outside the database id range answers 422.
 - It returns no user, card or ownership data, only league data already public in the player popup.
 - Responses are cached in memory per match and cleared with the schedule cache (`schedule.bust_cache`), so a new MVP or a re-ingested match shows at once.
+
+## Linkable Tabs (issue #245)
+
+### Open a Tab From a Link
+**User story**
+As a player, I want a link to a tab to open that tab, so that when the league posts "the finals predictions are open" the link takes me straight there.
+
+**Acceptance criteria**
+- **Every main tab has a link:** `/#my-team`, `/#leaderboards`, `/#history`, `/#players`, `/#teams`, `/#schedule`, `/#finals`, `/#team-finder`, `/#how-to-play`, `/#profile` and `/#admin` each open that tab on page load, with the tab's data loaded as when it is clicked.
+- **Old names:** `/#team`, `/#leaderboard`, `/#teamfinder` and `/#howtoplay` open the same tabs; names are matched without regard to case.
+- **Subtabs:** `/#how-to-play/users`, `/players`, `/streamers` and `/developers` open How to Play on that subtab.
+- **No link:** the page opens on Leaderboards, as today.
+- **Unknown name** (`/#nonsense`): the page opens on Leaderboards with no error.
+
+### Copy the Address of the Tab I'm On
+**User story**
+As the league admin, I want the address bar to show the tab I'm on, so that I can copy it and share it without knowing a special format.
+
+**Acceptance criteria**
+- Switching tab by a click, a link inside the site or a button sets the address to that tab's link (`/#schedule`), with the readable name; switching How to Play's subtab sets `/#how-to-play/<subtab>`. Clicking the tab already open adds nothing.
+- A click adds a history entry, so Back returns to the previous tab and Forward goes back again; the tab's scroll position is restored as it is today.
+- Opening the page from a link does not add an extra history entry (one Back leaves the site, as before).
+- Nothing else in the address changes: the path and any query string are kept. A plain `/` visit keeps its address until a tab is chosen.
+- Links inside a tab that only jump to a section (the Streamers overview in How to Play) scroll there without changing the address.
+
+### Links to Tabs That Aren't Available
+**User story**
+As a visitor, I want a link to a tab I can't see yet to land somewhere sensible, so that an early or private link never shows a broken page.
+
+**Acceptance criteria**
+- **Hidden tab:** `/#finals` while the Finals tab is hidden (`finals_available` is false in `/config`) opens Leaderboards and shows "The Finals tab isn't open yet."; `/#team-finder` while Team Finder is closed shows "Team Finder isn't open right now." The address is changed to `/#leaderboards`.
+- **Needs a login:** `/#my-team` or `/#profile` while logged out opens the login dialog; after logging in (with a password, a new account or a Steam sign-in, including its round trip to Steam) the page opens that tab. Closing the dialog leaves the page on Leaderboards, and a later login goes to My Team as usual.
+- **Admin:** `/#admin` for a visitor or a player who isn't an admin opens Leaderboards with no notice and no admin request.
+- The decision waits for `/config` and the login check that `init()` already makes, so an available tab is never refused because the page hadn't loaded yet.
+
+### Sign-in Returns Keep Working
+**User story**
+As a player connecting Steam or Twitch, I want the sign-in return to keep working, so that tab links don't break the flows that already use the address.
+
+**Acceptance criteria**
+- `#profile?twitch=<key>`, `#login?steam=<key>` and the other Steam returns (`#welcome?…`, `#admin?…`) are handled exactly as today, and tab routing ignores any hash containing `?`. A plain `#profile` is a tab link, not a Twitch return.
+- `?reset_token=…` (password reset) and the Twitch `?error=…&state=…` return are handled as today.
+- After one of those flows the address bar shows the tab it ended on, in the readable form.

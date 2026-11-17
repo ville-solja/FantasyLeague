@@ -2,6 +2,8 @@
 
 Visible to everyone (no login required). Default tab on page load.
 
+Its link is `/#leaderboards` (issue #245). It is also where links to a tab the visitor can't open land: for a hidden Finals or Team Finder tab a one-line notice (`#tabLinkNotice`, `role="status"`) at the top reads "The Finals tab isn't open yet." or "Team Finder isn't open right now." until the next tab switch; Admin, unknown names and a closed login dialog land here without a notice. See `features/reference/linkable-tabs.md`.
+
 ## Standings panel
 
 Fantasy user standings with two modes toggled by buttons:

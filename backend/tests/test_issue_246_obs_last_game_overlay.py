@@ -1234,8 +1234,9 @@ class TestStreamersTabListsEveryTool:
     def test_streamers_overview_lists_four_tools_with_in_page_links(self):
         """The streamers panel opens (before any tool section) with a list of four
         one-line items, in order, naming "Pause screen overlay", "Kana Cards
-        extension", "Viewer MVP vote" and "Kana Cards MVP Vote", each with an
-        `<a href="#...">` link; the overlay item says it needs no extension."""
+        extension", "Viewer MVP vote" and "Kana Cards MVP Vote", each with a
+        link button (issue 245: `<button data-target="...">` that scrolls without
+        changing the address); the overlay item says it needs no extension."""
         panel = _streamers()
         first_section = panel.index('id="htp-streamers-overlay"')
         overview = _tree(panel[:first_section])
@@ -1245,25 +1246,26 @@ class TestStreamersTabListsEveryTool:
         assert len(items) == 4
         names = ["Pause screen overlay", "Kana Cards extension", "Viewer MVP vote", "Kana Cards MVP Vote"]
         for li, name in zip(items, names):
-            links = li.by_tag("a")
+            assert li.by_tag("a") == []
+            links = li.by_tag("button")
             assert len(links) == 1 and links[0].text().strip() == name
-            assert links[0].attrs["href"].startswith("#")
+            assert links[0].attrs["type"] == "button"
+            assert links[0].attrs["onclick"] == "scrollToHtpSection(this.dataset.target)"
         assert "no extension needed" in items[0].text()
 
     def test_streamers_overview_links_resolve_to_sections_in_panel(self):
-        """Failure path. Every overview `href="#id"` names an element id that
+        """Failure path. Every overview button's `data-target` names an element id that
         exists exactly once in index.html and lies inside the streamers panel
         slice (`_extract_panel(html, "streamers")` of
         test_how_to_play_role_subtabs)."""
         html = _read("frontend", "index.html")
         panel = _streamers()
         overview = _tree(panel[:panel.index('id="htp-streamers-overlay"')])
-        hrefs = [a.attrs["href"] for a in overview.by_class("htp-tool-list")[0].by_tag("a")]
-        assert [h[1:] for h in hrefs] == _SECTION_IDS
+        targets = [b.attrs["data-target"] for b in overview.by_class("htp-tool-list")[0].by_tag("button")]
+        assert targets == _SECTION_IDS
         ids = [n.attrs.get("id") for n in _tree(html).walk()]
         panel_ids = [n.attrs.get("id") for n in _tree(panel).walk()]
-        for href in hrefs:
-            target = href[1:]
+        for target in targets:
             assert ids.count(target) == 1, target
             assert target in panel_ids, target
 

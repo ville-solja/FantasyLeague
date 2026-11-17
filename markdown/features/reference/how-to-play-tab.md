@@ -22,6 +22,10 @@ Subtab switching is client-side only (no additional network request): clicking a
 does not re-fetch `GET /weights` or call any other endpoint. The Users subtab is shown first
 (`x-data="{ howToPlayTab: 'users' }"`).
 
+Since #245 each subtab has a link, `/#how-to-play/<users|players|streamers|developers>`, which
+opens How to Play on that subtab; choosing a subtab replaces the address with its link (no extra
+history entry). See [Linkable Tabs](linkable-tabs.md).
+
 ---
 
 ## Implementation
@@ -30,11 +34,12 @@ The tab is entirely frontend. It reads the public `GET /weights` and, for the ov
 
 | Surface | Change |
 |---|---|
-| `frontend/index.html` | Tab button `#tab-btn-howtoplay`; content div `#tab-howtoplay` containing a `#howtoplay-tab-bar` of four `.howtoplay-tab-btn` buttons (`data-tab="users\|players\|streamers\|developers"`) and four panel divs `#howtoplay-panel-users`, `#howtoplay-panel-players`, `#howtoplay-panel-streamers`, `#howtoplay-panel-developers`. Switching is Alpine (see `reference/frontend-framework-evaluation.md`): `#tab-howtoplay` has `x-data="{ howToPlayTab: 'users' }"`, each button sets it with `@click` and gets `.active` through `:class`, each panel has `x-cloak x-show="howToPlayTab === '...'"`. Since #246 the Streamers panel's sections have ids `#htp-streamers-overlay`, `#htp-streamers-extension`, `#htp-streamers-viewer-vote` and `#htp-streamers-mvp-vote`, the targets of the overview list's links |
+| `frontend/index.html` | Tab button `#tab-btn-howtoplay`; content div `#tab-howtoplay` containing a `#howtoplay-tab-bar` of four `.howtoplay-tab-btn` buttons (`data-tab="users\|players\|streamers\|developers"`) and four panel divs `#howtoplay-panel-users`, `#howtoplay-panel-players`, `#howtoplay-panel-streamers`, `#howtoplay-panel-developers`. Switching is Alpine (see `reference/frontend-framework-evaluation.md`): `#tab-howtoplay` has `x-data="{ howToPlayTab: 'users' }"`, each button sets it with `@click` and gets `.active` through `:class`, each panel has `x-cloak x-show="howToPlayTab === '...'"`. Since #246 the Streamers panel's sections have ids `#htp-streamers-overlay`, `#htp-streamers-extension`, `#htp-streamers-viewer-vote` and `#htp-streamers-mvp-vote`, the targets of the overview list. Since #245 the overview items are `.htp-tool-link` buttons (`data-target="<section id>"`, `onclick="scrollToHtpSection(this.dataset.target)"`) that scroll to the section without changing the address. Also since #245 `#tab-howtoplay` has `x-init="howToPlayTab = htpSubtabOnStart(); $watch('howToPlayTab', v => htpSubtabChanged(v))"` and `@htp-subtab.window="howToPlayTab = $event.detail"`, so a subtab from a link reaches Alpine whether it starts before or after `init()` reads the link |
 | `frontend/app-init.js` | `loadHowToPlay()` fetches `GET /weights` and populates three `<tbody>` elements (`#howtoplay-stats-tbody`, `#howtoplay-rarity-tbody`, `#howtoplay-mods-tbody`) and one inline span (`#howtoplay-mvp-bonus`), all inside the Users panel |
 | `frontend/app-init.js` (#246) | `loadHowToPlay()` first calls `loadObsOverlayBuilder()`, which fills `#obs-team-a` / `#obs-team-b` once from `GET /teams` (`obsOverlayTeamOptions`, sorted by name, names escaped); `updateObsOverlayUrl()` (the pickers' and checkbox's `onchange`) builds the URL with `obsOverlayUrl(location.origin, a, b, transparent)` and enables **Copy** and the preview link only when `obsOverlayCopyEnabled(a, b)`; `copyObsOverlayUrl()` uses the Clipboard API and falls back to selecting the field |
-| `frontend/app-tour.js` | `startTourFromHowToPlay()`, wired to `#htpTourBtn` (see `reference/guided-tour.md`) |
-| `frontend/style.css` | `.howtoplay-tab-btn` / `.howtoplay-tab-btn.active` (shared rule with `.admin-tab-btn`, mirroring the Admin panel's subtab styling); `[x-cloak]` hides panels until Alpine starts; since #246 `.htp-tool-list` (the Streamers overview) and `.obs-builder*` (the overlay URL builder, one column under 520px) |
+| `frontend/app-init.js` (#245) | `htpSubtabOnStart()` (the subtab a link chose, else `users`), `setHowToPlaySubtab(role)` (sets it and sends the `htp-subtab` window event), `htpSubtabChanged(role)` (replaces the address while How to Play is open) and `scrollToHtpSection(id)` |
+| `frontend/app-tour.js` | `startTourFromHowToPlay()`, wired to `#htpTourBtn` (see `reference/guided-tour.md`); since #245 it opens My Team with `openTab("team")`, a click that adds a history entry |
+| `frontend/style.css` | `.howtoplay-tab-btn` / `.howtoplay-tab-btn.active` (shared rule with `.admin-tab-btn`, mirroring the Admin panel's subtab styling); `[x-cloak]` hides panels until Alpine starts; since #246 `.htp-tool-list` (the Streamers overview; its `.htp-tool-link` buttons look like links, #245) and `.obs-builder*` (the overlay URL builder, one column under 520px) |
 
 `switchTab('howtoplay')` calls `loadHowToPlay()`, which starts `loadObsOverlayBuilder()` and then
 fetches `GET /weights`. The tab button and all four subtabs have no auth-state visibility

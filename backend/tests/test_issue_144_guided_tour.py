@@ -136,18 +136,18 @@ class TestStartTourFromHowToPlay:
         assert m.start() < panel.index("Cards &amp; Drawing")
 
     def test_show_the_tour_button_switches_to_team_and_forces_start(self):
-        """For a logged-in user the button switches to My Team (switchTab('team')) and calls startTour(steps, {force: true}) from step 1."""
+        """For a logged-in user the button switches to My Team (openTab('team'), issue 245: switchTab with a history entry) and calls startTour(steps, {force: true}) from step 1."""
         fn = _js_function(_read(TOUR_JS_PATH), "startTourFromHowToPlay")
-        assert 'switchTab("team")' in fn
+        assert 'openTab("team")' in fn
         assert "startTour(myTeamTourSteps(), { force: true })" in fn
-        assert fn.index('switchTab("team")') < fn.index("startTour(")
+        assert fn.index('openTab("team")') < fn.index("startTour(")
 
     def test_show_the_tour_button_logged_out_opens_login_popup(self):
         """For a logged-out visitor the button opens the login popup (showLogin()) instead of starting the tour."""
         fn = _js_function(_read(TOUR_JS_PATH), "startTourFromHowToPlay")
         m = re.search(r"if \(!activeUserId\) \{\s*showLogin\(\);\s*return;\s*\}", fn)
         assert m, "logged-out branch must call showLogin() and return"
-        assert m.start() < fn.index('switchTab("team")')
+        assert m.start() < fn.index('openTab("team")')
 
     def test_index_html_loads_app_tour_js_before_app_init_js(self):
         """index.html loads /app-tour.js with a local <script> tag before /app-init.js (no new CDN script)."""

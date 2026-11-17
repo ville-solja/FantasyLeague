@@ -220,13 +220,114 @@ function _handleResetTokenParam() {
   showResetPassword(token);
 }
 
+// ---------------------------------------------------------------------------
+// Tab links (issue #245): `/#<tab>` opens that tab; Back and Forward move between tabs.
+// ---------------------------------------------------------------------------
+
+const _TAB_LINK_NOTICES = {
+  finals: "The Finals tab isn't open yet.",
+  teamfinder: "Team Finder isn't open right now.",
+};
+
+/** Whether a tab's button is shown to this visitor (the same flags the tab bar uses). */
+function _tabLinkAvailable(tab) {
+  if (tab === "finals" || tab === "teamfinder") {
+    const btn = document.getElementById(`tab-btn-${tab}`);
+    return !!btn && !btn.hidden;
+  }
+  if (tab === "team" || tab === "profile") return !!activeUserId;
+  if (tab === "admin") return !!(activeUserId && activeIsAdmin);
+  return true;
+}
+
+/** Shows the tab a link names, or the fallback for one this visitor can't open. On
+ *  page load a login-only tab opens the login dialog and waits for the login; on Back
+ *  or Forward it falls back to Leaderboards. Returns the subtab it selected, or null. */
+function _openLinkedTab(link, onLoad) {
+  const tab = link.tab;
+  if (_tabLinkAvailable(tab)) {
+    switchTab(tab, onLoad ? undefined : { history: "none" });
+    if (tab === "howtoplay" && link.subtab) setHowToPlaySubtab(link.subtab);
+    return tab === "howtoplay" ? link.subtab : null;
+  }
+  switchTab("leaderboard");
+  if (_TAB_LINK_NOTICES[tab]) {
+    setStatus("tabLinkNotice", _TAB_LINK_NOTICES[tab]);
+    document.getElementById("tabLinkNotice").hidden = false;
+  } else if (onLoad && (tab === "team" || tab === "profile")) {
+    _setPendingTab(tab);
+    showLogin();
+  }
+  return null;
+}
+
+/** End of init()'s address handling: opens the linked tab (or the tab a link asked
+ *  for before a Steam sign-in), then lets switchTab write the address again and, when
+ *  the page came with a hash or a return changed the address, writes the current
+ *  tab's link. A bare `/` load keeps its address. */
+function _routeInitialLink(startHash, startSearch) {
+  const link = tabFromLink(startHash);
+  let subtab = null;
+  let switched = false;
+  if (link) {
+    subtab = _openLinkedTab(link, true);
+  } else if (activeUserId && !startHash) {
+    const pending = _takePendingTab();
+    if (pending) { switchTab(pending); switched = true; }
+  }
+  _tabLinkRouting = false;
+  if (!startHash && !switched && (window.location.search || "") === startSearch) return;
+  const active = document.querySelector(".tab-content.active");
+  if (active) _writeTabAddress(active.id.replace(/^tab-/, ""), "replace", true, subtab);
+}
+
+window.addEventListener("popstate", () => {
+  const hash = window.location.hash || "";
+  if (!hash) { switchTab("leaderboard", { history: "none" }); return; }
+  const link = tabFromLink(hash);
+  if (link) _openLinkedTab(link, false);  // anything else (in-page anchors) is ignored
+});
+
+// How to Play's subtab lives in Alpine (`howToPlayTab`, index.html). Alpine is loaded
+// with `defer`, so the component reads the subtab a link chose when it starts
+// (htpSubtabOnStart) and hears later choices as an `htp-subtab` window event.
+let _htpSubtab = null;
+
+function setHowToPlaySubtab(subtab) {
+  _htpSubtab = subtab;
+  if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+    window.dispatchEvent(new CustomEvent("htp-subtab", { detail: subtab }));
+  }
+}
+
+function htpSubtabOnStart() {
+  return _htpSubtab || "users";
+}
+
+/** Alpine's `$watch` on howToPlayTab: a subtab chosen on How to Play replaces the address. */
+function htpSubtabChanged(subtab) {
+  _htpSubtab = subtab;
+  const tab = document.getElementById("tab-howtoplay");
+  if (tab && tab.classList.contains("active")) _writeTabAddress("howtoplay", "replace", true, subtab);
+}
+
+/** Streamers overview buttons: scroll to a section without changing the address. */
+function scrollToHtpSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+}
+
 async function init() {
+  // Issue #245: read the link before applyAuthState and the return handlers run.
+  const startHash = window.location.hash || "";
+  const startSearch = window.location.search || "";
   await loadConfig();
   loadAccolades();  // issue 50: accolade pips on every card, loaded once per page
   await loadMe();
   applyAuthState();
   _handleResetTokenParam();
   if (!handleSteamReturn() && !handleTwitchErrorReturn()) handleTwitchReturn();
+  _routeInitialLink(startHash, startSearch);
   if (activeUserId) {
     claimTokenEvents();
     checkNotifications();

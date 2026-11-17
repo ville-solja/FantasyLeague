@@ -12,6 +12,14 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-17 — developer — testing
+**Problem:** A `style.css` comment `/* Issue #245 … */` failed `test_issue_211` and `test_issue_224`, whose "tokens only" checks search CSS slices for `#[0-9a-fA-F]{3,8}\b` and read `#245` as a hex colour.
+**Solution:** Write "issue 245" (no `#`) in CSS comments.
+
+### 2026-11-17 — test-planner — frontend
+**Problem:** The page's address is read and rewritten in several places during `init()`: `applyAuthState()` calls `switchTab("leaderboard")` for logged-out visitors before `handleSteamReturn` reads `#login?steam=…`, and `handleTwitchReturn` strips any hash starting `#profile`, even without `?`. In-page `href="#htp-…"` anchors also change the hash.
+**Solution:** Read `location.hash` at the start of `init()`, before any handler runs, and keep `switchTab` from writing the address during init. Make a `popstate`/hash reader ignore anchor ids. Note that `test_how_to_play_role_subtabs` reads the first app-globals.js line containing `"howtoplay"`.
+
 ### 2026-11-17 — developer — security
 **Problem:** SlowAPIMiddleware's default limit (`RATE_LIMIT_GLOBAL`) never applies to routes added with `include_router`: this FastAPI wraps them in `_IncludedRouter`, the middleware finds no handler and treats the request as exempt, so a "covered by the global limit" test with a fresh `Limiter(default_limits=...)` sees no 429.
 **Solution:** Put `@limiter.limit(RATE_LIMIT_GLOBAL)` on a public route that must be limited (`routers/obs.py`, issue 246) and test it with the router's own Limiter (`limiter.reset()` first). Routes that rely only on the global limit are unlimited today.

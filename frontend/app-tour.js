@@ -307,7 +307,7 @@ async function startTourFromHowToPlay() {
     showLogin();
     return;
   }
-  switchTab("team");
+  openTab("team");  // issue #245: a click, so it adds a history entry
   const teamTab = document.getElementById("tab-team");
   if (!teamTab || !teamTab.classList.contains("active")) return;
   const grid = document.getElementById("rosterActiveGrid");

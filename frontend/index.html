@@ -515,23 +515,23 @@
       Weekly Report
       <span id="weeklyReportBadge" class="weekly-report-badge" style="display:none;"></span>
     </button>
-    <button id="headerUserLabel" class="secondary header-profile-btn" onclick="switchTab('profile')" style="display:none;"></button>
+    <button id="headerUserLabel" class="secondary header-profile-btn" onclick="openTab('profile')" style="display:none;"></button>
     <button class="ghost" id="headerLoginBtn"  onclick="showLogin()" style="display:none;">Login</button>
     <button class="ghost" id="headerLogoutBtn" onclick="logout()"    style="display:none;">Logout</button>
   </div>
 </header>
 
 <div class="tabs" id="tabBar">
-  <button class="tab" id="tab-btn-team"        onclick="switchTab('team')">My Team</button>
-  <button class="tab active" id="tab-btn-leaderboard" onclick="switchTab('leaderboard')">Leaderboards</button>
-  <button class="tab" id="tab-btn-history"     onclick="switchTab('history')">History</button>
-  <button class="tab" id="tab-btn-players"     onclick="switchTab('players')">Players</button>
-  <button class="tab" id="tab-btn-teams"       onclick="switchTab('teams')">Teams</button>
-  <button class="tab" id="tab-btn-schedule"    onclick="switchTab('schedule')">Schedule</button>
-  <button class="tab" id="tab-btn-finals"      onclick="switchTab('finals')" hidden>Finals</button>
-  <button class="tab" id="tab-btn-teamfinder"  onclick="switchTab('teamfinder')" hidden>Team Finder</button>
-  <button class="tab" id="tab-btn-howtoplay"   onclick="switchTab('howtoplay')">How to Play</button>
-  <button class="tab" id="tab-btn-admin"       onclick="switchTab('admin')">Admin<span class="admin-pending-badge" id="adminTabPendingBadge" role="img" hidden></span></button>
+  <button class="tab" id="tab-btn-team"        onclick="openTab('team')">My Team</button>
+  <button class="tab active" id="tab-btn-leaderboard" onclick="openTab('leaderboard')">Leaderboards</button>
+  <button class="tab" id="tab-btn-history"     onclick="openTab('history')">History</button>
+  <button class="tab" id="tab-btn-players"     onclick="openTab('players')">Players</button>
+  <button class="tab" id="tab-btn-teams"       onclick="openTab('teams')">Teams</button>
+  <button class="tab" id="tab-btn-schedule"    onclick="openTab('schedule')">Schedule</button>
+  <button class="tab" id="tab-btn-finals"      onclick="openTab('finals')" hidden>Finals</button>
+  <button class="tab" id="tab-btn-teamfinder"  onclick="openTab('teamfinder')" hidden>Team Finder</button>
+  <button class="tab" id="tab-btn-howtoplay"   onclick="openTab('howtoplay')">How to Play</button>
+  <button class="tab" id="tab-btn-admin"       onclick="openTab('admin')">Admin<span class="admin-pending-badge" id="adminTabPendingBadge" role="img" hidden></span></button>
 </div>
 
 <!-- TAB: PROFILE -->
@@ -720,7 +720,7 @@
         <div class="status" id="redeemStatus" style="margin:0;"></div>
       </div>
       <div style="margin-top:14px;font-size:0.82rem;">
-        <button class="inline-tab-link" onclick="switchTab('howtoplay')">How scoring works &rarr;</button>
+        <button class="inline-tab-link" onclick="openTab('howtoplay')">How scoring works &rarr;</button>
       </div>
       <div class="status" id="deckStatus"></div>
     </div>
@@ -734,6 +734,7 @@
 
 <!-- TAB: LEADERBOARDS -->
 <div id="tab-leaderboard" class="tab-content active">
+  <p id="tabLinkNotice" class="status" role="status" hidden></p>
   <div class="grid">
 
     <div class="panel">
@@ -994,7 +995,7 @@
 </div>
 
 <!-- TAB: HOW TO PLAY -->
-<div id="tab-howtoplay" class="tab-content" x-data="{ howToPlayTab: 'users' }">
+<div id="tab-howtoplay" class="tab-content" x-data="{ howToPlayTab: 'users' }" x-init="howToPlayTab = htpSubtabOnStart(); $watch('howToPlayTab', v => htpSubtabChanged(v))" @htp-subtab.window="howToPlayTab = $event.detail">
 
   <!-- How to Play subtab bar — Alpine.js spike (declarative x-show/@click instead of
        the imperative data-attribute matching used by the admin/schedule tab bars) -->
@@ -1135,10 +1136,10 @@
       <h2>Streamer Tools</h2>
       <p style="margin-bottom:12px;color:#ccc;font-size:0.9rem;line-height:1.7;">What Kana Cards offers a stream casting league games:</p>
       <ul class="htp-tool-list">
-        <li><a href="#htp-streamers-overlay">Pause screen overlay</a>: the last game's player stats as an OBS browser source; no extension needed.</li>
-        <li><a href="#htp-streamers-extension">Kana Cards extension</a>: the full Twitch panel game, with match MVP and token drops.</li>
-        <li><a href="#htp-streamers-viewer-vote">Viewer MVP vote</a>: let your viewers vote for the match MVP in the Kana Cards extension.</li>
-        <li><a href="#htp-streamers-mvp-vote">Kana Cards MVP Vote</a>: a small vote-only Twitch extension, without the card game.</li>
+        <li><button type="button" class="htp-tool-link" data-target="htp-streamers-overlay" onclick="scrollToHtpSection(this.dataset.target)">Pause screen overlay</button>: the last game's player stats as an OBS browser source; no extension needed.</li>
+        <li><button type="button" class="htp-tool-link" data-target="htp-streamers-extension" onclick="scrollToHtpSection(this.dataset.target)">Kana Cards extension</button>: the full Twitch panel game, with match MVP and token drops.</li>
+        <li><button type="button" class="htp-tool-link" data-target="htp-streamers-viewer-vote" onclick="scrollToHtpSection(this.dataset.target)">Viewer MVP vote</button>: let your viewers vote for the match MVP in the Kana Cards extension.</li>
+        <li><button type="button" class="htp-tool-link" data-target="htp-streamers-mvp-vote" onclick="scrollToHtpSection(this.dataset.target)">Kana Cards MVP Vote</button>: a small vote-only Twitch extension, without the card game.</li>
       </ul>
     </div>
 

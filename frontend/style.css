@@ -4381,7 +4381,15 @@ td .accolade-chip { border-color: transparent; }
 
 /* How to Play › Streamers (issue 246): tool overview and the OBS overlay URL builder */
 .htp-tool-list { padding-left: 18px; color: var(--k-ink-200); font-size: 0.9rem; line-height: 1.7; margin: 0; }
-.htp-tool-list a { color: var(--accent); font-weight: 600; }
+/* Issue 245: the overview links are buttons that scroll without changing the address. */
+.htp-tool-link {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 600;
+  letter-spacing: inherit; text-transform: none; color: var(--accent); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; display: inline; white-space: normal;
+}
+.htp-tool-link:hover { color: var(--accent-hover); background: none; }
+/* Issue 245: "The Finals tab isn't open yet." above Leaderboards (setStatus replaces the class). */
+#tabLinkNotice { margin: 0 0 12px; font-size: var(--fs-sm); }
 .obs-builder { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); max-width: 640px; }
 .obs-builder-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--fg-muted); }
 .obs-builder-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--k-ink-200); }
