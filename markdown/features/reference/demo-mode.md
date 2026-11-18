@@ -29,7 +29,7 @@ requested stages observable.
   matches" panel, used when selecting an MVP) also reads `now = clock.now(db)`, so a demo
   walkthrough of the Twitch MVP flow reflects the dialed-in simulated time rather than real
   wall-clock time.
-- `backend/routers/admin_demo.py` — the four endpoints below. `_require_demo_mode()` is declared
+- `backend/routers/admin_demo.py` — the endpoints below. `_require_demo_mode()` is declared
   as a real FastAPI dependency (`Depends(_require_demo_mode)`) positioned *before*
   `Depends(require_admin)` in each signature, so a real HTTP request resolves it first: a
   non-admin (or unauthenticated) caller gets 404 when the mode is off, not 403/401 — the
@@ -42,8 +42,8 @@ requested stages observable.
 
 ## Endpoints
 
-All four endpoints (`GET`/`POST`/`DELETE /admin/demo/clock` and `POST /admin/demo/seed-accounts`)
-return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence is not revealed on a
+All the endpoints (`GET`/`POST`/`DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` and
+`POST /admin/demo/scenario`) return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence is not revealed on a
 production deployment. When reachable, all require an admin session.
 
 ### `GET /admin/demo/clock`
@@ -77,6 +77,14 @@ answers 409 "Demo accounts can't be admins", and `SEED_ADMIN_STEAM_IDS` never ap
 never links Steam (Link Steam is hidden and start answers `steam=not_allowed`), and is never
 matched by the Steam sign-in callback. Demo accounts keep their passwords and are still created
 in `LOGIN_METHOD=steam_signup`. See `reference/steam-login.md`.
+
+### `POST /admin/demo/scenario`
+Body: `{"name": "pre-season" | "mid-season" | "season-end"}`. Replaces all game data and every
+account except the caller's with a deterministic synthetic season, and sets the demo clock. Needs
+a recent password re-entry (403 `reauth_required`), the typed phrase `LOAD SCENARIO` as `confirm`
+(400 `confirmation_required`) and a `DEMO_ACCOUNT_PASSWORD` that meets the registration password
+rules (409). The players use that password; `scenario-admin` gets a new random password returned
+once as `admin_password`. Logged as `demo_scenario_loaded` (without either password). See [testing-tooling.md](testing-tooling.md#season-scenarios).
 
 ## Effect on background jobs
 
@@ -123,8 +131,26 @@ and skips starting the `_ingest_poll_loop` background thread (no outbound OpenDo
 when `DEMO_MODE=true`. The `_week_maintenance_loop` thread (which calls `auto_lock_weeks`)
 always starts — it is the mechanism that reacts to the demo clock.
 
+`main.py` refuses to start with `ENV=production` and `DEMO_MODE=true` (a `[SECURITY]`
+`RuntimeError`, issue #145), the same check as `DEBUG` and `TWITCH_LOCAL_DEV`.
+
+## Test server setup
+
+The test server (`test.kana-cards.com`) runs with:
+
+- `DEMO_MODE=true`;
+- `DEMO_ACCOUNT_PASSWORD` set to a throwaway password (at least 6 characters) for the scenario
+  player accounts;
+- `ENV` unset, because `ENV=production` refuses `DEMO_MODE=true`. Set `SECRET_KEY` and
+  `HTTPS_ONLY=true` as usual.
+
+After deploying, an admin loads a scenario from Admin › Settings › Maintenance › Demo Mode › Season Scenario
+and can then log in as `scenario1`–`scenario5` with `DEMO_ACCOUNT_PASSWORD`, or as `scenario-admin`
+with the one-time password the panel shows after the load. Give testers the player password only.
+
 ## Configuration
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override and account-seeding endpoints, and disables the OpenDota ingest poll thread. **Never set in production.** |
+| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override, account seeding and season scenarios, and disables the OpenDota ingest poll thread. **Never set in production**: `ENV=production` refuses to start with it. |
+| `DEMO_ACCOUNT_PASSWORD` | *(empty)* | Password of the season-scenario player accounts (`scenario-admin` gets its own one-time password); `POST /admin/demo/scenario` answers 409 while it is empty, shorter than 6 characters or over 72 bytes. |

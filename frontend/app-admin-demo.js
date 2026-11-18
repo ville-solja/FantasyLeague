@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Demo Mode — clock override + disposable account seeding.
+// Demo Mode — clock override, disposable account seeding and season scenarios.
 // Env-gated (window.demoMode, set from GET /config in app-globals.js) and
 // admin-only: the panel markup is injected, and GET /admin/demo/clock requested,
 // only when demo mode is on and activeIsAdmin. applyAuthState() calls
@@ -21,7 +21,7 @@ function renderDemoModePanel() {
         <div class="admin-panel-heading">
           <h3 class="admin-panel-title">Demo Mode</h3>
           <p class="admin-panel-desc">Override the app's simulated "now" to walk through pre-lock, lock, and post-week
-            scoring on demand, and seed disposable accounts pre-loaded with random cards.</p>
+            scoring on demand, seed disposable accounts pre-loaded with random cards, or load a whole test season.</p>
         </div>
       </div>
 
@@ -46,10 +46,102 @@ function renderDemoModePanel() {
           <tbody id="demoSeedResultsBody"><tr><td colspan="2" style="color:#444">—</td></tr></tbody>
         </table>
       </div>
+      <h3 style="margin:16px 0 8px;">Season Scenario</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center;">
+        <select id="demoScenarioSelect" title="Scenario" onchange="describeDemoScenario()">
+          <option value="pre-season">pre-season</option>
+          <option value="mid-season" selected>mid-season</option>
+          <option value="season-end">season-end</option>
+        </select>
+        <button class="danger" onclick="askLoadDemoScenario()">Load Scenario…</button>
+      </div>
+      <div style="font-size:0.8rem;color:#888;margin-bottom:8px;" id="demoScenarioDesc"></div>
+      <div id="demoScenarioConfirm" hidden style="margin-bottom:8px;">
+        <p style="margin:0 0 8px;">Replaces every account except yours and all game data with the
+          <strong id="demoScenarioConfirmName"></strong> scenario. Player accounts use the
+          DEMO_ACCOUNT_PASSWORD password; scenario-admin gets a new password, shown once.</p>
+        <label for="demoScenarioConfirmInput" style="display:block;margin-bottom:4px;">Type
+          <strong id="demoScenarioConfirmPhrase"></strong> to confirm</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <input id="demoScenarioConfirmInput" type="text" autocomplete="off" spellcheck="false" />
+          <button class="danger" onclick="loadDemoScenario()">Load</button>
+          <button class="secondary" onclick="cancelDemoScenario()">Cancel</button>
+        </div>
+        <div class="status err" id="demoScenarioConfirmStatus"></div>
+      </div>
+      <div style="font-size:0.8rem;margin-bottom:8px;" id="demoScenarioResult"></div>
+      <div style="font-size:0.8rem;margin-bottom:8px;" id="demoScenarioAdminPassword" hidden></div>
       <div class="status" id="demoModeStatus"></div>
     </div>
   `;
+  describeDemoScenario();
   loadDemoClock();
+}
+
+// Issue #145: season scenarios (POST /admin/demo/scenario). In-page confirmation, then
+// adminFetch, which asks for the password again when the re-auth is not recent.
+const DEMO_SCENARIOS = {
+  "pre-season": "10 open weeks and no matches. Accounts have starter tokens and 3 cards each.",
+  "mid-season": "Weeks 1–5 locked and scored, week 6 open for edits. Benches, a bench substitution, MVPs, one unparsed and one excluded match.",
+  "season-end": "All 10 weeks locked and scored, with no archive yet, so End Season can run.",
+};
+
+function describeDemoScenario() {
+  const sel = document.getElementById("demoScenarioSelect");
+  const desc = document.getElementById("demoScenarioDesc");
+  if (sel && desc) desc.textContent = DEMO_SCENARIOS[sel.value] || "";
+}
+
+function askLoadDemoScenario() {
+  const name = document.getElementById("demoScenarioSelect").value;
+  document.getElementById("demoScenarioConfirmName").textContent = name;
+  document.getElementById("demoScenarioConfirmPhrase").textContent = ADMIN_CONFIRM_PHRASES.demo_scenario;
+  document.getElementById("demoScenarioConfirmInput").value = "";
+  document.getElementById("demoScenarioConfirmStatus").textContent = "";
+  document.getElementById("demoScenarioConfirm").hidden = false;
+}
+
+function cancelDemoScenario() {
+  document.getElementById("demoScenarioConfirm").hidden = true;
+}
+
+async function loadDemoScenario() {
+  const name = document.getElementById("demoScenarioSelect").value;
+  const typed = document.getElementById("demoScenarioConfirmInput").value.trim();
+  if (typed.toUpperCase() !== ADMIN_CONFIRM_PHRASES.demo_scenario) {
+    document.getElementById("demoScenarioConfirmStatus").textContent =
+      `Type "${ADMIN_CONFIRM_PHRASES.demo_scenario}" to confirm.`;
+    return;
+  }
+  document.getElementById("demoScenarioConfirm").hidden = true;
+  const adminPw = document.getElementById("demoScenarioAdminPassword");
+  adminPw.hidden = true;
+  adminPw.textContent = "";
+  setStatus("demoModeStatus", `Loading ${name}…`);
+  try {
+    const res = await adminFetch(`${API}/admin/demo/scenario`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name, confirm: typed}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `Loading failed (${res.status})`;
+      return setStatus("demoModeStatus", detail, false);
+    }
+    const c = data.counts || {};
+    document.getElementById("demoScenarioResult").textContent =
+      `${data.scenario}: ${c.locked_weeks} of ${c.weeks} weeks locked, ${c.matches} matches, ` +
+      `${c.cards} cards, ${c.substitutions} substitution(s). Accounts: ${(data.accounts || []).join(", ")}`;
+    if (data.admin_password) {
+      adminPw.textContent = `scenario-admin password (shown once, copy it now): ${data.admin_password}`;
+      adminPw.hidden = false;
+    }
+    setStatus("demoModeStatus", `Scenario ${data.scenario} loaded`);
+    loadDemoClock();
+    if (typeof loadAdminWeeks === "function") loadAdminWeeks();
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
 }
 
 async function loadDemoClock() {

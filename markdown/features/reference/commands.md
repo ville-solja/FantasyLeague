@@ -172,7 +172,8 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except the session-cookie `/twitch/merge/confirm` and `/twitch/disconnect`. Set `false` if the proxy rewrites `Host` |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
-| `DEMO_MODE` | *(unset)* | Enables the demo clock override and account-seeding endpoints; disables the OpenDota ingest poll thread — **never set in production**. See `reference/demo-mode.md` |
+| `DEMO_MODE` | *(unset)* | Enables the demo clock override, account-seeding and season-scenario endpoints; disables the OpenDota ingest poll thread. `ENV=production` refuses to start with it. See `reference/demo-mode.md` |
+| `DEMO_ACCOUNT_PASSWORD` | *(unset)* | Password for the season-scenario accounts; the scenario loader answers 409 without it. See `reference/testing-tooling.md` |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup unless an account with that username already exists (ignoring letter case; reserved words are allowed here). Skipped with a warning when `LOGIN_METHOD=steam_signup`. See `reference/env-based-admin-seeding.md` |
 | `LOGIN_METHOD` | `password` | `password`, `both` or `steam_signup`: whether Steam sign-in is offered and whether password registration is open (#150). See `reference/steam-login.md` |
 | `RESERVED_USERNAME_WORDS` | `admin,kana,liiga,support,official,staff,mod` | Words new usernames can't contain, after look-alike normalisation (#169). See `reference/impersonation-hardening.md` |

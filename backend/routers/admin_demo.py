@@ -2,13 +2,16 @@ import os
 import secrets
 import time
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import clock
+import scenarios
 from auth import check_reserved, hash_password, username_taken
 from database import get_db
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
 from models import User
 from routers.cards import draw_card
 from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
@@ -29,6 +32,10 @@ class DemoClockBody(BaseModel):
 class SeedDemoAccountsBody(BaseModel):
     count:             int | None = Field(None, ge=1, le=100)
     cards_per_account: int | None = Field(None, ge=0, le=50)
+
+
+class ScenarioBody(BaseModel):
+    name: Literal["pre-season", "mid-season", "season-end"]
 
 
 def _require_demo_mode():
@@ -122,3 +129,17 @@ def seed_demo_accounts(body: SeedDemoAccountsBody, db=Depends(get_db),
            actor_username=admin["username"], detail=f"created={len(created)}")
     db.commit()
     return {"accounts": created}
+
+
+@router.post("/admin/demo/scenario",
+             dependencies=[Depends(_require_demo_mode), Depends(require_recent_reauth),
+                           Depends(require_typed_confirmation("demo_scenario"))])
+def load_demo_scenario(body: ScenarioBody, db=Depends(get_db),
+                       admin: dict = Depends(require_admin)):
+    """Replace all game data with a named, deterministic season and set the demo clock
+    (issue #145). Keeps the caller's account and sessions. Needs a recent re-auth and
+    the typed phrase LOAD SCENARIO; 409 without a valid DEMO_ACCOUNT_PASSWORD. The
+    response names the accounts and carries scenario-admin's one-time random password
+    (`admin_password`), never DEMO_ACCOUNT_PASSWORD."""
+    _require_demo_mode()
+    return scenarios.load(db, body.name, admin["user_id"])

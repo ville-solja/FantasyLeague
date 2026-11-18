@@ -136,7 +136,7 @@ Implementation details, integrations, and operator tooling.
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | Pointer drag (mouse, pen, touch long-press) to reorder and move roster and bench cards (#186); card viewer backdrop-click dismiss |
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
-| [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
+| [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override, disposable account seeding and season scenarios for demonstrating the season lifecycle on demand; refused with `ENV=production` |
 | [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |

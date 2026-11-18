@@ -324,6 +324,7 @@ const ADMIN_CONFIRM_PHRASES = {
   grant_tokens:    "GRANT TOKENS",
   backup_download: "DOWNLOAD BACKUP",
   delete_user:     "DELETE USER",
+  demo_scenario:   "LOAD SCENARIO",
 };
 
 let _typedConfirmState = null;

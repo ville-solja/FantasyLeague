@@ -574,13 +574,14 @@ _is_dev = os.getenv("TWITCH_LOCAL_DEV") == "true" or os.getenv("DEBUG", "").lowe
 _MIN_PRODUCTION_SECRET_LEN = 32
 if os.getenv("ENV", "").lower() == "production":
     _active_dev_flags = [
-        name for name in ("DEBUG", "TWITCH_LOCAL_DEV")
+        name for name in ("DEBUG", "TWITCH_LOCAL_DEV", "DEMO_MODE")
         if os.getenv(name, "").lower() == "true"
     ]
     if _active_dev_flags:
+        # Issue #145: DEMO_MODE's scenario loader wipes game data and accounts.
         raise RuntimeError(
             f"[SECURITY] ENV=production but {' and '.join(f'{n}=true' for n in _active_dev_flags)} "
-            "is set. Dev bypasses must never run in production — unset them."
+            "is set. Dev bypasses and demo tools must never run in production — unset them."
         )
     if len(_secret_key) < _MIN_PRODUCTION_SECRET_LEN:
         raise RuntimeError(

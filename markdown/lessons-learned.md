@@ -13,6 +13,10 @@ Format:
 ```
 
 ### 2026-11-18 — developer — models
+**Problem:** `auto_lock_weeks`, `due_substitutions`, `generate_weekly_summaries` and `card_points.rebuild_all` each call `db.commit()`, so a caller that must run them inside one all-or-nothing transaction (issue 145's scenario loader) can't roll back; and Core `table.delete()` leaves the deleted rows' objects in the identity map, so new rows reusing their ids raise an SAWarning.
+**Solution:** Use `scenarios._one_transaction(db)`, which turns the session's commits into flushes until the block ends and rolls everything back on error. After Core deletes, `db.flush()` then `db.expunge_all()` and re-fetch the objects you need.
+
+### 2026-11-18 — developer — models
 **Problem:** Since issue 133, a new table in `models.py` fails `test_issue_133`'s coverage test until it is classified, and End Season with no users writes no `season_archive` rows, so `POST /admin/season/summary` then answers 404 for that label.
 **Solution:** Add every new table to `season_reset.TABLE_GROUPS` (cleared, updated or kept) in the same change. In tests of the summary route, create at least one user before End Season.
 

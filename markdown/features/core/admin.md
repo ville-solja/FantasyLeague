@@ -393,6 +393,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_clock_cleared` | Operator cleared the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_accounts_seeded` | Operator seeded disposable demo accounts (`DEMO_MODE` only) |
+| `demo_scenario_loaded` | Operator loaded a season scenario, replacing the game data (`DEMO_MODE` only; `detail` has `name=… users=… matches=…`) |
 
 ---
 
@@ -452,5 +453,5 @@ These features have dedicated reference documents:
 | Season Finals | `GET /admin/finals`, `PUT /admin/finals/tiebreak`, `POST /admin/finals/pause`, `POST /admin/finals/close`, `PUT /admin/finals/result` | `core/finals-predictions.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
-| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
+| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts`, `POST /admin/demo/scenario` (all `DEMO_MODE`-gated) | `reference/demo-mode.md`, `reference/testing-tooling.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |
