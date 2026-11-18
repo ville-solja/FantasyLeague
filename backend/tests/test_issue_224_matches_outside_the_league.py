@@ -125,6 +125,7 @@ def _stats(i, **over):
     s = {"kills": i, "deaths": 10 - i, "assists": i + 2, "last_hits": 20 * i, "denies": i,
          "gold_per_min": 300 + 20 * i, "obs_placed": i % 3, "sen_placed": i % 2, "tower_damage": 100 * i,
          "towers_killed": i % 2, "roshan_kills": 1 if i == 0 else 0,
+         "courier_kills": 1 if i == 6 else 0,
          "teamfight_participation": round(0.05 * (i + 1), 2), "camps_stacked": i % 4,
          "rune_pickups": i + 1, "firstblood_claimed": 1 if i == 3 else 0, "stuns": 2.5 * i}
     s.update(over)
@@ -1073,6 +1074,8 @@ class TestReplayToMatchScript:
                 (e["towers_killed"], e["roshans_killed"], e["rune_pickups"])
             assert p["stuns"] == pytest.approx(e["stuns"]) and p["tower_damage"] == e["tower_damage"]
             assert p["firstblood_claimed"] == e["firstblood_claimed"]
+            # Issue 134: the fixture's one courier death is Axe's (slot 3); a hero death is not counted
+            assert p["courier_kills"] == (1 if slot == 3 else 0)
 
     def test_replay_to_match_lists_missing_stats(self):
         """Stats the fixture's events cannot produce (e.g. teamfight_participation) are 0 for every player and listed under missing_stats."""

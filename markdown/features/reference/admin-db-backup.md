@@ -9,7 +9,7 @@ Lets admins create, list and download SQLite database backups from the admin Set
 Every backup is written next to the live database as `fantasy.db.backup-YYYYMMDD-HHmmss`. Scheduled, pre-reset and admin-panel backups use `backup_sqlite_db()` in `backend/database.py`, which uses the sqlite3 online backup API. `scripts/backup-db.sh` makes a plain file copy with the same name pattern. Both write the file with mode `0600` (owner read/write only), since a backup holds password hashes and emails. A backup can come from:
 
 - scheduled, from the background backup loop
-- taken before a season reset
+- taken before a season reset: renamed to a **season backup** (see below)
 - created manually through `scripts/backup-db.sh`
 - created from this admin panel
 
@@ -21,6 +21,8 @@ Because they share the naming pattern:
 
 Backups live on the same disk as the database. Download a copy to keep one off the server.
 
+**Season backups (issue #133).** Reset Season's pre-reset backup is renamed to `fantasy.db.season-<label>-<timestamp>` (the label reduced to `[A-Za-z0-9-]`). Season backups are not `.backup-*` files, so `cleanup_old_backups()` never deletes them and the 60-second cooldown ignores them; `list_season_backups()` lists them. `.gitignore` covers them with `data/*.season-*` and `.dockerignore` with `*.db.season-*`. They hold the same sensitive data. See [Season Reset Clean Slate](season-reset-clean-slate.md).
+
 ## Endpoints
 
 All three endpoints also need a recent identity check on this session (`require_recent_reauth`): without a password re-auth (`POST /reauth`) or a Steam re-auth (`GET /auth/steam/start?purpose=reauth`, issue #150) in the last `ADMIN_REAUTH_SECONDS` (default 600) they return 403 `{"detail": "reauth_required"}`. See `reference/longer-sessions.md`. The download also needs the typed confirmation `?confirm=DOWNLOAD BACKUP` (400 `confirmation_required` otherwise; issue #150, see `reference/steam-login.md`); the panel asks for it before downloading.
@@ -29,10 +31,10 @@ All three endpoints also need a recent identity check on this session (`require_
 Admin only. Creates a backup now and returns `{filename, size_bytes, created_at}`. Returns 429 if the newest backup is less than 60 seconds old, and 409 if the database is not a local SQLite file. The audit log records it as `admin_db_backup`.
 
 ### `GET /admin/backups`
-Admin only. Returns `{retention_days, backups: [{filename, size_bytes, created_at}]}`, newest first.
+Admin only. Returns `{retention_days, backups: [{filename, size_bytes, created_at}], season_backups: [...]}`, each newest first; a file is in one list only.
 
 ### `GET /admin/backups/{filename}`
-Admin only. Downloads one backup as an attachment. The filename must exactly match an entry in the listing, otherwise the response is 404. The audit log records it as `admin_db_backup_download`. The file contains every user's email and password hash, so treat downloaded copies as sensitive.
+Admin only. Downloads one backup as an attachment. The filename must exactly match an entry in either listing (daily or season), otherwise the response is 404. The audit log records it as `admin_db_backup_download`. The file contains every user's email and password hash, so treat downloaded copies as sensitive.
 
 ## Implementation
 

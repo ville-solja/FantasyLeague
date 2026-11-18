@@ -13,6 +13,7 @@ import time
 
 from sqlalchemy import text
 
+from card_utils import _SCORED_STAT_COLS as _MODIFIER_POOL
 from match_scoring import scored_match_sql
 from scoring import SCORING_STATS, STAT_LABELS, _death_contribution, display_points, fantasy_score
 
@@ -24,7 +25,7 @@ SOURCE_GROUPS = [
     ("farm",         "Farm",             ["last_hits", "denies"]),
     ("gpm",          "GPM",              ["gold_per_min"]),
     ("vision",       "Vision",           ["obs_placed"]),
-    ("objectives",   "Objectives",       ["towers_killed", "roshan_kills"]),
+    ("objectives",   "Objectives",       ["towers_killed", "roshan_kills", "courier_kills"]),
     ("teamfight",    "Teamfight",        ["teamfight_participation"]),
     ("stuns",        "Stuns",            ["stuns"]),
     ("jungle_runes", "Jungle and runes", ["camps_stacked", "rune_pickups"]),
@@ -230,7 +231,8 @@ def points_sources(scored_breakdowns: list[dict], league_sources: dict, per=None
 
 def modifier_values(scored_stats: list[dict], weights: dict, per=None) -> dict:
     """What a card modifier on each stat is worth per scored match:
-    modifier_bonus_pct % of that stat's average points. Per stat, highest first.
+    modifier_bonus_pct % of that stat's average points. Per stat, highest first, for
+    the stats a card can draw a modifier on (card_utils' pool, so no courier_kills).
     `base` is the stat's average points, so a card modifier with its own bonus_pct
     is worth base × bonus_pct / 100. `per` divides the sums instead of the row count
     (issue 211: per team game)."""
@@ -241,7 +243,7 @@ def modifier_values(scored_stats: list[dict], weights: dict, per=None) -> dict:
         for k, v in stat_points(s, weights).items():
             sums[k] += v
     rows = []
-    for k in _STAT_COLS:
+    for k in _MODIFIER_POOL:
         base = sums[k] / n if n else 0.0
         rows.append({"stat": k, "label": STAT_LABELS.get(k, k),
                      "base": display_points(base, 3),

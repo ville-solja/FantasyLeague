@@ -26,7 +26,7 @@ _MAX_ID = 2**63 - 1
 
 # Every stat ingest._build_stat_row reads, with its type and sane range. A replay
 # summary must carry each one (0 for a stat the parser couldn't give, listed under
-# missing_stats).
+# missing_stats), except the LATE_STATS below.
 STAT_FIELDS = {
     "kills": (int, 0, 200),
     "deaths": (int, 0, 200),
@@ -39,6 +39,7 @@ STAT_FIELDS = {
     "tower_damage": (int, 0, 100000),
     "towers_killed": (int, 0, 11),
     "roshan_kills": (int, 0, 10),
+    "courier_kills": (int, 0, 10),
     "teamfight_participation": (float, 0, 1),
     "camps_stacked": (int, 0, 300),
     "rune_pickups": (int, 0, 500),
@@ -48,8 +49,12 @@ STAT_FIELDS = {
 
 _REQUIRED_TOP = ("match_id", "start_time", "duration", "radiant_win", "players")
 _OPTIONAL_TOP = ("radiant_name", "dire_name", "picks_bans", "missing_stats")
-_REQUIRED_PLAYER = ("account_id", "side", "hero_id") + tuple(STAT_FIELDS)
-_OPTIONAL_PLAYER = ("personaname",)
+# Stats added after replay summaries were first written (issue #134). An older summary
+# without one is still accepted: the stat counts as 0 and is listed under missing_stats,
+# so the match is marked Partial stats.
+LATE_STATS = ("courier_kills",)
+_REQUIRED_PLAYER = ("account_id", "side", "hero_id") + tuple(k for k in STAT_FIELDS if k not in LATE_STATS)
+_OPTIONAL_PLAYER = ("personaname",) + LATE_STATS
 _PICK_BAN_KEYS = ("hero_id", "is_pick", "team", "order")
 
 # Dota 2 hero ids up to Largo (155). The server also accepts any id in the cached
@@ -149,7 +154,7 @@ def validate_replay(payload, known_hero_ids=None) -> dict:
     for i, name in enumerate(missing):
         if name not in STAT_FIELDS:
             raise ManualMatchError(f"unknown stat {name!r}", f"missing_stats[{i}]")
-    out["missing_stats"] = sorted(set(missing), key=list(STAT_FIELDS).index)
+    missing = set(missing)
 
     picks_bans = payload.get("picks_bans", [])
     if not isinstance(picks_bans, list) or len(picks_bans) > 48:
@@ -191,6 +196,10 @@ def validate_replay(payload, known_hero_ids=None) -> dict:
         row = {"account_id": account_id, "side": p["side"], "hero_id": p["hero_id"],
                "personaname": _name(p.get("personaname"), prefix + "personaname")}
         for stat, (kind, lo, hi) in STAT_FIELDS.items():
+            if stat not in p:  # a LATE_STATS key an older summary lacks
+                missing.add(stat)
+                row[stat] = 0
+                continue
             row[stat] = _number(p[stat], prefix + stat, kind, lo, hi)
         normalised.append(row)
     radiant = sum(1 for p in normalised if p["side"] == "radiant")
@@ -198,6 +207,7 @@ def validate_replay(payload, known_hero_ids=None) -> dict:
         raise ManualMatchError(f"needs five players per side (radiant {radiant}, dire {10 - radiant})",
                                "players[].side")
     out["players"] = normalised
+    out["missing_stats"] = sorted(missing, key=list(STAT_FIELDS).index)
     return out
 
 

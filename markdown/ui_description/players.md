@@ -72,10 +72,10 @@ Opened by clicking any player name or card (in this tab or elsewhere); the code 
   Result (W or L as text, blank when unknown), Fantasy pts, K/A/D, GPM, Wards, Tower dmg, Opponent
   (linked to the opposing team's detail modal), a link to the match on OpenDota, and a **Details**
   toggle (`aria-expanded`) that opens every stat of the match (including last hits, denies,
-  towers, Roshan, teamfight, camps, runes, first blood, stuns, sentry wards and duration) and its
+  towers, Roshan, courier kills, teamfight, camps, runes, first blood, stuns, sentry wards and duration) and its
   points breakdown by source with the MVP bonus. The Fantasy pts cell carries a "Partial stats"
   badge for a match whose replay is unparsed or unparseable. Its tooltip says wards, stuns,
-  teamfight, runes and camps count as 0. A match an admin excluded from scoring shows a dash and a
+  teamfight, runes, camps and courier kills count as 0. A match an admin excluded from scoring shows a dash and a
   "Not scored" badge instead, and counts in no tile, average, breakdown, comparison or hero figure.
   Below 640 px each match is one stacked row (date, hero, opponent, result, points) with the same
   Details toggle; nothing scrolls sideways.

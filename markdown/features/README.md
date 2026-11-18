@@ -44,6 +44,7 @@ Implementation details, integrations, and operator tooling.
 | [Toornament Integration](reference/toornament.md) | Automatic result sync to toornament.com |
 | [Player Profile Enrichment](reference/player-profile-enrichment.md) | AI-generated player bios from OpenDota stats |
 | [Player Rank Medals](reference/player-rank-medals.md) | Last known Dota 2 rank medal from OpenDota, refreshed with profile enrichment, shown as the player popup's Rank tile (#230; no longer in the card viewer or the popup header); on the card PNG deferred (#218) |
+| [Courier Kills Scoring](reference/courier-kills-scoring.md) | *(#134)* Courier kills from OpenDota's parsed match data become a scored stat (weight 1.0) from season 17; not a card modifier, past matches not backfilled |
 | [Point Simulator](reference/point-simulator.md) | The `/simulate` endpoint for testing scoring weights |
 | [Automated Testing](reference/automated-testing.md) | Playwright UI suite and GitHub Actions CI setup |
 | [Version Visibility](reference/version-visibility.md) | Faint build version badge on every page |
@@ -86,6 +87,7 @@ Implementation details, integrations, and operator tooling.
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
 | [Dependency Locking and Release Gating](reference/dependency-locking.md) | Hash-locked dependencies for the image and CI (`scripts/lock-deps.sh`), the image built only after the tests pass, the single-process rule and background-job safeguards (2026-10-31 architecture review) |
 | [Architecture Maturity Review](reference/architecture-maturity-review.md) | Season usage report (`scripts/usage_report.py`) and local load test (`scripts/load_test.py`) for sizing the architecture against a season's real load; how to run them and read their numbers (#251) |
+| [Season Reset Clean Slate](reference/season-reset-clean-slate.md) | *(#133)* Reset clears every season table (including the Weekly Report state and caches added since August) while End Season stores a per-player and per-team season summary and Reset keeps a permanent season backup; a guided End Season → Reset flow with a preview |
 | [Admin DB Backup](reference/admin-db-backup.md) | Admin-panel database backups: create on demand with a cooldown, list existing backups, and download a copy off the server |
 | [Table Element Sortability](reference/table-element-sortability.md) | Client-side sortable column headers for the Players tab table |
 | [Card Draw Modal UX](reference/card-draw-modal-ux.md) | Enter-key support, dynamic button label, and backdrop-click dismiss for the draw modal |
@@ -124,6 +126,9 @@ Implementation details, integrations, and operator tooling.
 | [MVP Schedule Cache Bust](reference/mvp-schedule-cache-bust.md) | Admin and Twitch MVP-setting endpoints bust the schedule cache so a new MVP shows on the Schedule tab immediately instead of after up to an hour |
 | [Schedule Fixtures API Source](reference/schedule-fixtures-api.md) | Structured JSON fixtures feed (`SCHEDULE_FIXTURES_URL`) as a preferred alternative to the Google Sheet CSV; same parsed shape downstream, "Time TBD" for unscheduled fixtures |
 | [Schedule Tournament Visualization](reference/schedule-tournament-visualization.md) | *(planned, #94)* Admin-defined tournament stages shown as Schedule subtabs: round-robin standings and results grid, single-elimination bracket; model ready for double elimination, GSL and Swiss |
+| [OBS Last Game Overlay](reference/obs-last-game-overlay.md) | *(#246)* An OBS browser source for the pause screen: the last game of the series being streamed with the series score and each player's raw points, refreshing itself; a URL builder on How to Play › Streamers, which is reorganised to list every streamer tool |
+| [Schedule Player Performance](reference/schedule-player-performance.md) | *(#244)* A Players table under each Schedule game: every player's raw points (before rarity, modifiers and the MVP bonus), hero and K/D/A, loaded on demand and never for hidden results |
+| [Linkable Tabs](reference/linkable-tabs.md) | *(#245)* Every main tab and How to Play subtab opens from its own link (`/#finals`, `/#how-to-play/streamers`); the address bar follows the tab and Back and Forward move between tabs; hidden, login-only and admin tabs fall back safely |
 | [Schedule Visuals](reference/schedule-visuals.md) | Schedule tab redesign: Right now strip (live, next up, latest result), fantasy-week strip with a Now line, and spoiler-free hide/reveal of results linked to Weekly Report reveals |
 | [Temporary Password Expiry](reference/temp-password-expiry.md) | Configurable TTL on temporary passwords; corrected reset email wording |
 | [Demoinfo2 Tipping Service](reference/demoinfo2-tipping-service.md) | **SHELVED** — investigated microservice to extract in-game tip events for a tipping leaderboard; found infeasible (tips aren't recorded in demo files) |
@@ -131,7 +136,7 @@ Implementation details, integrations, and operator tooling.
 | [My Team Drag-and-Drop](reference/my-team-drag-and-drop.md) | Pointer drag (mouse, pen, touch long-press) to reorder and move roster and bench cards (#186); card viewer backdrop-click dismiss |
 | [Admin Tab Navigation and MVP Match View](reference/admin-tab-navigation-mvp.md) | Tab-based admin panel layout; match table with admin-side MVP selection |
 | [Season Lifecycle Management](reference/season-lifecycle.md) | End-season archive, season reset, manual date-only week creation; retires season env vars |
-| [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override and disposable account seeding for demonstrating the season lifecycle on demand |
+| [Demo Mode](reference/demo-mode.md) | Env-gated demo clock override, disposable account seeding and season scenarios for demonstrating the season lifecycle on demand; refused with `ENV=production` |
 | [Testing Tooling](reference/testing-tooling.md) | Demo-mode season scenarios (pre-season, mid-season, season-end), a local mock OpenDota server for end-to-end ingest, and named test snapshots |
 | [Frontend Framework Evaluation](reference/frontend-framework-evaluation.md) | Decision document comparing vanilla-JS vs. framework adoption, grounded in this codebase's actual constraints and the scrapped bracket-tree visualization as a worked example |
 | [Container Health Check](reference/container-health-check.md) | Decision document comparing container health-reporting options; flags that the existing Compose healthcheck's `curl` dependency is likely missing from the built image |

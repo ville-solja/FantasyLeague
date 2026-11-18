@@ -12,7 +12,7 @@ locally as a Docker container:
     python scripts/replay_to_match.py replay.dem --out-dir out --parser-url http://localhost:5600
 
 The parser answers a POST of the raw .dem with line-delimited JSON events. This script
-reads three kinds:
+reads four kinds:
   - "player_slot": slot (key, 0-9) -> player_slot (value: 0-4 Radiant, 128-132 Dire);
   - "interval": one per player per game second, with the game's own scoreboard counters
     (kills, deaths, assists, lh, denies, gold (total earned), obs_placed, sen_placed,
@@ -22,10 +22,13 @@ reads three kinds:
   - "epilogue": `key` is the replay's CDemoFileInfo serialised by Gson (protobuf field
     names with a trailing underscore: gameInfo_.dota_.matchId_, gameWinner_, endTime_,
     playerInfo_[].steamid_/heroName_/playerName_/gameTeam_, picksBans_, radiantTeamTag_;
-    playbackTime_ at the top level). Text fields are Gson ByteStrings.
+    playbackTime_ at the top level). Text fields are Gson ByteStrings;
+  - "DOTA_COMBATLOG_DEATH": a combat-log death. One whose `targetname` is a courier
+    counts as a courier kill for the hero in `attackername` (as OpenDota counts
+    courier_kills); a kill by a summon or another unit is not credited.
 
-A stat that no player's final interval carries is written as 0 and listed under
-`missing_stats`; the server then marks the match as having partial stats. Standard
+A stat that no player's final interval carries (courier_kills: when the output has no
+combat-log deaths at all) is written as 0 and listed under `missing_stats`; the server then marks the match as having partial stats. Standard
 library only.
 """
 
@@ -61,7 +64,7 @@ _FLOAT_STATS = {"teamfight_participation", "stuns"}
 # Same order as manual_match.STAT_FIELDS (the server's schema).
 STAT_ORDER = ["kills", "deaths", "assists", "last_hits", "denies", "gold_per_min",
               "obs_placed", "sen_placed", "tower_damage", "towers_killed", "roshan_kills",
-              "teamfight_participation", "camps_stacked", "rune_pickups",
+              "courier_kills", "teamfight_participation", "camps_stacked", "rune_pickups",
               "firstblood_claimed", "stuns"]
 
 
@@ -153,10 +156,26 @@ def _text(value):
     return None
 
 
+def _courier_kills(deaths: list, heroes_by_slot: dict) -> dict:
+    """{slot: courier kills} from combat-log deaths whose target is a courier, credited
+    to the slot whose hero is the attacker."""
+    slot_by_hero = {name: slot for slot, names in heroes_by_slot.items() for name in names}
+    counts = {}
+    for e in deaths:
+        target = e.get("targetname")
+        if not isinstance(target, str) or "courier" not in target:
+            continue
+        slot = slot_by_hero.get(e.get("attackername"))
+        if slot is not None:
+            counts[slot] = counts.get(slot, 0) + 1
+    return counts
+
+
 def aggregate(events: list) -> dict:
     """The match summary (the server's replay JSON schema) from parser events."""
     slot_to_player_slot = {}
     last_interval = {}
+    deaths = []
     epilogue = None
     for e in events:
         etype = e.get("type")
@@ -170,6 +189,8 @@ def aggregate(events: list) -> dict:
                 prev = last_interval.get(e["slot"])
                 if prev is None or (e.get("time") or 0) >= (prev.get("time") or 0):
                     last_interval[e["slot"]] = e
+        elif etype == "DOTA_COMBATLOG_DEATH":
+            deaths.append(e)
         elif etype == "epilogue":
             try:
                 epilogue = json.loads(e.get("key") or "")
@@ -220,8 +241,11 @@ def aggregate(events: list) -> dict:
             by_team[team].append(entry)
 
     present = {stat: False for stat in _INTERVAL_STATS}
+    present["courier_kills"] = bool(deaths)
     gold_present = False
     players = []
+    courier_kills = _courier_kills(deaths, {slot: _hero_names(e.get("unit") or "")
+                                            for slot, e in last_interval.items()})
     for slot in sorted(last_interval):
         e = last_interval[slot]
         player_slot = slot_to_player_slot.get(slot, slot if slot < 5 else 128 + slot - 5)
@@ -254,6 +278,7 @@ def aggregate(events: list) -> dict:
             row["gold_per_min"] = int(round(gold * 60 / duration))
         else:
             row["gold_per_min"] = 0
+        row["courier_kills"] = min(courier_kills.get(slot, 0), 10)
         row["firstblood_claimed"] = min(int(row["firstblood_claimed"]), 1)
         row["teamfight_participation"] = min(max(row["teamfight_participation"], 0.0), 1.0)
         players.append(row)

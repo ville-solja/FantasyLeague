@@ -6,6 +6,7 @@ backups/
 *.db
 *.db-*
 *.db.backup-*
+*.db.season-*
 .env
 .env.*
 !.env.example

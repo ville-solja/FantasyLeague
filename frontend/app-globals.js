@@ -174,7 +174,12 @@ function renderSelectIfChanged(sel, html) {
 // Window scroll position per main tab during this page visit (issue #159).
 const _tabScroll = {};
 
-function switchTab(name) {
+/**
+ * Shows a main tab and loads its data. Issue #245: after init()'s routing it also
+ * writes the tab's link into the address; `opts.history` is "replace" (default, code
+ * callers), "push" (clicks, through openTab) or "none" (Back / Forward).
+ */
+function switchTab(name, opts) {
   if (activeMustChangePassword && name !== "profile") {
     name = "profile";
   }
@@ -182,7 +187,9 @@ function switchTab(name) {
   const sameTab = !!current && current.id === `tab-${name}`;
   // Issue #186: leaving My Team sends a waiting roster save at once.
   if (!sameTab && current && current.id === "tab-team" && typeof flushRosterSave === "function") flushRosterSave();
+  if (typeof _writeTabAddress === "function") _writeTabAddress(name, (opts && opts.history) || "replace", sameTab);
   if (!sameTab) {
+    if (typeof _clearTabLinkNotice === "function") _clearTabLinkNotice();
     if (current) _tabScroll[current.id.replace(/^tab-/, "")] = window.scrollY;
     document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
     document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
@@ -219,6 +226,81 @@ function switchTab(name) {
   if (name === "teamfinder")    loadTeamFinder();
   if (name === "howtoplay")     loadHowToPlay();
   if (name === "admin")  { if (!activeUserId || !activeIsAdmin) return; initAdminTabs(); loadAdminWeeks(); loadWeights(); loadPointsCheckWeeks(); loadUsers(); loadTags(); loadCodes(); loadNotifications(); loadTokenGrantEvents(); loadPlayerPool(); loadLeagues(); loadAuditLog(); loadSeasonArchives(); if (typeof loadAdminFinals === "function") loadAdminFinals(); if (typeof loadAdminTeamSignup === "function") loadAdminTeamSignup(); }
+}
+
+// Issue #245: every main tab's link is `#<readable name>`; the internal ids, any
+// letter case, also resolve. How to Play takes a subtab: `#how-to-play/streamers`.
+const _TAB_LINKS = {
+  team: "my-team", leaderboard: "leaderboards", history: "history", players: "players",
+  teams: "teams", schedule: "schedule", finals: "finals", teamfinder: "team-finder",
+  howtoplay: "how-to-play", profile: "profile", admin: "admin",
+};
+const _HTP_SUBTABS = ["users", "players", "streamers", "developers"];
+// True until init() has read the page's link and the sign-in returns: switchTab
+// writes nothing to the address meanwhile, so those returns see it untouched.
+let _tabLinkRouting = true;
+
+/** `#<readable name>` for a tab id (plus `/<subtab>` for How to Play), or "" for none. */
+function tabLink(name, subtab) {
+  if (!Object.hasOwn(_TAB_LINKS, name)) return "";
+  const sub = name === "howtoplay" && _HTP_SUBTABS.includes(subtab) ? `/${subtab}` : "";
+  return `#${_TAB_LINKS[name]}${sub}`;
+}
+
+/** { tab, subtab } for a tab link, or null for no link, an unknown name, an in-page
+ *  anchor or a sign-in return (any hash with `?`). An unknown subtab is null. */
+function tabFromLink(hash) {
+  const raw = String(hash || "").replace(/^#/, "").toLowerCase();
+  if (!raw || raw.includes("?")) return null;
+  const [head, sub] = raw.split("/");
+  const tab = Object.keys(_TAB_LINKS).find(id => id === head || _TAB_LINKS[id] === head);
+  if (!tab) return null;
+  return { tab, subtab: tab === "howtoplay" && _HTP_SUBTABS.includes(sub) ? sub : null };
+}
+
+/** Writes a tab's link with pushState or replaceState, keeping path and query. */
+function _writeTabAddress(name, mode, sameTab, subtab) {
+  if (_tabLinkRouting || mode === "none" || (mode === "push" && sameTab)) return;
+  if (typeof history === "undefined" || typeof location === "undefined") return;
+  const link = tabLink(name, subtab);
+  if (!link) return;
+  const url = location.pathname + location.search + link;
+  if (mode === "push") history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
+}
+
+/** A click on a tab (tab bar, header username, in-page tab links): adds a history entry. */
+function openTab(name) {
+  switchTab(name, { history: "push" });
+}
+
+function _clearTabLinkNotice() {
+  const el = document.getElementById("tabLinkNotice");
+  if (el && el.textContent) { el.textContent = ""; el.hidden = true; }
+}
+
+// The tab a link asked for while logged out; login, register and the Steam sign-up go
+// there. In sessionStorage so it survives the Steam sign-in's full-page round trip.
+let _pendingTabFallback = null;
+
+function _setPendingTab(name) {
+  _pendingTabFallback = name;
+  try { sessionStorage.setItem("pendingTab", name); } catch (_) { /* storage blocked */ }
+}
+
+/** The pending tab (team or profile only), read once and cleared. */
+function _takePendingTab() {
+  let name = _pendingTabFallback;
+  try {
+    name = sessionStorage.getItem("pendingTab") || name;
+    sessionStorage.removeItem("pendingTab");
+  } catch (_) { /* storage blocked */ }
+  _pendingTabFallback = null;
+  return name === "team" || name === "profile" ? name : null;
+}
+
+function _dropPendingTab() {
+  _takePendingTab();
 }
 
 /**

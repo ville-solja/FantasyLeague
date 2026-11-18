@@ -423,7 +423,9 @@ def test_season_reset_keeps_all_accolade_rows(db):
         result = reset_season(SeasonResetBody(force=True), db=db, admin=dict(_ADMIN))
     finally:
         admin_season.backup_sqlite_db = original
-    assert result["kept"] == {"season_accolades": 3}
+    # Issue #133: `kept` lists every kept table; the accolades count is still there.
+    assert result["kept"]["season_accolades"] == 3
+    assert {"season_archive", "season_player_stats", "season_team_results"} <= set(result["kept"])
     assert db.query(Player).count() == 0  # the season itself is gone
     assert len(_rows(db)) == 3
     assert "kept_season_accolades=3" in _audits(db, "admin_season_reset")[0].detail

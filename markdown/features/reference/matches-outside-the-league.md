@@ -119,12 +119,14 @@ Each player has `account_id` (1 … 2⁶³−1), `side`, `hero_id` (a known hero
 | Stat | Range | Stat | Range |
 |---|---|---|---|
 | `kills`, `deaths`, `assists` | 0–200 | `towers_killed` | 0–11 |
-| `last_hits` | 0–5000 | `roshan_kills` | 0–10 |
+| `last_hits` | 0–5000 | `roshan_kills`, `courier_kills` | 0–10 |
 | `denies` | 0–1000 | `teamfight_participation` | 0–1 (number) |
 | `gold_per_min` | 0–3000 | `camps_stacked` | 0–300 |
 | `obs_placed` | 0–200 | `rune_pickups` | 0–500 |
 | `sen_placed` | 0–300 | `firstblood_claimed` | 0–1 |
 | `tower_damage` | 0–100000 | `stuns` | 0–7200 seconds (number) |
+
+`courier_kills` (issue #134) is the one stat a player may leave out (`manual_match.LATE_STATS`), so a file written before season 17 is still accepted: every player then stores 0, `courier_kills` is added to `missing_stats` and the match is stored as Partial stats.
 
 A known hero is any id in `manual_match.KNOWN_HERO_IDS` (Dota hero ids up to Largo, 155) or in the cached OpenDota hero constants. So a hero released later is accepted once the cache is warm.
 
@@ -154,10 +156,11 @@ For the operator, on their own machine. You need Docker, Python 3 and the `.dem`
 
 ### What the script reads
 
-The parser answers a POST of the raw `.dem` with line-delimited JSON events (`scripts/test.sh` in odota/parser). The script reads three kinds:
+The parser answers a POST of the raw `.dem` with line-delimited JSON events (`scripts/test.sh` in odota/parser). The script reads four kinds:
 
 - `player_slot`: `key` is the slot (0–9), `value` the player slot (0–4 Radiant, 128–132 Dire).
 - `interval`: one per player per game second until the game ends, with the game's own scoreboard counters. The last one per slot gives the final values: `kills`, `deaths`, `assists`, `lh` → `last_hits`, `denies`, `obs_placed`, `sen_placed`, `camps_stacked`, `rune_pickups`, `towers_killed`, `roshans_killed` → `roshan_kills`, `stuns`, `tower_damage`, `teamfight_participation`, `firstblood_claimed` (capped at 1), `hero_id` and `unit` (the hero's entity class).
+- `DOTA_COMBATLOG_DEATH` (issue #134): a combat-log death. One whose `targetname` contains `courier` counts as a courier kill for the slot whose hero is the `attackername` (matched with the same two hero-name spellings as the account match below), as OpenDota counts `courier_kills`. A courier killed by a summon, an illusion's owner name the map doesn't know, or a creep or tower is not credited to anyone.
 - `epilogue`: `key` is the replay's `CDemoFileInfo` serialised by Gson. Protobuf field names have a trailing underscore: `gameInfo_.dota_.matchId_`, `gameWinner_` (2 Radiant, 3 Dire), `endTime_`, `radiantTeamTag_`, `direTeamTag_`, `picksBans_`, and `playerInfo_[]` with `steamid_`, `heroName_`, `playerName_` and `gameTeam_`; and, at the top level of the epilogue, `playbackTime_` (the whole replay's length in seconds, draft and pre-game included). Text fields arrive as Gson ByteStrings (below).
 
 From these:
@@ -165,7 +168,7 @@ From these:
 - **Account ids**: the account id is `steamid − 76561197960265728`. Each slot is matched to its file-info player by hero name (`CDOTA_Unit_Hero_ShadowShaman` → `npc_dota_hero_shadow_shaman`, both spellings, as odota's `processMetadata` builds them), falling back to the order within the team. A slot that can't be matched stops the script with an error.
 - **Duration**: the time of the last interval (seconds from the horn). **Start time**: `endTime_` minus `playbackTime_` (within about 25 s of OpenDota's `start_time` on the Step 0 replay); without `playbackTime_`, `endTime_` minus the duration, which is about 20 minutes late.
 - **GPM**: total earned gold (`gold`) × 60 / duration. This is close to, but not guaranteed to equal, OpenDota's scoreboard GPM.
-- **Missing stats**: any stat that no player's final interval carries is set to 0 for everyone and listed under `missing_stats`. The parser leaves out `teamfight_participation` when the game reports none, so it is the likeliest one.
+- **Missing stats**: any stat that no player's final interval carries is set to 0 for everyone and listed under `missing_stats`. The parser leaves out `teamfight_participation` when the game reports none, so it is the likeliest one. `courier_kills` is missing only when the output has no combat-log deaths at all (a parse that dropped the combat log); a game with deaths but no courier kill gives 0 for everyone, not a missing stat.
 
 The script uses the Python standard library only. It contains no `@dataclass` (tests load it with `spec_from_file_location`).
 
@@ -192,11 +195,13 @@ Two fixes came out of the run:
 
 No stat had to move to `missing_stats`: all of them are present and within the tolerances above. The team tags (for example "SC", "HOLISA") are short tags, not the full team names, so the Add match preview won't suggest teams from them; pick both teams by hand.
 
+**Courier kills (2026-11-17, issue #134).** On game 2's replay the parser gave 3705 combat-log deaths, 5 of them couriers; the script credited Mars 1, Grimstroke 2 and Pangolier 2, the same as OpenDota's `courier_kills` for that match.
+
 The replay files live in the git-ignored `parse/` folder (`*.dem` is ignored too); the upload files are written next to them.
 
 ### Test fixture
 
-`backend/tests/fixtures/replay_parser_sample.jsonl` is **synthetic**. It was written by hand in the parser's event format, not recorded from a real replay: ten players, `player_slot` events, intervals at −30, 0, 600 and 2400 s without `teamfight_participation`, two other events, and an epilogue whose players are listed out of slot order. It stays synthetic on purpose (a real recording carries players' Steam ids); since Step 0 the script's tests also cover the real format: ByteString names and `playbackTime_`.
+`backend/tests/fixtures/replay_parser_sample.jsonl` is **synthetic**. It was written by hand in the parser's event format, not recorded from a real replay: ten players, `player_slot` events, intervals at −30, 0, 600 and 2400 s without `teamfight_participation`, two other events, two `DOTA_COMBATLOG_DEATH` events (Axe kills a courier; Pudge kills Lion, which is not a courier kill), and an epilogue whose players are listed out of slot order. It stays synthetic on purpose (a real recording carries players' Steam ids); since Step 0 the script's tests also cover the real format: ByteString names and `playbackTime_`.
 
 ## Tests
 

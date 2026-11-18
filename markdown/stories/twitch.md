@@ -1109,3 +1109,60 @@ As the maintainer, I want a submission guide for the vote extension, so that the
 - **Honest listing:** the listing says tokens are for the Kana Cards game and how they are claimed; the vote is described as usable without it.
 - **Drift test:** every `/twitch/...` path the packaged files call is in the disclosure table, as for the full extension.
 - **Vote-only fallback:** the guide has a variant for submitting with tokens switched off.
+
+## OBS Last Game Overlay and Streamer Tools (#246)
+
+### Show the Last Game on the Pause Screen
+**User story**
+As a streamer casting a series, I want an OBS browser source that shows how each player did in the last game, so that my pause screen between games has something worth looking at.
+
+**Acceptance criteria**
+- **URL:** `/obs/last-game.html?teams=<id>,<id>` loads without a login and shows the most recent ingested game between those two teams, in the current series (games no more than 6 hours apart).
+- **Header:** both team names, "Game N" (its number in the series), the winner, the game's duration and the series score so far (e.g. "Series 1–0"). The columns and the score follow the URL's team order (first team left, its wins first), not radiant/dire.
+- **Players:** two columns, one per team, five players each, sorted by raw points (highest first): name, hero icon, kills / deaths / assists, raw points to one decimal. The game's top raw score is highlighted; the confirmed MVP has a star.
+- **Label:** a small line says "Raw fantasy points: before card bonuses", so viewers don't confuse it with card points.
+- **Size:** laid out for 1920×1080 and scaled to the browser source's size, with text large enough to read on a stream at 720p.
+- **Theme:** `theme=transparent` leaves the page background transparent; the default is the site's dark background.
+- **Not set up:** with a missing or malformed `teams` the page makes no request and shows a short line pointing to How to Play › Streamers.
+
+### Follow the Series Without Touching OBS
+**User story**
+As a streamer, I want the overlay to move on to each new game by itself, so that I don't have to change anything in OBS during the series.
+
+**Acceptance criteria**
+- The page re-reads its data every 30 seconds and redraws only when the game or its data changed.
+- When game 2 has stats, the page shows game 2 without a reload.
+- While a game between the two teams has ended and has no stats yet, the page shows "Game N stats are on their way" above the last game it has.
+- Before the series' first game has stats, the page shows the two team names and "Stats appear here a few minutes after each game ends." and no older game. If game 1 has already ended, it shows the team names and "Game 1 stats are on their way" instead.
+- A failed request keeps the last good view on screen and tries again at the next refresh; it never shows an error over the stream.
+
+### Build the Overlay URL
+**User story**
+As a streamer, I want to pick the two teams and copy a ready URL, so that I don't have to look up team ids.
+
+**Acceptance criteria**
+- How to Play › Streamers has a **Pause screen overlay** section: two team pickers (the league's teams by name), a Transparent background checkbox, the resulting URL in a read-only field, a **Copy** button and an **Open preview** link.
+- The section explains the OBS steps in three lines: add a Browser Source, paste the URL, set width 1920 and height 1080.
+- Copy is disabled until two different teams are picked.
+
+### Streamers Tab Lists Every Streamer Tool
+**User story**
+As a streamer, I want How to Play › Streamers to show everything Kana Cards offers a streamer, so that I can pick what fits my stream without asking the league.
+
+**Acceptance criteria**
+- **Overview:** the subtab opens with a short list of the tools, each one line with a link to its section: **Pause screen overlay** (an OBS browser source, no extension needed), **Kana Cards extension** (the full panel game with match MVP and token drops), **Viewer MVP vote** (in the Kana Cards extension) and **Kana Cards MVP Vote** (a small vote-only extension).
+- **Pause screen overlay:** the section from the story above, with the URL builder and the OBS steps.
+- **Viewer MVP vote:** how to start a vote from Quick Actions (Select match MVP → series → match → **Start viewer vote**, 1, 2 or 3 minutes), that joined viewers vote in the panel, **End now** and **Cancel vote**, and that **Confirm MVP & Drop Tokens** sets the MVP and drops tokens as a hand pick does. The section says the vote comes with extension version 1.4.0 and is not yet available on Twitch.
+- **Kana Cards MVP Vote:** what it is for (a vote without the card game on the channel), that any viewer logged in to Twitch can vote, that voters who share their Twitch identity can win a token claimed at kana-cards.com, and that a channel normally installs one of the two extensions. Its confirm button is **Confirm MVP**. The section says the extension has not been submitted to Twitch yet and is not yet available on Twitch.
+- **Status is accurate:** the text does not say an extension is in testing or released unless that is true when it ships; the existing "Getting access" text is updated to match the current Twitch review status of each extension. As of #246: the Kana Cards extension is not yet approved by Twitch and so not yet available on Twitch, so channels install it as testers with a test install link from the league (the "Local Test" wording is gone); the viewer vote comes with version 1.4.0, not yet released; Kana Cards MVP Vote has not been submitted.
+- **Approval:** each extension section repeats that a channel needs the league's approval before it can set MVPs, and that the overlay needs none.
+
+### Public Endpoint for the Last Game
+**User story**
+As the overlay page, I want one call that returns the last game of a series and its players, so that the page stays simple.
+
+**Acceptance criteria**
+- `GET /obs/last-game?teams=<id>,<id>` is public and returns `teams` (both ids and names), `series_score`, `pending_game` (the number of a game that ended without stats, or null) and `game` (null before the first game) with `match_id`, `game_number`, `winner_team_id`, `duration`, `start_time` and the `game_players` payload (`parse_status`, `excluded_from_scoring`, both teams' players with raw points, `is_mvp`, `top`).
+- `teams` must be exactly two different positive team ids (1..2**63-1, comma-separated, whitespace around each allowed); anything else answers 422. An unknown team id answers 404. Two known teams with no current series answer 200 with `game: null`.
+- It returns no user, card or ownership data.
+- It is limited per IP at the global rate (`RATE_LIMIT_GLOBAL`, set on the route itself, since the middleware's default limit doesn't reach included routers); one overlay polling every 30 seconds is far below it.

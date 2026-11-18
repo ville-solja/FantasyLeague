@@ -1,6 +1,6 @@
 # Authentication & Account Management
 
-User accounts, sessions, and profile management for the Kana Cards app. Players sign in with a username and password, or with Steam when `LOGIN_METHOD` is `both` or `steam_signup` (issue #150; see **Steam Sign-in** below). Sessions are server-side: each login creates a `user_sessions` row, and the signed cookie (Starlette's `SessionMiddleware`) carries only a random session ID. Idle and absolute limits depend on the role, and admins pass a recent identity check (password or Steam re-auth) before destructive actions, plus a typed confirmation for six of them (issues #117 and #150; see Session Validation and Revocation below and `reference/longer-sessions.md`).
+User accounts, sessions, and profile management for the Kana Cards app. Players sign in with a username and password, or with Steam when `LOGIN_METHOD` is `both` or `steam_signup` (issue #150; see **Steam Sign-in** below). Sessions are server-side: each login creates a `user_sessions` row, and the signed cookie (Starlette's `SessionMiddleware`) carries only a random session ID. Idle and absolute limits depend on the role, and admins pass a recent identity check (password or Steam re-auth) before destructive actions, plus a typed confirmation for seven of them (issues #117 and #150; see Session Validation and Revocation below and `reference/longer-sessions.md`).
 
 ---
 

@@ -16,7 +16,7 @@ These endpoints also need a password re-entry (`POST /reauth`, see `core/auth.md
 session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they return 403
 `{"detail": "reauth_required"}` and do nothing:
 
-- `POST /admin/season/end` and `POST /admin/season/reset`
+- `POST /admin/season/end`, `POST /admin/season/reset` and `POST /admin/season/summary` (issue #133)
 - `DELETE /admin/leagues/{league_id}/data`
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
@@ -41,7 +41,7 @@ other admin endpoints work without re-authentication.
 
 ### Typed confirmation
 
-Steam OpenID cannot force a fresh password prompt, so six destructive actions also need the
+Steam OpenID cannot force a fresh password prompt, so seven destructive actions also need the
 action's name typed in, for every admin (issue #150). The backend dependency
 `require_typed_confirmation(action)` (`backend/deps.py`, after the re-auth check) reads `confirm`
 from the query string or the JSON body (case and surrounding spaces ignored) and otherwise answers
@@ -52,6 +52,7 @@ from the query string or the JSON body (case and surrounding spaces ignored) and
 |---|---|---|
 | Season end | `POST /admin/season/end` | `END SEASON` |
 | Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Save season summary (issue #133) | `POST /admin/season/summary` | `SAVE SUMMARY` |
 | Admin toggle | `POST /users/{user_id}/toggle-admin` | `CHANGE ADMIN` |
 | Token grant | `POST /grant-tokens` | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
@@ -392,6 +393,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_clock_cleared` | Operator cleared the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_accounts_seeded` | Operator seeded disposable demo accounts (`DEMO_MODE` only) |
+| `demo_scenario_loaded` | Operator loaded a season scenario, replacing the game data (`DEMO_MODE` only; `detail` has `name=… users=… matches=…`) |
 
 ---
 
@@ -451,5 +453,5 @@ These features have dedicated reference documents:
 | Season Finals | `GET /admin/finals`, `PUT /admin/finals/tiebreak`, `POST /admin/finals/pause`, `POST /admin/finals/close`, `PUT /admin/finals/result` | `core/finals-predictions.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
-| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
+| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts`, `POST /admin/demo/scenario` (all `DEMO_MODE`-gated) | `reference/demo-mode.md`, `reference/testing-tooling.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |

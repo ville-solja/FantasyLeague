@@ -12,6 +12,42 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-18 — developer — models
+**Problem:** `auto_lock_weeks`, `due_substitutions`, `generate_weekly_summaries` and `card_points.rebuild_all` each call `db.commit()`, so a caller that must run them inside one all-or-nothing transaction (issue 145's scenario loader) can't roll back; and Core `table.delete()` leaves the deleted rows' objects in the identity map, so new rows reusing their ids raise an SAWarning.
+**Solution:** Use `scenarios._one_transaction(db)`, which turns the session's commits into flushes until the block ends and rolls everything back on error. After Core deletes, `db.flush()` then `db.expunge_all()` and re-fetch the objects you need.
+
+### 2026-11-18 — developer — models
+**Problem:** Since issue 133, a new table in `models.py` fails `test_issue_133`'s coverage test until it is classified, and End Season with no users writes no `season_archive` rows, so `POST /admin/season/summary` then answers 404 for that label.
+**Solution:** Add every new table to `season_reset.TABLE_GROUPS` (cleared, updated or kept) in the same change. In tests of the summary route, create at least one user before End Season.
+
+### 2026-11-17 — test-planner — testing
+**Problem:** Seven test files (issues 50, 81, 135, 141, 150, 220, 237) patch `routers.admin_season.backup_sqlite_db` with a zero-argument `lambda: …`, so passing arguments to it breaks them, and calling a renamed backup function instead leaves them unpatched and backs up the real `data/fantasy.db`.
+**Solution:** When the reset's backup call changes, update every stub to `lambda *a, **k: …` in the same change (keep the `monkeypatch.setattr(admin_season_module, "backup_sqlite_db"` text that test_issue_85 greps for).
+
+### 2026-11-17 — developer — models
+**Problem:** A migrated database's `card_modifiers` CHECK lists the stat keys from migration 025, so a stat added to `SCORING_STATS` later is refused there; `scripts/bench_leaderboards.py` drew modifiers from `SCORING_STATS + deaths` and failed `test_issue_149`'s benchmark tests only in the full suite.
+**Solution:** Draw modifier keys from `card_utils._SCORED_STAT_COLS` (the pool without `NO_MODIFIER_STATS`) everywhere, including scripts; a new scored stat that should be a modifier target needs a `card_modifiers` rebuild migration.
+
+### 2026-11-17 — test-planner — models
+**Problem:** A new scored stat touches the replay import too: every `manual_match.STAT_FIELDS` key is required per player, `scripts/replay_to_match.py` lists any stat its parser events can't give under `missing_stats`, and a replay with missing stats is stored as Partial stats.
+**Solution:** When adding a stat to `SCORING_STATS`, decide how `replay_to_match.py` produces it (or why it may be absent) and update `STAT_ORDER`, the issue 224 test helpers and the fixture together.
+
+### 2026-11-17 — developer — testing
+**Problem:** A `style.css` comment `/* Issue #245 … */` failed `test_issue_211` and `test_issue_224`, whose "tokens only" checks search CSS slices for `#[0-9a-fA-F]{3,8}\b` and read `#245` as a hex colour.
+**Solution:** Write "issue 245" (no `#`) in CSS comments.
+
+### 2026-11-17 — test-planner — frontend
+**Problem:** The page's address is read and rewritten in several places during `init()`: `applyAuthState()` calls `switchTab("leaderboard")` for logged-out visitors before `handleSteamReturn` reads `#login?steam=…`, and `handleTwitchReturn` strips any hash starting `#profile`, even without `?`. In-page `href="#htp-…"` anchors also change the hash.
+**Solution:** Read `location.hash` at the start of `init()`, before any handler runs, and keep `switchTab` from writing the address during init. Make a `popstate`/hash reader ignore anchor ids. Note that `test_how_to_play_role_subtabs` reads the first app-globals.js line containing `"howtoplay"`.
+
+### 2026-11-17 — developer — security
+**Problem:** SlowAPIMiddleware's default limit (`RATE_LIMIT_GLOBAL`) never applies to routes added with `include_router`: this FastAPI wraps them in `_IncludedRouter`, the middleware finds no handler and treats the request as exempt, so a "covered by the global limit" test with a fresh `Limiter(default_limits=...)` sees no 429.
+**Solution:** Put `@limiter.limit(RATE_LIMIT_GLOBAL)` on a public route that must be limited (`routers/obs.py`, issue 246) and test it with the router's own Limiter (`limiter.reset()` first). Routes that rely only on the global limit are unlimited today.
+
+### 2026-11-17 — test-planner — models
+**Problem:** Plans say "reuse `weekly_summary._SERIES_GAP`", but the 6-hour series gap has four copies (`weekly_summary._SERIES_GAP`, a local `GAP` in `schedule._build_unscheduled_results`, `admin_ingest.SERIES_GAP_SECONDS`, `_SERIES_GAP_SECONDS` in app-admin-matches.js, pinned by test_issue_193), and env settings such as `INGEST_POST_MATCH_FAST_POLL_MINUTES` are parsed only in `main.py`.
+**Solution:** Put a shared constant in the service module (`schedule.py`) and import it in the routers, never import a router's private constant into a service. Don't import `main` from a service to read a setting: read the env var with the same default in the service or move it to a small shared module.
+
 ### 2026-11-17 — developer — testing
 **Problem:** Adding a keyword to `twitch._post_chat_message` / `_pubsub_broadcast` calls (issue 253's `ext=`) broke older tests: their recorders (`_chat_recorder` in `test_issue_157`, `_pubsub` in `test_issue_234`) are two-argument lambdas. Separately, `twitch_channels.record_request` ignores a non-numeric channel id, so the tests' `test_channel` never gets an approval row.
 **Solution:** Send through `twitch.chat_as(ext, …)` / `broadcast_as(ext, …)`, which keep the two-argument call for the full extension; in a new test that needs the keyword, patch with a recorder that takes `ext="game"`. Use a numeric channel id when a test expects a `TwitchChannelApproval` row.

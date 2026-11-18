@@ -8,7 +8,7 @@ Tracks whether each match's replay has been parsed. Players see when a score is 
 
 ## Why it exists
 
-OpenDota records kills, deaths, assists, last hits and GPM for every match. Observer wards, stuns, teamfight participation, runes and camps only exist once OpenDota parses the replay. When Valve's replay file is missing or broken, the match never parses, and every player in it keeps those stats at 0.
+OpenDota records kills, deaths, assists, last hits and GPM for every match. Observer wards, stuns, teamfight participation, runes, camps and (from season 17) courier kills only exist once OpenDota parses the replay. When Valve's replay file is missing or broken, the match never parses, and every player in it keeps those stats at 0.
 
 Example: radres scored 9.4 in parsed match 9000543547 but 0.9 in match 9000632714, whose replay URL returned HTTP 502 on 2026-09-24. The scoring was correct for the data it had.
 
@@ -84,7 +84,7 @@ Admin only, 404 for an unknown match. Body: `{"unparseable": bool | null, "exclu
 
 ## UI
 
-- **Player popup match history.** A match that is unparsed or unparseable shows a "Partial stats" badge next to its points. The tooltip says the replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0. An excluded match shows a dash and a "Not scored" badge.
+- **Player popup match history.** A match that is unparsed or unparseable shows a "Partial stats" badge next to its points. The tooltip says the replay has not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0. An excluded match shows a dash and a "Not scored" badge.
 - **Schedule game rows and the Weekly Report.** Excluded matches show a "Not scored" badge. In the Weekly Report, player points on those matches show as a dash.
 - **Admin Matches tab.** A Parse column shows Parsed / Unparsed / Unparseable, with a Retry parse button on unparsed rows. A Scoring column has Unparseable and Not scored checkboxes. An "Unparseable only" filter is one of three combined filters in the filter row above the table, with MVP missing and League (issue 214).
 

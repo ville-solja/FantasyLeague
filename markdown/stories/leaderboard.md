@@ -177,7 +177,7 @@ As a fantasy manager, I want to see which stats earn a player their points, so t
 
 **Acceptance criteria**
 - **Points by source:** one 100 % stacked bar plus a row per source, giving average points per scored match, share of the total, and a marker for the league's average for that source.
-- **Sources,** from `SCORING_STATS` and the death pool: Kills, Assists, Farm (last hits and denies), GPM, Vision (observer wards), Objectives (towers and Roshan), Teamfight, Stuns, Jungle and runes (camps and runes), First blood, Survival (death pool), and MVP bonus.
+- **Sources,** from `SCORING_STATS` and the death pool: Kills, Assists, Farm (last hits and denies), GPM, Vision (observer wards), Objectives (towers, Roshan and courier kills), Teamfight, Stuns, Jungle and runes (camps and runes), First blood, Survival (death pool), and MVP bonus.
 - **Modifier value:** a line "A +10 % modifier is worth most on: Kills (+0.42 / match), GPM (+0.38)". It uses `modifier_bonus_pct` and each stat's average points, per stat rather than per group, and the top three.
 - **Your card:** when the viewer owns a card of this player, its modifiers are highlighted in that list with their value per match. When they don't, the list is shown unhighlighted.
 - **One formula:** values come from the server, using the same scoring code as match points. The parts of a match add up to its fantasy points.

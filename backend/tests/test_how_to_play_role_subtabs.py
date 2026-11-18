@@ -323,12 +323,15 @@ class TestPlayersSubtab:
 class TestStreamersSubtab:
 
     def test_streamers_subtab_explains_local_test_application_process(self):
-        """#howtoplay-panel-streamers explains that while the extension is in
-        Twitch's "Local Test" status, a broadcaster needs a developer-provided
-        test install link to whitelist their channel, and that this step is not
-        needed once publicly released."""
+        """#howtoplay-panel-streamers explains that while the extension waits for
+        Twitch review it is not yet available on Twitch, so a broadcaster needs a
+        test install link from the league, and that this step is not needed once
+        publicly released. (Issue 246 replaced the "Local Test" wording with the
+        review status recorded in the submission guide.)"""
         panel = _extract_panel(_read(INDEX_HTML_PATH), "streamers")
-        assert "Local Test" in panel
+        assert "not yet approved by Twitch" in panel
+        assert "not yet available on Twitch" in panel
+        assert "Local Test" not in panel
         assert "test install link" in panel
         assert "publicly released" in panel.lower()
 

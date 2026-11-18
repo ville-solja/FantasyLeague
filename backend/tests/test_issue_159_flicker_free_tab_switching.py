@@ -372,7 +372,7 @@ class TestSameTabOrDifferentTab:
         assert 'switchTab("leaderboard")' in auth  # logout
         assert 'switchTab("team")' in auth        # login
         assert 'switchTab("profile")' in auth     # forced password change
-        assert 'switchTab("team")' in _read(os.path.join(_FRONTEND_DIR, "app-tour.js"))
+        assert 'openTab("team")' in _read(os.path.join(_FRONTEND_DIR, "app-tour.js"))  # issue 245: switchTab with a history entry
 
     def test_switch_tab_forced_password_change_redirects_to_profile_first(self):
         """Failure path: the `activeMustChangePassword && name !== "profile"` redirect to "profile" stays the first statement in switchTab, before the same-tab check."""

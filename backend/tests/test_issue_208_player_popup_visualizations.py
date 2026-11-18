@@ -474,6 +474,9 @@ def _popup_src():
     players = _fe("app-players.js")
     dur = _fn_source(players, "_formatGameDuration")
     dur += "\n" + re.search(r"^const _NOT_SCORED_TOOLTIP = .*$", players, re.M).group(0)
+    # Issue 244: the Partial stats tooltip and check moved to app-players.js.
+    dur += "\n" + re.search(r"^const _PARTIAL_STATS_TOOLTIP = .*$", players, re.M).group(0)
+    dur += "\n" + _fn_source(players, "_popupIsPartial")
     return _FAKE_DOM + helpers + "\n" + acc + "\n" + dur + "\n" + _fe("app-player-popup.js")
 
 
@@ -847,7 +850,7 @@ def test_points_by_source_has_planned_source_groups():
     assert sorted(covered) == sorted(SCORING_STATS + ["deaths"])
     groups = {k: g for k, _, g in player_insights.SOURCE_GROUPS}
     assert groups["farm"] == ["last_hits", "denies"]
-    assert groups["objectives"] == ["towers_killed", "roshan_kills"]
+    assert groups["objectives"] == ["towers_killed", "roshan_kills", "courier_kills"]
     assert groups["jungle_runes"] == ["camps_stacked", "rune_pickups"]
     assert list(player_insights.points_by_source(_STATS, _default_weights())) == player_insights.SOURCE_KEYS
 
@@ -912,13 +915,14 @@ def test_get_player_modifier_values_per_stat_top_three(db):
     mv = _get(db)["modifier_values"]
     assert mv["bonus_pct"] == w["modifier_bonus_pct"]
     stats = [r["stat"] for r in mv["stats"]]
-    assert sorted(stats) == sorted(SCORING_STATS + ["deaths"])  # per stat: last_hits and denies apart
+    # per stat: last_hits and denies apart; courier_kills is never a modifier (issue 134)
+    assert sorted(stats) == sorted([k for k in SCORING_STATS if k != "courier_kills"] + ["deaths"])
     values = [r["value"] for r in mv["stats"]]
     assert values == sorted(values, reverse=True)
     kills = next(r for r in mv["stats"] if r["stat"] == "kills")
     assert kills["value"] == pytest.approx(w["kills"] * 5 * w["modifier_bonus_pct"] / 100, abs=0.01)
     assert kills["label"] == "Kills"
-    top = max(SCORING_STATS, key=lambda s: w[s] * _STATS[s])
+    top = max(SCORING_STATS, key=lambda s: w[s] * _STATS.get(s, 0))
     expected_top = "deaths" if w["death_pool"] - 3 * w["death_deduction"] > w[top] * _STATS[top] else top
     assert stats[0] == expected_top
 
@@ -1432,7 +1436,7 @@ def test_history_details_panel_lists_every_stat():
     stats = dict(re.findall(r"<dt>([^<]*)</dt><dd>([^<]*)</dd>", panel))
     assert stats == {"Kills": "5", "Deaths": "2", "Assists": "7", "Last hits": "150", "Denies": "9",
                      "GPM": "480", "Observer wards": "1", "Sentry wards": "2", "Tower damage": "1500",
-                     "Towers": "1", "Roshan": "1", "Teamfight": "55 %", "Camps stacked": "3",
+                     "Towers": "1", "Roshan": "1", "Courier kills": "0", "Teamfight": "55 %", "Camps stacked": "3",
                      "Runes": "4", "First blood": "Yes", "Stuns": "12.5 s", "Duration": "32:05"}
 
 
@@ -1454,7 +1458,7 @@ def test_history_partial_and_not_scored_badges_unchanged():
     html = _history()
     partial = dict(_cells(_history_row(html, 2)))["hc-pts"]
     excluded = dict(_cells(_history_row(html, 4)))["hc-pts"]
-    assert partial.startswith("12.4 ") and '<span class="badge common" title="The replay has not been parsed, so wards, stuns, teamfight, runes and camps count as 0.">Partial stats</span>' in partial
+    assert partial.startswith("12.4 ") and '<span class="badge common" title="The replay has not been parsed, so wards, stuns, teamfight, runes, camps and courier kills count as 0.">Partial stats</span>' in partial
     assert excluded == '— <span class="badge common" title="An admin excluded this match from scoring. It adds no fantasy points.">Not scored</span>'
     assert dict(_cells(_history_row(html, 1)))["hc-pts"] == "10.1"
 

@@ -139,6 +139,7 @@ function showSteamSignup() {
 
 function closeSteamSignup() {
   document.getElementById("steamSignupModal").classList.add("hidden");
+  _dropPendingTab();  // issue #245
 }
 
 async function submitSteamSignup() {
@@ -156,15 +157,14 @@ async function submitSteamSignup() {
       if (detail === "signup_expired") detail = "This sign-up has expired. Sign in with Steam again.";
       return setStatus("steamSignupStatus", detail || "Could not create the account", false);
     }
-    closeSteamSignup();
+    document.getElementById("steamSignupModal").classList.add("hidden");  // not closeSteamSignup: keeps the pending tab
     document.getElementById("steamSignupUsername").value = "";
     if (typeof clearWeeklySummaryCache === "function") clearWeeklySummaryCache();
     await loadMe();
     await claimTokenEvents();
     checkNotifications();
     applyAuthState();
-    switchTab("team");
-    loadDeck();
+    _switchAfterLogin();
     showOwnCardGrant();
   } catch (e) {
     setStatus("steamSignupStatus", e.message, false);
@@ -250,10 +250,12 @@ async function submitResetPassword() {
 
 function closeLoginModal() {
   document.getElementById("loginModal").classList.add("hidden");
+  _dropPendingTab();  // issue #245: a later login lands on My Team
 }
 
 function closeRegisterModal() {
   document.getElementById("registerModal").classList.add("hidden");
+  _dropPendingTab();
 }
 
 function showRegister() {
@@ -327,12 +329,7 @@ async function login() {
     document.getElementById("loginModal").classList.add("hidden");
     document.getElementById("loginPassword").value = "";
     applyAuthState();
-    if (activeMustChangePassword) {
-      switchTab("profile");
-    } else {
-      switchTab("team");
-      loadDeck();
-    }
+    _switchAfterLogin();
   } catch (e) {
     setStatus("loginStatus", e.message, false);
   }
@@ -415,10 +412,23 @@ async function register() {
     document.getElementById("regEmail").value    = "";
     document.getElementById("regPassword").value = "";
     applyAuthState();
-    switchTab("team");
-    loadDeck();
+    _switchAfterLogin();
   } catch (e) {
     setStatus("registerStatus", e.message, false);
+  }
+}
+
+/** After a login, registration or Steam sign-up: the tab a link asked for (issue #245),
+ *  else My Team; Profile while the password must be changed. */
+function _switchAfterLogin() {
+  const pending = _takePendingTab();
+  if (activeMustChangePassword) {
+    switchTab("profile");
+  } else if (pending) {
+    switchTab(pending);
+  } else {
+    switchTab("team");
+    loadDeck();
   }
 }
 

@@ -1098,6 +1098,36 @@ a.now-card-link:focus-visible { outline: 2px solid var(--accent); outline-offset
   display: inline-block;
 }
 
+/* Issue 244: a game's player table, opened by the Players button of its game row. */
+.game-players-btn { padding: 0 8px; font-size: var(--fs-xs); }
+.game-players {
+  padding: 8px 12px 10px;
+  border-bottom: var(--bw-hair) solid var(--k-ink-900);
+  background: var(--bg-card-hi);
+  font-size: var(--fs-xs);
+}
+.game-players-badges { display: flex; gap: 6px; margin-bottom: 6px; }
+.game-players-table { width: 100%; max-width: 100%; border-collapse: collapse; table-layout: auto; }
+.game-players-table th,
+.game-players-table td { padding: 3px 6px; text-align: left; border-bottom: var(--bw-hair) solid var(--k-ink-900); }
+.game-players-table thead th { color: var(--fg-muted); font-weight: var(--w-bold); }
+.game-players-team th { padding-top: 8px; color: var(--fg-muted); font-weight: var(--w-bold); }
+.game-players-name { overflow-wrap: anywhere; }
+.game-players-mvp { color: var(--k-amber-300); }
+.game-players-hero { width: 28px; }
+.game-players-kda,
+.game-players-pts { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.game-players-table th.game-players-kda,
+.game-players-table th.game-players-pts,
+.game-players-table td.game-players-kda,
+.game-players-table td.game-players-pts { text-align: right; }
+.game-players-note,
+.game-players-msg { margin: 6px 0 0; color: var(--fg-muted); }
+@media (max-width: 479px) {
+  .game-players { padding: 6px 4px 8px; }
+  .game-players-hero { display: none; }
+}
+
 @media (max-width: 700px) {
   .schedule-now { grid-template-columns: 1fr; }
   .schedule-week-arrow { display: none; }
@@ -2939,6 +2969,15 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .end-season-players { display: grid; gap: 2px; margin: var(--s-2) 0; font-size: var(--fs-sm); }
 .end-season-add { display: flex; gap: var(--s-1); }
 .end-season-warning { margin-top: var(--s-3); color: var(--k-warn); font-size: var(--fs-sm); }
+/* issue 133: End Season parts, the Reset preview lists and season backups */
+.end-season-parts { display: grid; gap: var(--s-1); font-size: var(--fs-sm); }
+.end-season-recorded { color: var(--fg-muted); font-size: var(--fs-xs); margin-left: var(--s-1); }
+#endSeasonChampsBlock[hidden] { display: none; }
+.season-reset-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-3); font-size: var(--fs-sm); margin-bottom: var(--s-3); }
+.season-reset-lists ul { margin: 0; padding-left: 1.2em; }
+.season-reset-summary { font-size: var(--fs-sm); margin-bottom: var(--s-3); }
+.season-reset-summary .end-season-warning { margin: 0 0 var(--s-2); }
+.season-backups-title { margin: var(--s-4) 0 var(--s-1); font-size: var(--fs-sm); }
 @media (max-width: 640px) {
   .champ-modal { padding: var(--s-5); }
   .champ-row { grid-template-columns: 1fr; padding-bottom: var(--s-2); border-bottom: var(--bw-hair) solid var(--border-soft); }
@@ -4347,6 +4386,29 @@ td .accolade-chip { border-color: transparent; }
 .add-match-actions button { flex: 1; }
 @media (max-width: 520px) {
   .add-match-pickers { grid-template-columns: 1fr; }
+}
+
+/* How to Play › Streamers (issue 246): tool overview and the OBS overlay URL builder */
+.htp-tool-list { padding-left: 18px; color: var(--k-ink-200); font-size: 0.9rem; line-height: 1.7; margin: 0; }
+/* Issue 245: the overview links are buttons that scroll without changing the address. */
+.htp-tool-link {
+  background: none; border: none; padding: 0; font: inherit; font-weight: 600;
+  letter-spacing: inherit; text-transform: none; color: var(--accent); cursor: pointer;
+  text-decoration: underline; text-underline-offset: 2px; display: inline; white-space: normal;
+}
+.htp-tool-link:hover { color: var(--accent-hover); background: none; }
+/* Issue 245: "The Finals tab isn't open yet." above Leaderboards (setStatus replaces the class). */
+#tabLinkNotice { margin: 0 0 12px; font-size: var(--fs-sm); }
+.obs-builder { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); max-width: 640px; }
+.obs-builder-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--fg-muted); }
+.obs-builder-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--k-ink-200); }
+.obs-builder-url { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.obs-builder-url input { flex: 1 1 260px; min-width: 0; font-family: var(--font-mono); font-size: 0.8rem; }
+.obs-builder-preview { font-size: 0.9rem; color: var(--accent); }
+.obs-builder-preview[aria-disabled="true"] { color: var(--fg-dim); pointer-events: none; text-decoration: none; }
+.obs-builder-status { grid-column: 1 / -1; margin: 0; min-height: 1.2em; font-size: 0.8rem; color: var(--fg-muted); }
+@media (max-width: 520px) {
+  .obs-builder { grid-template-columns: 1fr; }
 }
 
 /* ============================================================

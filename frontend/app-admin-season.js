@@ -53,7 +53,8 @@ async function endSeason() {
   const typed = document.getElementById("endSeasonLabel").value.trim();
   setStatus("seasonLifecycleStatus", "");
   try {
-    const res = await fetch(`${API}/admin/season/accolades-preview`);
+    const query = typed ? `?season_label=${encodeURIComponent(typed)}` : "";
+    const res = await fetch(`${API}/admin/season/accolades-preview${query}`);
     const data = await res.json();
     if (!res.ok) return setStatus("seasonLifecycleStatus", data.detail, false);
     _endSeasonPreview = data;
@@ -82,9 +83,60 @@ async function endSeason() {
     _endSeasonPicks[div] = [];
     _renderEndSeasonPlayers(div);
   });
+  _applyEndSeasonRecorded(p.recorded, document.getElementById("endSeasonDialogLabel").value.trim());
   setStatus("endSeasonDialogStatus", "");
-  _updateEndSeasonWarning();
+  endSeasonPartChanged();
   document.getElementById("endSeasonModal").classList.remove("hidden");
+}
+
+// Issue 133: End Season's parts. A part whose accolades the label already has (granted
+// by hand, say) starts unticked, so End Season doesn't record near-duplicates.
+const _END_SEASON_PARTS = [
+  { part: "awards", key: "awards", noun: "awards" },
+  { part: "champions", key: "champion", noun: "champion rows" },
+  { part: "played", key: "played", noun: "Played rows" },
+];
+
+function _applyEndSeasonRecorded(recorded, label) {
+  _END_SEASON_PARTS.forEach(({ part, key, noun }) => {
+    const n = (recorded && recorded[key]) || 0;
+    document.getElementById(`endSeasonPart_${part}`).checked = n === 0;
+    document.getElementById(`endSeasonRecorded_${part}`).textContent =
+      n ? `${n} ${noun} already recorded for ${label}` : "";
+  });
+  document.getElementById("endSeasonPart_summary").checked = true;
+}
+
+let _endSeasonLabelTimer = null;
+
+/** Re-reads the already-recorded counts for the label being typed (debounced). */
+function endSeasonLabelChanged() {
+  clearTimeout(_endSeasonLabelTimer);
+  _endSeasonLabelTimer = setTimeout(async () => {
+    const label = document.getElementById("endSeasonDialogLabel").value.trim();
+    if (!label) return;
+    try {
+      const res = await fetch(`${API}/admin/season/accolades-preview?season_label=${encodeURIComponent(label)}`);
+      const data = await res.json();
+      if (!res.ok || document.getElementById("endSeasonDialogLabel").value.trim() !== label) return;
+      _applyEndSeasonRecorded(data.recorded, label);
+      endSeasonPartChanged();
+    } catch (e) {
+      setStatus("endSeasonDialogStatus", e.message, false);
+    }
+  }, 400);
+}
+
+function _endSeasonParts() {
+  const on = part => document.getElementById(`endSeasonPart_${part}`).checked;
+  return { record_awards: on("awards"), record_champions: on("champions"),
+           record_played: on("played"), store_summary: on("summary") };
+}
+
+/** With Record champions off, the champion pickers are hidden and none are sent. */
+function endSeasonPartChanged() {
+  document.getElementById("endSeasonChampsBlock").hidden = !_endSeasonParts().record_champions;
+  _updateEndSeasonWarning();
 }
 
 function closeEndSeasonDialog() {
@@ -135,6 +187,7 @@ function endSeasonAddPlayer(div) {
 
 /** [{division, team_name, player_account_ids}] for the divisions with a team and ticked players. */
 function _endSeasonChampions() {
+  if (!_endSeasonParts().record_champions) return [];
   return ["div1", "div2"].map(div => {
     const team = _endSeasonTeam(div);
     const ids = _endSeasonPicks[div].filter(p => p.checked).map(p => p.account_id);
@@ -143,42 +196,183 @@ function _endSeasonChampions() {
 }
 
 function _updateEndSeasonWarning() {
-  document.getElementById("endSeasonChampWarning").hidden = _endSeasonChampions().length > 0;
+  document.getElementById("endSeasonChampWarning").hidden =
+    !_endSeasonParts().record_champions || _endSeasonChampions().length > 0;
 }
 
 async function confirmEndSeason() {
   const label = document.getElementById("endSeasonDialogLabel").value.trim();
   if (!label) return setStatus("endSeasonDialogStatus", "Enter a season label", false);
+  const parts = _endSeasonParts();
   const champions = _endSeasonChampions();
-  const champNote = champions.length ? "" : " No champions recorded; add them in Player management.";
+  const champNote = !parts.record_champions || champions.length ? "" : " No champions recorded; add them in Player management.";
   closeEndSeasonDialog();
-  const confirmText = await typedConfirm("season_end", `Archive the current standings and record the season's accolades as "${label}".${champNote}`);
+  const confirmText = await typedConfirm("season_end", `Archive the current standings and record the chosen parts of the season as "${label}".${champNote}`);
   if (confirmText === null) return;
   try {
     const res = await adminFetch(`${API}/admin/season/end`, {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({season_label: label, champions, confirm: confirmText}),
+      body: JSON.stringify({season_label: label, champions,
+                            record_awards: parts.record_awards, record_champions: parts.record_champions,
+                            record_played: parts.record_played, store_summary: parts.store_summary,
+                            confirm: confirmText}),
     });
     const data = await res.json();
     if (!res.ok) return setStatus("seasonLifecycleStatus", data.detail, false);
     const extra = data.note ? ` ${data.note}.` : (data.warning ? ` ${data.warning}.` : "");
-    setStatus("seasonLifecycleStatus", `Archived "${data.season_label}" (${data.archived_users} users, ${data.accolades} accolades, ${data.champions} champions).${extra}`);
+    const summary = data.summary ? `, summary of ${data.summary.players} players and ${data.summary.teams} teams` : "";
+    const detail = `${data.archived_users} users, ${data.accolades} accolades, ${data.champions} champions${summary}`;
+    setStatus("seasonLifecycleStatus", `Archived "${data.season_label}" (${detail}).${extra}`);
     document.getElementById("endSeasonLabel").value = "";
     loadSeasonArchives();
     if (typeof loadSeasonAccolades === "function") loadSeasonAccolades();
+    showEndSeasonResult(data.season_label, `Recorded: ${detail}.${extra}`);
   } catch (e) {
     setStatus("seasonLifecycleStatus", e.message, false);
   }
 }
 
-function openSeasonResetConfirm() {
+// Issue 133: End Season deletes nothing, so its result leads on to Reset Season.
+function endSeasonResultText(label) {
+  return `Season ${label} archived. The season's data is still live: continue to Reset Season to start the next season.`;
+}
+
+function showEndSeasonResult(label, detail) {
+  document.getElementById("endSeasonResultText").textContent = endSeasonResultText(label);
+  document.getElementById("endSeasonResultDetail").textContent = detail || "";
+  document.getElementById("endSeasonResultModal").classList.remove("hidden");
+}
+
+function closeEndSeasonResult() {
+  document.getElementById("endSeasonResultModal").classList.add("hidden");
+}
+
+function continueToSeasonReset() {
+  closeEndSeasonResult();
+  openSeasonResetConfirm();
+}
+
+const _RESET_TABLE_NAMES = {
+  matches: "Matches", player_match_stats: "Player game stats", card_match_points: "Stored card points",
+  match_bans: "Hero bans", weeks: "Weeks", weekly_roster_entries: "Weekly roster entries",
+  twitch_mvp: "Twitch MVPs", twitch_token_drops: "Twitch token drops", players: "Players (Player Pool)",
+  teams: "Teams", cards: "Cards", card_modifiers: "Card modifiers", own_player_card_grants: "Own-card grants",
+  weekly_summaries: "Weekly Reports", weekly_summary_reveals: "Weekly Report reveals",
+  weekly_summary_seen: "Weekly Report seen marks", live_matches: "Live games", match_timings: "Match timings",
+  twitch_presence: "Twitch viewer heartbeats", leagues_unmonitored: "Leagues unmonitored",
+  demo_clock_override: "Demo clock override",
+  season_archive: "Season standings archive", season_accolades: "Accolades (history)",
+  season_player_stats: "Season player summaries", season_team_results: "Season team results",
+  audit_logs: "Audit log", user_tags: "User tags", tag_definitions: "Tag definitions",
+  finals_brackets: "Finals brackets", finals_predictions: "Finals predictions",
+  team_signups: "Team signups", promo_codes: "Promo codes", token_grant_events: "Token grant events",
+  notifications: "Notifications", weights: "Scoring weights", player_profiles: "Player profiles",
+  twitch_mvp_polls: "Twitch vote polls", twitch_pending_tokens: "Pending vote tokens",
+};
+
+function _resetName(key) {
+  return _RESET_TABLE_NAMES[key] || key.replace(/_/g, " ");
+}
+
+/** The Reset dialog's Deleted and Kept lists from GET /admin/season/reset-preview. */
+function seasonResetPreviewLists(p) {
+  const del = p.delete || {};
+  const deleted = Object.keys(del)
+    .filter(k => k !== "users_tokens_reset" && del[k] > 0)
+    .map(k => `${_resetName(k)}: ${del[k]}`);
+  deleted.push(`${del.users_tokens_reset || 0} users' tokens reset to ${p.initial_tokens}`);
+  const keep = p.keep || {};
+  const kept = [`User accounts: ${del.users_tokens_reset || 0}`].concat(
+    Object.keys(keep).filter(k => keep[k] > 0).map(k => `${_resetName(k)}: ${keep[k]}`));
+  kept.push(`Season backup named after "${p.season_label}"`);
+  return { deleted, kept };
+}
+
+let _seasonResetPreview = null;
+
+/**
+ * Issue 133: a season ended before the summary existed (Season 16) has none; Reset
+ * would lose its player and team results, so the dialog offers to save it first.
+ */
+function seasonResetSummaryHtml(p) {
+  if (!p || !p.archived) return "";
+  const label = _escHtml(p.season_label);
+  if (p.has_summary) {
+    return `<p>Season summary stored: ${p.summary_players} players, ${p.summary_teams} teams.</p>`;
+  }
+  return `<p class="end-season-warning">Season ${label} has no stored summary. Save it before resetting, or its player and team results are lost.</p>`
+    + `<button type="button" class="secondary" id="seasonResetSaveSummaryBtn" onclick="saveSeasonSummary()">Save season summary</button>`;
+}
+
+async function saveSeasonSummary() {
+  const label = _seasonResetPreview && _seasonResetPreview.season_label;
+  if (!label) return;
+  const confirmText = await typedConfirm("season_summary", `Store the player and team summary of "${label}" from the live data.`);
+  if (confirmText === null) return;
+  const status = document.getElementById("seasonResetModalStatus");
+  try {
+    const res = await adminFetch(`${API}/admin/season/summary`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({season_label: label, confirm: confirmText}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = data.detail;
+      return;
+    }
+    status.textContent = `Saved the summary of ${data.season_label}: ${data.players} players, ${data.teams} teams.`;
+    await openSeasonResetConfirm(true);
+  } catch (e) {
+    status.textContent = e.message;
+  }
+}
+
+function _renderSeasonResetPreview(p) {
+  _seasonResetPreview = p;
+  document.getElementById("seasonResetSummary").innerHTML = seasonResetSummaryHtml(p);
+  const lists = seasonResetPreviewLists(p);
+  const li = items => items.map(t => `<li>${_escHtml(t)}</li>`).join("");
+  document.getElementById("seasonResetDeleteList").innerHTML = li(lists.deleted);
+  document.getElementById("seasonResetKeepList").innerHTML = li(lists.kept);
+  const warn = document.getElementById("seasonResetWarning");
+  warn.textContent = p.warning || "";
+  warn.hidden = !p.warning;
+}
+
+async function openSeasonResetConfirm(keepStatus) {
   document.getElementById("seasonResetConfirmInput").value = "";
-  document.getElementById("seasonResetModalStatus").textContent = "";
+  if (!keepStatus) document.getElementById("seasonResetModalStatus").textContent = "";
+  document.getElementById("seasonResetSummary").innerHTML = "";
+  document.getElementById("seasonResetDeleteList").innerHTML = "<li>Loading…</li>";
+  document.getElementById("seasonResetKeepList").innerHTML = "<li>Loading…</li>";
+  document.getElementById("seasonResetWarning").hidden = true;
   document.getElementById("seasonResetModal").style.display = "flex";
+  try {
+    const res = await fetch(`${API}/admin/season/reset-preview`);
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById("seasonResetModalStatus").textContent = data.detail;
+      return;
+    }
+    _renderSeasonResetPreview(data);
+  } catch (e) {
+    document.getElementById("seasonResetModalStatus").textContent = e.message;
+  }
 }
 
 function closeSeasonResetConfirm() {
   document.getElementById("seasonResetModal").style.display = "none";
+}
+
+/** The reset's result line: what was deleted, and the season backup's file name. */
+function seasonResetResultText(data) {
+  const counts = data.counts || {};
+  const deleted = Object.keys(counts)
+    .filter(k => k !== "users_tokens_reset" && counts[k] > 0)
+    .map(k => `${counts[k]} ${_resetName(k).toLowerCase()}`);
+  return `Season reset complete. Deleted: ${deleted.length ? deleted.join(", ") : "nothing"}; `
+    + `${counts.users_tokens_reset || 0} users' tokens reset to ${data.initial_tokens}. `
+    + `Season backup: ${data.backup_file}`;
 }
 
 async function confirmSeasonReset() {
@@ -198,10 +392,11 @@ async function confirmSeasonReset() {
       return;
     }
     closeSeasonResetConfirm();
-    setStatus("seasonLifecycleStatus", "Season reset complete");
+    setStatus("seasonLifecycleStatus", seasonResetResultText(data));
     loadSeasonArchives();
     loadAdminWeeks();
     loadLeagues();
+    if (typeof loadBackups === "function") loadBackups();
   } catch (e) {
     document.getElementById("seasonResetModalStatus").textContent = e.message;
   }

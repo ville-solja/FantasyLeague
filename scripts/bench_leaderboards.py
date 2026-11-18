@@ -42,7 +42,7 @@ import models  # noqa: E402,F401  (registers tables)
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (Card, CardModifier, League, Match, Player, PlayerMatchStats,  # noqa: E402
                     Team, User, Week, WeeklyRosterEntry)
-from scoring import SCORING_STATS  # noqa: E402
+import season_generator  # noqa: E402
 
 
 def seed(users: int, weeks: int, teams: int, players_per_team: int, games_per_team_week: int,
@@ -56,100 +56,71 @@ def seed(users: int, weeks: int, teams: int, players_per_team: int, games_per_te
         pass
     seed_weights()
 
+    # Issue #145: the data comes from the pure generator (same draws as before the move).
+    start0 = 1_700_000_000
+    season = season_generator.generate(
+        rng, weeks=weeks, teams=teams, players_per_team=players_per_team,
+        games_per_team_week=games_per_team_week, users=users, cards_per_user=cards_per_user,
+        roster_size=roster_size, start=start0)
+    stat_cols = set(PlayerMatchStats.__table__.columns.keys())
+
     db = SessionLocal()
     try:
         db.add(League(id=1, name="Bench League", is_monitored=True))
-        team_ids = list(range(1, teams + 1))
-        for t in team_ids:
-            db.add(Team(id=t, name=f"Team {t}"))
-        players_by_team = {}
-        pid = 1000
-        for t in team_ids:
-            players_by_team[t] = []
-            for _ in range(players_per_team):
-                pid += 1
-                db.add(Player(id=pid, name=f"Player {pid}", is_active=True))
-                players_by_team[t].append(pid)
-        all_players = [p for ps in players_by_team.values() for p in ps]
+        for t in season["teams"]:
+            db.add(Team(id=t["id"], name=t["name"]))
+        for p in season["players"]:
+            db.add(Player(id=p["id"], name=p["name"], is_active=True))
 
-        week_len = 7 * 86400
-        start0 = 1_700_000_000
         week_rows = []
-        for w in range(weeks):
-            wk = Week(label=f"Week {w + 1}", start_time=start0 + w * week_len,
-                      end_time=start0 + (w + 1) * week_len - 1, is_locked=True)
+        for w in season["weeks"]:
+            wk = Week(label=w["label"], start_time=w["start_time"], end_time=w["end_time"],
+                      is_locked=True)
             db.add(wk)
             week_rows.append(wk)
         db.flush()
 
-        match_id = 8_000_000_000
         stat_count = 0
-        for wk in week_rows:
-            # Pair teams up; each pair plays games_per_team_week games this week.
-            order = team_ids[:]
-            rng.shuffle(order)
-            for a, b in zip(order[::2], order[1::2]):
-                for g in range(games_per_team_week):
-                    match_id += 1
-                    t0 = wk.start_time + rng.randint(3600, week_len - 7200)
-                    db.add(Match(match_id=match_id, radiant_team_id=a, dire_team_id=b, league_id=1,
-                                 start_time=t0, radiant_win=rng.random() < 0.5, duration=2400,
-                                 parse_status="parsed"))
-                    mvp = rng.choice(players_by_team[a] + players_by_team[b])
-                    for team in (a, b):
-                        for p in players_by_team[team]:
-                            row = {s: 0 for s in SCORING_STATS}
-                            row.update(
-                                kills=rng.randint(0, 15), assists=rng.randint(0, 20),
-                                deaths=rng.randint(0, 14), last_hits=rng.randint(10, 400),
-                                denies=rng.randint(0, 25), gold_per_min=rng.randint(250, 750),
-                                obs_placed=rng.randint(0, 20), towers_killed=rng.randint(0, 4),
-                                roshan_kills=rng.randint(0, 2),
-                                teamfight_participation=round(rng.random(), 2),
-                                camps_stacked=rng.randint(0, 10), rune_pickups=rng.randint(0, 12),
-                                firstblood_claimed=int(rng.random() < 0.1),
-                                stuns=round(rng.random() * 60, 1),
-                            )
-                            db.add(PlayerMatchStats(player_id=p, match_id=match_id, team_id=team,
-                                                    fantasy_points=0.0, is_mvp=(p == mvp),
-                                                    **{k: v for k, v in row.items()
-                                                       if hasattr(PlayerMatchStats, k)}))
-                            stat_count += 1
+        for m in season["matches"]:
+            db.add(Match(match_id=m["match_id"], radiant_team_id=m["radiant_team_id"],
+                         dire_team_id=m["dire_team_id"], league_id=1, start_time=m["start_time"],
+                         radiant_win=m["radiant_win"], duration=m["duration"],
+                         parse_status=m["parse_status"]))
+            for row in m["stats"]:
+                db.add(PlayerMatchStats(match_id=m["match_id"], fantasy_points=0.0,
+                                        **{k: v for k, v in row.items() if k in stat_cols}))
+                stat_count += 1
         db.flush()
 
-        rarities = ["common"] * 60 + ["rare"] * 25 + ["epic"] * 10 + ["legendary"] * 5
-        mod_count = {"common": 0, "rare": 1, "epic": 2, "legendary": 3}
-        stat_keys = list(SCORING_STATS) + ["deaths"]
         card_total = 0
         roster_total = 0
-        for u in range(users):
+        for gu in season["users"]:
+            u = gu["index"]
             user = User(username=f"bench{u}", email=f"bench{u}@example.invalid",
                         password_hash="x", is_admin=False, is_tester=False, tokens=5,
                         created_at=start0)
             db.add(user)
             db.flush()
-            owned = rng.sample(all_players, min(cards_per_user, len(all_players)))
             cards = []
-            for i, p in enumerate(owned):
-                ctype = rng.choice(rarities)
-                c = Card(player_id=p, owner_id=user.id, card_type=ctype, league_id=1,
-                         is_active=i < roster_size, slot_index=i if i < roster_size else None)
+            for gc in gu["cards"]:
+                c = Card(player_id=gc["player_id"], owner_id=user.id, card_type=gc["card_type"],
+                         league_id=1, is_active=gc["is_active"], slot_index=gc["slot_index"])
                 db.add(c)
                 db.flush()
-                for sk in rng.sample(stat_keys, mod_count[ctype]):
-                    db.add(CardModifier(card_id=c.id, stat_key=sk, bonus_pct=10.0))
+                for mod in gc["modifiers"]:
+                    db.add(CardModifier(card_id=c.id, **mod))
                 cards.append(c)
                 card_total += 1
-            for wk in week_rows:
-                for c in rng.sample(cards, min(roster_size, len(cards))):
-                    db.add(WeeklyRosterEntry(week_id=wk.id, user_id=user.id, card_id=c.id))
+            for wk, picks in zip(week_rows, gu["weekly_rosters"]):
+                for i in picks:
+                    db.add(WeeklyRosterEntry(week_id=wk.id, user_id=user.id, card_id=cards[i].id))
                     roster_total += 1
         db.commit()
         # Build stored per-match card points (issue #141) the way ingest would have.
         import card_points
         card_points.rebuild_all(db)
-        return {"weeks": [w.id for w in week_rows], "players": len(all_players),
-                "matches": match_id - 8_000_000_000, "stat_rows": stat_count,
+        return {"weeks": [w.id for w in week_rows], "players": len(season["players"]),
+                "matches": len(season["matches"]), "stat_rows": stat_count,
                 "cards": card_total, "roster_entries": roster_total,
                 "first_user_id": db.query(User.id).order_by(User.id).first()[0]}
     finally:

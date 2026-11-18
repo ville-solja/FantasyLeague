@@ -62,6 +62,7 @@ points = kills                   × kill_weight
        + obs_placed              × obs_weight
        + towers_killed           × tower_weight
        + roshan_kills            × roshan_weight
+       + courier_kills           × courier_weight
        + teamfight_participation × participation_weight
        + camps_stacked           × stack_weight
        + rune_pickups            × rune_weight
@@ -88,6 +89,8 @@ Each modifier targets one of the scoring stats and carries a `bonus_pct` percent
 
 Valid modifier targets: `kills`, `assists`, `deaths`, `gold_per_min`, `obs_placed`, `last_hits`, `denies`, `towers_killed`, `roshan_kills`, `teamfight_participation`, `camps_stacked`, `rune_pickups`, `firstblood_claimed`, `stuns`
 
+Courier kills (season 17, issue #134) score through the formula above but are never a modifier target: `card_utils.NO_MODIFIER_STATS` keeps them out of the draw pool, and the player popup's "A +10 % modifier is worth most on" list leaves them out too. See [Courier Kills Scoring](../reference/courier-kills-scoring.md).
+
 The modifier always benefits the card owner:
 - For **standard stats** (all except deaths):  
   `contribution = stat_value × weight × (1 + bonus_pct / 100)`
@@ -98,7 +101,7 @@ The modifier always benefits the card owner:
 
 ```
 For each standard stat (kills, assists, last_hits, denies, gpm, obs, towers, roshan,
-                        participation, stacks, runes, firstblood, stuns):
+                        courier, participation, stacks, runes, firstblood, stuns):
   base = stat_value × stat_weight
   points += base × (1 + modifier_bonus_pct / 100)   if modifier present
   points += base                                      if no modifier
@@ -124,7 +127,7 @@ A card's week or season points are the sum of its stored match_points
 When a card is drawn from the deck, modifiers are randomly assigned:
 
 1. **How many**: determined by `modifier_count_<rarity>` weight (e.g. `modifier_count_rare = 1` → 1 modifier on a rare card).
-2. **Which stats**: randomly sampled without replacement from the 14 valid stat keys (the 13 scoring stats in `SCORING_STATS` + `deaths`).
+2. **Which stats**: randomly sampled without replacement from the 14 keys in `card_utils._SCORED_STAT_COLS`: the 14 scoring stats in `SCORING_STATS` minus `NO_MODIFIER_STATS` (`courier_kills`), plus `deaths`.
 3. **Bonus %**: all modifiers on a card share the same `modifier_bonus_pct` value.
 
 All three settings are weights set through `WEIGHTS_JSON` (shown read-only in the admin panel under Scoring Weights).
@@ -181,7 +184,7 @@ The current system uses a single uniform `bonus_pct` for all modifiers. Future e
 - Special named modifiers with flavour text
 - Card-specific modifiers that affect only one player's known strengths
 
-To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` present in `SCORING_STATS` (defined in `backend/scoring.py`) will be applied automatically.
+To add a new modifier type, add a new row to the `card_modifiers` table with the appropriate `stat_key` and `bonus_pct`. Any `stat_key` present in `SCORING_STATS` (defined in `backend/scoring.py`) will be applied automatically. Draws only pick from `card_utils._SCORED_STAT_COLS`, and on a migrated database the `card_modifiers` CHECK still lists the keys from migration 025, so a new stat that should be a draw target also needs a table-rebuild migration.
 
 ---
 

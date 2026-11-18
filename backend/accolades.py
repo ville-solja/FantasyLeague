@@ -320,17 +320,17 @@ def grant_winner_tag(db, user_id: int, granted_by: int | None) -> bool:
     return True
 
 
-def record_season(db, label: str, champions: list[dict] | None, actor_id: int | None) -> dict:
-    """End Season: insert the awards, the champions and one played row per player with
-    a scored match, all with source season_end, and give each fantasy winner the
-    season_winner tag. Rows that already exist (entered by hand earlier) are kept.
-    Does not commit. champions: [{division, team_name, player_account_ids}]."""
-    now = int(time.time())
-    base = {"season_label": label, "source": SOURCE_SEASON_END, "created_at": now,
+def _season_end_base(label: str, actor_id: int | None) -> dict:
+    return {"season_label": label, "source": SOURCE_SEASON_END, "created_at": int(time.time()),
             "created_by": actor_id}
+
+
+def record_awards(db, label: str, actor_id: int | None) -> int:
+    """End Season's awards part: the four player awards and the fantasy winner rows
+    (source season_end), and the season_winner tag for each fantasy winner. Returns
+    how many rows were new (fantasy_winner rows included). Does not commit."""
+    base = _season_end_base(label, actor_id)
     awards = compute_awards(db)
-    played = played_player_ids(db)
-    names = _player_names(db, played)
     rows: list[dict] = []
     for kind in AWARD_KINDS:
         for a in awards[kind]:
@@ -340,24 +340,55 @@ def record_season(db, label: str, champions: list[dict] | None, actor_id: int | 
     for a in awards["fantasy_winner"]:
         rows.append({**base, "kind": "fantasy_winner", "user_id": a["user_id"],
                      "username": a["username"], "value": a["value"]})
-    award_count = insert_ignore(db, rows)
+    added = insert_ignore(db, rows)
+    for a in awards["fantasy_winner"]:
+        grant_winner_tag(db, a["user_id"], actor_id)
+    return added
 
-    champ_rows = []
+
+def record_champions(db, label: str, champions: list[dict] | None, actor_id: int | None) -> int:
+    """End Season's champions part. champions: [{division, team_name, player_account_ids}]."""
+    base = _season_end_base(label, actor_id)
+    rows = []
     for c in champions or []:
         for pid in dict.fromkeys(c["player_account_ids"]):
-            champ_rows.append({**base, "kind": "champion", "division": c["division"],
-                               "team_name": c["team_name"], "player_account_id": pid,
-                               "player_name": known_name(db, pid) or f"Player {pid}"})
-    champion_count = insert_ignore(db, champ_rows)
+            rows.append({**base, "kind": "champion", "division": c["division"],
+                         "team_name": c["team_name"], "player_account_id": pid,
+                         "player_name": known_name(db, pid) or f"Player {pid}"})
+    return insert_ignore(db, rows)
 
-    played_count = insert_ignore(db, [
+
+def record_played(db, label: str, actor_id: int | None) -> int:
+    """End Season's Played part: one played row per player with a scored match."""
+    base = _season_end_base(label, actor_id)
+    played = played_player_ids(db)
+    names = _player_names(db, played)
+    return insert_ignore(db, [
         {**base, "kind": "played", "player_account_id": pid,
          "player_name": names.get(pid) or f"Player {pid}"} for pid in played])
 
-    for a in awards["fantasy_winner"]:
-        grant_winner_tag(db, a["user_id"], actor_id)
+
+def record_season(db, label: str, champions: list[dict] | None, actor_id: int | None, *,
+                  awards: bool = True, champions_on: bool = True, played: bool = True) -> dict:
+    """End Season: the parts the admin chose (issue #133), each with source season_end:
+    awards (with the season_winner tag), champions and Played. Rows that already exist
+    (entered by hand earlier) are kept. Does not commit."""
+    award_count = record_awards(db, label, actor_id) if awards else 0
+    champion_count = record_champions(db, label, champions, actor_id) if champions_on else 0
+    played_count = record_played(db, label, actor_id) if played else 0
     return {"awards": award_count, "champions": champion_count, "played": played_count,
             "accolades": award_count + champion_count + played_count}
+
+
+def recorded_counts(db, label: str) -> dict:
+    """Accolade rows already stored for a label, by End Season part (issue #133):
+    awards (the four awards plus fantasy_winner), champion, played, and every kind."""
+    by_kind = dict(db.query(SeasonAccolade.kind, func.count(SeasonAccolade.id))
+                   .filter(SeasonAccolade.season_label == label)
+                   .group_by(SeasonAccolade.kind).all())
+    return {"awards": sum(by_kind.get(k, 0) for k in AWARD_KINDS + ("fantasy_winner",)),
+            "champion": by_kind.get("champion", 0), "played": by_kind.get("played", 0),
+            "by_kind": by_kind}
 
 
 def set_champions(db, label: str, division: str, team_name: str, players: list[dict],

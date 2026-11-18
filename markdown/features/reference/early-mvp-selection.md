@@ -101,7 +101,7 @@ Version 1.1.6 keeps working against the new backend: it ignores the new fields a
 |---|---|---|
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key for live-game detection. Unset: no live checks run, so matches appear only after ingest |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live checks |
-| `INGEST_POST_MATCH_FAST_POLL_MINUTES` | `20` | Minutes after a monitored game ends during which the poll loop keeps `INGEST_LIVE_MATCH_POLL_INTERVAL`, until the match is ingested. `0` disables |
+| `INGEST_POST_MATCH_FAST_POLL_MINUTES` | `20` | Minutes after a monitored game ends during which the poll loop keeps `INGEST_LIVE_MATCH_POLL_INTERVAL`, until the match is ingested. `0` disables. `obs_overlay.PENDING_WINDOW_MINUTES` reads it too, for the OBS overlay's "stats are on their way" line ([OBS Last Game Overlay](obs-last-game-overlay.md)) |
 
 ## Tests
 
