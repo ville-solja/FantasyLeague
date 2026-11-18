@@ -16,7 +16,7 @@ Confirm with Steam opens the Steam check in a small popup window (`return_tab=po
 
 ## Typed confirmation
 
-Six destructive actions also ask the admin to type the action's name (issue #150): End Season (`END SEASON`), Reset Season (`RESET SEASON`, typed in the Season Reset modal itself), Promote/Demote admin (`CHANGE ADMIN`), **Grant** tokens (`GRANT TOKENS`), backup **Download** (`DOWNLOAD BACKUP`) and **Delete** on a Twitch viewer account (`DELETE USER`). A **Confirm action** modal (`#typedConfirmModal`) shows what will happen, "Type {PHRASE} to confirm", a text field, a red **Confirm** and **Cancel**. A wrong phrase shows "Type "{PHRASE}" to confirm." in the modal and keeps it open; case does not matter. Cancel, Escape or a backdrop click does nothing. The password prompt (when needed) opens after this modal. See `features/reference/steam-login.md`.
+Seven destructive actions also ask the admin to type the action's name (issue #150): End Season (`END SEASON`), Reset Season (`RESET SEASON`, typed in the Season Reset modal itself), **Save season summary** in the Reset dialog (`SAVE SUMMARY`, issue #133), Promote/Demote admin (`CHANGE ADMIN`), **Grant** tokens (`GRANT TOKENS`), backup **Download** (`DOWNLOAD BACKUP`) and **Delete** on a Twitch viewer account (`DELETE USER`). A **Confirm action** modal (`#typedConfirmModal`) shows what will happen, "Type {PHRASE} to confirm", a text field, a red **Confirm** and **Cancel**. A wrong phrase shows "Type "{PHRASE}" to confirm." in the modal and keeps it open; case does not matter. Cancel, Escape or a backdrop click does nothing. The password prompt (when needed) opens after this modal. See `features/reference/steam-login.md`.
 
 ## Ingest League panel
 
@@ -55,7 +55,11 @@ OpenDota id inputs here and in Mark champions, Add accolade, End Season and Add 
 
 ## Season Lifecycle: End Season dialog (issue #50)
 
-**End Season (Archive)** opens a dialog: the season label (the typed one, else the current season), the awards (Most Points, Best Average, Best Single Match, Most MVPs, Fantasy Winner) with their winners and values (Most MVPs as "N MVPs", issue 248), the Played count, and a Div 1 and a Div 2 winner picker. Picking a team ticks the players who played for it this season; a stand-in can be unticked and a player added by OpenDota id. With no champion picked the dialog warns "No champions recorded; add them in Player management". **Continue to END SEASON** opens the typed confirmation.
+**End Season (Archive)** opens a dialog: the season label (the typed one, else the current season), the awards (Most Points, Best Average, Best Single Match, Most MVPs, Fantasy Winner) with their winners and values (Most MVPs as "N MVPs", issue 248), the Played count, and a Div 1 and a Div 2 winner picker. Picking a team ticks the players who played for it this season; a stand-in can be unticked and a player added by OpenDota id. With no champion picked the dialog warns "No champions recorded; add them in Player management". Above the awards, **Parts** lists a checkbox per part (issue #133): Archive standings (ticked and disabled), Record awards, Record champions, Record Played and Store season summary. A part whose accolades the label already has shows "N awards already recorded for <label>" (or champion / Played rows) and starts unticked; the counts reload 400 ms after the label stops changing. Unticking Record champions hides the champion pickers and the warning. **Continue to END SEASON** opens the typed confirmation.
+
+After a successful End Season a **Season archived** dialog says "Season <label> archived. The season's data is still live: continue to Reset Season to start the next season.", with the recorded counts, a red **Continue to Reset Season** (opens the Reset dialog) and **Later**.
+
+**Reset Season…** opens the Reset dialog: a short description, the "Run End Season first" warning when locked weeks have no archive after them, then, for an archived season with no stored summary, "Season <label> has no stored summary. Save it before resetting, or its player and team results are lost." with **Save season summary** (typed confirmation `SAVE SUMMARY`, then the password prompt when needed; the preview reloads after saving), or "Season summary stored: N players, M teams." when it has one; then two lists from `GET /admin/season/reset-preview`: **Deleted** (each non-empty table with its count, and "N users' tokens reset to 5") and **Kept** (user accounts, each non-empty kept table, and the season backup's label), then the `RESET SEASON` field. After the reset the Season Lifecycle status line reads "Season reset complete. Deleted: …; N users' tokens reset to 5. Season backup: <file name>".
 
 ## Season Finals panel (issue #237)
 
@@ -94,10 +98,11 @@ Six sections, each a heading with its panels: **Season** (League Management, Ref
 
 Settings › Maintenance. See `markdown/features/reference/admin-db-backup.md`.
 
-- Explanatory line: "Backups are stored on the server and deleted automatically after N days. Download a copy before deploying if you need to keep it." — N comes from `retention_days` in `GET /admin/backups` (`DB_BACKUP_RETENTION_DAYS`).
+- Explanatory line: "Backups are stored on the server and deleted automatically after N days. Download a copy before deploying if you need to keep it. Season backups are kept for good." — N comes from `retention_days` in `GET /admin/backups` (`DB_BACKUP_RETENTION_DAYS`).
 - **Create backup now** — calls `POST /admin/backups`. Disabled while the request is in flight. The status line shows "Created {filename}" or the error detail (e.g. the 60-second cooldown message on 429, or the non-SQLite message on 409). The table reloads only after a successful backup.
 - **Refresh** — reloads the table.
 - **Table** — columns Filename, Created (browser local time), Size (human-readable, e.g. `1.9 MB`), and a **Download** button per row. It asks for the typed confirmation `DOWNLOAD BACKUP`, then fetches `GET /admin/backups/{filename}?confirm=…` through `adminFetch()` (so it can ask for the password) and saves the file under its own name; errors appear in the panel's status line. Newest first. Shows "No backups yet" when empty. Filenames are HTML-escaped.
+- **Season backups** (issue #133) — a second table under the first, with "Reset Season takes one before it deletes a season. Season backups are never deleted automatically." Same columns and **Download** button; "No season backups yet" when empty.
 - Loading, creating and downloading backups all need a recent password re-entry (see the prompt above), so opening the panel may show the prompt.
 - The list loads whenever the Settings admin sub-tab is activated.
 

@@ -81,6 +81,7 @@ def require_recent_player_reauth(request: Request, current_user: dict = Depends(
 CONFIRM_PHRASES = {
     "season_end": "END SEASON",
     "season_reset": "RESET SEASON",
+    "season_summary": "SAVE SUMMARY",
     "toggle_admin": "CHANGE ADMIN",
     "grant_tokens": "GRANT TOKENS",
     "backup_download": "DOWNLOAD BACKUP",

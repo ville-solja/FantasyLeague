@@ -12,6 +12,14 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-18 — developer — models
+**Problem:** Since issue 133, a new table in `models.py` fails `test_issue_133`'s coverage test until it is classified, and End Season with no users writes no `season_archive` rows, so `POST /admin/season/summary` then answers 404 for that label.
+**Solution:** Add every new table to `season_reset.TABLE_GROUPS` (cleared, updated or kept) in the same change. In tests of the summary route, create at least one user before End Season.
+
+### 2026-11-17 — test-planner — testing
+**Problem:** Seven test files (issues 50, 81, 135, 141, 150, 220, 237) patch `routers.admin_season.backup_sqlite_db` with a zero-argument `lambda: …`, so passing arguments to it breaks them, and calling a renamed backup function instead leaves them unpatched and backs up the real `data/fantasy.db`.
+**Solution:** When the reset's backup call changes, update every stub to `lambda *a, **k: …` in the same change (keep the `monkeypatch.setattr(admin_season_module, "backup_sqlite_db"` text that test_issue_85 greps for).
+
 ### 2026-11-17 — developer — models
 **Problem:** A migrated database's `card_modifiers` CHECK lists the stat keys from migration 025, so a stat added to `SCORING_STATS` later is refused there; `scripts/bench_leaderboards.py` drew modifiers from `SCORING_STATS + deaths` and failed `test_issue_149`'s benchmark tests only in the full suite.
 **Solution:** Draw modifier keys from `card_utils._SCORED_STAT_COLS` (the pool without `NO_MODIFIER_STATS`) everywhere, including scripts; a new scored stat that should be a modifier target needs a `card_modifiers` rebuild migration.

@@ -10,9 +10,11 @@ between seasons.
 
 ```
 Season running
-    ↓  admin: POST /admin/season/end        (archive standings, record accolades)
-Standings snapshotted to season_archive; awards, champions and Played kept in season_accolades
-    ↓  admin: POST /admin/season/reset      (clean slate; users retained; players/teams cleared)
+    ↓  admin: POST /admin/season/end        (archive standings, the chosen accolade parts, season summary)
+Standings snapshotted to season_archive; awards, champions and Played kept in season_accolades;
+player and team results kept in season_player_stats / season_team_results (issue #133)
+    ↓  admin: GET /admin/season/reset-preview, then POST /admin/season/reset
+       (clean slate; permanent season backup; users retained; players/teams cleared)
 Empty season state
     ↓  admin: add monitored league, add players (Player Management tab), create weeks (date-only forms)
 Next season running
@@ -42,21 +44,33 @@ inferred from the archives and accolades. Past seasons' Played rows (S4–S15) a
 [Season Participation Backfill](season-participation-backfill.md) and
 [Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md).
 
+Issue #133: the body also takes `record_awards`, `record_champions`, `record_played` and
+`store_summary` (default true); the standings archive always runs. In the same transaction End
+Season stores the season summary (`season_player_stats`, `season_team_results`). The response adds
+`parts` and `summary`. End Season deletes nothing: the season's data stays live until Reset.
+`POST /admin/season/summary` stores the summary for a season archived without one, before Reset.
+See [Season Reset Clean Slate](season-reset-clean-slate.md).
+
 ### `POST /admin/season/reset`
-Body: `{"force": false}`. Before any deletes, takes an automatic online backup of the live
+Body: `{"force": false, "season_label": null}`. Issue #133 extended Reset: the full list of cleared,
+updated and kept tables, the cache clearing, the season backup's name and the preview are in
+[Season Reset Clean Slate](season-reset-clean-slate.md); the summary below is the original behaviour.
+Before any deletes, takes an automatic online backup of the live
 SQLite database (`backup_sqlite_db()` in `backend/database.py`, using SQLite's online backup
 API so it's safe against a WAL-mode connection). If the backup fails, or returns no file
 because the database is not a local SQLite file or the SQLite file is missing (issue #135), the reset aborts with a
 500 and **no deletes are performed** — there's no code path that wipes season data without a
-fresh backup existing first. Deletes all rows from `player_match_stats`, `match_bans`,
+fresh backup existing first. The backup is renamed to a permanent season backup,
+`fantasy.db.season-<label>-<timestamp>`, which the daily cleanup never deletes. Deletes all rows from `card_match_points`, `player_match_stats`, `match_bans`,
 `matches`, `weekly_roster_entries`, `weeks`, `twitch_mvp`, `twitch_token_drops`, `players`,
 `teams`, `card_modifiers`, `cards` and `own_player_card_grants` (issue #188, so next season's
-league players get their own player card again). Resets every user's `tokens` to `INITIAL_TOKENS` and
+league players get their own player card again), plus (issue #133) the Weekly Report tables,
+`live_matches`, `match_timings`, `twitch_presence` and the demo clock override. Resets every user's `tokens` to `INITIAL_TOKENS` and
 unmonitors all leagues. Retains users, tags, audit logs, `season_archive` rows and
-`season_accolades` rows (issue #50; the response's `kept.season_accolades` counts them). The finals tables `finals_brackets` and `finals_predictions` are also kept, keyed by season label, though not counted in `kept` (issue #237, see `core/finals-predictions.md`). Returns 409
+`season_accolades` rows (issue #50), the season summary tables (issue #133) and every other kept table; the response's `kept` counts each of them. The finals tables `finals_brackets` and `finals_predictions` are kept too, keyed by season label (issue #237, see `core/finals-predictions.md`). Returns 409
 if any locked week exists with no `season_archive` row archived at or after that week's start
 time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
-includes `{"status", "initial_tokens", "counts": {...}, "kept": {"season_accolades": N}, "backup_path"}` with a per-table
+includes `{"status", "initial_tokens", "counts": {...}, "kept": {...}, "season_label", "backup_path", "backup_file"}` with a per-table
 deleted-row count (including `own_player_card_grants`) and the path of the pre-reset backup file. Logged as `admin_season_reset`,
 with the backup path prefixed to the counts in the detail string.
 
@@ -100,6 +114,7 @@ cannot be edited/deleted) is unchanged.
 |---|---|
 | `season_archive` | One row per user per archived season: label, user_id, username (denormalised), points, rank, archived_at. Unique on (season_label, user_id). |
 | `season_accolades` | Champions, awards, fantasy winners and seasons played (issue #50); never touched by Reset. See [Season Champions, Accolades and Holo Cards](season-winners-and-holo-cards.md). |
+| `season_player_stats`, `season_team_results` | The season summary End Season stores (issue #133): per player games, wins, raw points, best game, K/D/A, MVPs; per team series and games won, lost and drawn. Never touched by Reset. See [Season Reset Clean Slate](season-reset-clean-slate.md). |
 
 ## Retired Configuration
 
@@ -119,8 +134,10 @@ explicitly in `.env`.
 
 The Settings tab (admin panel) has a "Season Lifecycle" section: a season-label input with
 an "End Season (Archive)" button. It opens a dialog with the season's awards, the Played count
-and the Div 1 and Div 2 champion pickers (issue #50), then asks the admin to type `END SEASON`; a "Reset Season…"
-button that opens a type-to-confirm modal (must type `RESET SEASON`; the backend checks it as
+and the Div 1 and Div 2 champion pickers (issue #50) and a checkbox per part (issue #133), then asks the
+admin to type `END SEASON`; on success a result dialog offers **Continue to Reset Season**. A "Reset Season…"
+button opens a modal that lists what will be deleted and kept (`GET /admin/season/reset-preview`) above
+the type-to-confirm field (must type `RESET SEASON`; the backend checks it as
 `confirm`, issue #150), and a table of previously archived seasons. The Leaderboard tab
 shows a "Past Seasons" panel with a season selector once at least one archive exists. The
 Profile view shows a "Past Seasons" line per archived season the user appears in

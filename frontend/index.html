@@ -384,10 +384,19 @@
       <h2 style="margin:0;" id="endSeasonTitle">END SEASON</h2>
       <button class="ghost" onclick="closeEndSeasonDialog()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
-    <label class="champ-fields">Season label <input id="endSeasonDialogLabel" type="text" maxlength="100" /></label>
+    <label class="champ-fields">Season label <input id="endSeasonDialogLabel" type="text" maxlength="100" oninput="endSeasonLabelChanged()" /></label>
+    <h3 class="end-season-sub">Parts</h3>
+    <div class="end-season-parts" id="endSeasonParts">
+      <label><input type="checkbox" id="endSeasonPart_archive" checked disabled /> Archive standings <span class="end-season-recorded">always: Reset Season checks for it</span></label>
+      <label><input type="checkbox" id="endSeasonPart_awards" checked onchange="endSeasonPartChanged()" /> Record awards <span class="end-season-recorded" id="endSeasonRecorded_awards"></span></label>
+      <label><input type="checkbox" id="endSeasonPart_champions" checked onchange="endSeasonPartChanged()" /> Record champions <span class="end-season-recorded" id="endSeasonRecorded_champions"></span></label>
+      <label><input type="checkbox" id="endSeasonPart_played" checked onchange="endSeasonPartChanged()" /> Record Played <span class="end-season-recorded" id="endSeasonRecorded_played"></span></label>
+      <label><input type="checkbox" id="endSeasonPart_summary" checked onchange="endSeasonPartChanged()" /> Store season summary <span class="end-season-recorded">player and team results kept after Reset</span></label>
+    </div>
     <h3 class="end-season-sub">Awards</h3>
     <div id="endSeasonAwards"></div>
     <p class="end-season-played" id="endSeasonPlayed"></p>
+    <div id="endSeasonChampsBlock">
     <h3 class="end-season-sub">Champions</h3>
     <div class="end-season-champs">
       <div class="end-season-div" data-division="div1">
@@ -401,12 +410,26 @@
         <div class="end-season-add"><input id="endSeasonAdd_div2" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Add by OpenDota id" /><button type="button" class="secondary" onclick="endSeasonAddPlayer('div2')">Add</button></div>
       </div>
     </div>
+    </div>
     <p class="end-season-warning" id="endSeasonChampWarning" hidden>No champions recorded; add them in Player management</p>
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button id="endSeasonContinueBtn" style="flex:1;" onclick="confirmEndSeason()">Continue to END SEASON</button>
       <button class="secondary" onclick="closeEndSeasonDialog()">Cancel</button>
     </div>
     <div class="status" id="endSeasonDialogStatus"></div>
+  </div>
+</div>
+
+<!-- End Season result (issue #133): the slate is not clean until Reset Season runs -->
+<div class="modal-overlay hidden" id="endSeasonResultModal" role="dialog" aria-modal="true" aria-labelledby="endSeasonResultTitle" data-close="closeEndSeasonResult" onclick="closeEndSeasonResult()">
+  <div class="modal" style="max-width:460px;" onclick="event.stopPropagation()">
+    <h2 style="margin:0 0 12px;" id="endSeasonResultTitle">SEASON ARCHIVED</h2>
+    <p id="endSeasonResultText"></p>
+    <p class="end-season-played" id="endSeasonResultDetail"></p>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="endSeasonResultContinueBtn" class="danger" style="flex:1;" onclick="continueToSeasonReset()">Continue to Reset Season</button>
+      <button class="secondary" onclick="closeEndSeasonResult()">Later</button>
+    </div>
   </div>
 </div>
 
@@ -1695,7 +1718,7 @@
           <div class="admin-panel-head">
             <div class="admin-panel-heading">
               <h3 class="admin-panel-title">Database Backups</h3>
-              <p class="admin-panel-desc">Backups are stored on the server and deleted automatically after <span id="dbBackupsRetention">N</span> days. Download a copy before deploying if you need to keep it.</p>
+              <p class="admin-panel-desc">Backups are stored on the server and deleted automatically after <span id="dbBackupsRetention">N</span> days. Download a copy before deploying if you need to keep it. Season backups are kept for good.</p>
             </div>
           <div class="admin-panel-actions"><button id="createBackupBtn" onclick="createBackup()">Create backup now</button><button class="secondary" onclick="loadBackups()">Refresh</button></div>
           </div>
@@ -1703,6 +1726,14 @@
             <table>
               <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
               <tbody id="dbBackupsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+            </table>
+          </div>
+          <h4 class="season-backups-title">Season backups</h4>
+          <p class="admin-panel-note">Reset Season takes one before it deletes a season. Season backups are never deleted automatically.</p>
+          <div class="admin-table-wrap">
+            <table>
+              <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
+              <tbody id="dbSeasonBackupsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
             </table>
           </div>
           <div class="status" id="dbBackupsStatus"></div>
@@ -1817,16 +1848,24 @@
 
 <!-- Season Reset Confirm Modal -->
 <div id="seasonResetModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true" data-close="closeSeasonResetConfirm" onclick="if(event.target===this)closeSeasonResetConfirm()">
-  <div class="modal" style="max-width:460px;">
+  <div class="modal" style="max-width:560px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <h2 style="margin:0;">RESET SEASON</h2>
       <button class="ghost" onclick="closeSeasonResetConfirm()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
     </div>
     <p style="font-size:0.85rem;margin-bottom:8px;">
-      This deletes all matches, player stats, weeks, Twitch MVP/token-drop records, the
-      entire Player Pool (players and teams), and every user's cards. Tokens are reset and
-      leagues unmonitored. User accounts, tags, audit logs, and season archives are kept.
+      This deletes the season: matches, player stats, weeks, Weekly Reports, Twitch MVP/token-drop
+      records, the entire Player Pool (players and teams), and every user's cards. Tokens are reset
+      and leagues unmonitored. A season backup of the database is taken first and kept for good.
     </p>
+    <div class="season-reset-preview" id="seasonResetPreview">
+      <p class="end-season-warning" id="seasonResetWarning" hidden></p>
+      <div class="season-reset-summary" id="seasonResetSummary"></div>
+      <div class="season-reset-lists">
+        <div><h3 class="end-season-sub">Deleted</h3><ul id="seasonResetDeleteList"><li>Loading…</li></ul></div>
+        <div><h3 class="end-season-sub">Kept</h3><ul id="seasonResetKeepList"><li>Loading…</li></ul></div>
+      </div>
+    </div>
     <p style="font-size:0.85rem;color:#e05;margin-bottom:8px;">
       Make sure you have already archived this season's standings — reset destroys the
       live leaderboard data. Users will need to draw new cards and you will need to

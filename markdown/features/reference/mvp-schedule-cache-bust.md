@@ -40,4 +40,4 @@ Only cache invalidation was added — MVP storage (`TwitchMVP` upsert), the fant
 bonus (`_apply_mvp_bonus`), and the Twitch token-drop logic are unaffected.
 
 See `backend/schedule.py` for the cache itself (`_cache`, `CACHE_TTL = 3600`) and its other
-existing callers (`POST /schedule/refresh`, the manual-match store in `ingest.py`, the admin retry-parse and scoring-toggle routes). League ingest, parse retries, enrichment and season reset don't call it; both caches expire after `CACHE_TTL` instead.
+existing callers (`POST /schedule/refresh`, the manual-match store in `ingest.py`, the admin retry-parse and scoring-toggle routes, and since issue #133 `POST /admin/season/reset` after its commit). League ingest, parse retries and enrichment don't call it; both caches expire after `CACHE_TTL` instead.

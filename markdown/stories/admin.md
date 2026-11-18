@@ -885,3 +885,62 @@ As an admin, I want Settings grouped into a few named sections with consistent p
 - **Danger last:** Reset Season and Recalculate are danger-styled and sit last in their sections.
 - **No behaviour change:** no panel changes what it does. Every existing element id stays, so existing JS and tests keep working.
 - **Matches the canvas:** the layout follows the design canvas.
+
+## A Clean Slate Between Seasons That Keeps the History (#133)
+
+### Reset Leaves Nothing of the Old Season Behind
+**User story**
+As the league admin, I want Reset Season to clear everything that belongs to the season, so that next season starts clean without leftovers that confuse players.
+
+**Acceptance criteria**
+- **Already cleared, unchanged:** matches, per-game stats, stored card points, bans, weeks, weekly rosters, Twitch MVPs and token drops, players, teams, cards, card modifiers, own-card grants; tokens reset to `INITIAL_TOKENS`; leagues unmonitored.
+- **Also cleared:** `weekly_summaries`, `weekly_summary_reveals`, `weekly_summary_seen`, `live_matches`, `match_timings`, `twitch_presence` (viewer heartbeats), and the demo clock override.
+- **Week ids:** after a reset, a new Week 1 shows no Weekly Report as revealed or seen, even when it gets the id an old week had (a test creates a week after reset with the old id and checks).
+- **Caches:** after its commit the reset clears the schedule cache and per-game player cache (`schedule.bust_cache`), the Twitch panel cache, the finals caches and the team and player league caches (`team_insights` / `player_insights.clear_league_cache`), so the first request after it shows the empty season. There is no accolades cache.
+- **Updated, not deleted:** users (tokens reset), leagues (unmonitored), the demo clock row (override cleared).
+- **Kept, unchanged:** tags and user tags, audit logs, `season_archive`, `season_accolades`, `season_player_stats`, `season_team_results`, finals tables, team signups, promo codes and redemptions, token grant events and claims, notifications and dismissals, weights, player profiles, Twitch vote polls, votes and pending vote tokens, and the account and sign-in tables (sessions, Steam and Twitch link states, password reset tokens, merge log, starter grants, channel approvals), the Toornament sync log and `scoring_state`.
+- Every model table is in exactly one of the cleared, updated and kept groups (`season_reset.TABLE_GROUPS`); a test fails when a new table is in none.
+- The response's `counts` lists every cleared table (plus `users_tokens_reset`, `leagues_unmonitored`, `demo_clock_override`), and `kept` lists the kept ones with their row counts.
+
+### Season Stats Survive the Reset
+**User story**
+As a player, I want each season's player and team results kept after the reset, so that the league's history isn't wiped every season.
+
+**Acceptance criteria**
+- **End Season** stores, for the season label, one `season_player_stats` row per player with a scored match (player id, name, team name, games, wins, raw-point total and average, best game's raw points and match id, kills, deaths, assists, MVPs) and one `season_team_results` row per team (team id, name, division, series won, lost and drawn, games won and lost), in the same transaction as the archive and accolades; a failure stores nothing.
+- Raw points follow the stored stats and the weights in force at End Season (`scoring.fantasy_score`, issue #244's definition, no MVP bonus); a game excluded from scoring is left out. So a player's best game can differ from the Best Single Match award, which uses stored points with the MVP bonus.
+- The player's team is the team of most of their games. Team results come from stored matches only: each team pair's scored games are clustered into series by the 6-hour series gap; the division comes from the schedule cache when it is already cached (never fetched), else none.
+- Ending a season twice with the same label is refused as today (409), and a re-run never duplicates summary rows.
+- **A season ended before this change:** an admin can store the summary for an already-archived label once, before Reset, from the same live data (`POST /admin/season/summary` with the label and the typed phrase SAVE SUMMARY; 404 when the label isn't archived; 409 if that label already has a summary or the season's matches are gone).
+- Reset never deletes `season_player_stats` or `season_team_results`.
+
+### Choose What End Season Records
+**User story**
+As the league admin, I want to choose which parts End Season applies, so that it doesn't record champions or awards again when I've already granted them by hand.
+
+**Acceptance criteria**
+- **Parts:** the End Season dialog lists each part with a checkbox: **Archive standings** (always on: the season's archive is what Reset checks for), **Record awards** (Most Points, Best Average, Best Single Match, Most MVPs, Fantasy Winner and its tag), **Record champions**, **Record Played** and **Store season summary**.
+- **Already recorded:** for the typed label, each accolade part shows how many rows already exist ("5 awards already recorded for Season 16") and starts unticked when there are any; the other parts start ticked.
+- **Applied as chosen:** `POST /admin/season/end` takes `record_awards`, `record_champions`, `record_played` and `store_summary` (all default true, so an existing call behaves as today) and skips each part that is false; the response and the audit detail say which parts ran.
+- **Champions:** with Record champions off, the dialog hides the champion pickers and sends none.
+- Rows entered by hand are never changed or deleted by End Season, as today.
+
+### The Raw Season Data Is Kept as a File
+**User story**
+As the league admin, I want the backup taken before a reset kept for good, so that every match of a past season can be restored or studied later.
+
+**Acceptance criteria**
+- Reset's pre-reset backup is named after the season (`fantasy.db.season-<label>-<timestamp>`, the label reduced to letters, digits and dashes) and is never deleted by the daily backup cleanup. The label is the optional `season_label` in Reset's body, else the newest archived season, else "unarchived".
+- Admin › Settings › Database Backups lists season backups apart from the daily ones, with the same Download button.
+- If the season backup can't be taken, the reset aborts with no deletes, as today.
+
+### One Guided End-of-Season Flow
+**User story**
+As the league admin, I want ending a season to lead me through both steps and show what will happen, so that I never think the slate is clean when it isn't.
+
+**Acceptance criteria**
+- After a successful End Season, a result dialog says "Season <label> archived. The season's data is still live: continue to Reset Season to start the next season." with a **Continue to Reset Season** button and **Later**.
+- **Reset preview:** before the typed confirmation, the Reset dialog shows two lists from `GET /admin/season/reset-preview`: what will be deleted, with row counts (matches, weeks, cards, players…, and "N users' tokens reset to 5"), and what is kept (users, history, accolades, season summary, the season backup…).
+- The preview warns, and Reset still refuses with 409, when locked weeks exist with no archive after them (End Season not run).
+- **Missing summary:** the preview reports the label Reset will use and whether it has a stored summary. When an archived label has none (a season ended before this change), the Reset dialog says "Season <label> has no stored summary. Save it before resetting, or its player and team results are lost." with **Save season summary** (typed SAVE SUMMARY, recent re-auth), which stores it and reloads the preview; with a summary it says "Season summary stored: N players, M teams."
+- After the reset, the result lists the deleted counts and the season backup's file name.

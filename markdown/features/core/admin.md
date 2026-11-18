@@ -16,7 +16,7 @@ These endpoints also need a password re-entry (`POST /reauth`, see `core/auth.md
 session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they return 403
 `{"detail": "reauth_required"}` and do nothing:
 
-- `POST /admin/season/end` and `POST /admin/season/reset`
+- `POST /admin/season/end`, `POST /admin/season/reset` and `POST /admin/season/summary` (issue #133)
 - `DELETE /admin/leagues/{league_id}/data`
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
@@ -41,7 +41,7 @@ other admin endpoints work without re-authentication.
 
 ### Typed confirmation
 
-Steam OpenID cannot force a fresh password prompt, so six destructive actions also need the
+Steam OpenID cannot force a fresh password prompt, so seven destructive actions also need the
 action's name typed in, for every admin (issue #150). The backend dependency
 `require_typed_confirmation(action)` (`backend/deps.py`, after the re-auth check) reads `confirm`
 from the query string or the JSON body (case and surrounding spaces ignored) and otherwise answers
@@ -52,6 +52,7 @@ from the query string or the JSON body (case and surrounding spaces ignored) and
 |---|---|---|
 | Season end | `POST /admin/season/end` | `END SEASON` |
 | Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Save season summary (issue #133) | `POST /admin/season/summary` | `SAVE SUMMARY` |
 | Admin toggle | `POST /users/{user_id}/toggle-admin` | `CHANGE ADMIN` |
 | Token grant | `POST /grant-tokens` | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |

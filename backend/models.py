@@ -273,6 +273,53 @@ class SeasonAccolade(Base):
     created_by        = Column(Integer, nullable=True)
 
 
+class SeasonPlayerStats(Base):
+    """One player's season summary (issue #133), stored by End Season (or POST
+    /admin/season/summary) from the live data so it outlives Reset Season. Raw points
+    are scoring.fantasy_score of the stored stats with the weights in force then (no
+    MVP bonus, no rarity), exact sums; scored matches only. See season_summary.py."""
+    __tablename__ = "season_player_stats"
+    __table_args__ = (UniqueConstraint("season_label", "player_id",
+                                       name="uq_season_player_stats_label_player"),)
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    season_label     = Column(String, nullable=False)
+    player_id        = Column(Integer, nullable=False)   # OpenDota account id; no FK (players are reset)
+    player_name      = Column(String, nullable=True)     # denormalised
+    team_name        = Column(String, nullable=True)     # the team of most of the player's games
+    games            = Column(Integer, nullable=False)
+    wins             = Column(Integer, nullable=False)
+    raw_points_total = Column(Float, nullable=False)
+    raw_points_avg   = Column(Float, nullable=False)
+    best_raw_points  = Column(Float, nullable=True)
+    best_match_id    = Column(Integer, nullable=True)
+    kills            = Column(Integer, nullable=False)
+    deaths           = Column(Integer, nullable=False)
+    assists          = Column(Integer, nullable=False)
+    mvps             = Column(Integer, nullable=False)
+    created_at       = Column(Integer, nullable=True)
+
+
+class SeasonTeamResult(Base):
+    """One team's season results (issue #133), stored with SeasonPlayerStats. Series are
+    the team's scored games against one opponent clustered by schedule.SERIES_GAP_SECONDS."""
+    __tablename__ = "season_team_results"
+    __table_args__ = (UniqueConstraint("season_label", "team_id",
+                                       name="uq_season_team_results_label_team"),)
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    season_label  = Column(String, nullable=False)
+    team_id       = Column(Integer, nullable=False)   # no FK (teams are reset)
+    team_name     = Column(String, nullable=True)     # denormalised
+    division      = Column(String, nullable=True)     # div1 | div2 from a cached schedule, else None
+    series_won    = Column(Integer, nullable=False)
+    series_lost   = Column(Integer, nullable=False)
+    series_drawn  = Column(Integer, nullable=False)
+    games_won     = Column(Integer, nullable=False)
+    games_lost    = Column(Integer, nullable=False)
+    created_at    = Column(Integer, nullable=True)
+
+
 class PromoCode(Base):
     __tablename__ = "promo_codes"
 

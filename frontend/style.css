@@ -2969,6 +2969,15 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .end-season-players { display: grid; gap: 2px; margin: var(--s-2) 0; font-size: var(--fs-sm); }
 .end-season-add { display: flex; gap: var(--s-1); }
 .end-season-warning { margin-top: var(--s-3); color: var(--k-warn); font-size: var(--fs-sm); }
+/* issue 133: End Season parts, the Reset preview lists and season backups */
+.end-season-parts { display: grid; gap: var(--s-1); font-size: var(--fs-sm); }
+.end-season-recorded { color: var(--fg-muted); font-size: var(--fs-xs); margin-left: var(--s-1); }
+#endSeasonChampsBlock[hidden] { display: none; }
+.season-reset-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-3); font-size: var(--fs-sm); margin-bottom: var(--s-3); }
+.season-reset-lists ul { margin: 0; padding-left: 1.2em; }
+.season-reset-summary { font-size: var(--fs-sm); margin-bottom: var(--s-3); }
+.season-reset-summary .end-season-warning { margin: 0 0 var(--s-2); }
+.season-backups-title { margin: var(--s-4) 0 var(--s-1); font-size: var(--fs-sm); }
 @media (max-width: 640px) {
   .champ-modal { padding: var(--s-5); }
   .champ-row { grid-template-columns: 1fr; padding-bottom: var(--s-2); border-bottom: var(--bw-hair) solid var(--border-soft); }

@@ -337,6 +337,30 @@ def bust_cache():
     _game_players_cache.clear()
 
 
+def cached_team_divisions() -> dict:
+    """{team_id: "div1" | "div2"} from the schedule cache as it is now, the division
+    each team's series are listed under most (ties: div1). Never fetches: {} on a cold
+    cache. Used by the season summary (issue #133)."""
+    data = _cache["data"]
+    if not data:
+        return {}
+    counts: dict = {}
+
+    def add(team_id, div):
+        if team_id is not None and div in ("div1", "div2"):
+            d = counts.setdefault(team_id, {"div1": 0, "div2": 0})
+            d[div] += 1
+    for week in data.get("weeks") or []:
+        for div in ("div1", "div2"):
+            for series in week.get(div) or []:
+                add(series.get("team1_id"), div)
+                add(series.get("team2_id"), div)
+    for series in data.get("extra_results") or []:
+        add(series.get("team1_id"), series.get("division"))
+        add(series.get("team2_id"), series.get("division"))
+    return {tid: ("div2" if d["div2"] > d["div1"] else "div1") for tid, d in counts.items()}
+
+
 def get_live_pairs(db, now: int) -> list[dict]:
     """Team pairs with a game in progress: live_matches rows not ended and seen
     recently. Computed per request, never cached (issue #156)."""

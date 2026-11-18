@@ -87,6 +87,7 @@ Implementation details, integrations, and operator tooling.
 | [DB Sustainability](reference/db-sustainability.md) | Versioned schema migration registry; pre-deploy backup script |
 | [Dependency Locking and Release Gating](reference/dependency-locking.md) | Hash-locked dependencies for the image and CI (`scripts/lock-deps.sh`), the image built only after the tests pass, the single-process rule and background-job safeguards (2026-10-31 architecture review) |
 | [Architecture Maturity Review](reference/architecture-maturity-review.md) | Season usage report (`scripts/usage_report.py`) and local load test (`scripts/load_test.py`) for sizing the architecture against a season's real load; how to run them and read their numbers (#251) |
+| [Season Reset Clean Slate](reference/season-reset-clean-slate.md) | *(#133)* Reset clears every season table (including the Weekly Report state and caches added since August) while End Season stores a per-player and per-team season summary and Reset keeps a permanent season backup; a guided End Season → Reset flow with a preview |
 | [Admin DB Backup](reference/admin-db-backup.md) | Admin-panel database backups: create on demand with a cooldown, list existing backups, and download a copy off the server |
 | [Table Element Sortability](reference/table-element-sortability.md) | Client-side sortable column headers for the Players tab table |
 | [Card Draw Modal UX](reference/card-draw-modal-ux.md) | Enter-key support, dynamic button label, and backdrop-click dismiss for the draw modal |

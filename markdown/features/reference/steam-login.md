@@ -113,6 +113,7 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 |---|---|---|
 | Season end | `POST /admin/season/end` | `END SEASON` |
 | Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Save season summary (issue #133) | `POST /admin/season/summary` | `SAVE SUMMARY` |
 | Admin toggle | `POST /users/{id}/toggle-admin` | `CHANGE ADMIN` |
 | Token grant | `POST /grant-tokens` (now also needs the recent re-auth) | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
