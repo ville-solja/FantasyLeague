@@ -114,6 +114,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `INGEST_POLL_INTERVAL` | `900` | Seconds between ingest + toornament sync cycles (off-season) |
 | `INGEST_LIVE_POLL_INTERVAL` | `120` | Seconds between ingest cycles when an active week is running |
 | `INGEST_LIVE_MATCH_POLL_INTERVAL` | `30` | Seconds between ingest cycles when a monitored league has a match currently in progress (per `live_matches`, written by the live thread) — takes priority over `INGEST_LIVE_POLL_INTERVAL` |
+| `INGEST_PARSE_RETRY_HOURS` | `48` | Window of the parse-retry pass after each ingest cycle: matches started this many hours ago or less are re-checked while unparsed, and older ones still unparsed are marked unparseable. `0` turns it off. The mock Compose file sets `87600`, since scripted matches are dated 2026. See `reference/opendota-parse-retry.md` |
 | `STEAM_API_KEY` | *(empty)* | Steam Web API key for live-game detection (`GetLiveLeagueGames`). Unset: no live checks run and a warning is logged at start-up. See `reference/mvp-selection-delays.md` |
 | `LIVE_POLL_INTERVAL` | `60` | Seconds between live-game checks (Steam), in their own thread apart from ingest |
 | `WEEK_CHECK_INTERVAL` | `300` | Seconds between week auto-lock maintenance checks (weeks themselves are admin-created, see `reference/season-lifecycle.md`). The same loop deletes expired login sessions on its first pass after startup and then once a day |
@@ -122,11 +123,13 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `SCHEDULE_SHEET_URL` | *(empty)* | Google Sheets CSV export URL for the match schedule. Fallback when `SCHEDULE_FIXTURES_URL` is unset. No built-in default — leave both empty to disable the schedule tab (e.g. a fresh instance for another league); Kanaliiga deployments must set one explicitly |
 | `OPENDOTA_API_KEY` | *(empty)* | Optional API key to raise OpenDota rate limits |
 | `OPENDOTA_MAX_RPM` | `55` | Max OpenDota requests per rolling 60 s (free tier ~60/min; default leaves headroom) |
+| `OPENDOTA_BASE_URL` | `https://api.opendota.com/api` | OpenDota API address, read at startup (a trailing `/` is dropped). Dev: the mock OpenDota (`docker-compose.mock.yml`). `ENV=production` refuses a non-https address. See `reference/testing-tooling.md` |
+| `STEAM_LIVE_URL` | `https://api.steampowered.com/IDOTA2Match_570/GetLiveLeagueGames/v1/` | Address of the live-games check. Dev: the mock. `ENV=production` refuses a non-https address |
 | `TOORNAMENT_CLIENT_ID` | *(empty)* | OAuth2 client ID for toornament.com |
 | `TOORNAMENT_CLIENT_SECRET` | *(empty)* | OAuth2 client secret for toornament.com |
 | `TOORNAMENT_API_KEY` | *(empty)* | `X-Api-Key` header for toornament.com |
 | `TOORNAMENT_TOURNAMENT_ID` | *(empty)* | Toornament tournament UUID |
-| `DOTABUFF_LEAGUE_LOGO_PAGES` | *(Kanaliiga URLs)* | Dotabuff league overview URLs to scrape team logos from |
+| `DOTABUFF_LEAGUE_LOGO_PAGES` | *(Kanaliiga URLs)* | Comma-separated Dotabuff league overview URLs to scrape team logos from. Set but empty: no scraping (the mock Compose file does this) |
 | `LOGO_HOST_ALLOWLIST` | Steam CDN hosts | Comma-separated hosts a team `logo_url` may use (https, no port); others are not stored, returned or fetched (#171) |
 | `WEIGHTS_JSON` | *(empty)* | JSON overrides for scoring weights applied at startup |
 | `TOKEN_NAME` | `Tokens` | Display name for the token currency |
@@ -172,7 +175,7 @@ SELECT label, is_locked, datetime(start_time, 'unixepoch') as start,
 | `CSRF_ORIGIN_CHECK` | `true` | Refuses cross-origin POST/PUT/PATCH/DELETE (Origin, else Referer, must match the request `Host` or `APP_BASE_URL`); `/twitch/*` exempt except the session-cookie `/twitch/merge/confirm` and `/twitch/disconnect`. Set `false` if the proxy rewrites `Host` |
 | `CORS_EXTRA_ORIGINS` | *(empty)* | Extra comma-separated CORS origins beyond `https://<TWITCH_EXTENSION_CLIENT_ID>.ext-twitch.tv`, e.g. `http://localhost:8080` for Twitch Local Test |
 | `ROSTER_LIMIT` | `5` | Maximum active cards per user roster |
-| `DEMO_MODE` | *(unset)* | Enables the demo clock override, account-seeding and season-scenario endpoints; disables the OpenDota ingest poll thread. `ENV=production` refuses to start with it. See `reference/demo-mode.md` |
+| `DEMO_MODE` | *(unset)* | Enables the demo clock override, account-seeding and season-scenario endpoints. While `OPENDOTA_BASE_URL` is the real OpenDota address it also skips the ingest and live poll threads; with the mock address (and a non-default `STEAM_LIVE_URL` for the live thread) polling runs. `ENV=production` refuses to start with it. See `reference/demo-mode.md` |
 | `DEMO_ACCOUNT_PASSWORD` | *(unset)* | Password for the season-scenario accounts; the scenario loader answers 409 without it. See `reference/testing-tooling.md` |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | *(unset)* | Bootstrap admin account credentials; if all three are set, an admin is created at startup unless an account with that username already exists (ignoring letter case; reserved words are allowed here). Skipped with a warning when `LOGIN_METHOD=steam_signup`. See `reference/env-based-admin-seeding.md` |
 | `LOGIN_METHOD` | `password` | `password`, `both` or `steam_signup`: whether Steam sign-in is offered and whether password registration is open (#150). See `reference/steam-login.md` |

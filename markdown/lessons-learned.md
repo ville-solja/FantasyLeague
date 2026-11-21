@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-18 — developer — testing
+**Problem:** Issue 146's How to Play copy change failed `test_how_to_play_role_subtabs` in the full suite: the Developers panel (where the Demo Mode bullet lives) must not contain the word "OpenDota". Separately, `opendota_client.requests` and `steam_live.requests` are the one global `requests` module, so patching `.get` there reroutes every caller.
+**Solution:** Say "match-data services" in that panel. To run the app against the mock in tests, use `_wire` / `_route_to_mock` in `test_issue_146_mock_opendota.py` (patches `requests.get/post` once and records stray URLs, since ingest swallows transport exceptions).
+
 ### 2026-11-18 — developer — models
 **Problem:** `auto_lock_weeks`, `due_substitutions`, `generate_weekly_summaries` and `card_points.rebuild_all` each call `db.commit()`, so a caller that must run them inside one all-or-nothing transaction (issue 145's scenario loader) can't roll back; and Core `table.delete()` leaves the deleted rows' objects in the identity map, so new rows reusing their ids raise an SAWarning.
 **Solution:** Use `scenarios._one_transaction(db)`, which turns the session's commits into flushes until the block ends and rolls everything back on error. After Core deletes, `db.flush()` then `db.expunge_all()` and re-fetch the objects you need.

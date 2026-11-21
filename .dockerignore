@@ -18,6 +18,9 @@ backups/
 markdown/
 competitor-analysis/
 twitch-extension/
+# Dev tools (the mock OpenDota, issue #146) are never in the app image.
+tools/
+docker-compose.mock.yml
 
 # Local caches
 **/__pycache__/

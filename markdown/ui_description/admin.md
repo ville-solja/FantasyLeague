@@ -18,10 +18,12 @@ Confirm with Steam opens the Steam check in a small popup window (`return_tab=po
 
 Seven destructive actions also ask the admin to type the action's name (issue #150), and so does loading a Demo Mode season scenario (`LOAD SCENARIO`, typed in the Demo panel's own confirmation, issue #145): End Season (`END SEASON`), Reset Season (`RESET SEASON`, typed in the Season Reset modal itself), **Save season summary** in the Reset dialog (`SAVE SUMMARY`, issue #133), Promote/Demote admin (`CHANGE ADMIN`), **Grant** tokens (`GRANT TOKENS`), backup **Download** (`DOWNLOAD BACKUP`) and **Delete** on a Twitch viewer account (`DELETE USER`). A **Confirm action** modal (`#typedConfirmModal`) shows what will happen, "Type {PHRASE} to confirm", a text field, a red **Confirm** and **Cancel**. A wrong phrase shows "Type "{PHRASE}" to confirm." in the modal and keeps it open; case does not matter. Cancel, Escape or a backdrop click does nothing. The password prompt (when needed) opens after this modal. See `features/reference/steam-login.md`.
 
-## Ingest League panel
+## League Management panel
 
-- Input field for an OpenDota league ID.
-- **Ingest** button — fetches all matches for that league from OpenDota, calculates fantasy points, seeds player cards into the deck, and enriches player profiles with names and avatars. Safe to re-run; already-stored matches are skipped.
+- **Add** opens a modal for an OpenDota league ID and monitors that league; **Refresh** reloads the table.
+- The table lists each league: ID, name, match count, monitored (Yes/No), **Last check** and **Not stored** (see Settings below).
+- A monitored row has **Ingest Now** (`POST /ingest/league/{id}`: fetches the league's matches from OpenDota, calculates fantasy points and enriches player names and avatars; safe to re-run, stored matches are skipped; the button reads "Ingesting…" meanwhile) and **Unmonitor**; an unmonitored row has **Monitor**. A row with matches has a red **Purge data**.
+- The status line under the table reports progress and errors.
 
 ## Refresh Schedule Cache panel
 

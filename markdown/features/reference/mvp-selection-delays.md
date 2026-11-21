@@ -32,7 +32,7 @@ OpenDota's `/live` and `ingest.get_live_matches()` are gone. OpenDota remains th
 
 An exception is logged ("Live poll failed") and the next tick runs as usual.
 
-The thread starts with the others unless `DEMO_MODE=true` or `STEAM_API_KEY` is unset. Without a key a warning is logged once at start-up: matches then reach the MVP picker only after ingest.
+The thread starts with the others unless `STEAM_API_KEY` is unset or `DEMO_MODE=true` with the default `OPENDOTA_BASE_URL` or `STEAM_LIVE_URL` (with the mock OpenDota, issue #146, it runs in Demo Mode too). `STEAM_LIVE_URL` sets the address (default Steam's). Without a key a warning is logged once at start-up: matches then reach the MVP picker only after ingest.
 
 ### Ingest loop
 `_ingest_poll_loop` makes no live calls. A monitored league counts as live when it has a `live_matches` row with `ended_at IS NULL` seen in the last 15 minutes (`main._live_league_ids`). That set still skips enrichment and selects `INGEST_LIVE_MATCH_POLL_INTERVAL` (see [OpenDota Query Prioritization](opendota-query-prioritization.md)). A failure reading it is logged and counts as nothing live.

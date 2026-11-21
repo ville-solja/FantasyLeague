@@ -8,13 +8,25 @@ against a real capture (see markdown/features/reference/mvp-selection-delays.md)
 """
 import logging
 import os
+from urllib.parse import urlsplit
 
 import requests
 
 logger = logging.getLogger(__name__)
 
 STEAM_API_KEY = os.getenv("STEAM_API_KEY", "").strip()
-_URL = "https://api.steampowered.com/IDOTA2Match_570/GetLiveLeagueGames/v1/"
+DEFAULT_URL = "https://api.steampowered.com/IDOTA2Match_570/GetLiveLeagueGames/v1/"
+# Issue #146: STEAM_LIVE_URL points the live check at another address (the dev mock).
+_URL = (os.getenv("STEAM_LIVE_URL") or "").strip() or DEFAULT_URL
+
+
+_DEFAULT_HOST = "api.steampowered.com"
+
+
+def is_default_url() -> bool:
+    """True while the live check goes to Steam's host (by hostname, case-insensitive,
+    scheme, port and path ignored)."""
+    return (urlsplit(_URL).hostname or "").rstrip(".") == _DEFAULT_HOST
 _TIMEOUT = 10
 
 # Unix time of the last successful live check (set by main._live_poll_once); None

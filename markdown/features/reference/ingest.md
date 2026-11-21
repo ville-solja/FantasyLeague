@@ -6,10 +6,12 @@ The ingest pipeline is responsible for pulling Dota 2 match data from external s
 
 ### 1. Match Ingest (OpenDota)
 
-Source: `GET https://api.opendota.com/api/leagues/{league_id}/matchIds`
+Source: `GET {OPENDOTA_BASE_URL}/leagues/{league_id}/matchIds`
+
+`OPENDOTA_BASE_URL` (default `https://api.opendota.com/api`, read at startup into `opendota_client.OPEN_DOTA_URL`) is the base of every OpenDota call: ingest, parse requests, parse retry, enrichment, player lookups, hero constants and Add match. In dev it points at the mock OpenDota (issue #146, `docker-compose.mock.yml`, see `reference/testing-tooling.md`); `ENV=production` refuses a non-https address. Live games come from Steam's `GetLiveLeagueGames` at `STEAM_LIVE_URL`, with the same rule.
 
 For each match ID not already in the database:
-- Fetches full match data via `GET /api/matches/{match_id}`
+- Fetches full match data via `GET {OPENDOTA_BASE_URL}/matches/{match_id}`
 - Stores team IDs, match result (`radiant_win`), and start timestamp
 - Stores per-player stats: kills, deaths, assists, GPM, observer wards, last hits, denies, towers destroyed, Roshan kills, courier kills (from season 17, issue #134), teamfight participation, camps stacked, rune pickups, first blood, stuns
 - Calculates and stores fantasy points for each player using current scoring weights

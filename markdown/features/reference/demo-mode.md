@@ -89,9 +89,19 @@ once as `admin_password`. Logged as `demo_scenario_loaded` (without either passw
 ## Effect on background jobs
 
 - The week auto-lock thread keeps running — it is the mechanism that reacts to the demo clock.
-- The ingest poll thread (OpenDota polling) does not start when `DEMO_MODE=true`, since a
-  demo walks through already-concluded, static season data and should not make outbound API
-  calls or risk overwriting curated demo state.
+- The ingest and live poll threads do not start when `DEMO_MODE=true` while
+  `OPENDOTA_BASE_URL` is the real OpenDota address, since a demo walks through
+  already-concluded, static season data and should not call the real APIs with a fake clock
+  or risk overwriting curated demo state. Start-up logs "Demo Mode with the default OpenDota
+  address: match polling is off".
+- With a mock address (issue #146, `docker-compose.mock.yml`), polling runs in Demo Mode, so
+  scenarios can be driven by the mock OpenDota (log: "Demo Mode with a non-default OpenDota
+  address (mock): match polling runs"). The live thread also needs a non-default
+  `STEAM_LIVE_URL` (`steam_live.is_default_url()`), so it never calls the real Steam API in
+  Demo Mode; otherwise start-up logs "Live poll thread skipped (DEMO_MODE=true with the
+  default STEAM_LIVE_URL)". Both checks compare the hostname (`api.opendota.com`,
+  `api.steampowered.com`; case, scheme, port and path ignored). See
+  `reference/testing-tooling.md`.
 
 ## Known limitation
 
@@ -127,8 +137,9 @@ unless `GET /config` reports `demo_mode: true`.
 ## Startup behaviour
 
 `backend/main.py`'s `lifespan()` logs a `[DEMO MODE] ... NEVER enable in production` warning
-and skips starting the `_ingest_poll_loop` background thread (no outbound OpenDota calls)
-when `DEMO_MODE=true`. The `_week_maintenance_loop` thread (which calls `auto_lock_weeks`)
+and, when `DEMO_MODE=true` with the real OpenDota host, skips starting the
+`_ingest_poll_loop` and `_live_poll_loop` threads (profile enrichment and the hero
+constants warm-up still call OpenDota; see Effect on background jobs). The `_week_maintenance_loop` thread (which calls `auto_lock_weeks`)
 always starts — it is the mechanism that reacts to the demo clock.
 
 `main.py` refuses to start with `ENV=production` and `DEMO_MODE=true` (a `[SECURITY]`
@@ -152,5 +163,5 @@ with the one-time password the panel shows after the load. Give testers the play
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override, account seeding and season scenarios, and disables the OpenDota ingest poll thread. **Never set in production**: `ENV=production` refuses to start with it. |
+| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override, account seeding and season scenarios; skips the ingest and live poll threads while `OPENDOTA_BASE_URL` is the real OpenDota address. **Never set in production**: `ENV=production` refuses to start with it. |
 | `DEMO_ACCOUNT_PASSWORD` | *(empty)* | Password of the season-scenario player accounts (`scenario-admin` gets its own one-time password); `POST /admin/demo/scenario` answers 409 while it is empty, shorter than 6 characters or over 72 bytes. |
