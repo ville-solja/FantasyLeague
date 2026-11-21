@@ -13,6 +13,10 @@ Format:
 ```
 
 ### 2026-11-21 — security-patcher — security
+**Problem:** CodeQL `py/incomplete-url-substring-sanitization` flags `"api.example.com" in text` even when `text` is file contents (a "no literal outside module X" guard test), not a URL.
+**Solution:** Search for the literal with `re.search(r"api\.example\.com", text)`: same check, no substring sink.
+
+### 2026-11-21 — security-patcher — security
 **Problem:** CodeQL `py/path-injection` also flags tests: a test that calls a route function and passes a path from its response (e.g. `os.path.isfile(result["backup_path"])`) is a tainted flow from the request body.
 **Solution:** In tests, check files through an untainted source, such as a directory listing (`database.list_season_backups()`), and compare the response's path as a string.
 

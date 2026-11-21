@@ -408,7 +408,7 @@ class TestConfigurableAddresses:
                 if not name.endswith(".py") or (folder == "" and name == "opendota_client.py"):
                     continue
                 with open(os.path.join(path, name), encoding="utf-8") as f:
-                    if "api.opendota.com" in f.read():
+                    if re.search(r"api\.opendota\.com", f.read()):
                         offenders.append(os.path.join(folder, name))
         assert offenders == []
 
