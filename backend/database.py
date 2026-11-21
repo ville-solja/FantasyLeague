@@ -197,15 +197,27 @@ def rename_to_season_backup(path: str | None, label: str | None) -> str | None:
     A path that is not an existing file (None, or a test stub) is returned as is."""
     if not path or not os.path.isfile(path):
         return path
-    src = Path(path)
-    m = _BACKUP_SUFFIX_RE.search(src.name)
+    db_path = _sqlite_db_path()
+    if db_path is None:
+        return path
+    # Source and target must both sit directly in the live DB's directory.
+    db_dir = os.path.realpath(db_path.parent)
+    src = os.path.realpath(path)
+    if not src.startswith(db_dir + os.sep) or os.path.dirname(src) != db_dir:
+        raise ValueError("Backup is not in the database directory")
+    name = os.path.basename(src)
+    m = _BACKUP_SUFFIX_RE.search(name)
     stamp = m.group(1) if m else time.strftime('%Y%m%d-%H%M%S')
-    base = src.name[:m.start()] if m else src.name
-    target = src.with_name(f"{base}.season-{season_label_slug(label)}-{stamp}")
+    base = name[:m.start()] if m else name
+    stem = f"{base}.season-{season_label_slug(label)}-{stamp}"
     # Two resets with the same label in the same second must not overwrite each other.
-    n = 2
-    while target.exists():
-        target = src.with_name(f"{base}.season-{season_label_slug(label)}-{stamp}-{n}")
+    n = 1
+    while True:
+        target = os.path.normpath(os.path.join(db_dir, stem if n == 1 else f"{stem}-{n}"))
+        if not target.startswith(db_dir + os.sep) or os.path.dirname(target) != db_dir:
+            raise ValueError("Season backup name escapes the database directory")
+        if not os.path.exists(target):
+            break
         n += 1
     os.replace(src, target)
-    return str(target)
+    return os.path.join(os.path.dirname(path), os.path.basename(target))

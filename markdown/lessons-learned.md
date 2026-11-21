@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-21 — security-patcher — security
+**Problem:** CodeQL `py/path-injection` flags a file name built from admin input even after a regex slug (e.g. `season_label_slug`), because it doesn't treat `re.sub` or `Path.with_name` as sanitisers.
+**Solution:** Build the path with `os.path.join(<realpath of the live DB dir>, name)`, `os.path.normpath` it, and check `startswith(db_dir + os.sep)` (and `dirname == db_dir`) before any filesystem call; see `rename_to_season_backup` in `database.py`.
+
 ### 2026-11-21 — developer — testing
 **Problem:** A new `/admin/demo/*` route fails `test_issue_145`'s guard, which pins the exact set of demo paths; and a TestClient request to `/x/../y` never reaches a `{name:path}` route, because httpx removes dot segments (as browsers do).
 **Solution:** Extend that path set and its 404 loop with the new route functions. To test traversal names over HTTP, encode the slash (`..%2Fx`); Starlette decodes it before routing. For save/restore tests use a tmp FILE database (`live_db` in `test_issue_147_demo_snapshots.py`).
