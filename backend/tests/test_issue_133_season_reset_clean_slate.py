@@ -1285,9 +1285,12 @@ class TestSeasonBackupFile:
         result = reset_season(SeasonResetBody(force=True), db=db, admin=dict(_ADMIN))
         assert _SEASON_NAME_RE.match(result["backup_file"]), result["backup_file"]
         assert result["backup_path"] == str(db_file.parent / result["backup_file"])
-        assert os.path.isfile(result["backup_path"])
+        # Check the file through the directory listing, not the response's path string.
+        season_files = database.list_season_backups()
+        assert [str(p) for p in season_files] == [result["backup_path"]]
+        assert season_files[0].is_file()
         assert database.list_sqlite_backups() == []
-        assert [p.name for p in database.list_season_backups()] == [result["backup_file"]]
+        assert [p.name for p in season_files] == [result["backup_file"]]
         assert result["season_label"] == "Season 16"
         # An explicit label wins; without any archive the backup is "unarchived".
         assert season_reset.backup_label(db) == "Season 16"
