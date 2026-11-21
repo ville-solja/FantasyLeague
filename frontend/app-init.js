@@ -85,7 +85,7 @@ function obsOverlayCopyEnabled(teamA, teamB) {
 
 function obsOverlayUrl(origin, teamA, teamB, transparent) {
   if (!obsOverlayCopyEnabled(teamA, teamB)) return '';
-  return `${origin}/obs/last-game.html?teams=${teamA},${teamB}` + (transparent ? '&theme=transparent' : '');
+  return `${origin}/obs/last-game.html?teams=${Number(teamA)},${Number(teamB)}` + (transparent ? '&theme=transparent' : '');
 }
 
 function obsOverlayTeamOptions(teams) {
