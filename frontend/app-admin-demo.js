@@ -71,11 +71,38 @@ function renderDemoModePanel() {
       </div>
       <div style="font-size:0.8rem;margin-bottom:8px;" id="demoScenarioResult"></div>
       <div style="font-size:0.8rem;margin-bottom:8px;" id="demoScenarioAdminPassword" hidden></div>
+
+      <h3 style="margin:16px 0 8px;">Snapshots</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center;">
+        <input id="demoSnapshotName" type="text" placeholder="Name (letters, digits, -)" maxlength="40"
+          pattern="[A-Za-z0-9-]{1,40}" autocomplete="off" spellcheck="false" title="Snapshot name" />
+        <button onclick="saveDemoSnapshot()">Save Snapshot</button>
+        <button class="secondary" onclick="loadDemoSnapshots()">Refresh</button>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:8px;">
+        <table>
+          <thead><tr><th>Name</th><th>Size</th><th>Saved</th><th></th></tr></thead>
+          <tbody id="demoSnapshotsBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
+        </table>
+      </div>
+      <div id="demoSnapshotConfirm" hidden style="margin-bottom:8px;">
+        <p style="margin:0 0 8px;">Replaces all data with snapshot <strong id="demoSnapshotConfirmName"></strong>;
+          everyone else is logged out. You stay logged in.</p>
+        <label for="demoSnapshotConfirmInput" style="display:block;margin-bottom:4px;">Type
+          <strong id="demoSnapshotConfirmPhrase"></strong> to confirm</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <input id="demoSnapshotConfirmInput" type="text" autocomplete="off" spellcheck="false" />
+          <button class="danger" onclick="restoreDemoSnapshot()">Restore</button>
+          <button class="secondary" onclick="cancelDemoSnapshot()">Cancel</button>
+        </div>
+        <div class="status err" id="demoSnapshotConfirmStatus"></div>
+      </div>
       <div class="status" id="demoModeStatus"></div>
     </div>
   `;
   describeDemoScenario();
   loadDemoClock();
+  loadDemoSnapshots();
 }
 
 // Issue #145: season scenarios (POST /admin/demo/scenario). In-page confirmation, then
@@ -216,6 +243,124 @@ async function seedDemoAccounts() {
       tbody.appendChild(tr);
     });
     setStatus("demoModeStatus", `Created ${data.accounts.length} account(s)`);
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+// Issue #147: named database snapshots. Save and list need admin only; Restore opens
+// an in-page confirmation with the typed phrase, then adminFetch (password prompt when
+// the re-auth is not recent). A restore replaces every row, so the page reloads.
+let _demoSnapshotPending = null;
+
+function _formatSnapshotSize(bytes) {
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+async function loadDemoSnapshots() {
+  if (!window.demoMode || !activeIsAdmin) return;
+  const tbody = document.getElementById("demoSnapshotsBody");
+  if (!tbody) return;
+  try {
+    const res = await fetch(`${API}/admin/demo/snapshots`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setStatus("demoModeStatus", data.detail || `Loading snapshots failed (${res.status})`, false);
+    const snaps = data.snapshots || [];
+    tbody.innerHTML = "";
+    if (!snaps.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.style.color = "#444";
+      td.textContent = "No snapshots yet";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    snaps.forEach(s => {
+      const tr = document.createElement("tr");
+      const cells = [s.name, _formatSnapshotSize(s.size_bytes), new Date(s.saved_at * 1000).toLocaleString()];
+      cells.forEach(text => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      const td = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.className = "danger";
+      btn.textContent = "Restore…";
+      btn.addEventListener("click", () => askRestoreDemoSnapshot(s.name));
+      td.appendChild(btn);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+async function saveDemoSnapshot() {
+  const name = document.getElementById("demoSnapshotName").value.trim();
+  if (!/^[A-Za-z0-9-]{1,40}$/.test(name)) {
+    return setStatus("demoModeStatus", "Name: 1–40 letters, digits or hyphens", false);
+  }
+  try {
+    const res = await fetch(`${API}/admin/demo/snapshots`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({name}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `Saving failed (${res.status})`;
+      return setStatus("demoModeStatus", detail, false);
+    }
+    document.getElementById("demoSnapshotName").value = "";
+    setStatus("demoModeStatus", `Snapshot ${data.name} saved`);
+    loadDemoSnapshots();
+  } catch (e) {
+    setStatus("demoModeStatus", e.message, false);
+  }
+}
+
+function askRestoreDemoSnapshot(name) {
+  _demoSnapshotPending = name;
+  document.getElementById("demoSnapshotConfirmName").textContent = name;
+  document.getElementById("demoSnapshotConfirmPhrase").textContent = ADMIN_CONFIRM_PHRASES.demo_snapshot_restore;
+  document.getElementById("demoSnapshotConfirmInput").value = "";
+  document.getElementById("demoSnapshotConfirmStatus").textContent = "";
+  document.getElementById("demoSnapshotConfirm").hidden = false;
+}
+
+function cancelDemoSnapshot() {
+  _demoSnapshotPending = null;
+  document.getElementById("demoSnapshotConfirm").hidden = true;
+}
+
+async function restoreDemoSnapshot() {
+  const name = _demoSnapshotPending;
+  if (!name) return;
+  const typed = document.getElementById("demoSnapshotConfirmInput").value.trim();
+  if (typed.toUpperCase() !== ADMIN_CONFIRM_PHRASES.demo_snapshot_restore) {
+    document.getElementById("demoSnapshotConfirmStatus").textContent =
+      `Type "${ADMIN_CONFIRM_PHRASES.demo_snapshot_restore}" to confirm.`;
+    return;
+  }
+  document.getElementById("demoSnapshotConfirm").hidden = true;
+  _demoSnapshotPending = null;
+  setStatus("demoModeStatus", `Restoring ${name}…`);
+  try {
+    const res = await adminFetch(`${API}/admin/demo/snapshots/${encodeURIComponent(name)}/restore`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({confirm: typed}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `Restoring failed (${res.status})`;
+      return setStatus("demoModeStatus", detail, false);
+    }
+    setStatus("demoModeStatus", `Snapshot ${data.restored} restored. Reloading…`);
+    location.reload();
   } catch (e) {
     setStatus("demoModeStatus", e.message, false);
   }

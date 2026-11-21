@@ -325,6 +325,7 @@ const ADMIN_CONFIRM_PHRASES = {
   backup_download: "DOWNLOAD BACKUP",
   delete_user:     "DELETE USER",
   demo_scenario:   "LOAD SCENARIO",
+  demo_snapshot_restore: "RESTORE SNAPSHOT",
 };
 
 let _typedConfirmState = null;

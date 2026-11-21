@@ -68,6 +68,11 @@ runs unconditionally on every reset and is renamed to a permanent **season backu
 `data/fantasy.db.season-<label>-<timestamp>`, which retention never deletes (issue #133, see
 `reference/season-reset-clean-slate.md`); `scripts/backup-db.sh` is the manual pre-deploy step.
 
+Demo Mode snapshots (issue #147, `reference/testing-tooling.md#snapshots`) are another set of full
+copies: `demo-snapshots/<name>.db` in the folder of the live database (`data/demo-snapshots/` in a
+normal deployment; only there do `.gitignore` and `.dockerignore` cover them). Nothing prunes them;
+delete them by hand when a test server's disk fills up.
+
 ## Automatic scheduled backups
 
 A background thread (`_backup_loop` in `backend/main.py`, started at startup alongside week

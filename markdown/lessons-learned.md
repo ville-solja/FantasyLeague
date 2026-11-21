@@ -12,6 +12,10 @@ Format:
 **Solution:** What works instead.
 ```
 
+### 2026-11-21 — developer — testing
+**Problem:** A new `/admin/demo/*` route fails `test_issue_145`'s guard, which pins the exact set of demo paths; and a TestClient request to `/x/../y` never reaches a `{name:path}` route, because httpx removes dot segments (as browsers do).
+**Solution:** Extend that path set and its 404 loop with the new route functions. To test traversal names over HTTP, encode the slash (`..%2Fx`); Starlette decodes it before routing. For save/restore tests use a tmp FILE database (`live_db` in `test_issue_147_demo_snapshots.py`).
+
 ### 2026-11-18 — developer — testing
 **Problem:** Issue 146's How to Play copy change failed `test_how_to_play_role_subtabs` in the full suite: the Developers panel (where the Demo Mode bullet lives) must not contain the word "OpenDota". Separately, `opendota_client.requests` and `steam_live.requests` are the one global `requests` module, so patching `.get` there reroutes every caller.
 **Solution:** Say "match-data services" in that panel. To run the app against the mock in tests, use `_wire` / `_route_to_mock` in `test_issue_146_mock_opendota.py` (patches `requests.get/post` once and records stray URLs, since ingest swallows transport exceptions).

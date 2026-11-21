@@ -87,6 +87,7 @@ CONFIRM_PHRASES = {
     "backup_download": "DOWNLOAD BACKUP",
     "delete_user": "DELETE USER",
     "demo_scenario": "LOAD SCENARIO",  # issue #145, Demo Mode only
+    "demo_snapshot_restore": "RESTORE SNAPSHOT",  # issue #147, Demo Mode only
 }
 
 

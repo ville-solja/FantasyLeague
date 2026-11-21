@@ -1,8 +1,9 @@
 # Demo Mode
 
-An env-gated capability that lets an operator override the app's simulated "now" and seed
-disposable accounts with random cards, so the season lifecycle (pre-lock → lock → scored) can
-be demonstrated on demand using existing S15 data instead of waiting for real time to pass.
+An env-gated capability that lets an operator override the app's simulated "now", seed
+disposable accounts with random cards, load a whole synthetic season (scenarios, issue #145) and
+save and restore named database snapshots (issue #147), so the season lifecycle (pre-lock → lock →
+scored) can be demonstrated and tested on demand instead of waiting for real time to pass.
 Structurally absent unless `DEMO_MODE=true` — never enable in production.
 
 ---
@@ -37,13 +38,16 @@ requested stages observable.
   function body, since this codebase's test suite calls endpoint functions directly and
   bypasses FastAPI's dependency resolution entirely; a bare `Depends()` default never fires
   under that calling convention.
+- `backend/demo_snapshots.py` — save, list and restore named database snapshots (issue #147,
+  see [testing-tooling.md](testing-tooling.md#snapshots)).
 - `backend/routers/cards.py` — `draw_card` is reused unmodified, called as a plain Python
   function from `seed_demo_accounts` with a constructed `current_user` dict.
 
 ## Endpoints
 
-All the endpoints (`GET`/`POST`/`DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` and
-`POST /admin/demo/scenario`) return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence is not revealed on a
+All the endpoints (`GET`/`POST`/`DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts`,
+`POST /admin/demo/scenario`, and `GET`/`POST /admin/demo/snapshots` and
+`POST /admin/demo/snapshots/{name}/restore`) return 404 (not 403) when `DEMO_MODE` is not `true`, so their existence is not revealed on a
 production deployment. When reachable, all require an admin session.
 
 ### `GET /admin/demo/clock`
@@ -86,9 +90,20 @@ a recent password re-entry (403 `reauth_required`), the typed phrase `LOAD SCENA
 rules (409). The players use that password; `scenario-admin` gets a new random password returned
 once as `admin_password`. Logged as `demo_scenario_loaded` (without either password). See [testing-tooling.md](testing-tooling.md#season-scenarios).
 
+### `GET /admin/demo/snapshots`, `POST /admin/demo/snapshots`, `POST /admin/demo/snapshots/{name}/restore`
+Issue #147. Save the live database under a name (`[A-Za-z0-9-]{1,40}`) to `data/demo-snapshots/`,
+list the saved snapshots, and restore one while the app runs. Restore needs a recent password
+re-entry and the typed phrase `RESTORE SNAPSHOT`; the restoring admin stays logged in, every other
+session ends, and a snapshot without the caller as an admin answers 409. Logged as
+`demo_snapshot_saved` / `demo_snapshot_restored`. A restore brings back the snapshot's users as
+they were, including admin flags and password hashes. See [testing-tooling.md](testing-tooling.md#snapshots).
+
 ## Effect on background jobs
 
 - The week auto-lock thread keeps running — it is the mechanism that reacts to the demo clock.
+- During a snapshot restore the live file is replaced underneath the running threads: their
+  writes wait on SQLite's lock (10 s timeout) and may fail once; the pool is disposed so later
+  requests read the restored data.
 - The ingest and live poll threads do not start when `DEMO_MODE=true` while
   `OPENDOTA_BASE_URL` is the real OpenDota address, since a demo walks through
   already-concluded, static season data and should not call the real APIs with a fake clock
@@ -163,5 +178,5 @@ with the one-time password the panel shows after the load. Give testers the play
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override, account seeding and season scenarios; skips the ingest and live poll threads while `OPENDOTA_BASE_URL` is the real OpenDota address. **Never set in production**: `ENV=production` refuses to start with it. |
+| `DEMO_MODE` | *(unset/false)* | Enables the demo clock override, account seeding, season scenarios and snapshots; skips the ingest and live poll threads while `OPENDOTA_BASE_URL` is the real OpenDota address. **Never set in production**: `ENV=production` refuses to start with it. |
 | `DEMO_ACCOUNT_PASSWORD` | *(empty)* | Password of the season-scenario player accounts (`scenario-admin` gets its own one-time password); `POST /admin/demo/scenario` answers 409 while it is empty, shorter than 6 characters or over 72 bytes. |

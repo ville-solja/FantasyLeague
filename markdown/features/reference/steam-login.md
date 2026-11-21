@@ -118,6 +118,8 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 | Token grant | `POST /grant-tokens` (now also needs the recent re-auth) | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
 | Delete Twitch viewer account | `DELETE /admin/users/{id}` (soft accounts only) | `DELETE USER` |
+| Load a season scenario (Demo Mode, issue #145) | `POST /admin/demo/scenario` | `LOAD SCENARIO` |
+| Restore a snapshot (Demo Mode, issue #147) | `POST /admin/demo/snapshots/{name}/restore` | `RESTORE SNAPSHOT` |
 
 ## Demo accounts
 

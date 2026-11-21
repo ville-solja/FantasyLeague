@@ -72,25 +72,36 @@ The mock imports `backend/season_generator.py` and `backend/scenarios.py` from a
 - **Parse retry.** It uses the real clock, and scripted matches are dated 2026. The mock Compose file therefore sets `INGEST_PARSE_RETRY_HOURS=87600`, so these matches are re-checked and not marked unparseable at once.
 - **Production.** With `ENV=production`, startup refuses a non-https `OPENDOTA_BASE_URL` or `STEAM_LIVE_URL` (`[SECURITY]` `RuntimeError` naming the variable; only the scheme is printed, never the address).
 
-## Snapshots *(planned, #147)*
+## Snapshots
 
-Saving writes the database under a name in `data/demo-snapshots/` with SQLite's online backup. Restoring copies a snapshot back while the app runs. After it:
+An admin saves the live database under a name and restores it later, to repeat a manual test from the same starting point (Admin › Settings › Maintenance › Demo Mode › Snapshots). Code: `backend/demo_snapshots.py`.
 
-- the schema is migrated;
-- stored card points are rebuilt and the caches emptied;
-- the restoring admin stays logged in and every other session ends.
+- **Save** writes `data/demo-snapshots/{name}.db` (next to the live database file) with SQLite's online backup, so it is consistent while the app runs. The folder is created `0700` and each file `0600`, since snapshots hold password hashes and emails. `.gitignore` lists `data/demo-snapshots/`; `.dockerignore` already excludes `data/`. An existing name gives 409; there is no delete (remove files by hand).
+- **Names** match `^[A-Za-z0-9-]{1,40}$`. `path_for(name)` builds the path only from a valid name and checks it resolves inside the folder, so `../x`, `a/b`, `..%2Fx`, a 41-character name and an empty name get 422 and no file outside the folder is read or written.
+- **Location.** The folder follows the live database path (`DATABASE_URL`), so it is `data/demo-snapshots/` only when the database is `data/fantasy.db`; `.gitignore` and `.dockerignore` cover it only there. Snapshots are never pruned.
+- **Symlinks.** A name whose file in the folder is a symlink is invalid (422), even when it points at another snapshot there; save opens the new file with `O_NOFOLLOW`, and the list skips symlinks.
+- **Restore** runs under the same module lock as save, one at a time. A WARNING log line names the snapshot and the admin before the data is replaced:
+  1. The snapshot is opened read-only (`file:…?mode=ro`). If its `users` table has no admin with the caller's id, it answers 409 and changes nothing, since the caller would be locked out.
+  2. The caller's `user_sessions` rows are read, the connection pool is disposed and `snapshot.backup(live)` copies the snapshot into the live file.
+  3. On the same raw connection, every `user_sessions` row is deleted and the caller's rows are written back, before anything else can fail: the caller stays logged in and every other session ends (401 on the next request), and no snapshot session is valid even briefly.
+  4. The pool is disposed again so no connection keeps old pages, then `create_all` and `migrate.run_migrations` bring an older snapshot up to the current schema, and the ORM writes the caller's sessions once more.
+  5. `card_points.rebuild_all` rebuilds stored card points, the `demo_snapshot_restored` audit entry is written (after the swap, so it survives; `detail` is `name=… replaced_state_at=<Unix time just before the swap>`), and `season_reset.bust_caches()` empties the in-memory caches.
 
-Restore requires the admin password re-entry. It refuses (409) when the snapshot has no admin account with the caller's id.
+  If step 4 or 5 fails, every session is deleted (logged), the error is logged and the response is 500 with only the exception type; log in again and restore once more. Refused restores (404, 409) are not audited.
+- **What comes back.** A restore brings back everything in the snapshot, including its users' admin flags and password hashes: a password changed since the save reverts.
+
+Restore needs a recent password re-entry and the typed phrase `RESTORE SNAPSHOT`. Both save and restore also answer 409 "Snapshots need a local SQLite database" for a non-SQLite `DATABASE_URL`; save answers 409 "The live database file was not found" when the file is missing; restore answers 409 "The snapshot can't be read" when SQLite can't open the file (the path is logged on the server only). Error responses never contain filesystem paths; a failed save or restore is logged on the server and answers 500 with only the exception type. The audit log after a restore is the snapshot's, plus the restore entry.
 
 ## Endpoints
 
 ### `POST /admin/demo/scenario`
 Body `{"name": "pre-season" | "mid-season" | "season-end"}` (422 otherwise). Requires a recent re-auth (403 `reauth_required`) and `confirm` equal to `LOAD SCENARIO` in the body or query, any case (400 `confirmation_required`, `deps.CONFIRM_PHRASES["demo_scenario"]`). The checks run in that order, after the Demo Mode check (404). Returns 409 when `DEMO_ACCOUNT_PASSWORD` is unset or breaks the registration password rules (at least 6 characters, at most 72 bytes); the message names the variable, never its value. Answers `{"scenario", "override_timestamp", "effective_now", "accounts": [usernames], "counts": {accounts, teams, players, weeks, locked_weeks, matches, stat_rows, cards, roster_entries, substitutions}, "admin_password"}`. `admin_password` is scenario-admin's one-time password (`null` when the caller is scenario-admin and keeps their own); the response never contains `DEMO_ACCOUNT_PASSWORD`.
-### `GET /admin/demo/snapshots` *(planned)*
-### `POST /admin/demo/snapshots` *(planned)*
-Body `{"name"}`, matching `^[A-Za-z0-9-]{1,40}$`. Returns 409 when the name exists.
-### `POST /admin/demo/snapshots/{name}/restore` *(planned)*
-Requires a recent re-auth. Returns 422 for an invalid name (including `../x` and `a/b`).
+### `GET /admin/demo/snapshots`
+Admin only, no re-auth. Answers `{"snapshots": [{"name", "size_bytes", "saved_at"}]}`, newest first (`saved_at` is the file's modification time, Unix seconds); an empty list before the first save.
+### `POST /admin/demo/snapshots`
+Admin only, no re-auth. Body `{"name"}`, matching `^[A-Za-z0-9-]{1,40}$` (422 otherwise, also for a name that is a symlink in the folder). Returns 409 when the name exists, for a non-SQLite database or when the live file is missing. Answers `{"name", "size_bytes", "saved_at"}`. Audited `demo_snapshot_saved` (`detail` `name=…`).
+### `POST /admin/demo/snapshots/{name}/restore`
+Requires a recent re-auth (403 `reauth_required`) and `confirm` equal to `RESTORE SNAPSHOT` in the body or query, any case (400 `confirmation_required`, `deps.CONFIRM_PHRASES["demo_snapshot_restore"]`), after the Demo Mode check (404). The route takes `{name:path}`, so a name with `/` reaches the handler: an invalid name (including `../x`, `a/b`, `..%2Fx` and an empty name, `/admin/demo/snapshots//restore`) answers 422, not 404. A symlinked name answers 422 too. A valid name without a file answers 404; a snapshot without the caller as an admin, or one SQLite can't read, answers 409. Answers `{"restored": name, "card_points_rows": n}`. Audited `demo_snapshot_restored` (`detail` `name=…`).
 
 All are admin only, and return 404 unless `DEMO_MODE=true`.
 
@@ -107,4 +118,4 @@ All are admin only, and return 404 unless `DEMO_MODE=true`.
 
 ---
 
-*This document is a stub created at feature planning time. Season scenarios (#145) and the mock OpenDota (#146) are filled in; the snapshot section is still planned.*
+*This document was a stub created at feature planning time. Season scenarios (#145), the mock OpenDota (#146) and snapshots (#147) are now filled in.*

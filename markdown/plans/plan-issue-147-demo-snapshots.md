@@ -28,7 +28,7 @@ As a tester, I want to save the test database and restore it later so that I can
 - `POST /admin/demo/snapshots` with `{"name"}` (letters, digits, hyphen; 1–40 characters) saves a copy of the live database to `data/demo-snapshots/{name}.db` with SQLite's online backup. An existing name gives 409
 - `GET /admin/demo/snapshots` lists the saved snapshots with name, size and time, newest first
 - `POST /admin/demo/snapshots/{name}/restore` restores one into the live database while the app keeps running, then rebuilds stored card points and empties the caches
-- All three are admin and `DEMO_MODE` only, and give 404 otherwise. Restore needs the admin password re-entry from #117 (403 `reauth_required` without it)
+- All three are admin and `DEMO_MODE` only, and give 404 otherwise. Restore needs the admin password re-entry from #117 (403 `reauth_required` without it), and the typed phrase `RESTORE SNAPSHOT` (400 `confirmation_required` without it, the #150 rule as for `LOAD SCENARIO`)
 - Names never become paths outside `data/demo-snapshots/`. `../x`, `a/b` and any other invalid name get 422
 - The restoring admin stays logged in and every other session ends. A snapshot without that admin account gives 409 and restores nothing
 - The admin Demo panel lists the snapshots with Save and Restore, and restore has an in-page confirmation. It never uses `confirm()`

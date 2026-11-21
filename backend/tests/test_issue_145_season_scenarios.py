@@ -842,15 +842,18 @@ class TestDemoModeNeverInProduction:
         assert proc.returncode == 0, proc.stderr[-4000:]
 
     def test_every_demo_endpoint_404_when_demo_mode_off_for_admin_and_non_admin(self, db, monkeypatch):
-        """With DEMO_MODE unset, every /admin/demo/* route function (clock GET/POST/DELETE, seed-accounts, scenario) raises 404 for both admin and non-admin."""
+        """With DEMO_MODE unset, every /admin/demo/* route function (clock GET/POST/DELETE, seed-accounts, scenario, and issue 147's snapshots list/save/restore) raises 404 for both admin and non-admin."""
         monkeypatch.delenv("DEMO_MODE", raising=False)
         monkeypatch.setenv("DEMO_ACCOUNT_PASSWORD", _PASSWORD)
         from routers import admin_demo
         from routers.admin_demo import (DemoClockBody, ScenarioBody, SeedDemoAccountsBody,
-                                        clear_demo_clock, get_demo_clock, load_demo_scenario,
+                                        SnapshotBody, clear_demo_clock, get_demo_clock,
+                                        list_demo_snapshots, load_demo_scenario,
+                                        restore_demo_snapshot, save_demo_snapshot,
                                         seed_demo_accounts, set_demo_clock)
         demo_paths = {r.path for r in admin_demo.router.routes if r.path.startswith("/admin/demo/")}
-        assert demo_paths == {"/admin/demo/clock", "/admin/demo/seed-accounts", "/admin/demo/scenario"}
+        assert demo_paths == {"/admin/demo/clock", "/admin/demo/seed-accounts", "/admin/demo/scenario",
+                              "/admin/demo/snapshots", "/admin/demo/snapshots/{name:path}/restore"}
         for identity in (_ADMIN, _NON_ADMIN):
             for call in (
                 lambda: get_demo_clock(db=db, _=identity),
@@ -858,6 +861,9 @@ class TestDemoModeNeverInProduction:
                 lambda: clear_demo_clock(db=db, admin=identity),
                 lambda: seed_demo_accounts(SeedDemoAccountsBody(), db=db, admin=identity),
                 lambda: load_demo_scenario(ScenarioBody(name="mid-season"), db=db, admin=identity),
+                lambda: list_demo_snapshots(_=identity),
+                lambda: save_demo_snapshot(SnapshotBody(name="x"), db=db, admin=identity),
+                lambda: restore_demo_snapshot(name="x", db=db, admin=identity),
             ):
                 with pytest.raises(HTTPException) as exc:
                     call()
