@@ -6,6 +6,10 @@ data/fantasy.db
 data/fantasy.db-shm
 data/fantasy.db-wal
 data/*.backup-*
+# Permanent season backups (issue #133): password hashes and emails
+data/*.season-*
+# Demo Mode snapshots (issue #147): password hashes and emails
+data/demo-snapshots/
 
 # Local card preview scratch files (repo root)
 /tmp.png

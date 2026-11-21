@@ -8,12 +8,15 @@ Run from repo root:  python backend/scripts/test_match_team_logos.py
 """
 from __future__ import annotations
 
+import os
 import sys
 
 import requests
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from opendota_client import OPEN_DOTA_URL as OPEN_DOTA  # noqa: E402  (OPENDOTA_BASE_URL)
+
 MATCH_ID = 8760881999
-OPEN_DOTA = "https://api.opendota.com/api"
 # Valve default assets (pro teams); many amateur team_ids 404 here — OpenDota may still expose logo_url when indexed.
 TEAM_LOGO_TEMPLATES = (
     "https://steamcdn-a.akamaihd.net/apps/dota2/images/team_logos/{team_id}.png",

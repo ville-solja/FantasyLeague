@@ -64,7 +64,14 @@ this way is **not** protected by that pattern and could be committed by an unrel
 This is separate from the automatic in-app backup that `backup_sqlite_db()` (in
 `backend/database.py`, using the sqlite3 online backup API rather than this script's plain `cp`) takes immediately before
 `POST /admin/season/reset` deletes any data — see `reference/season-lifecycle.md`. That backup
-runs unconditionally on every reset; `scripts/backup-db.sh` is the manual pre-deploy step.
+runs unconditionally on every reset and is renamed to a permanent **season backup**,
+`data/fantasy.db.season-<label>-<timestamp>`, which retention never deletes (issue #133, see
+`reference/season-reset-clean-slate.md`); `scripts/backup-db.sh` is the manual pre-deploy step.
+
+Demo Mode snapshots (issue #147, `reference/testing-tooling.md#snapshots`) are another set of full
+copies: `demo-snapshots/<name>.db` in the folder of the live database (`data/demo-snapshots/` in a
+normal deployment; only there do `.gitignore` and `.dockerignore` cover them). Nothing prunes them;
+delete them by hand when a test server's disk fills up.
 
 ## Automatic scheduled backups
 
@@ -77,11 +84,12 @@ one-off/manual.
 | Variable | Default | Description |
 |---|---|---|
 | `DB_BACKUP_INTERVAL_HOURS` | `24` | Hours between automatic backups |
-| `DB_BACKUP_RETENTION_DAYS` | `14` | Age (by file mtime) at which any backup file, automatic or manual, is deleted |
+| `DB_BACKUP_RETENTION_DAYS` | `14` | Age (by file mtime) at which any `fantasy.db.backup-*` file, automatic or manual, is deleted; season backups (`fantasy.db.season-*`) are kept for good |
 
 Backups land next to the live DB as `data/fantasy.db.backup-YYYYMMDD-HHmmss`, same naming
 convention as the manual script, so both are pruned/restorable the same way. Retention only
-touches files matching that pattern — it never deletes the live database.
+touches files matching that pattern — it never deletes the live database or a season backup
+(`fantasy.db.season-*`, which stays on the server until someone deletes it by hand).
 
 Backups contain password hashes and email addresses, so they are owner-only (mode `0600`,
 `-rw-------`): `backup_sqlite_db()` creates the file with that mode before copying into it, and
@@ -92,7 +100,8 @@ Backups contain password hashes and email addresses, so they are owner-only (mod
 The admin Settings tab's **Database Backups** panel is the no-shell alternative to
 `scripts/backup-db.sh` — use it before a mid-season deploy when you don't have a shell on the host.
 It calls the same `backup_sqlite_db()` and writes the same `data/fantasy.db.backup-YYYYMMDD-HHmmss`
-files, so manual panel backups are listed alongside scheduled and pre-reset ones.
+files, so manual panel backups are listed alongside scheduled ones; pre-reset season backups are
+listed in a separate **Season backups** table (issue #133).
 
 - **60-second cooldown:** `POST /admin/backups` returns 429 if the newest backup file is under
   60 seconds old. This also prevents two backups in the same second from overwriting each other.

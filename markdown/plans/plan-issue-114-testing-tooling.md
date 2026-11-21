@@ -1,5 +1,7 @@
 # Plan: Testing Tooling: Season Scenarios and Mock OpenDota
 
+> Superseded for building by the per-issue plans, which are updated for the current code: `plan-issue-145-season-scenarios.md`, `plan-issue-146-mock-opendota.md` and `plan-issue-147-demo-snapshots.md`.
+
 ## Context
 Testing a feature by hand on a dev or test server is slow, because most features only show up in a mid-season state: locked weeks, rosters with a bench, ingested matches with MVPs, unparsed matches, substitutions, a populated leaderboard. Building that state by hand takes hours. Real league data only arrives as the actual season plays out, and it can't be replayed.
 

@@ -319,10 +319,13 @@ async function submitReauth() {
 const ADMIN_CONFIRM_PHRASES = {
   season_end:      "END SEASON",
   season_reset:    "RESET SEASON",
+  season_summary:  "SAVE SUMMARY",
   toggle_admin:    "CHANGE ADMIN",
   grant_tokens:    "GRANT TOKENS",
   backup_download: "DOWNLOAD BACKUP",
   delete_user:     "DELETE USER",
+  demo_scenario:   "LOAD SCENARIO",
+  demo_snapshot_restore: "RESTORE SNAPSHOT",
 };
 
 let _typedConfirmState = null;

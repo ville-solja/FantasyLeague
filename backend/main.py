@@ -41,6 +41,7 @@ from models import League, LiveMatch, PlayerMatchStats, Week, Weight
 from migrate import run_migrations
 from ingest import ingest_league, store_live_matches, retry_unparsed_matches, INGEST_LOCK
 import steam_live
+import opendota_client
 import schedule
 from enrich import run_enrichment, run_profile_enrichment
 from seed import seed_users, seed_admin_from_env, seed_weights, seed_tags
@@ -48,6 +49,7 @@ from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
 from toornament import sync_toornament_results
 from image import _ASSETS_DIR
 from routers import players as players_router
+from routers import obs as obs_router
 from routers import auth as auth_router
 from routers import profile as profile_router
 from routers import leaderboard as leaderboard_router
@@ -467,13 +469,21 @@ def _single_process_guard():
 
 
 def _start_background_threads():
-    if _DEMO_MODE:
+    # Issue #146: Demo Mode skips polling only while OpenDota is the real API, so a demo
+    # server with a fake clock never calls it; with a mock address (dev), polling runs.
+    if _DEMO_MODE and opendota_client.is_default_base_url():
+        logger.info("Demo Mode with the default OpenDota address: match polling is off")
         logger.info("Ingest poll thread skipped (DEMO_MODE=true)")
         logger.info("Live poll thread skipped (DEMO_MODE=true)")
     else:
+        if _DEMO_MODE:
+            logger.info("Demo Mode with a non-default OpenDota address (mock): match polling runs")
         threading.Thread(target=_ingest_poll_loop, daemon=True).start()
         logger.info("Ingest poll thread started (interval=%ds)", _INGEST_POLL_INTERVAL)
-        if steam_live.STEAM_API_KEY:
+        if _DEMO_MODE and steam_live.is_default_url():
+            # The same rule for the live check: never call the real Steam API in Demo Mode.
+            logger.info("Live poll thread skipped (DEMO_MODE=true with the default STEAM_LIVE_URL)")
+        elif steam_live.STEAM_API_KEY:
             threading.Thread(target=_live_poll_loop, daemon=True).start()
             logger.info("Live poll thread started (interval=%ds)", _LIVE_POLL_INTERVAL)
         else:
@@ -573,19 +583,30 @@ _is_dev = os.getenv("TWITCH_LOCAL_DEV") == "true" or os.getenv("DEBUG", "").lowe
 _MIN_PRODUCTION_SECRET_LEN = 32
 if os.getenv("ENV", "").lower() == "production":
     _active_dev_flags = [
-        name for name in ("DEBUG", "TWITCH_LOCAL_DEV")
+        name for name in ("DEBUG", "TWITCH_LOCAL_DEV", "DEMO_MODE")
         if os.getenv(name, "").lower() == "true"
     ]
     if _active_dev_flags:
+        # Issue #145: DEMO_MODE's scenario loader wipes game data and accounts.
         raise RuntimeError(
             f"[SECURITY] ENV=production but {' and '.join(f'{n}=true' for n in _active_dev_flags)} "
-            "is set. Dev bypasses must never run in production — unset them."
+            "is set. Dev bypasses and demo tools must never run in production — unset them."
         )
     if len(_secret_key) < _MIN_PRODUCTION_SECRET_LEN:
         raise RuntimeError(
             f"[SECURITY] ENV=production requires a SECRET_KEY of at least "
             f"{_MIN_PRODUCTION_SECRET_LEN} characters (got {len(_secret_key)})."
         )
+    # Issue #146: the match-data addresses can point at the dev mock; production must
+    # use https. Only the scheme is printed: the address could carry credentials.
+    for _name, _url in (("OPENDOTA_BASE_URL", opendota_client.OPEN_DOTA_URL),
+                        ("STEAM_LIVE_URL", steam_live._URL)):
+        _scheme = urlsplit(_url).scheme.lower()
+        if _scheme != "https":
+            raise RuntimeError(
+                f"[SECURITY] ENV=production requires an https:// {_name} "
+                f"(got scheme {_scheme or 'none'!r}). The mock OpenDota is for dev only."
+            )
 if not _secret_key:
     if not _is_dev:
         raise RuntimeError(
@@ -947,6 +968,7 @@ app.include_router(twitch_mvp_poll.router)
 app.include_router(twitch_oauth.router)
 app.include_router(steam_openid.router)
 app.include_router(players_router.router)
+app.include_router(obs_router.router)
 app.include_router(auth_router.router)
 app.include_router(profile_router.router)
 app.include_router(leaderboard_router.router)

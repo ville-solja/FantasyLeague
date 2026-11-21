@@ -8,10 +8,11 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
 import accolades
-import card_points
-from database import get_db, backup_sqlite_db
+import season_reset
+import season_summary
+from database import get_db, backup_sqlite_db, rename_to_season_backup
 from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
-from models import Card, CardModifier, League, Match, MatchBan, OwnPlayerCardGrant, Player, PlayerMatchStats, SeasonAccolade, SeasonArchive, Team, TwitchMVP, TwitchTokenDrop, User, Week, WeeklyRosterEntry
+from models import OwnPlayerCardGrant, SeasonAccolade, SeasonArchive
 from routers.leaderboard import compute_season_standings
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ class SeasonEndBody(BaseModel):
     season_label: str = Field(..., min_length=1, max_length=100)
     # Optional: the finals may not be played yet; Mark champions adds them later.
     champions: list[SeasonEndChampions] | None = Field(None, max_length=2)
+    # Issue #133: the parts End Season applies (the standings archive always runs).
+    record_awards: bool = True
+    record_champions: bool = True
+    record_played: bool = True
+    store_summary: bool = True
 
     @field_validator("champions")
     @classmethod
@@ -58,14 +64,22 @@ class SeasonEndBody(BaseModel):
 
 class SeasonResetBody(BaseModel):
     force: bool = False
+    # Names the season backup; default: the newest archived season (issue #133).
+    season_label: str | None = Field(None, max_length=100)
+
+
+class SeasonSummaryBody(BaseModel):
+    season_label: str = Field(..., min_length=1, max_length=100)
 
 
 @router.get("/admin/season/accolades-preview")
-def accolades_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
+def accolades_preview(season_label: str | None = Query(None, max_length=100),
+                      db=Depends(get_db), _: dict = Depends(require_admin)):
     """What End Season will record (issue #50): the five awards (ties included), how
     many players get a played row, and the season's teams with their players for the
-    champion picker. season_label is the live season's label."""
-    label = accolades.current_season_label(db)
+    champion picker. season_label defaults to the live season's label; `recorded`
+    counts the accolade rows that label already has, per End Season part (issue #133)."""
+    label = (season_label or "").strip() or accolades.current_season_label(db)
     recorded = {d: db.query(SeasonAccolade).filter(
         SeasonAccolade.season_label == label, SeasonAccolade.kind == "champion",
         SeasonAccolade.division == d).count() for d in accolades.DIVISIONS}
@@ -75,6 +89,7 @@ def accolades_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
         "played_count": len(accolades.played_player_ids(db)),
         "teams": accolades.season_teams(db),
         "champions_recorded": recorded,
+        "recorded": accolades.recorded_counts(db, label),
     }
 
 
@@ -110,27 +125,71 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
             rank=rank,
             archived_at=now,
         ))
-    champions = [c.model_dump() for c in body.champions] if body.champions else None
+    champions = ([c.model_dump() for c in body.champions]
+                 if body.champions and body.record_champions else None)
+    parts = {"archive": True, "awards": body.record_awards, "champions": body.record_champions,
+             "played": body.record_played, "summary": body.store_summary}
     try:
-        recorded = accolades.record_season(db, season_label, champions, admin["user_id"])
+        recorded = accolades.record_season(db, season_label, champions, admin["user_id"],
+                                           awards=body.record_awards,
+                                           champions_on=body.record_champions,
+                                           played=body.record_played)
     except Exception:
         db.rollback()
         logger.exception("End Season: recording accolades failed for %s", season_label)
         raise HTTPException(status_code=500,
                             detail="Recording accolades failed; nothing was archived")
+    try:
+        summary = season_summary.store(db, season_label) if body.store_summary else None
+    except Exception:
+        db.rollback()
+        logger.exception("End Season: storing the summary failed for %s", season_label)
+        raise HTTPException(status_code=500,
+                            detail="Storing the season summary failed; nothing was archived")
+    ran = ",".join(k for k, v in parts.items() if v)
     _audit(db, "admin_season_archived", actor_id=admin["user_id"],
            actor_username=admin["username"],
            detail=f"season_label={season_label} users={len(standings)} "
-                  f"accolades={recorded['accolades']} champions={recorded['champions']}")
+                  f"accolades={recorded['accolades']} champions={recorded['champions']} "
+                  f"parts={ran}" + (f" summary_players={summary['players']} "
+                                    f"summary_teams={summary['teams']}" if summary else ""))
     db.commit()
     result = {"season_label": season_label, "archived_users": len(standings),
               "accolades": recorded["accolades"], "awards": recorded["awards"],
-              "champions": recorded["champions"], "played": recorded["played"]}
-    if recorded["played"] == 0 and recorded["awards"] == 0:
+              "champions": recorded["champions"], "played": recorded["played"],
+              "parts": parts, "summary": summary}
+    if not accolades.played_player_ids(db):
         result["note"] = "No scored matches: no awards or played rows recorded"
-    if not champions:
+    if body.record_champions and not champions:
         result["warning"] = "No champions recorded; add them in Player management"
     return result
+
+
+@router.post("/admin/season/summary", dependencies=[Depends(require_recent_reauth),
+                                                    Depends(require_typed_confirmation("season_summary"))])
+def store_season_summary(body: SeasonSummaryBody, db=Depends(get_db),
+                         admin: dict = Depends(require_admin)):
+    """Store the season summary (issue #133) for a season archived without one, from
+    the live data: only before Reset Season has cleared it."""
+    label = body.season_label.strip()
+    if not db.query(SeasonArchive.id).filter(SeasonArchive.season_label == label).first():
+        raise HTTPException(status_code=404, detail=f"Season '{label}' is not archived")
+    if season_summary.has_summary(db, label):
+        raise HTTPException(status_code=409, detail=f"Season '{label}' already has a summary")
+    if not season_summary.has_live_data(db):
+        raise HTTPException(status_code=409,
+                            detail="No live matches: the season's data has already been reset")
+    stored = season_summary.store(db, label)
+    _audit(db, "admin_season_summary", actor_id=admin["user_id"], actor_username=admin["username"],
+           detail=f"season_label={label} players={stored['players']} teams={stored['teams']}")
+    db.commit()
+    return {"season_label": label, **stored}
+
+
+@router.get("/admin/season/reset-preview")
+def reset_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
+    """What Reset Season would delete and keep, with row counts (issue #133). Read-only."""
+    return season_reset.preview(db)
 
 
 @router.post("/admin/season/reset", dependencies=[Depends(require_recent_reauth),
@@ -155,66 +214,49 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
 
     Takes an automatic online backup of the SQLite database immediately
     before deleting anything, since this single call is the most destructive
-    operation in the app and has no undo path otherwise. Aborts with a 500
-    (no deletes performed) if the backup cannot be taken, rather than
-    proceeding uninsured.
-    """
-    locked_weeks = db.query(Week).filter(Week.is_locked == True).all()  # noqa: E712
-    if locked_weeks and not body.force:
-        newest_lock = max(w.start_time or 0 for w in locked_weeks)
-        newer_archive = (db.query(SeasonArchive)
-                         .filter(SeasonArchive.archived_at >= newest_lock).first())
-        if not newer_archive:
-            raise HTTPException(
-                status_code=409,
-                detail="Locked weeks exist but no season archive was created "
-                       "after the newest locked week. Run End Season first "
-                       "or pass force=true.")
+    operation in the app and has no undo path otherwise. The backup is renamed to a
+    permanent season backup (fantasy.db.season-<label>-<timestamp>, issue #133) that
+    the daily cleanup never deletes. Aborts with a 500 (no deletes performed) if the
+    backup cannot be taken, rather than proceeding uninsured.
 
+    Issue #133: also clears the Weekly Report tables, live_matches, match_timings,
+    Twitch presence and the demo clock override (season_reset.TABLE_GROUPS lists
+    every table), then empties the in-memory season caches after the commit.
+    """
+    if season_reset.end_season_missing(db) and not body.force:
+        raise HTTPException(status_code=409, detail=season_reset.END_SEASON_MISSING)
+
+    label = (body.season_label or "").strip() or season_reset.backup_label(db)
     try:
         backup_path = backup_sqlite_db()
+        backup_path = rename_to_season_backup(backup_path, label)
     except Exception as e:
+        # The error text can hold absolute server paths: log it, return only its type.
+        logger.exception("Season reset aborted: pre-reset backup failed")
         raise HTTPException(
             status_code=500,
-            detail=f"Season reset aborted — pre-reset backup failed: {e}")
+            detail=f"Season reset aborted — pre-reset backup failed ({type(e).__name__})")
     if backup_path is None:
         raise HTTPException(
             status_code=500,
             detail="Season reset aborted — no pre-reset backup could be taken")
 
     counts = {
-        "card_match_points":     card_points.delete_card_points(db),
-        "player_match_stats":    db.query(PlayerMatchStats).delete(synchronize_session=False),
-        "match_bans":            db.query(MatchBan).delete(synchronize_session=False),
-        "matches":               db.query(Match).delete(synchronize_session=False),
-        "weekly_roster_entries": db.query(WeeklyRosterEntry).delete(synchronize_session=False),
-        "weeks":                 db.query(Week).delete(synchronize_session=False),
-        "twitch_mvp":            db.query(TwitchMVP).delete(synchronize_session=False),
-        "twitch_token_drops":    db.query(TwitchTokenDrop).delete(synchronize_session=False),
-        "players":               db.query(Player).delete(synchronize_session=False),
-        "teams":                 db.query(Team).delete(synchronize_session=False),
-        "card_modifiers":        db.query(CardModifier).delete(synchronize_session=False),
-        "cards":                 db.query(Card).delete(synchronize_session=False),
         # Issue #188: next season's league players get their own card again.
         "own_player_card_grants": db.query(OwnPlayerCardGrant).delete(synchronize_session=False),
+        **season_reset.clear(db, skip=("own_player_card_grants",)),
     }
-    initial_tokens = int(os.getenv("INITIAL_TOKENS", "5"))
-    counts["users_tokens_reset"] = (
-        db.query(User).update({User.tokens: initial_tokens},
-                              synchronize_session=False)
-    )
-    counts["leagues_unmonitored"] = (
-        db.query(League).filter(League.is_monitored == True)  # noqa: E712
-        .update({League.is_monitored: False}, synchronize_session=False)
-    )
-    kept = {"season_accolades": db.query(SeasonAccolade).count()}
+    kept = season_reset.kept_counts(db)
+    backup_file = os.path.basename(backup_path)
     detail = (f"backup={backup_path} " + " ".join(f"{k}={v}" for k, v in counts.items())
               + f" kept_season_accolades={kept['season_accolades']}")
     _audit(db, "admin_season_reset", actor_id=admin["user_id"],
            actor_username=admin["username"], detail=detail)
     db.commit()
-    return {"status": "ok", "initial_tokens": initial_tokens, "counts": counts,
-            "kept": kept, "backup_path": backup_path}
+    season_reset.bust_caches()
+    return {"status": "ok", "initial_tokens": season_reset.initial_tokens(), "counts": counts,
+            "kept": kept, "season_label": label, "backup_path": backup_path,
+            "backup_file": backup_file}
 
 
 @router.get("/audit-logs")

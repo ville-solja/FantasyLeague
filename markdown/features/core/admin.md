@@ -16,7 +16,7 @@ These endpoints also need a password re-entry (`POST /reauth`, see `core/auth.md
 session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they return 403
 `{"detail": "reauth_required"}` and do nothing:
 
-- `POST /admin/season/end` and `POST /admin/season/reset`
+- `POST /admin/season/end`, `POST /admin/season/reset` and `POST /admin/season/summary` (issue #133)
 - `DELETE /admin/leagues/{league_id}/data`
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
@@ -41,8 +41,9 @@ other admin endpoints work without re-authentication.
 
 ### Typed confirmation
 
-Steam OpenID cannot force a fresh password prompt, so six destructive actions also need the
-action's name typed in, for every admin (issue #150). The backend dependency
+Steam OpenID cannot force a fresh password prompt, so seven destructive actions also need the
+action's name typed in, for every admin (issue #150), and so do two Demo Mode actions (issues #145
+and #147). The backend dependency
 `require_typed_confirmation(action)` (`backend/deps.py`, after the re-auth check) reads `confirm`
 from the query string or the JSON body (case and surrounding spaces ignored) and otherwise answers
 400 `{"detail": "confirmation_required"}`. The admin panel asks for the phrase in a dialog
@@ -52,10 +53,13 @@ from the query string or the JSON body (case and surrounding spaces ignored) and
 |---|---|---|
 | Season end | `POST /admin/season/end` | `END SEASON` |
 | Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Save season summary (issue #133) | `POST /admin/season/summary` | `SAVE SUMMARY` |
 | Admin toggle | `POST /users/{user_id}/toggle-admin` | `CHANGE ADMIN` |
 | Token grant | `POST /grant-tokens` | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
 | Delete Twitch viewer account | `DELETE /admin/users/{user_id}` (soft accounts only) | `DELETE USER` |
+| Load a season scenario (Demo Mode, issue #145) | `POST /admin/demo/scenario` | `LOAD SCENARIO` |
+| Restore a snapshot (Demo Mode, issue #147) | `POST /admin/demo/snapshots/{name}/restore` | `RESTORE SNAPSHOT` |
 
 **Support rule (issue #167).** Admins never grant tokens or cards, move accounts or change account
 details because someone asks in chat or a DM, however urgent or official it sounds. Lost items
@@ -392,6 +396,9 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `admin_demo_clock_set` | Operator set the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_clock_cleared` | Operator cleared the demo clock override (`DEMO_MODE` only) |
 | `admin_demo_accounts_seeded` | Operator seeded disposable demo accounts (`DEMO_MODE` only) |
+| `demo_scenario_loaded` | Operator loaded a season scenario, replacing the game data (`DEMO_MODE` only; `detail` has `name=… users=… matches=…`) |
+| `demo_snapshot_saved` | Operator saved a database snapshot (`DEMO_MODE` only; `detail` has `name=…`) |
+| `demo_snapshot_restored` | Operator restored a database snapshot, replacing all data; written after the restore (`DEMO_MODE` only; `detail` has `name=…`) |
 
 ---
 
@@ -451,5 +458,5 @@ These features have dedicated reference documents:
 | Season Finals | `GET /admin/finals`, `PUT /admin/finals/tiebreak`, `POST /admin/finals/pause`, `POST /admin/finals/close`, `PUT /admin/finals/result` | `core/finals-predictions.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |
-| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts` (all `DEMO_MODE`-gated) | `reference/demo-mode.md` |
+| Demo Mode | `GET/POST/DELETE /admin/demo/clock`, `POST /admin/demo/seed-accounts`, `POST /admin/demo/scenario`, `GET/POST /admin/demo/snapshots`, `POST /admin/demo/snapshots/{name}/restore` (all `DEMO_MODE`-gated) | `reference/demo-mode.md`, `reference/testing-tooling.md` |
 | Weekly Summary Report | `GET /weekly-summary`, `GET /weekly-summary/{week_id}`, `POST /weekly-summary/{week_id}/reveal`, `POST /weekly-summary/reveal-all`, `POST /weekly-summary/seen`, `POST /weekly-summary/prompted` | `core/weekly-summary.md` |

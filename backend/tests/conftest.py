@@ -19,6 +19,17 @@ from sqlalchemy.orm import sessionmaker
 from database import Base
 
 
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Start every test with empty counters in the shared slowapi limiter. Its
+    in-memory storage lives for the whole worker process, so without this a test
+    that logs in can get 429 from logins made by whichever tests xdist happened to
+    run before it on the same worker."""
+    import rate_limit
+    rate_limit.limiter.reset()
+    yield
+
+
 @pytest.fixture
 def db():
     engine = create_engine("sqlite:///:memory:")

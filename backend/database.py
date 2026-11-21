@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -95,20 +96,42 @@ def _sqlite_db_path() -> Path | None:
     return Path(DATABASE_URL[len(prefix):])
 
 
-def list_sqlite_backups() -> list[Path]:
-    """Backup files (from backup_sqlite_db()) next to the live SQLite DB, newest
-    first. Empty for non-SQLite URLs or if the DB directory can't be found."""
+SEASON_LABEL_MAX = 60
+
+
+def season_label_slug(label) -> str:
+    """A season label as a file-name part (issue #133): only [A-Za-z0-9-], runs of
+    anything else become one "-", trimmed and capped; "season" when nothing is left."""
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", str(label or "")).strip("-")[:SEASON_LABEL_MAX].strip("-")
+    return slug or "season"
+
+
+def _backups_matching(pattern: str) -> list[Path]:
     db_path = _sqlite_db_path()
     if db_path is None or not db_path.parent.is_dir():
         return []
     files = []
-    for f in db_path.parent.glob(f"{db_path.name}.backup-*"):
+    for f in db_path.parent.glob(f"{db_path.name}.{pattern}"):
         try:
             if f.is_file():
                 files.append((f.stat().st_mtime, f))
         except OSError:
             pass
     return [f for _, f in sorted(files, key=lambda t: t[0], reverse=True)]
+
+
+def list_sqlite_backups() -> list[Path]:
+    """Backup files (from backup_sqlite_db()) next to the live SQLite DB, newest
+    first. Empty for non-SQLite URLs or if the DB directory can't be found. Season
+    backups (fantasy.db.season-*) are not in this list, so the daily cleanup never
+    deletes them."""
+    return _backups_matching("backup-*")
+
+
+def list_season_backups() -> list[Path]:
+    """Permanent season backups (fantasy.db.season-<label>-<timestamp>, issue #133),
+    newest first. Nothing deletes them automatically."""
+    return _backups_matching("season-*")
 
 
 def cleanup_old_backups(retention_days: int) -> int:
@@ -127,9 +150,11 @@ def cleanup_old_backups(retention_days: int) -> int:
     return deleted
 
 
-def backup_sqlite_db() -> str | None:
+def backup_sqlite_db(kind: str = "daily", label: str | None = None) -> str | None:
     """Online backup of the live SQLite database, mirroring scripts/backup-db.sh's
     naming convention ({db}.backup-{timestamp}) but callable from within a request.
+    kind="season" names it {db}.season-{label slug}-{timestamp} instead (issue #133),
+    a file the daily cleanup never deletes.
 
     Uses sqlite3's backup API (not a raw file copy) so a backup taken while the
     engine holds a WAL-mode connection is always transactionally consistent.
@@ -142,7 +167,11 @@ def backup_sqlite_db() -> str | None:
     db_path = str(sqlite_path)
     if not os.path.isfile(db_path):
         return None
-    backup_path = f"{db_path}.backup-{time.strftime('%Y%m%d-%H%M%S')}"
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    if kind == "season":
+        backup_path = f"{db_path}.season-{season_label_slug(label)}-{stamp}"
+    else:
+        backup_path = f"{db_path}.backup-{stamp}"
     # Create the file owner-only up front so it is never world-readable, even
     # briefly: backups hold password hashes and emails.
     os.close(os.open(backup_path, os.O_CREAT | os.O_WRONLY, 0o600))
@@ -157,3 +186,38 @@ def backup_sqlite_db() -> str | None:
         src.close()
     os.chmod(backup_path, 0o600)
     return backup_path
+
+
+_BACKUP_SUFFIX_RE = re.compile(r"\.backup-(\d{8}-\d{6})$")
+
+
+def rename_to_season_backup(path: str | None, label: str | None) -> str | None:
+    """Rename a backup written by backup_sqlite_db() to its permanent season name
+    ({db}.season-{label slug}-{timestamp}, issue #133), in the same directory.
+    A path that is not an existing file (None, or a test stub) is returned as is."""
+    if not path or not os.path.isfile(path):
+        return path
+    db_path = _sqlite_db_path()
+    if db_path is None:
+        return path
+    # Source and target must both sit directly in the live DB's directory.
+    db_dir = os.path.realpath(db_path.parent)
+    src = os.path.realpath(path)
+    if not src.startswith(db_dir + os.sep) or os.path.dirname(src) != db_dir:
+        raise ValueError("Backup is not in the database directory")
+    name = os.path.basename(src)
+    m = _BACKUP_SUFFIX_RE.search(name)
+    stamp = m.group(1) if m else time.strftime('%Y%m%d-%H%M%S')
+    base = name[:m.start()] if m else name
+    stem = f"{base}.season-{season_label_slug(label)}-{stamp}"
+    # Two resets with the same label in the same second must not overwrite each other.
+    n = 1
+    while True:
+        target = os.path.normpath(os.path.join(db_dir, stem if n == 1 else f"{stem}-{n}"))
+        if not target.startswith(db_dir + os.sep) or os.path.dirname(target) != db_dir:
+            raise ValueError("Season backup name escapes the database directory")
+        if not os.path.exists(target):
+            break
+        n += 1
+    os.replace(src, target)
+    return os.path.join(os.path.dirname(path), os.path.basename(target))

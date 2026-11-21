@@ -1,27 +1,107 @@
 # Testing Tooling
 
-Tools for testing on dev and test servers: load a realistic season state in one action, drive ingest from a local mock OpenDota, and save or restore the test database. All of it is behind `DEMO_MODE` and refused in production.
+Tools for testing on dev and test servers:
+
+- load a realistic season state in one action;
+- drive ingest from a local mock OpenDota;
+- save and restore the test database.
+
+All of it is behind `DEMO_MODE` and refused in production. Plans: `plan-issue-145-season-scenarios.md`, `plan-issue-146-mock-opendota.md` and `plan-issue-147-demo-snapshots.md`.
 
 ---
 
-## Season scenarios *(planned)*
+## Season scenarios
 
-`POST /admin/demo/scenario` with `pre-season`, `mid-season` or `season-end` replaces the game data with a deterministic, synthetic season and sets the demo clock. Mid-season has 5 scored weeks, rosters with benches, MVPs, a bench substitution, and one unparsed and one excluded match. Scenario accounts use `DEMO_ACCOUNT_PASSWORD`.
+`POST /admin/demo/scenario` with `pre-season`, `mid-season` or `season-end` replaces the game data with a deterministic, synthetic season and sets the demo clock. The admin Demo Mode panel has a scenario picker with an in-page confirmation where the admin types `LOAD SCENARIO` (the issue #150 rule for destructive admin actions); the request goes through `adminFetch`, so it asks for the password when the re-auth is not recent.
 
-## Mock OpenDota *(planned)*
+| Scenario | Seed | Weeks locked | Data |
+|---|---|---|---|
+| `pre-season` | 145001 | 0 of 10 | No matches; accounts with starter tokens (`INITIAL_TOKENS`) and 3 cards each |
+| `mid-season` | 145002 | 5 of 10 | Week 6 open; 10–15 cards per account with benches, MVPs on 4 of 5 matches, a bench substitution in week 3, one unparsed and one excluded match in week 4 |
+| `season-end` | 145003 | 10 of 10 | Every week scored and reported, no season archive, so End Season can run |
 
-`tools/mock_opendota/` serves the OpenDota endpoints the app uses, from the same scripted season. The app points at it with `OPENDOTA_BASE_URL`. Control endpoints release the next match, make a game live, or mark a match parsed, so ingest, live polling, parse retry and early MVP selection can be tested end to end. Start it with the `mock` Compose profile.
+All three have 8 teams ("Scenario Team A" to "H") of 5 generated players, two-game series, and the monitored league `990001` (`scenarios.SCENARIO_LEAGUE_ID`, shared with the mock). Week 1 starts Monday 2026-01-05 00:00 UTC; each week's match window is Monday to Friday, so the weekend leaves room for the 24-hour substitution delay. The final clock is 12 hours before the next week's lock: for mid-season, Sunday before week 6, with weeks 1–5 locked, substituted and reported and week 6 still editable.
 
-## Snapshots *(planned)*
+### What is kept
 
-Save the test database under a name and restore it later (SQLite online backup, `data/demo-snapshots/`). Restore requires the admin password re-entry.
+`backend/scenarios.py` lists the tables. A load keeps `scenarios.KEPT_TABLES` (`weights`, `scoring_state`, `tag_definitions`, `audit_logs`, `demo_clock`) and the caller's own `users` and `user_sessions` rows, so the caller stays logged in. It runs `season_reset.clear()` and then deletes every table in `scenarios.EXTRA_DELETED_TABLES`, which is every other table, season history and other accounts included, so scenario data never mixes with real data. A test checks that each model table is in exactly one of `season_reset.CLEARED_TABLES`, `KEPT_TABLES` and `EXTRA_DELETED_TABLES`. An empty `weights` table gets the default weights.
+
+### How it is built
+
+1. `backend/season_generator.py`'s `generate(seed, *, weeks, teams, players_per_team, games_per_team_week, users, cards_per_user, roster_size, start, …)` returns plain dicts: teams, players, weeks, matches (with `radiant_name`, `dire_name`, `parse_status`, `series_id`, per-player stats with `hero_id` and `is_mvp`) and users with cards and modifiers. It imports only `scoring.SCORING_STATS` and `card_utils._SCORED_STAT_COLS`; note that `card_utils` imports `models`, so the mock's container mounts the backend and installs its dependencies. `scripts/bench_leaderboards.py` writes the same output, with the same draws as before, so its counts and totals are unchanged.
+2. The loader inserts the league, teams, players, unlocked weeks, the accounts (`scenario-admin` as admin and `scenario1`–`scenario5`, all `is_demo` with `@demo.local` emails). The players' password is `DEMO_ACCOUNT_PASSWORD`; `scenario-admin` gets a new random password (`secrets.token_urlsafe`) on every load, returned once in the response and never logged or audited, so a tester given a player login doesn't also have the admin login and their cards. Only active cards get a `slot_index`. If the caller's username matches a scenario account name, the caller's row plays that account.
+3. For each week to lock it changes `scenario5`'s roster from week 2 on (one active card swapped for a bench card), sets the clock to the week's start, runs `auto_lock_weeks`, `due_substitutions` and `generate_weekly_summaries` (the `POST /admin/demo/clock` sequence), and inserts the week's matches with `fantasy_points` including the MVP bonus. The player on `scenario1`'s first card plays no game in week 3, which gives the substitution.
+4. It sets the final clock, runs the jobs again, rebuilds stored card points (`card_points.rebuild_all`), writes the `demo_scenario_loaded` audit entry (`name=… users=… matches=…`) and empties the season caches after the commit.
+
+The week jobs commit as they go, so the loader turns the session's commits into flushes for the duration of the load. The load is one transaction: an error anywhere rolls back the wipe too.
+
+## Mock OpenDota
+
+`tools/mock_opendota/` is a local stand-in for OpenDota and for Steam's `GetLiveLeagueGames`, where live games have come from since #161. The app's real polling code runs against it, end to end: ingest, live polling, parse retry and early MVP selection. Its control endpoints release the next match, make a game live and mark a match parsed. Control calls with `curl` and the response shapes are in [tools/mock_opendota/README.md](../../../tools/mock_opendota/README.md).
+
+The mock is a dev tool. It is never in the app image (the root `.dockerignore` excludes `tools/`), and Compose publishes it on `127.0.0.1:8090` only, because the control endpoints have no authentication. It runs with `--no-access-log`, so the query-string keys the app sends are not logged. Never point an app that holds real `OPENDOTA_API_KEY` or `STEAM_API_KEY` values at it.
+
+### Walkthrough
+
+1. Start the app with the mock:
+
+   ```
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.mock.yml up
+   ```
+
+   `docker-compose.mock.yml` adds the `mock_opendota` service and sets the backend's `OPENDOTA_BASE_URL=http://mock_opendota:8090`, `STEAM_LIVE_URL=http://mock_opendota:8090/IDOTA2Match_570/GetLiveLeagueGames/v1/` and `STEAM_API_KEY=mock`. It also sets short poll intervals (`INGEST_POLL_INTERVAL=30`, `LIVE_POLL_INTERVAL=15`), a wide `INGEST_PARSE_RETRY_HOURS` and an empty `DOTABUFF_LEAGUE_LOGO_PAGES` (no logo scraping); details below.
+2. With `DEMO_MODE=true` and `DEMO_ACCOUNT_PASSWORD` set, load the `mid-season` scenario (Admin › Settings › Maintenance › Demo Mode). League 990001 is then monitored in Admin › Settings › Season › League Management. Without the scenario, add league 990001 there and mark it monitored.
+3. Release a match: `curl -X POST localhost:8090/_control/next-match`. The next ingest pass, within `INGEST_POLL_INTERVAL` (30 s here) or at once with **Ingest Now** on the league's row in League Management, stores it with its stats and points.
+4. Make a game live: `curl -X POST localhost:8090/_control/live -H 'Content-Type: application/json' -d '{"minutes": 10}'`. The live poll stores it in `live_matches`, and the Twitch panel shows it as provisional for early MVP selection.
+5. Parse retry: release a match with `-d '{"unparsed": true}'`, which gives Partial stats. Parse it with `curl -X POST localhost:8090/_control/parse/<id>`, and the next parse-retry pass (or **Retry parse** in Admin › Matches) replaces the stats.
+6. Release two matches and check week 6 points on My Team. `curl -X POST localhost:8090/_control/reset` starts the script over; matches the app already stored stay stored.
+
+### Script
+
+By default the script is the mid-season scenario's unplayed weeks 6–10: 40 matches in league `990001`. It is built with `season_generator.generate()` and the same seed and parameters as `scenarios.load("mid-season")`, so the teams, players and match ids are the scenario's, and released matches score against the scenario's rosters. Matches are released in start-time order and keep their scripted start times, so they fall into scenario weeks 6–10.
+
+`MOCK_SEED=<integer>` gives a standalone league instead (id `990100 + seed % 900`) with its own team, player and match ids. A value that is not an integer stops the mock at startup.
+
+Match JSON uses OpenDota's fields as `ingest.py` reads them. An unparsed match has no `version` and only `season_generator.UNPARSED_STATS`, as OpenDota sends before a replay parse, so ingest stores it as `unparsed` and asks for a parse (`POST /request/{id}`, recorded in `/_control/state`). The Steam response follows `steam_live.parse_live_league_games`; every other player has no name, as Steam often sends. Without a key the Steam path answers 403, and it never echoes the key.
+
+The mock imports `backend/season_generator.py` and `backend/scenarios.py` from a read-only `./backend:/backend:ro` mount. They import the backend's models, so the mock image installs the backend's hash-locked `requirements.lock`, and `DATABASE_URL=sqlite://` keeps `database` on an in-memory SQLite, so the mock never creates a database file.
+
+### Polling and the clock
+
+- **Demo Mode.** It skips the ingest and live poll threads only while `OPENDOTA_BASE_URL` is the real API (`opendota_client.is_default_base_url()`, which compares the hostname, so `http://`, an uppercase host or a port still count as the real API). Other jobs, such as profile enrichment and the hero constants warm-up, still call the address that is set. With the mock address, both run. The live thread also needs a non-default `STEAM_LIVE_URL` (`steam_live.is_default_url()`, also by hostname), so a demo server never calls the real Steam API; otherwise start-up logs "Live poll thread skipped (DEMO_MODE=true with the default STEAM_LIVE_URL)". Start-up logs which rule applied: "Demo Mode with the default OpenDota address: match polling is off" or "Demo Mode with a non-default OpenDota address (mock): match polling runs".
+- **Parse retry.** It uses the real clock, and scripted matches are dated 2026. The mock Compose file therefore sets `INGEST_PARSE_RETRY_HOURS=87600`, so these matches are re-checked and not marked unparseable at once.
+- **Production.** With `ENV=production`, startup refuses a non-https `OPENDOTA_BASE_URL` or `STEAM_LIVE_URL` (`[SECURITY]` `RuntimeError` naming the variable; only the scheme is printed, never the address).
+
+## Snapshots
+
+An admin saves the live database under a name and restores it later, to repeat a manual test from the same starting point (Admin › Settings › Maintenance › Demo Mode › Snapshots). Code: `backend/demo_snapshots.py`.
+
+- **Save** writes `data/demo-snapshots/{name}.db` (next to the live database file) with SQLite's online backup, so it is consistent while the app runs. The folder is created `0700` and each file `0600`, since snapshots hold password hashes and emails. `.gitignore` lists `data/demo-snapshots/`; `.dockerignore` already excludes `data/`. An existing name gives 409; there is no delete (remove files by hand).
+- **Names** match `^[A-Za-z0-9-]{1,40}$`. `path_for(name)` builds the path only from a valid name and checks it resolves inside the folder, so `../x`, `a/b`, `..%2Fx`, a 41-character name and an empty name get 422 and no file outside the folder is read or written.
+- **Location.** The folder follows the live database path (`DATABASE_URL`), so it is `data/demo-snapshots/` only when the database is `data/fantasy.db`; `.gitignore` and `.dockerignore` cover it only there. Snapshots are never pruned.
+- **Symlinks.** A name whose file in the folder is a symlink is invalid (422), even when it points at another snapshot there; save opens the new file with `O_NOFOLLOW`, and the list skips symlinks.
+- **Restore** runs under the same module lock as save, one at a time. A WARNING log line names the snapshot and the admin before the data is replaced:
+  1. The snapshot is opened read-only (`file:…?mode=ro`). If its `users` table has no admin with the caller's id, it answers 409 and changes nothing, since the caller would be locked out.
+  2. The caller's `user_sessions` rows are read, the connection pool is disposed and `snapshot.backup(live)` copies the snapshot into the live file.
+  3. On the same raw connection, every `user_sessions` row is deleted and the caller's rows are written back, before anything else can fail: the caller stays logged in and every other session ends (401 on the next request), and no snapshot session is valid even briefly.
+  4. The pool is disposed again so no connection keeps old pages, then `create_all` and `migrate.run_migrations` bring an older snapshot up to the current schema, and the ORM writes the caller's sessions once more.
+  5. `card_points.rebuild_all` rebuilds stored card points, the `demo_snapshot_restored` audit entry is written (after the swap, so it survives; `detail` is `name=… replaced_state_at=<Unix time just before the swap>`), and `season_reset.bust_caches()` empties the in-memory caches.
+
+  If step 4 or 5 fails, every session is deleted (logged), the error is logged and the response is 500 with only the exception type; log in again and restore once more. Refused restores (404, 409) are not audited.
+- **What comes back.** A restore brings back everything in the snapshot, including its users' admin flags and password hashes: a password changed since the save reverts.
+
+Restore needs a recent password re-entry and the typed phrase `RESTORE SNAPSHOT`. Both save and restore also answer 409 "Snapshots need a local SQLite database" for a non-SQLite `DATABASE_URL`; save answers 409 "The live database file was not found" when the file is missing; restore answers 409 "The snapshot can't be read" when SQLite can't open the file (the path is logged on the server only). Error responses never contain filesystem paths; a failed save or restore is logged on the server and answers 500 with only the exception type. The audit log after a restore is the snapshot's, plus the restore entry.
 
 ## Endpoints
 
-### `POST /admin/demo/scenario` *(planned)*
-### `GET /admin/demo/snapshots` *(planned)*
-### `POST /admin/demo/snapshots` *(planned)*
-### `POST /admin/demo/snapshots/{name}/restore` *(planned)*
+### `POST /admin/demo/scenario`
+Body `{"name": "pre-season" | "mid-season" | "season-end"}` (422 otherwise). Requires a recent re-auth (403 `reauth_required`) and `confirm` equal to `LOAD SCENARIO` in the body or query, any case (400 `confirmation_required`, `deps.CONFIRM_PHRASES["demo_scenario"]`). The checks run in that order, after the Demo Mode check (404). Returns 409 when `DEMO_ACCOUNT_PASSWORD` is unset or breaks the registration password rules (at least 6 characters, at most 72 bytes); the message names the variable, never its value. Answers `{"scenario", "override_timestamp", "effective_now", "accounts": [usernames], "counts": {accounts, teams, players, weeks, locked_weeks, matches, stat_rows, cards, roster_entries, substitutions}, "admin_password"}`. `admin_password` is scenario-admin's one-time password (`null` when the caller is scenario-admin and keeps their own); the response never contains `DEMO_ACCOUNT_PASSWORD`.
+### `GET /admin/demo/snapshots`
+Admin only, no re-auth. Answers `{"snapshots": [{"name", "size_bytes", "saved_at"}]}`, newest first (`saved_at` is the file's modification time, Unix seconds); an empty list before the first save.
+### `POST /admin/demo/snapshots`
+Admin only, no re-auth. Body `{"name"}`, matching `^[A-Za-z0-9-]{1,40}$` (422 otherwise, also for a name that is a symlink in the folder). Returns 409 when the name exists, for a non-SQLite database or when the live file is missing. Answers `{"name", "size_bytes", "saved_at"}`. Audited `demo_snapshot_saved` (`detail` `name=…`).
+### `POST /admin/demo/snapshots/{name}/restore`
+Requires a recent re-auth (403 `reauth_required`) and `confirm` equal to `RESTORE SNAPSHOT` in the body or query, any case (400 `confirmation_required`, `deps.CONFIRM_PHRASES["demo_snapshot_restore"]`), after the Demo Mode check (404). The route takes `{name:path}`, so a name with `/` reaches the handler: an invalid name (including `../x`, `a/b`, `..%2Fx` and an empty name, `/admin/demo/snapshots//restore`) answers 422, not 404. A symlinked name answers 422 too. A valid name without a file answers 404; a snapshot without the caller as an admin, or one SQLite can't read, answers 409. Answers `{"restored": name, "card_points_rows": n}`. Audited `demo_snapshot_restored` (`detail` `name=…`).
 
 All are admin only, and return 404 unless `DEMO_MODE=true`.
 
@@ -29,11 +109,13 @@ All are admin only, and return 404 unless `DEMO_MODE=true`.
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENDOTA_BASE_URL` | `https://api.opendota.com/api` | OpenDota API address; point it at the mock in dev. Must be https with `ENV=production` |
-| `DEMO_ACCOUNT_PASSWORD` | *(empty)* | Password for scenario accounts; the scenario loader refuses to run without it |
+| `OPENDOTA_BASE_URL` | `https://api.opendota.com/api` | OpenDota API address, read at startup (a trailing `/` is dropped); point it at the mock in dev. Must be https with `ENV=production`. Demo Mode polls only when its host is not `api.opendota.com`. `OPENDOTA_API_KEY` is sent as a query parameter to this address: only point it at a trusted host |
+| `STEAM_LIVE_URL` | `https://api.steampowered.com/IDOTA2Match_570/GetLiveLeagueGames/v1/` | Live-games address; point it at the mock in dev. Must be https with `ENV=production`. `STEAM_API_KEY` is sent as a query parameter to this address: only point it at a trusted host |
+| `DEMO_ACCOUNT_PASSWORD` | *(empty)* | Password for the scenario player accounts (`scenario1`–`scenario5`; `scenario-admin` gets its own one-time password); the loader answers 409 when it is unset, shorter than 6 characters or over 72 bytes |
+| `MOCK_SEED` | *(empty)* | Mock only: an integer gives a standalone scripted league (id `990100 + seed % 900`) instead of the mid-season scenario's weeks 6–10; anything else stops the mock |
 
-`ENV=production` refuses `DEMO_MODE=true` at startup.
+`ENV=production` refuses `DEMO_MODE=true` at startup (`[SECURITY]` `RuntimeError` from `main.py`). Test server setup (`test.kana-cards.com`): `DEMO_MODE=true`, `DEMO_ACCOUNT_PASSWORD` set, `ENV` unset.
 
 ---
 
-*This document is a stub created at feature planning time. Fill in implementation details once the feature is built.*
+*This document was a stub created at feature planning time. Season scenarios (#145), the mock OpenDota (#146) and snapshots (#147) are now filled in.*

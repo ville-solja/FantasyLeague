@@ -8,12 +8,12 @@ Converts the static username label in the page header into a clickable button th
 
 When a user is logged in, their username is displayed as a ghost-style button in the top-right header alongside the Logout button. Clicking it activates the Profile tab. When logged out, the button is hidden so no empty interactive element is visible.
 
-No backend changes are involved. The feature is purely a frontend interaction change: the `<span id="headerUserLabel">` element becomes a `<button>`, `applyAuthState()` toggles its visibility, and an `onclick` handler calls the existing `switchTab('profile')` function.
+No backend changes are involved. The feature is purely a frontend interaction change: the `<span id="headerUserLabel">` element becomes a `<button>`, `applyAuthState()` toggles its visibility, and an `onclick` handler opens the Profile tab (since #245 `openTab('profile')`, which also adds a history entry with `/#profile`; see `linkable-tabs.md`).
 
 ## Files changed
 
 | File | Change |
 |---|---|
-| `frontend/index.html` | `#headerUserLabel` changed from `<span>` to `<button class="ghost header-profile-btn" onclick="switchTab('profile')">` |
+| `frontend/index.html` | `#headerUserLabel` changed from `<span>` to `<button class="secondary header-profile-btn" onclick="openTab('profile')">` (`switchTab` before #245) |
 | `frontend/style.css` | `.header-profile-btn` — display font, bold weight, `0.04em` tracking, `4px 10px` padding |
 | `frontend/app-auth.js` | `applyAuthState()` toggles `userLabel.style.display` alongside `textContent` |

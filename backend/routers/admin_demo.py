@@ -1,19 +1,25 @@
+import logging
 import os
 import secrets
 import time
+
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 import clock
+import demo_snapshots
+import scenarios
 from auth import check_reserved, hash_password, username_taken
 from database import get_db
-from deps import require_admin, _audit
+from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
 from models import User
 from routers.cards import draw_card
 from weeks import auto_lock_weeks, due_substitutions, generate_weekly_summaries
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +35,14 @@ class DemoClockBody(BaseModel):
 class SeedDemoAccountsBody(BaseModel):
     count:             int | None = Field(None, ge=1, le=100)
     cards_per_account: int | None = Field(None, ge=0, le=50)
+
+
+class ScenarioBody(BaseModel):
+    name: Literal["pre-season", "mid-season", "season-end"]
+
+
+class SnapshotBody(BaseModel):
+    name: str = Field(..., pattern=r"^[A-Za-z0-9-]{1,40}$")
 
 
 def _require_demo_mode():
@@ -122,3 +136,70 @@ def seed_demo_accounts(body: SeedDemoAccountsBody, db=Depends(get_db),
            actor_username=admin["username"], detail=f"created={len(created)}")
     db.commit()
     return {"accounts": created}
+
+
+@router.post("/admin/demo/scenario",
+             dependencies=[Depends(_require_demo_mode), Depends(require_recent_reauth),
+                           Depends(require_typed_confirmation("demo_scenario"))])
+def load_demo_scenario(body: ScenarioBody, db=Depends(get_db),
+                       admin: dict = Depends(require_admin)):
+    """Replace all game data with a named, deterministic season and set the demo clock
+    (issue #145). Keeps the caller's account and sessions. Needs a recent re-auth and
+    the typed phrase LOAD SCENARIO; 409 without a valid DEMO_ACCOUNT_PASSWORD. The
+    response names the accounts and carries scenario-admin's one-time random password
+    (`admin_password`), never DEMO_ACCOUNT_PASSWORD."""
+    _require_demo_mode()
+    return scenarios.load(db, body.name, admin["user_id"])
+
+
+# Issue #147: named database snapshots. Save and list need admin only; restore
+# replaces every row, so it needs a recent re-auth and the typed RESTORE SNAPSHOT.
+
+@router.get("/admin/demo/snapshots")
+def list_demo_snapshots(_demo: None = Depends(_require_demo_mode),
+                        _: dict = Depends(require_admin)):
+    _require_demo_mode()
+    return {"snapshots": demo_snapshots.list_all()}
+
+
+@router.post("/admin/demo/snapshots")
+def save_demo_snapshot(body: SnapshotBody, _demo: None = Depends(_require_demo_mode),
+                       db=Depends(get_db), admin: dict = Depends(require_admin)):
+    _require_demo_mode()
+    try:
+        demo_snapshots.path_for(body.name)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid snapshot name")
+    try:
+        info = demo_snapshots.save(body.name)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Demo snapshot save failed for %s", body.name)
+        raise HTTPException(status_code=500, detail=f"Saving the snapshot failed ({type(e).__name__})")
+    _audit(db, "demo_snapshot_saved", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"name={body.name}")
+    db.commit()
+    return info
+
+
+@router.post("/admin/demo/snapshots/{name:path}/restore",
+             dependencies=[Depends(_require_demo_mode), Depends(require_recent_reauth),
+                           Depends(require_typed_confirmation("demo_snapshot_restore"))])
+def restore_demo_snapshot(name: str, db=Depends(get_db), admin: dict = Depends(require_admin)):
+    """Replace all data with a saved snapshot. `{name:path}` lets names with "/" reach
+    this handler, so they get 422 instead of a routing 404. The caller stays logged in
+    and every other session ends; 409 when the snapshot lacks the caller as an admin."""
+    _require_demo_mode()
+    try:
+        demo_snapshots.path_for(name)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid snapshot name")
+    db.close()  # return this request's connection before the file is replaced
+    try:
+        return demo_snapshots.restore(name, admin["user_id"], admin["username"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Demo snapshot restore failed for %s", name)
+        raise HTTPException(status_code=500, detail=f"Restoring the snapshot failed ({type(e).__name__})")

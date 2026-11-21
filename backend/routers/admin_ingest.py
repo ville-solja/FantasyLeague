@@ -14,7 +14,7 @@ from deps import require_admin, _audit
 from enrich import run_enrichment, run_profile_enrichment
 from ingest import ingest_league, retry_unparsed_matches, INGEST_LOCK
 from models import Match, PlayerMatchStats, Week, Weight
-from schedule import get_schedule_for_request, bust_cache, out_of_week_series, SCHEDULE_SHEET_URL
+from schedule import get_schedule_for_request, bust_cache, out_of_week_series, SCHEDULE_SHEET_URL, SERIES_GAP_SECONDS
 from scoring import fantasy_score, stat_dict_from_row
 from toornament import sync_toornament_results
 from twitch import bust_panel_cache
@@ -210,9 +210,6 @@ def schedule_debug(_: dict = Depends(require_admin)):
         result["error"] = type(e).__name__
 
     return result
-
-
-SERIES_GAP_SECONDS = 6 * 3600
 
 
 def _series_matches(db, match: Match) -> list[Match]:

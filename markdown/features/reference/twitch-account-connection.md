@@ -33,7 +33,7 @@ Code: `backend/twitch_oauth.py` (routes, sign-in checks, `connect_account`), `ba
    6. verifies the ID token: RS256 signature against Twitch's keys (`https://id.twitch.tv/oauth2/keys`, PyJWT `PyJWKClient`, keys cached for an hour), `iss = https://id.twitch.tv/oauth2`, `aud` = client id, `exp`, and `nonce` equal to the stored nonce,
    7. keeps only `sub`. The access and refresh tokens are dropped at once and never stored or logged,
    8. conflicts, then stores the id (`connect_account`).
-5. Every outcome redirects to `/#profile?twitch=<key>`, never with Twitch data in the URL. Profile maps the key to a message and strips it from the address bar.
+5. Every outcome redirects to `/#profile?twitch=<key>`, never with Twitch data in the URL. Profile maps the key to a message and strips it from the address bar, which then shows `/#profile` (#245). `handleTwitchReturn()` handles only `#profile?…`; a plain `#profile` is a tab link (see [Linkable Tabs](linkable-tabs.md)).
 
 | Key | Meaning |
 |---|---|

@@ -62,6 +62,8 @@ The roster DOM outlives a render. Since #186 the grids are a keyed render (`rend
    - The incoming tab's saved position, or 0 on a first visit, is restored in a `requestAnimationFrame`.
 4. The tab's loaders always run, as a quiet refresh. Login, logout, a forced password change and the tour still get fresh data this way.
 
+Since #245 `switchTab(name, opts)` also writes the tab's link into the address (`opts.history`: `"replace"` by default, `"push"` for clicks through `openTab`, `"none"` for Back / Forward) and clears the Leaderboards link notice when the tab changes. See [Linkable Tabs](linkable-tabs.md).
+
 ### Weekly Report (`frontend/app-weekly-summary.js`, `style.css`)
 
 - **Fixed frame:** `.weekly-summary-modal { height: 85vh; max-height: 85vh }`, and `height: 92vh` at 600 px and below. In the stacked layout (1100 px and below) the popup still scrolls as one page.

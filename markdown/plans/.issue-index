@@ -11,9 +11,9 @@
 117 plan-issue-117-longer-sessions
 129 plan-issue-129-automatic-bench-substitution
 114 plan-issue-114-testing-tooling
-145 plan-issue-114-testing-tooling
-146 plan-issue-114-testing-tooling
-147 plan-issue-114-testing-tooling
+145 plan-issue-145-season-scenarios
+146 plan-issue-146-mock-opendota
+147 plan-issue-147-demo-snapshots
 149 plan-issue-149-points-rounding
 144 plan-issue-144-guided-tour
 108 plan-issue-108-kana-hub-integration-feasibility
@@ -72,3 +72,8 @@
 248 plan-issue-248-most-mvps-accolade
 251 plan-issue-251-architecture-maturity-review
 253 plan-issue-253-twitch-mvp-vote-extension
+244 plan-issue-244-schedule-player-performance
+246 plan-issue-246-obs-last-game-overlay
+245 plan-issue-245-linkable-tabs
+134 plan-issue-134-courier-kills-scoring
+133 plan-issue-133-season-reset-clean-slate

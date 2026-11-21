@@ -1,0 +1,37 @@
+# Mock OpenDota (issue #146): a local stand-in for OpenDota and Steam's
+# GetLiveLeagueGames, so the app's real ingest, live poll and parse retry run
+# against scripted matches. Dev and test only, never in production:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.mock.yml up
+#
+# See tools/mock_opendota/README.md and markdown/features/reference/testing-tooling.md.
+services:
+  mock_opendota:
+    build:
+      context: .
+      dockerfile: tools/mock_opendota/Dockerfile
+    volumes:
+      - ./tools/mock_opendota:/mock:ro
+      - ./backend:/backend:ro
+    environment:
+      - MOCK_SEED=${MOCK_SEED:-}
+    # Localhost only: the control endpoints have no authentication.
+    ports:
+      - "127.0.0.1:8090:8090"
+
+  backend:
+    depends_on:
+      - mock_opendota
+    environment:
+      - OPENDOTA_BASE_URL=http://mock_opendota:8090
+      - STEAM_LIVE_URL=http://mock_opendota:8090/IDOTA2Match_570/GetLiveLeagueGames/v1/
+      # The mock answers any non-empty key; never a real Steam key here.
+      - STEAM_API_KEY=mock
+      - OPENDOTA_API_KEY=
+      # Scripted matches are dated with the scenario weeks (2026), not the real clock:
+      # a wide parse-retry window keeps them re-checked instead of marked unparseable.
+      - INGEST_PARSE_RETRY_HOURS=87600
+      - INGEST_POLL_INTERVAL=${INGEST_POLL_INTERVAL:-30}
+      - LIVE_POLL_INTERVAL=${LIVE_POLL_INTERVAL:-15}
+      # No Dotabuff logo scraping against the mock league.
+      - DOTABUFF_LEAGUE_LOGO_PAGES=

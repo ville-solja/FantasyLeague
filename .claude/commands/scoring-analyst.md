@@ -43,8 +43,8 @@ List the stats in `SCORING_STATS`. Verify that:
 ### 2. fantasy_score() trace
 With these synthetic inputs, manually trace `fantasy_score()` step by step:
 ```
-stats: kills=5, deaths=2, last_hits=200, denies=10, gold_per_min=600, obs_placed=3, towers_killed=1, roshan_kills=0, teamfight_participation=0.6, camps_stacked=2, rune_pickups=4, firstblood_claimed=0, stuns=10.0
-weights: kills=0.3, last_hits=0.003, denies=0.0003, gold_per_min=0.002, obs_placed=0.5, towers_killed=1.0, roshan_kills=1.0, teamfight_participation=3.0, camps_stacked=0.5, rune_pickups=0.25, firstblood_claimed=4.0, stuns=0.05, death_pool=3.0, death_deduction=0.3
+stats: kills=5, assists=8, deaths=2, last_hits=200, denies=10, gold_per_min=600, obs_placed=3, towers_killed=1, roshan_kills=0, courier_kills=1, teamfight_participation=0.6, camps_stacked=2, rune_pickups=4, firstblood_claimed=0, stuns=10.0
+weights: kills=0.3, assists=0.15, last_hits=0.003, denies=0.0003, gold_per_min=0.002, obs_placed=0.5, towers_killed=1.0, roshan_kills=1.0, courier_kills=1.0, teamfight_participation=3.0, camps_stacked=0.5, rune_pickups=0.25, firstblood_claimed=4.0, stuns=0.05, death_pool=3.0, death_deduction=0.3
 ```
 Show each term (`stat × weight`) and the running total. State the expected final score.
 

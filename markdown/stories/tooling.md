@@ -258,11 +258,11 @@ As a maintainer, I want the new command registered like every other agent so tha
 As a developer testing on a dev or test server, I want to reset the app to a named, realistic season state in one action so that I can test mid-season features without building the state by hand.
 
 **Acceptance criteria**
-- `POST /admin/demo/scenario` with `{"name": "pre-season" | "mid-season" | "season-end"}` (admin, `DEMO_MODE` only, otherwise 404) replaces all game data with the named scenario and sets the demo clock to match
+- `POST /admin/demo/scenario` with `{"name": "pre-season" | "mid-season" | "season-end"}` replaces all game data with the named scenario and sets the demo clock to match. It is admin only, needs a recent password re-entry, and gives 404 when `DEMO_MODE` is off (#145)
 - **mid-season:** 10 weeks, 5 locked and scored, week 6 open for edits. 8 teams of 5 synthetic players, 1 admin and 5 player accounts with 10–15 cards each, rosters with benches, at least one bench substitution, MVPs set on most matches, one unparsed match and one excluded match
-- **pre-season:** weeks created, none locked, accounts with starter tokens and a few cards. **season-end:** all weeks locked and scored, ready for End Season
+- **pre-season:** 10 weeks, none locked, and accounts with starter tokens and a few cards. **season-end:** all 10 weeks locked and scored, with no archive yet, so End Season can run
 - The same scenario name always produces the same data: same seed, same totals
-- The loader refuses to run without `DEMO_ACCOUNT_PASSWORD`, and writes a `demo_scenario_loaded` audit entry
+- The loader refuses to run without `DEMO_ACCOUNT_PASSWORD` (409), and writes a `demo_scenario_loaded` audit entry
 - Stored card points (#141) are rebuilt, and substitutions (#129) are run for finished weeks, so every page shows consistent numbers right after loading
 - The admin Demo panel shows a scenario picker with a confirmation step in the page; it never uses `confirm()`
 
@@ -271,28 +271,30 @@ As a developer testing on a dev or test server, I want to reset the app to a nam
 As a developer, I want the app to ingest matches from a local mock OpenDota so that I can test ingest, live polling, parse retry and early MVP selection exactly as they run in production.
 
 **Acceptance criteria**
-- `OPENDOTA_BASE_URL` (default `https://api.opendota.com/api`) replaces the hard-coded address; every OpenDota call uses it
-- `tools/mock_opendota/` serves the endpoints the app calls: `/leagues/{id}`, `/leagues/{id}/matchIds`, `/matches/{id}`, `/live`, `POST /request/{id}` and `/constants/heroes`. Responses follow the field shapes the app reads, including `/live` with a string `match_id` and players without names
+- `OPENDOTA_BASE_URL` (default `https://api.opendota.com/api`) replaces the hard-coded address, and every OpenDota call uses it. `STEAM_LIVE_URL` (default Steam's `GetLiveLeagueGames` address) does the same for the live check, which comes from Steam since #161 (#146)
+- `tools/mock_opendota/` serves the paths the app calls: `/leagues/{id}`, `/leagues/{id}/matchIds`, `/matches/{id}`, `POST /request/{id}`, `/constants/heroes`, `/players/{id}` and Steam's `/IDOTA2Match_570/GetLiveLeagueGames/v1/`. Responses follow the field shapes the app reads
 - The mock's control endpoints let a tester:
   - `POST /_control/next-match`: release the next scripted match
   - `POST /_control/live`: make a scripted game live for N minutes
   - `POST /_control/parse/{id}`: turn an unparsed match into a parsed one
   - `POST /_control/reset`: reset the script
-- The script matches the mid-season scenario's teams and players, so mock matches score against scenario rosters
-- `docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile mock up` starts the app with the mock and `OPENDOTA_BASE_URL` pointing at it. Ingest polling runs normally in that profile
-- With `ENV=production`, startup refuses an `OPENDOTA_BASE_URL` that isn't https
+  - `GET /_control/state`: list released, live and unparsed matches
+- By default the script is the mid-season scenario's unplayed weeks, so mock matches score against scenario rosters. `MOCK_SEED` gives a standalone league
+- `docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.mock.yml up` starts the app with the mock and both addresses pointing at it. Ingest and live polling run there, also with `DEMO_MODE=true`
+- With `ENV=production`, startup refuses a non-https `OPENDOTA_BASE_URL` or `STEAM_LIVE_URL`
 
 ### Save and Restore a Test Snapshot
 **User story**
 As a tester, I want to save the test database and restore it later so that I can repeat a manual test from the same starting point.
 
 **Acceptance criteria**
-- `POST /admin/demo/snapshots` with `{"name"}` (letters, digits, hyphen; 1–40 characters) saves a copy of the live database to `data/demo-snapshots/{name}.db`
-- `GET /admin/demo/snapshots` lists the saved snapshots with name, size and time
-- `POST /admin/demo/snapshots/{name}/restore` restores one into the live database while the app keeps running, then rebuilds stored card points
-- All three are admin and `DEMO_MODE` only (404 otherwise), and need the admin password re-entry from #117, since restore overwrites everything
-- Snapshot names never become paths outside `data/demo-snapshots/`; anything else gets 422
-- Restoring keeps the restoring admin logged in: their user row is in the snapshot, and the session table is preserved across the restore. Every other session ends
+- `POST /admin/demo/snapshots` with `{"name"}` (letters, digits, hyphen; 1–40 characters) saves a copy of the live database to `data/demo-snapshots/{name}.db` with SQLite's online backup. An existing name gives 409 (#147)
+- `GET /admin/demo/snapshots` lists the saved snapshots with name, size and time, newest first
+- `POST /admin/demo/snapshots/{name}/restore` restores one into the live database while the app keeps running, then rebuilds stored card points and empties the caches
+- All three are admin and `DEMO_MODE` only, and give 404 otherwise. Restore needs the admin password re-entry from #117 (403 `reauth_required` without it), and the typed phrase `RESTORE SNAPSHOT` (400 `confirmation_required` without it, the #150 rule as for `LOAD SCENARIO`)
+- Names never become paths outside `data/demo-snapshots/`. `../x`, `a/b` and any other invalid name get 422
+- The restoring admin stays logged in and every other session ends. A snapshot without that admin account gives 409 and restores nothing
+- The admin Demo panel lists the snapshots with Save and Restore, and restore has an in-page confirmation. It never uses `confirm()`
 
 ### Demo Mode Can Never Reach Production
 **User story**
@@ -300,7 +302,7 @@ As an operator, I want the test tools impossible to switch on in production so t
 
 **Acceptance criteria**
 - With `ENV=production`, startup fails when `DEMO_MODE=true`, with a clear `[SECURITY]` message
-- Every scenario and snapshot endpoint returns 404 when `DEMO_MODE` is off, before any admin check, as the existing demo endpoints do
+- Every demo endpoint returns 404 when `DEMO_MODE` is off, before any admin check
 - The docs list the test setup for `test.kana-cards.com`: `DEMO_MODE=true`, `DEMO_ACCOUNT_PASSWORD` set, `ENV` unset
 
 ---

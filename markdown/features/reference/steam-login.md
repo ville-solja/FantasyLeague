@@ -58,7 +58,7 @@ When `APP_BASE_URL` starts with `http://localhost`, the state and sign-up cookie
 | `/#<tab>?steam=reauth_ok` / `reauth_failed` / `not_linked` | Steam re-auth result; `<tab>` is `profile` or `admin` |
 | `/steam-reauth-done.html?steam=<key>` | Re-auth in a popup (`return_tab=popup`, issue #213): every redirect of that attempt, with a key from this table |
 
-The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash from the address bar and shows the message.
+The frontend (`handleSteamReturn` in `frontend/app-auth.js`) strips the hash from the address bar and shows the message. Since #245 `init()` then writes the link of the tab the return ended on (`/#profile`, `/#admin`, `/#leaderboards`); a `/#my-team` or `/#profile` link that sent a logged-out visitor to Steam sign-in is kept in `sessionStorage` (`pendingTab`) and opened after the sign-in. See [Linkable Tabs](linkable-tabs.md).
 
 ## Link Steam
 
@@ -113,10 +113,13 @@ Steam OpenID cannot force a fresh password prompt, so destructive admin actions 
 |---|---|---|
 | Season end | `POST /admin/season/end` | `END SEASON` |
 | Season reset | `POST /admin/season/reset` | `RESET SEASON` |
+| Save season summary (issue #133) | `POST /admin/season/summary` | `SAVE SUMMARY` |
 | Admin toggle | `POST /users/{id}/toggle-admin` | `CHANGE ADMIN` |
 | Token grant | `POST /grant-tokens` (now also needs the recent re-auth) | `GRANT TOKENS` |
 | Backup download | `GET /admin/backups/{filename}?confirm=…` | `DOWNLOAD BACKUP` |
 | Delete Twitch viewer account | `DELETE /admin/users/{id}` (soft accounts only) | `DELETE USER` |
+| Load a season scenario (Demo Mode, issue #145) | `POST /admin/demo/scenario` | `LOAD SCENARIO` |
+| Restore a snapshot (Demo Mode, issue #147) | `POST /admin/demo/snapshots/{name}/restore` | `RESTORE SNAPSHOT` |
 
 ## Demo accounts
 

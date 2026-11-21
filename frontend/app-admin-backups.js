@@ -6,6 +6,16 @@ function _formatBytes(n) {
   return `${v.toFixed(1)} ${units[i]}`;
 }
 
+function _backupRowsHtml(backups) {
+  return backups.map(b => {
+    const name = _escHtml(b.filename);
+    const created = new Date(b.created_at * 1000).toLocaleString();
+    // A plain link could not answer a re-auth prompt, so the download goes through adminFetch.
+    return `<tr><td style="font-size:0.8rem;">${name}</td><td style="font-size:0.8rem;">${_escHtml(created)}</td>`
+      + `<td>${_formatBytes(b.size_bytes)}</td><td><button class="secondary" data-filename="${name}" onclick="downloadBackup(this.dataset.filename)">Download</button></td></tr>`;
+  }).join("");
+}
+
 async function loadBackups() {
   if (!activeIsAdmin) return;
   const tbody = document.getElementById("dbBackupsBody");
@@ -15,17 +25,18 @@ async function loadBackups() {
     const data = await res.json();
     if (!res.ok) return setStatus("dbBackupsStatus", data.detail, false);
     document.getElementById("dbBackupsRetention").textContent = data.retention_days;
+    // Issue 133: Reset Season's permanent season backups, listed apart from the daily ones.
+    const seasonBody = document.getElementById("dbSeasonBackupsBody");
+    const seasonBackups = data.season_backups || [];
+    if (seasonBody) {
+      seasonBody.innerHTML = seasonBackups.length ? _backupRowsHtml(seasonBackups)
+        : "<tr><td colspan='4' style='color:#444'>No season backups yet</td></tr>";
+    }
     if (!data.backups.length) {
       tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No backups yet</td></tr>";
       return;
     }
-    tbody.innerHTML = data.backups.map(b => {
-      const name = _escHtml(b.filename);
-      const created = new Date(b.created_at * 1000).toLocaleString();
-      // A plain link could not answer a re-auth prompt, so the download goes through adminFetch.
-      return `<tr><td style="font-size:0.8rem;">${name}</td><td style="font-size:0.8rem;">${_escHtml(created)}</td>`
-        + `<td>${_formatBytes(b.size_bytes)}</td><td><button class="secondary" data-filename="${name}" onclick="downloadBackup(this.dataset.filename)">Download</button></td></tr>`;
-    }).join("");
+    tbody.innerHTML = _backupRowsHtml(data.backups);
   } catch (e) {
     setStatus("dbBackupsStatus", e.message, false);
   }

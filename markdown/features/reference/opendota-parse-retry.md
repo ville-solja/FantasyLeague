@@ -12,7 +12,7 @@ Runs as part of every ingest poll cycle; admins can also trigger it on demand.
 
 Most of a game's fantasy points come from replay-parsed stats (`teamfight_participation`,
 `stuns`, `obs_placed`, `camps_stacked`, `rune_pickups`, `towers_killed`, `roshan_kills`,
-`firstblood_claimed`). OpenDota returns them as `0`/`null` until the replay is parsed and reports
+`courier_kills` (scored from season 17, issue #134), `firstblood_claimed`). OpenDota returns them as `0`/`null` until the replay is parsed and reports
 `"version": null` on the match. First-pass ingest happens minutes after a match ends, so those
 rows are often stored unparsed — and `ingest_league()` never re-fetches a match ID it already
 has, so the partial score was permanent.

@@ -3,7 +3,8 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
-from database import _sqlite_db_path, backup_retention_days, backup_sqlite_db, get_db, list_sqlite_backups
+from database import (_sqlite_db_path, backup_retention_days, backup_sqlite_db, get_db, list_season_backups,
+                      list_sqlite_backups)
 from deps import require_admin, require_recent_reauth, require_typed_confirmation, _audit
 
 router = APIRouter()
@@ -49,13 +50,18 @@ def create_backup(db=Depends(get_db), admin: dict = Depends(require_admin)):
 
 @router.get("/admin/backups", dependencies=[Depends(require_recent_reauth)])
 def list_backups(admin: dict = Depends(require_admin)):
-    backups = []
-    for f in list_sqlite_backups():
-        try:
-            backups.append(_backup_info(f))
-        except OSError:
-            pass
-    return {"retention_days": backup_retention_days(), "backups": backups}
+    """Daily backups (pruned after retention_days) and, apart, the permanent season
+    backups Reset Season takes (issue #133)."""
+    def infos(files):
+        out = []
+        for f in files:
+            try:
+                out.append(_backup_info(f))
+            except OSError:
+                pass
+        return out
+    return {"retention_days": backup_retention_days(), "backups": infos(list_sqlite_backups()),
+            "season_backups": infos(list_season_backups())}
 
 
 @router.get("/admin/backups/{filename}", dependencies=[Depends(require_recent_reauth),
@@ -63,9 +69,9 @@ def list_backups(admin: dict = Depends(require_admin)):
 def download_backup(filename: str, db=Depends(get_db),
                     admin: dict = Depends(require_admin)):
     """Stream a backup as an attachment (needs ?confirm=DOWNLOAD BACKUP, issue #150). The filename is only ever matched
-    against the listing's basenames — never joined onto a path — so traversal
+    against the daily and season listings' basenames — never joined onto a path — so traversal
     attempts and the live DB's own name simply don't match and 404."""
-    match = next((f for f in list_sqlite_backups() if f.name == filename), None)
+    match = next((f for f in [*list_sqlite_backups(), *list_season_backups()] if f.name == filename), None)
     if match is None:
         raise HTTPException(status_code=404, detail="Backup not found")
     _audit(db, "admin_db_backup_download", actor_id=admin["user_id"],

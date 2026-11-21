@@ -25,7 +25,7 @@ A short spotlight tour of My Team, started from the How to Play tab. An automati
 
 ### Starting from How to Play
 
-**Show the tour** (`#htpTourBtn`) sits under the Getting Started intro on the How to Play Users subtab and calls `startTourFromHowToPlay()`. Logged out, it opens the login popup (`showLogin()`). Logged in, it calls `switchTab('team')`, waits up to 5 seconds for the roster grid to render, then calls `startTour(myTeamTourSteps(), {force: true})`, which ignores the seen flag.
+**Show the tour** (`#htpTourBtn`) sits under the Getting Started intro on the How to Play Users subtab and calls `startTourFromHowToPlay()`. Logged out, it opens the login popup (`showLogin()`). Logged in, it calls `openTab('team')` (since #245, a click that adds a history entry and sets the address to `/#my-team`; see `reference/linkable-tabs.md`), waits up to 5 seconds for the roster grid to render, then calls `startTour(myTeamTourSteps(), {force: true})`, which ignores the seen flag.
 
 ### Automatic start (off by default)
 

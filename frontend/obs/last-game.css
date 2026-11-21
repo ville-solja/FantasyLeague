@@ -1,0 +1,178 @@
+/* Issue 246: OBS pause-screen overlay. Tokens and fonts come from /colors_and_type.css;
+   the stage is laid out at 1920x1080 and scaled to the browser source by last-game.js. */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+html.theme-transparent,
+html.theme-transparent body {
+  background: transparent;
+}
+
+.obs-stage {
+  width: 1920px;
+  height: 1080px;
+  transform-origin: 0 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 30px;
+  line-height: 1.3;
+  overflow: hidden;
+}
+
+html.theme-transparent .obs-stage {
+  background: transparent;
+}
+
+.obs-frame {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 64px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.obs-pending {
+  align-self: center;
+  padding: 12px 32px;
+  border-radius: 8px;
+  background: var(--accent-ghost);
+  border: 2px solid var(--accent);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.obs-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 48px;
+  padding: 24px 40px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.obs-team {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 64px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.obs-team-a { text-align: left; align-items: flex-start; }
+.obs-team-b { text-align: right; align-items: flex-end; }
+
+.obs-winner-mark {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--mark-winner);
+}
+
+.obs-meta {
+  text-align: center;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+}
+
+.obs-game { font-size: 40px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }
+.obs-score { font-size: 56px; font-weight: 800; }
+.obs-duration { font-size: 30px; color: var(--fg-muted); font-family: var(--font-mono); }
+.obs-vs { font-size: 48px; color: var(--fg-muted); }
+
+.obs-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+}
+
+.obs-col {
+  padding: 20px 28px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+html.theme-transparent .obs-header,
+html.theme-transparent .obs-col {
+  background: rgba(10, 10, 12, 0.85);
+}
+
+.obs-col-title {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.obs-players {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.obs-players th {
+  font-size: 28px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--fg-muted);
+  padding: 0 12px 8px;
+}
+
+.obs-players td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 32px;
+}
+
+.obs-hero { width: 96px; }
+.obs-hero img,
+.obs-hero-empty {
+  display: block;
+  width: 88px;
+  height: 50px;
+  border-radius: 4px;
+  background: var(--bg-card-hi);
+  object-fit: cover;
+}
+
+.obs-name { font-weight: 600; overflow-wrap: anywhere; }
+.obs-mvp { color: var(--mark-mvp); }
+.obs-kda { font-family: var(--font-mono); white-space: nowrap; }
+.obs-pts { text-align: right; font-weight: 700; font-family: var(--font-mono); }
+
+.obs-row.obs-top td { background: var(--accent-ghost); }
+.obs-row.obs-top .obs-pts { color: var(--accent); }
+
+.obs-note {
+  margin: 0;
+  font-size: 28px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.obs-waiting,
+.obs-setup {
+  margin: auto 0;
+  text-align: center;
+  font-size: 40px;
+  color: var(--fg-muted);
+}

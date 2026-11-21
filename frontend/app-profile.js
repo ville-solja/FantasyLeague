@@ -310,8 +310,9 @@ function dismissTwitchMerge() {
  *  the address bar, opens Profile and shows the message. Returns true when handled. */
 function handleTwitchReturn() {
   const hash = window.location.hash || "";
-  if (!hash.startsWith("#profile")) return false;
-  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  // Issue #245: a plain #profile is a tab link, left to the tab routing.
+  if (!hash.startsWith("#profile?")) return false;
+  const query = hash.slice(hash.indexOf("?") + 1);
   const key = new URLSearchParams(query).get("twitch");
   history.replaceState(null, "", window.location.pathname);
   if (!activeUserId) return false;

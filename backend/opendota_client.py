@@ -11,6 +11,7 @@ import os
 import random
 import threading
 import time
+from urllib.parse import urlsplit
 
 import requests
 
@@ -84,7 +85,20 @@ def reset_health() -> None:
         _health.update(last_ok_at=None, last_problem=None)
         _health_events.clear()
 
-OPEN_DOTA_URL = "https://api.opendota.com/api"
+DEFAULT_OPEN_DOTA_URL = "https://api.opendota.com/api"
+# Issue #146: OPENDOTA_BASE_URL points the app at another address (the dev mock in
+# tools/mock_opendota/). Read once at import; callers import the value by name.
+OPEN_DOTA_URL = (os.getenv("OPENDOTA_BASE_URL") or "").strip().rstrip("/") or DEFAULT_OPEN_DOTA_URL
+
+
+_DEFAULT_HOST = "api.opendota.com"
+
+
+def is_default_base_url() -> bool:
+    """True while OpenDota calls go to the real API's host (Demo Mode then skips polling).
+    By hostname, case-insensitive, scheme, port and path ignored: any spelling of the real
+    address counts as the real API."""
+    return (urlsplit(OPEN_DOTA_URL).hostname or "").rstrip(".") == _DEFAULT_HOST
 
 DEFAULT_HEADERS = {
     "User-Agent": "KanaCards/1.0 (+https://kana-cards.com)",

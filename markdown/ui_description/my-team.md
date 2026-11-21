@@ -18,7 +18,7 @@ The panel starts with the **deck** (`#drawDeck`, decorative, `aria-hidden`): thr
 - **Draw counter** — shows the user's current token balance (e.g. "3 Kana Tokens remaining"), next to the buttons. It is the panel's only balance indicator.
 - **Promo code** — under a **Promo code** caption, a text field and Redeem button (`#redeemBtn`) to enter a promo code and receive additional tokens.
 - **In-flight lock** (#185) — Draw a card, Draw 1 card from this team, the reroll Confirm and Redeem are disabled from the click until the answer is handled (for a draw, until the reveal shows), so a double click sends one request; a failed request re-enables the button and shows the error. A drawn card joins the roster only when there is room and no roster card has the same player; otherwise the reveal says it went to the bench.
-- **How scoring works →** — a link that switches to the How to Play tab.
+- **How scoring works →** — a link that switches to the How to Play tab (and, since #245, sets the address to `/#how-to-play` with a history entry).
 - **Status line** (`#deckStatus`) — empty unless a draw fails; then it shows the error.
 - **Landed notice** (`#drawLandedNotice`, phone only, below 768 px) — the roster sits above the Draw panel, so on Continue the card flies up off the top edge and a notice at the top of the screen says "Added to active roster" or "Added to bench" with **See roster ↑** for 5 seconds. See roster scrolls up to the roster, where the new card glows once.
 

@@ -399,7 +399,10 @@ def test_frontend_player_popup_contains_partial_stats_and_not_scored_markers():
     helper = src[src.index("function _matchPointsCellHtml"):]
     helper = helper[:helper.index("\n}\n")]
     assert "_escHtml(" in helper
-    assert "wards, stuns, teamfight, runes and camps count as 0" in src
+    assert "_PARTIAL_STATS_TOOLTIP" in helper
+    # Issue 244: the tooltip text moved to app-players.js, shared with the Schedule.
+    players = (FRONTEND_DIR / "app-players.js").read_text()
+    assert "wards, stuns, teamfight, runes, camps and courier kills count as 0" in players
 
 
 # ---------------------------------------------------------------------------
