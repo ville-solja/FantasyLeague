@@ -10,15 +10,15 @@ GitHub closes the issues through `Closes #N`, and the `issue-closed` workflow re
 `implemented` label.
 
 **Usage:**
-- `/ship`: commit everything uncommitted, push, open or update the PR against `main`, and report.
-- `/ship --watch`: the same, then wait for CI and list the PR's code-scanning alerts.
-- `/ship --fix all` or `/ship --fix <alert,...>`: fix the PR's code-scanning alerts (implies `--watch`).
-- `/ship status`: read-only overview of the branch, open PRs and issues.
-- `/ship sync <N>`: bring GitHub issue N in line with its plan after a scope change.
+- `/release`: commit everything uncommitted, push, open or update the PR against `main`, and report.
+- `/release --watch`: the same, then wait for CI and list the PR's code-scanning alerts.
+- `/release --fix all` or `/release --fix <alert,...>`: fix the PR's code-scanning alerts (implies `--watch`).
+- `/release status`: read-only overview of the branch, open PRs and issues.
+- `/release sync <N>`: bring GitHub issue N in line with its plan after a scope change.
 - Add `--dry-run` to any of them to print what would happen and change nothing.
 
 ## Shared rules
-- **The invocation is the consent.** Running `/ship` authorises the commit, the push and the PR
+- **The invocation is the consent.** Running `/release` authorises the commit, the push and the PR
   edit it describes; `--fix` authorises committing and pushing the patches; `sync` authorises the
   issue edits. Don't stop to ask for a yes; list everything sent in the report.
 - **No questions mid-run.** When a choice can't be made from the repo, stop before changing
@@ -35,7 +35,7 @@ GitHub closes the issues through `Closes #N`, and the `issue-closed` workflow re
 
 ---
 
-## `/ship`
+## `/release`
 
 1. **Branch.** If on `main`, create a branch first: `issue-<N>-<slug>` from the issue in the
    changes (below), otherwise `work-<YYYY-MM-DD>`. Never commit to `main`.
@@ -44,7 +44,7 @@ GitHub closes the issues through `Closes #N`, and the `issue-closed` workflow re
    added to `markdown/plans/.issue-index`. Read each plan's Context (not the whole plan).
 3. **Commit** everything uncommitted in one commit with `git add -A` (after the forbidden-file
    check). If the change holds several issues, still one commit with one section per issue; run
-   `/ship` after each `/develop` to keep one commit per issue.
+   `/release` after each `/develop` to keep one commit per issue.
 
    ```
    <Short title> (#N)
@@ -79,14 +79,14 @@ GitHub closes the issues through `Closes #N`, and the `issue-closed` workflow re
 
 ---
 
-## `/ship status` (read-only)
+## `/release status` (read-only)
 
 - Branch, uncommitted file count, unpushed commits.
 - Open PRs with their check state (`gh pr list --json number,title,headRefName,statusCheckRollup`).
 - Open issues labelled `implemented` (waiting for a merge), and open issues with no plan in
   `markdown/plans/.issue-index`.
 
-## `/ship sync <N>`
+## `/release sync <N>`
 
 Read `gh issue view N --json title,body,milestone` and the plan's Context and stories. Update
 the issue body to match the plan, keeping the original text under an "Original description"
@@ -98,7 +98,7 @@ split-off issue with `gh issue create` when the plan names one that doesn't exis
 ## Output format
 
 ```
-/ship — <done | stopped>
+/release — <done | stopped>
 
 Committed: <sha> <title>            (or "nothing to commit")
 PR:        #<P> <url> (<opened | updated>)
@@ -107,14 +107,14 @@ Waiting on you: <merge, manual checks, alerts to dismiss>
 Next:      <one invocation>
 ```
 
-`Next:`: alerts open → `/ship --fix all`; checks pending and you want to wait → `/ship --watch`;
+`Next:`: alerts open → `/release --fix all`; checks pending and you want to wait → `/release --watch`;
 otherwise "merge PR #P in GitHub". After a merge nothing else is needed.
 
 ## Lessons log
 
 If the run surfaces a novel pitfall, add an entry at the top of `markdown/lessons-learned.md`:
 
-### YYYY-MM-DD — ship — [category: file-paths | endpoints | testing | models | frontend | agent-config]
+### YYYY-MM-DD — release — [category: file-paths | endpoints | testing | models | frontend | agent-config]
 **Problem:** One sentence.
 **Solution:** What works instead.
 

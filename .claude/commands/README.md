@@ -53,7 +53,7 @@ flowchart TD
 
     UI["/ui-design\nProduction edits\nor prototypes"]
 
-    SHIP["/ship\nCommit, push,\nopen or update PR"]
+    SHIP["/release\nCommit, push,\nopen or update PR"]
 
     MERGE([Merge — human])
 
@@ -92,7 +92,7 @@ flowchart TD
 |---|---|---|
 | [`/product-planner`](product-planner.md) | read-write | Formalises a feature: writes plan file, user stories, and feature stub. Entry point for all new work. |
 | [`/develop`](develop.md) | read-write | Orchestrates the full pipeline: test stubs → implementation → QA + docs → labels the source GitHub issue `implemented` with a summary comment when every stage passes (the issue stays open until merged). Adds `/security-reviewer` to Stage 3 when the change touches security-sensitive code; a High finding blocks the issue update. Use this instead of running the stages manually. |
-| [`/ship`](ship.md) | read-write | One step after `/develop`: commits the work, pushes, opens or updates the PR against `main` with `Closes #N`. `--watch` waits for CI and lists code-scanning alerts; `--fix all|<N,...>` fixes them via the `/security-patcher` workflow; `status` and `sync <N>` are read-only overview and issue sync. Running it is the consent; `--dry-run` shows it without doing it. Never merges or force-pushes. |
+| [`/release`](release.md) | read-write | One step after `/develop`: commits the work, pushes, opens or updates the PR against `main` with `Closes #N`. `--watch` waits for CI and lists code-scanning alerts; `--fix all|<N,...>` fixes them via the `/security-patcher` workflow; `status` and `sync <N>` are read-only overview and issue sync. Running it is the consent; `--dry-run` shows it without doing it. Never merges or force-pushes. |
 | [`/test-planner`](test-planner.md) | read-write | Writes failing pytest stubs from a plan's acceptance criteria. Called by `/develop` Stage 1; can be run standalone. |
 | [`/developer`](developer.md) | read-write | Implements a plan and makes the test stubs pass. Called by `/develop` Stage 2; can be run standalone. |
 | [`/qa-engineer`](qa-engineer.md) | read-only | Runs the backend suite in parallel (`-n auto`) and reports the result with one line per failure. Called by `/develop` Stage 3; also useful after any ad-hoc backend change. |
@@ -103,7 +103,7 @@ flowchart TD
 | Agent | Trigger | Focus |
 |---|---|---|
 | [`/security-reviewer`](security-reviewer.md) | Any change to `backend/` routers or `main.py` (run automatically by `/develop` for security-sensitive changes) | Auth gaps, session leaks, input validation, data over-exposure; `/security-reviewer fix` applies the fixes for the last review's High and Medium findings |
-| [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert (default branch or open PR); also run by `/ship --fix` for its PR's alerts | Fetches alert, fixes flagged code, verifies tests pass; with no argument lists open alerts including those on PRs |
+| [`/security-patcher`](security-patcher.md) | New GitHub code scanning alert (default branch or open PR); also run by `/release --fix` for its PR's alerts | Fetches alert, fixes flagged code, verifies tests pass; with no argument lists open alerts including those on PRs |
 | [`/scoring-analyst`](scoring-analyst.md) | Changes to `scoring.py`, `enrich.py`, or `WEIGHTS_JSON` | Formula correctness, stat-key mapping, division-by-zero |
 | [`/ux-reviewer`](ux-reviewer.md) | Any significant frontend change | Flow completeness, state coverage, consistency, accessibility |
 | [`/ui-design`](ui-design.md) | New UI surface or brand/design change | Brand-compliant production edits or throwaway prototypes |
@@ -126,7 +126,7 @@ flowchart TD
 /agent-steward          # ensure agent definitions and this README are current
 /product-planner <desc> # plan the work
 /develop <plan-slug>    # implement it
-/ship                   # commit, push, open the PR (then merge it in GitHub)
+/release                   # commit, push, open the PR (then merge it in GitHub)
 ```
 
-`/ship status` shows open PRs and the issues waiting for a merge.
+`/release status` shows open PRs and the issues waiting for a merge.

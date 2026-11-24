@@ -1,24 +1,65 @@
+// Issue 257: the archived seasons (label, date, users), each with Remove archive…
 async function loadSeasonArchives() {
   if (!activeIsAdmin) return;
   try {
-    const res = await fetch(`${API}/leaderboard/seasons`);
+    const res = await fetch(`${API}/admin/season/archives`);
     const rows = await res.json();
     if (!res.ok) return setStatus("seasonLifecycleStatus", rows.detail, false);
     const tbody = document.getElementById("seasonArchivesBody");
     if (!rows.length) {
-      tbody.innerHTML = "<tr><td colspan='3' style='color:#444'>No archived seasons yet</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='4' style='color:#444'>No archived seasons yet</td></tr>";
       return;
     }
-    tbody.innerHTML = "";
-    rows.forEach(s => {
-      const tr = document.createElement("tr");
-      const archived = new Date(s.archived_at * 1000).toLocaleString();
-      tr.innerHTML = `<td>${_escHtml(s.season_label)}</td><td style="font-size:0.8rem;">${archived}</td><td>${s.user_count}</td>`;
-      tbody.appendChild(tr);
-    });
+    tbody.replaceChildren(...rows.map(seasonArchiveRow));
   } catch (e) {
     setStatus("seasonLifecycleStatus", e.message, false);
   }
+}
+
+/** One archive row, built with textContent so the label is never parsed as markup. */
+function seasonArchiveRow(s) {
+  const tr = document.createElement("tr");
+  const cell = (text, cls) => {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    tr.appendChild(td);
+    return td;
+  };
+  cell(s.season_label);
+  cell(new Date(s.archived_at * 1000).toLocaleString(), "accolade-admin-id");
+  cell(String(Number(s.users)));
+  const actions = cell("", "season-archive-actions");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  btn.textContent = "Remove archive…";
+  btn.setAttribute("aria-label", `Remove the archive of ${s.season_label}`);
+  btn.addEventListener("click", () => removeSeasonArchive(s.season_label, Number(s.users), btn));
+  actions.appendChild(btn);
+  return tr;
+}
+
+/** Issue 257: in-page typed confirmation (REMOVE ARCHIVE), then DELETE through adminFetch. */
+async function removeSeasonArchive(label, users, btn) {
+  const confirmText = await typedConfirm("season_archive_remove",
+    `Remove the archived standings of "${label}" (${users} users) so End Season can run again. ` +
+    "Accolades, the season summary and season backups are not touched.");
+  if (confirmText === null) return;
+  await withBusy(btn, async () => {
+    try {
+      const res = await adminFetch(`${API}/admin/season/archive?season_label=${encodeURIComponent(label)}`, {
+        method: "DELETE", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({confirm: confirmText}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return setStatus("seasonLifecycleStatus", typeof data.detail === "string" ? data.detail : "Removing the archive failed", false);
+      setStatus("seasonLifecycleStatus", `Removed the archive of "${data.season_label}" (${Number(data.removed)} users). ${data.kept || ""}`.trim());
+      await loadSeasonArchives();
+    } catch (e) {
+      setStatus("seasonLifecycleStatus", e.message, false);
+    }
+  });
 }
 
 // Issue 50: End Season opens a dialog that shows the awards and the Played count and
@@ -84,6 +125,7 @@ async function endSeason() {
     _renderEndSeasonPlayers(div);
   });
   _applyEndSeasonRecorded(p.recorded, document.getElementById("endSeasonDialogLabel").value.trim());
+  _applyEndSeasonArchived(p.archived);
   setStatus("endSeasonDialogStatus", "");
   endSeasonPartChanged();
   document.getElementById("endSeasonModal").classList.remove("hidden");
@@ -107,6 +149,28 @@ function _applyEndSeasonRecorded(recorded, label) {
   document.getElementById("endSeasonPart_summary").checked = true;
 }
 
+/**
+ * Issue 257: the label (in any spelling) is already archived. The dialog says so and
+ * End Season is off; a season archived without a summary can still save one in Reset.
+ */
+function endSeasonArchivedText(archived) {
+  if (!archived) return "";
+  const day = new Date(archived.archived_at * 1000).toLocaleDateString();
+  let text = `${archived.label} is already archived (archived ${day}, ${Number(archived.users)} users). `
+    + "End Season can't run again for it; use Remove archive… first to redo it.";
+  if (!archived.has_summary) {
+    text += ` ${archived.label} has no stored summary: press Save season summary in the Reset Season dialog.`;
+  }
+  return text;
+}
+
+function _applyEndSeasonArchived(archived) {
+  const note = document.getElementById("endSeasonArchived");
+  note.textContent = endSeasonArchivedText(archived);
+  note.hidden = !archived;
+  document.getElementById("endSeasonContinueBtn").disabled = !!archived;
+}
+
 let _endSeasonLabelTimer = null;
 
 /** Re-reads the already-recorded counts for the label being typed (debounced). */
@@ -120,6 +184,7 @@ function endSeasonLabelChanged() {
       const data = await res.json();
       if (!res.ok || document.getElementById("endSeasonDialogLabel").value.trim() !== label) return;
       _applyEndSeasonRecorded(data.recorded, label);
+      _applyEndSeasonArchived(data.archived);
       endSeasonPartChanged();
     } catch (e) {
       setStatus("endSeasonDialogStatus", e.message, false);
@@ -268,13 +333,37 @@ const _RESET_TABLE_NAMES = {
   team_signups: "Team signups", promo_codes: "Promo codes", token_grant_events: "Token grant events",
   notifications: "Notifications", weights: "Scoring weights", player_profiles: "Player profiles",
   twitch_mvp_polls: "Twitch vote polls", twitch_pending_tokens: "Pending vote tokens",
+  code_redemptions: "Promo code redemptions", token_grant_claims: "Token grant claims",
+  notification_dismissals: "Notification dismissals",
 };
 
 function _resetName(key) {
   return _RESET_TABLE_NAMES[key] || key.replace(/_/g, " ");
 }
 
-/** The Reset dialog's Deleted and Kept lists from GET /admin/season/reset-preview. */
+// Preview keys that are actions on kept rows, not deleted tables.
+const _RESET_ACTION_KEYS = ["users_tokens_reset", "leagues_unmonitored", "demo_clock_override"];
+
+/** 12345 -> "12 345". */
+function _groupDigits(n) {
+  const digits = String(Math.trunc(Math.abs(Number(n) || 0)));
+  let out = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i && (digits.length - i) % 3 === 0) out += " ";
+    out += digits[i];
+  }
+  return out;
+}
+
+/** "Deleted: 14 tables, 12 345 rows" over the tables that have rows. */
+function _resetTotal(name, counts) {
+  const tables = Object.values(counts).filter(n => n > 0);
+  const rows = tables.reduce((a, n) => a + n, 0);
+  return `${name}: ${tables.length} ${tables.length === 1 ? "table" : "tables"}, ${_groupDigits(rows)} ${rows === 1 ? "row" : "rows"}`;
+}
+
+/** The Reset dialog's Deleted and Kept lists from GET /admin/season/reset-preview,
+ * with a totals line for each (issue 257). */
 function seasonResetPreviewLists(p) {
   const del = p.delete || {};
   const deleted = Object.keys(del)
@@ -285,7 +374,11 @@ function seasonResetPreviewLists(p) {
   const kept = [`User accounts: ${del.users_tokens_reset || 0}`].concat(
     Object.keys(keep).filter(k => keep[k] > 0).map(k => `${_resetName(k)}: ${keep[k]}`));
   kept.push(`Season backup named after "${p.season_label}"`);
-  return { deleted, kept };
+  const deletedTables = Object.fromEntries(Object.entries(del).filter(([k]) => !_RESET_ACTION_KEYS.includes(k)));
+  const keptTables = { users: del.users_tokens_reset || 0, ...keep };
+  return { deleted, kept,
+           deletedTotal: _resetTotal("Deleted", deletedTables),
+           keptTotal: _resetTotal("Kept", keptTables) };
 }
 
 let _seasonResetPreview = null;
@@ -334,6 +427,8 @@ function _renderSeasonResetPreview(p) {
   const li = items => items.map(t => `<li>${_escHtml(t)}</li>`).join("");
   document.getElementById("seasonResetDeleteList").innerHTML = li(lists.deleted);
   document.getElementById("seasonResetKeepList").innerHTML = li(lists.kept);
+  document.getElementById("seasonResetDeleteTotal").textContent = lists.deletedTotal;
+  document.getElementById("seasonResetKeepTotal").textContent = lists.keptTotal;
   const warn = document.getElementById("seasonResetWarning");
   warn.textContent = p.warning || "";
   warn.hidden = !p.warning;
@@ -345,6 +440,8 @@ async function openSeasonResetConfirm(keepStatus) {
   document.getElementById("seasonResetSummary").innerHTML = "";
   document.getElementById("seasonResetDeleteList").innerHTML = "<li>Loading…</li>";
   document.getElementById("seasonResetKeepList").innerHTML = "<li>Loading…</li>";
+  document.getElementById("seasonResetDeleteTotal").textContent = "Deleted";
+  document.getElementById("seasonResetKeepTotal").textContent = "Kept";
   document.getElementById("seasonResetWarning").hidden = true;
   document.getElementById("seasonResetModal").style.display = "flex";
   try {

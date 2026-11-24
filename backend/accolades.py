@@ -136,6 +136,38 @@ def current_season_label(db) -> str:
     return f"Season {max(numbers) + 1}" if numbers else "Season 1"
 
 
+def normalise_label(label) -> str:
+    """The form two season labels are compared in (issue 257): trimmed, inner spaces
+    collapsed, case ignored. scripts/season_end_check.py keeps a copy (a test checks it)."""
+    return " ".join((label or "").split()).casefold()
+
+
+def archives(db) -> list[dict]:
+    """Every archived season: [{season_label, archived_at (newest), users}], newest first."""
+    rows = db.execute(text(
+        "SELECT season_label, MAX(archived_at) AS at, COUNT(*) AS users FROM season_archive "
+        "GROUP BY season_label ORDER BY at DESC, season_label")).fetchall()
+    return [{"season_label": r.season_label, "archived_at": r.at, "users": r.users} for r in rows]
+
+
+def archived_match(db, label) -> dict | None:
+    """The archived season whose label matches `label` after normalise_label:
+    {label, archived_at, users}, or None."""
+    key = normalise_label(label)
+    if not key:
+        return None
+    for a in archives(db):
+        if normalise_label(a["season_label"]) == key:
+            return {"label": a["season_label"], "archived_at": a["archived_at"], "users": a["users"]}
+    return None
+
+
+def archived_text(match: dict) -> str:
+    """'Season 16 is already archived (archived 2026-11-20, 42 users)'."""
+    day = time.strftime("%Y-%m-%d", time.gmtime(match["archived_at"]))
+    return f"{match['label']} is already archived (archived {day}, {match['users']} users)"
+
+
 # ---------------------------------------------------------------------------
 # The live season: awards, played players, teams
 # ---------------------------------------------------------------------------

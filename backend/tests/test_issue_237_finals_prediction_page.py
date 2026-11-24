@@ -908,8 +908,8 @@ class TestStory3CorrectPicks:
         assert rows[SEMI_T - 100].correct_picks == 2
         assert db.query(FinalsBracket).one().final_winner == 102
 
-    def test_season_reset_keeps_finals_tables(self, db, monkeypatch, tmp_path):
-        """POST /admin/season/reset leaves finals_brackets and finals_predictions rows (with their season_label) intact."""
+    def test_season_reset_clears_finals_tables(self, db, monkeypatch, tmp_path):
+        """POST /admin/season/reset deletes finals_brackets and finals_predictions (issue 257: they only mean something for their season)."""
         from routers import admin_season
         _decided(db)
         monkeypatch.setattr(admin_season, "backup_sqlite_db", lambda: str(tmp_path / "b.db"))
@@ -918,10 +918,9 @@ class TestStory3CorrectPicks:
                                         {"user_id": admin.id, "username": admin.username})
         assert out["status"] == "ok"
         assert db.query(Match).count() == 0 and db.query(Team).count() == 0
-        b = db.query(FinalsBracket).one()
-        assert b.season_label == "Season 16"
-        assert db.query(FinalsPrediction).count() == 4
-        assert json.loads(b.seed_names_json)["104"] == "Hoxhunt Fortum"
+        assert db.query(FinalsBracket).count() == 0
+        assert db.query(FinalsPrediction).count() == 0
+        assert out["counts"]["finals_brackets"] == 1 and out["counts"]["finals_predictions"] == 4
 
     def test_new_season_label_starts_fresh_bracket(self, db):
         """A bracket from a previous season_label is not shown by GET /finals for the current season."""

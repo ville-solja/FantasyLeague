@@ -17,6 +17,7 @@ session within `ADMIN_REAUTH_SECONDS` (default 600, 10 minutes); otherwise they 
 `{"detail": "reauth_required"}` and do nothing:
 
 - `POST /admin/season/end`, `POST /admin/season/reset` and `POST /admin/season/summary` (issue #133)
+- `DELETE /admin/season/archive` (issue #257)
 - `DELETE /admin/leagues/{league_id}/data`
 - `POST /admin/backups`, `GET /admin/backups` and `GET /admin/backups/{filename}`
 - `POST /users/{user_id}/toggle-admin`
@@ -43,7 +44,7 @@ other admin endpoints work without re-authentication.
 
 Steam OpenID cannot force a fresh password prompt, so seven destructive actions also need the
 action's name typed in, for every admin (issue #150), and so do two Demo Mode actions (issues #145
-and #147). The backend dependency
+and #147) and removing a season's archive (issue #257). The backend dependency
 `require_typed_confirmation(action)` (`backend/deps.py`, after the re-auth check) reads `confirm`
 from the query string or the JSON body (case and surrounding spaces ignored) and otherwise answers
 400 `{"detail": "confirmation_required"}`. The admin panel asks for the phrase in a dialog
@@ -60,6 +61,7 @@ from the query string or the JSON body (case and surrounding spaces ignored) and
 | Delete Twitch viewer account | `DELETE /admin/users/{user_id}` (soft accounts only) | `DELETE USER` |
 | Load a season scenario (Demo Mode, issue #145) | `POST /admin/demo/scenario` | `LOAD SCENARIO` |
 | Restore a snapshot (Demo Mode, issue #147) | `POST /admin/demo/snapshots/{name}/restore` | `RESTORE SNAPSHOT` |
+| Remove a season's archived standings (issue #257) | `DELETE /admin/season/archive?season_label=…` | `REMOVE ARCHIVE` |
 
 **Support rule (issue #167).** Admins never grant tokens or cards, move accounts or change account
 details because someone asks in chat or a DM, however urgent or official it sounds. Lost items
@@ -378,6 +380,7 @@ rendering them, since `detail` can carry user-supplied text such as usernames. A
 | `twitch_token_drop` | Token drop fired on MVP confirmation |
 | `admin_season_archived` | Admin archived final season standings via End Season |
 | `admin_season_reset` | Admin reset per-season data for the next season |
+| `admin_season_archive_removed` | Admin removed one season's archived standings so End Season can run again (issue #257; `detail` has `season_label=… users=N`). Accolades, the season summary and backups are untouched |
 | `admin_finals_tiebreak` | Admin ordered teams in a shared tie at the finals seeding cut (`core/finals-predictions.md`) |
 | `admin_finals_paused` | Admin paused or resumed finals predictions |
 | `admin_finals_closed` | Admin closed finals predictions early |
@@ -454,7 +457,7 @@ These features have dedicated reference documents:
 | Match MVP Selection | `GET /admin/matches`, `GET /admin/matches/{id}/players`, `POST /admin/matches/{id}/mvp`, `PATCH /admin/matches/{id}/vod` | `reference/admin-tab-navigation-mvp.md` |
 | Unparseable Match Handling | `POST /admin/matches/{id}/retry-parse`, `PATCH /admin/matches/{id}/scoring` (`GET /admin/matches` carries `parse_status` / `excluded_from_scoring`) | `reference/unparseable-match-handling.md` |
 | Matches Outside the League | `POST /admin/matches/manual/preview`, `POST /admin/matches/manual` (`GET /admin/matches` carries `source`, `added_by`, `added_at`) | `reference/matches-outside-the-league.md` |
-| Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md` |
+| Season Lifecycle | `POST /admin/season/end`, `POST /admin/season/reset`, `GET /admin/season/reset-preview`, `POST /admin/season/summary`, `GET /admin/season/archives`, `DELETE /admin/season/archive` (issue #257), `GET /leaderboard/seasons(/{id})` | `reference/season-lifecycle.md`, `reference/season-reset-clean-slate.md` |
 | Season Finals | `GET /admin/finals`, `PUT /admin/finals/tiebreak`, `POST /admin/finals/pause`, `POST /admin/finals/close`, `PUT /admin/finals/result` | `core/finals-predictions.md` |
 | Season Champions and Accolades | `GET /admin/season/accolades-preview`, `PUT /admin/season-champions`, `GET`/`POST`/`PATCH`/`DELETE /admin/season-accolades` | `reference/season-winners-and-holo-cards.md` |
 | Database Backups | `POST /admin/backups`, `GET /admin/backups`, `GET /admin/backups/{filename}` | `reference/admin-db-backup.md` |

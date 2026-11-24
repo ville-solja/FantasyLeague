@@ -769,7 +769,7 @@ class UserTag(Base):
 
 class FinalsBracket(Base):
     """The Div 1 final four of a season (issue #237), stored once the seeds are clear
-    or an admin breaks a tie. Kept across season resets; team names are copied into
+    or an admin breaks a tie. Deleted by Reset Season (issue 257); team names are copied into
     seed_names_json because a reset deletes the teams."""
     __tablename__ = "finals_brackets"
     __table_args__ = (UniqueConstraint("season_label", "division", name="uq_finals_bracket_season_div"),)

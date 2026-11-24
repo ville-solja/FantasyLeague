@@ -747,7 +747,7 @@ class TestResetLeavesNothingBehind:
         assert _caches_empty(), _caches_state()
 
     def test_reset_season_keeps_kept_tables(self, db, monkeypatch):
-        """Rows in tag_definitions, user_tags, audit_logs, season_archive, season_accolades, finals_brackets, finals_predictions, team_signup_periods, team_signups, team_signup_players, promo_codes, token_grant_events, notifications, weights, player_profiles, twitch_mvp_polls, twitch_pending_tokens and every other kept table are all still there, unchanged, after reset; user accounts stay (only their tokens change)."""
+        """Rows in tag_definitions, user_tags, audit_logs, season_archive, season_accolades, team_signup_periods, team_signups, team_signup_players, weights, player_profiles, twitch_mvp_polls, twitch_pending_tokens and every other kept table are all still there, unchanged, after reset; user accounts stay (only their tokens change). Finals, promo codes, token grants and notifications are cleared since issue 257."""
         for name in season_reset.KEPT_TABLES:
             _fill(db, name, 2, **_FILL_OVERRIDES.get(name, {}))
         alice = _user(db, "alice")

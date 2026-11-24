@@ -185,7 +185,7 @@ Next: /develop {slug}
 ```
 
 If the issue's scope changed while planning (split, narrowed, moved to another issue), use
-`Next: /ship sync <N>` instead and put `/develop {slug}` after it.
+`Next: /release sync <N>` instead and put `/develop {slug}` after it.
 
 ---
 

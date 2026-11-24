@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 import accolades
 import season_reset
@@ -80,6 +80,9 @@ def accolades_preview(season_label: str | None = Query(None, max_length=100),
     champion picker. season_label defaults to the live season's label; `recorded`
     counts the accolade rows that label already has, per End Season part (issue #133)."""
     label = (season_label or "").strip() or accolades.current_season_label(db)
+    archived = accolades.archived_match(db, label)
+    if archived:
+        archived["has_summary"] = season_summary.has_summary(db, archived["label"])
     recorded = {d: db.query(SeasonAccolade).filter(
         SeasonAccolade.season_label == label, SeasonAccolade.kind == "champion",
         SeasonAccolade.division == d).count() for d in accolades.DIVISIONS}
@@ -90,6 +93,8 @@ def accolades_preview(season_label: str | None = Query(None, max_length=100),
         "teams": accolades.season_teams(db),
         "champions_recorded": recorded,
         "recorded": accolades.recorded_counts(db, label),
+        # Issue 257: an archive under this label in any spelling; End Season refuses it.
+        "archived": archived,
     }
 
 
@@ -109,11 +114,10 @@ def end_season(body: SeasonEndBody, db=Depends(get_db),
     season_label = body.season_label.strip()
     if not season_label:
         raise HTTPException(status_code=422, detail="Season label cannot be empty")
-    existing = (db.query(SeasonArchive)
-                .filter(SeasonArchive.season_label == season_label).first())
+    # Issue 257: "season 16" or "Season  16" would be a second copy of "Season 16".
+    existing = accolades.archived_match(db, season_label)
     if existing:
-        raise HTTPException(status_code=409,
-                            detail=f"Season '{season_label}' is already archived")
+        raise HTTPException(status_code=409, detail=accolades.archived_text(existing))
     standings = compute_season_standings(db)
     now = int(time.time())
     for rank, row in enumerate(standings, start=1):
@@ -186,6 +190,40 @@ def store_season_summary(body: SeasonSummaryBody, db=Depends(get_db),
     return {"season_label": label, **stored}
 
 
+@router.get("/admin/season/archives")
+def list_season_archives(db=Depends(get_db), _: dict = Depends(require_admin)):
+    """The archived seasons, newest first, with whether each has a stored summary (issue 257)."""
+    return [{**a, "has_summary": season_summary.has_summary(db, a["season_label"])}
+            for a in accolades.archives(db)]
+
+
+@router.delete("/admin/season/archive", dependencies=[Depends(require_recent_reauth),
+                                                     Depends(require_typed_confirmation("season_archive_remove"))])
+def remove_season_archive(season_label: str = Query(..., min_length=1, max_length=100),
+                          db=Depends(get_db), admin: dict = Depends(require_admin)):
+    """Delete one season's archived standings (issue 257) so End Season can run again.
+    Accolades, the season summary and season backups stay. Refused once the season's
+    data is gone (Reset ran, or a newer season is archived): End Season couldn't rebuild it."""
+    label = season_label.strip()
+    rows = db.query(SeasonArchive).filter(SeasonArchive.season_label == label)
+    newest = db.query(func.max(SeasonArchive.archived_at)).filter(
+        SeasonArchive.season_label == label).scalar()
+    if newest is None:
+        raise HTTPException(status_code=404, detail=f"Season '{label}' is not archived")
+    if not season_summary.has_live_data(db):
+        raise HTTPException(status_code=409,
+                            detail="No live matches: the season's data has already been reset")
+    if db.query(SeasonArchive.id).filter(SeasonArchive.archived_at > newest).first():
+        raise HTTPException(status_code=409,
+                            detail="A newer season is archived: this archive can no longer be redone")
+    removed = rows.delete(synchronize_session=False)
+    _audit(db, "admin_season_archive_removed", actor_id=admin["user_id"],
+           actor_username=admin["username"], detail=f"season_label={label} users={removed}")
+    db.commit()
+    return {"season_label": label, "removed": removed,
+            "kept": "Accolades, the season summary and season backups are unchanged"}
+
+
 @router.get("/admin/season/reset-preview")
 def reset_preview(db=Depends(get_db), _: dict = Depends(require_admin)):
     """What Reset Season would delete and keep, with row counts (issue #133). Read-only."""
@@ -221,7 +259,9 @@ def reset_season(body: SeasonResetBody, db=Depends(get_db),
 
     Issue #133: also clears the Weekly Report tables, live_matches, match_timings,
     Twitch presence and the demo clock override (season_reset.TABLE_GROUPS lists
-    every table), then empties the in-memory season caches after the commit.
+    every table), then empties the in-memory season caches after the commit. Issue 257:
+    also finals brackets and predictions, promo codes and redemptions, token grant
+    events and claims, and notifications with their dismissals.
     """
     if season_reset.end_season_missing(db) and not body.force:
         raise HTTPException(status_code=409, detail=season_reset.END_SEASON_MISSING)

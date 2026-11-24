@@ -6,7 +6,7 @@ When adding a column to an existing table in `backend/models.py`, add a numbered
 
 ## Pre-deploy backup
 
-Run `bash scripts/backup-db.sh` before every deploy. See `markdown/features/reference/db-sustainability.md`.
+Take a backup before every deploy: Admin › Backups › Create, then Download (the operator has no shell on the host; `bash scripts/backup-db.sh` does the same where a shell is available). Production deploys are triggered by the operator from OliveTin. See `markdown/features/reference/db-sustainability.md`.
 
 ## Tests
 
@@ -37,7 +37,7 @@ Two conventions:
 |---|---|
 | `/product-planner <description \| issue N>` | Plan, stories and feature stub for new work |
 | `/develop <plan-slug>` | Pipeline: test stubs → implementation → QA, docs check (change mode) and, for sensitive changes, a security change review → labels the issue `implemented` |
-| `/ship` | Commit, push, open or update the PR against `main` (`--watch`, `--fix`, `status`, `sync <N>`) |
+| `/release` | Commit, push, open or update the PR against `main` (`--watch`, `--fix`, `status`, `sync <N>`) |
 | `/test-planner <plan-slug>` | Failing pytest stubs from a plan (`/develop` Stage 1) |
 | `/developer <plan-slug>` | Implements a plan (`/develop` Stage 2) |
 | `/qa-engineer` | Runs the suite and reports failures |
@@ -56,7 +56,7 @@ Two conventions:
 
 1. `/product-planner issue N` (or a description), then review the plan.
 2. `/develop <plan-slug>`, then review its report.
-3. `/ship`, then merge the PR in GitHub. `Closes #N` closes the issue and the `issue-closed` workflow removes the `implemented` label.
+3. `/release`, then merge the PR in GitHub. `Closes #N` closes the issue and the `issue-closed` workflow removes the `implemented` label.
 
 `markdown/plans/.issue-index` lists planned issues, one `<N> <plan-slug>` per line; status comes from GitHub (open, `implemented` label, closed).
 

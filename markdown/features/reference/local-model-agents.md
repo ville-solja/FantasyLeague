@@ -91,7 +91,7 @@ Four workers, each with a clear limit:
 |---|---|---|
 | **Deterministic scripts** (pytest, pip-audit, gh, grep) | Produce facts: test results, outdated packages, new issues, changed files | Judge or summarise |
 | **Local model** (Ollama) | First pass over those facts: classify, summarise, flag likely problems, draft text. Writes a report | Edit code, gate a pipeline, post to GitHub, read secrets |
-| **Claude agents** (`/develop`, `/ship`, the reviewers) | Plan, implement, review security, decide, act on reports | Trust a local report without checking it |
+| **Claude agents** (`/develop`, `/release`, the reviewers) | Plan, implement, review security, decide, act on reports | Trust a local report without checking it |
 | **You** | Merge, deploy, approve anything outward or irreversible | |
 
 ### 2.1 Which tasks go where

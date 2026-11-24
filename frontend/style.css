@@ -2973,13 +2973,27 @@ body.roster-dragging { -webkit-user-select: none; user-select: none; }
 .end-season-parts { display: grid; gap: var(--s-1); font-size: var(--fs-sm); }
 .end-season-recorded { color: var(--fg-muted); font-size: var(--fs-xs); margin-left: var(--s-1); }
 #endSeasonChampsBlock[hidden] { display: none; }
-.season-reset-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-3); font-size: var(--fs-sm); margin-bottom: var(--s-3); }
+.season-reset-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: var(--s-3); font-size: var(--fs-sm); margin-bottom: var(--s-3); }
 .season-reset-lists ul { margin: 0; padding-left: 1.2em; }
 .season-reset-summary { font-size: var(--fs-sm); margin-bottom: var(--s-3); }
 .season-reset-summary .end-season-warning { margin: 0 0 var(--s-2); }
 .season-backups-title { margin: var(--s-4) 0 var(--s-1); font-size: var(--fs-sm); }
+/* issue 257: the season dialogs fit the screen. The body scrolls; the title and the
+   footer (typed input and buttons) stay in view. */
+.modal.season-dialog { display: flex; flex-direction: column; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: hidden; }
+.season-reset-modal { width: min(760px, calc(100vw - 32px)); max-width: none; }
+.season-dialog-head { flex: none; display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); }
+.season-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.season-dialog-foot { flex: none; padding-top: var(--s-3); border-top: var(--bw-hair) solid var(--border-soft); }
+.season-dialog-foot .end-season-warning { margin: 0 0 var(--s-2); }
+.season-dialog-foot .end-season-warning[hidden] { display: none; }
+.season-reset-group summary { cursor: pointer; font-weight: 600; }
+.season-reset-group ul { margin-top: var(--s-2); overflow-wrap: anywhere; }
+.season-archive-actions { white-space: nowrap; text-align: right; }
 @media (max-width: 640px) {
   .champ-modal { padding: var(--s-5); }
+  .season-reset-modal { padding: var(--s-5); }
+  .season-reset-lists { grid-template-columns: 1fr; }
   .champ-row { grid-template-columns: 1fr; padding-bottom: var(--s-2); border-bottom: var(--bw-hair) solid var(--border-soft); }
   .champ-row .ghost { justify-self: start; }
 }

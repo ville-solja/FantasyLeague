@@ -118,7 +118,7 @@ After the table, list each stale or broken finding as:
 ```
 
 End with a one-line summary: `X agents checked: Y valid, Z stale, W broken`, then
-`Next: <invocation>` — `/agent-steward apply` when fixes are pending, `/ship` after
+`Next: <invocation>` — `/agent-steward apply` when fixes are pending, `/release` after
 writing agent files, otherwise the planning step (`/product-planner issue <N>`).
 
 ## Complementary agents

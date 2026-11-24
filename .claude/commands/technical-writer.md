@@ -111,7 +111,7 @@ Removed/moved:    {fact} — {reason}   (or "none")
 Declined:         {option}   (if any)
 Follow-up:        [ ] {e.g. run /documentation-steward if facts were questioned}
 Next:             {after a proposal: /technical-writer apply; after applying: /agent-steward
-                   if a file in .claude/commands/ changed, else /ship}
+                   if a file in .claude/commands/ changed, else /release}
 ```
 
 On discard, print `Changes applied: none (discarded)` and leave `git status` unchanged.

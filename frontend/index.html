@@ -379,11 +379,12 @@
 
 <!-- Season Lifecycle: End Season dialog (issue 50) -->
 <div class="modal-overlay hidden" id="endSeasonModal" role="dialog" aria-modal="true" aria-labelledby="endSeasonTitle" data-close="closeEndSeasonDialog" onclick="closeEndSeasonDialog()">
-  <div class="modal champ-modal" onclick="event.stopPropagation()">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+  <div class="modal champ-modal season-dialog" onclick="event.stopPropagation()">
+    <div class="season-dialog-head">
       <h2 style="margin:0;" id="endSeasonTitle">END SEASON</h2>
       <button class="ghost" onclick="closeEndSeasonDialog()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
+    <div class="season-dialog-body">
     <label class="champ-fields">Season label <input id="endSeasonDialogLabel" type="text" maxlength="100" oninput="endSeasonLabelChanged()" /></label>
     <h3 class="end-season-sub">Parts</h3>
     <div class="end-season-parts" id="endSeasonParts">
@@ -412,11 +413,15 @@
     </div>
     </div>
     <p class="end-season-warning" id="endSeasonChampWarning" hidden>No champions recorded; add them in Player management</p>
-    <div style="display:flex;gap:8px;margin-top:12px;">
-      <button id="endSeasonContinueBtn" style="flex:1;" onclick="confirmEndSeason()">Continue to END SEASON</button>
-      <button class="secondary" onclick="closeEndSeasonDialog()">Cancel</button>
     </div>
-    <div class="status" id="endSeasonDialogStatus"></div>
+    <div class="season-dialog-foot">
+      <p class="end-season-warning" id="endSeasonArchived" role="status" hidden></p>
+      <div style="display:flex;gap:8px;">
+        <button id="endSeasonContinueBtn" style="flex:1;" onclick="confirmEndSeason()">Continue to END SEASON</button>
+        <button class="secondary" onclick="closeEndSeasonDialog()">Cancel</button>
+      </div>
+      <div class="status" id="endSeasonDialogStatus"></div>
+    </div>
   </div>
 </div>
 
@@ -1543,13 +1548,13 @@
           </div>
           <div class="admin-table-wrap">
           <table>
-            <thead><tr><th>Season</th><th>Archived</th><th>Users</th></tr></thead>
-            <tbody id="seasonArchivesBody"><tr><td colspan="3" style="color:#444">—</td></tr></tbody>
+            <thead><tr><th>Season</th><th>Archived</th><th>Users</th><th></th></tr></thead>
+            <tbody id="seasonArchivesBody"><tr><td colspan="4" style="color:#444">—</td></tr></tbody>
           </table>
           </div>
           <div class="admin-danger-row">
             <button class="danger" onclick="openSeasonResetConfirm()">Reset Season…</button>
-            <span class="admin-panel-note">Deletes matches, weeks, stats, the Player Pool, and all cards — retains users, tags, archives</span>
+            <span class="admin-panel-note">Deletes matches, weeks, stats, the Player Pool, all cards, finals predictions, promo codes, token grants and notifications — retains users, tags, archives</span>
           </div>
           <div class="status" id="seasonLifecycleStatus"></div>
         </div>
@@ -1848,22 +1853,24 @@
 
 <!-- Season Reset Confirm Modal -->
 <div id="seasonResetModal" class="modal-overlay" style="display:none" role="dialog" aria-modal="true" data-close="closeSeasonResetConfirm" onclick="if(event.target===this)closeSeasonResetConfirm()">
-  <div class="modal" style="max-width:560px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <h2 style="margin:0;">RESET SEASON</h2>
-      <button class="ghost" onclick="closeSeasonResetConfirm()" style="padding:4px 8px;font-size:1rem;">&#x2715;</button>
+  <div class="modal season-dialog season-reset-modal" aria-labelledby="seasonResetTitle">
+    <div class="season-dialog-head">
+      <h2 style="margin:0;" id="seasonResetTitle">RESET SEASON</h2>
+      <button class="ghost" onclick="closeSeasonResetConfirm()" style="padding:4px 8px;font-size:1rem;" aria-label="Close">&#x2715;</button>
     </div>
+    <div class="season-dialog-body">
     <p style="font-size:0.85rem;margin-bottom:8px;">
       This deletes the season: matches, player stats, weeks, Weekly Reports, Twitch MVP/token-drop
-      records, the entire Player Pool (players and teams), and every user's cards. Tokens are reset
-      and leagues unmonitored. A season backup of the database is taken first and kept for good.
+      records, the entire Player Pool (players and teams), every user's cards, finals predictions,
+      promo codes, token grants and notifications. Tokens are reset and leagues unmonitored.
+      A season backup of the database is taken first and kept for good.
     </p>
     <div class="season-reset-preview" id="seasonResetPreview">
       <p class="end-season-warning" id="seasonResetWarning" hidden></p>
       <div class="season-reset-summary" id="seasonResetSummary"></div>
       <div class="season-reset-lists">
-        <div><h3 class="end-season-sub">Deleted</h3><ul id="seasonResetDeleteList"><li>Loading…</li></ul></div>
-        <div><h3 class="end-season-sub">Kept</h3><ul id="seasonResetKeepList"><li>Loading…</li></ul></div>
+        <details class="season-reset-group" open><summary class="end-season-sub" id="seasonResetDeleteTotal">Deleted</summary><ul id="seasonResetDeleteList"><li>Loading…</li></ul></details>
+        <details class="season-reset-group"><summary class="end-season-sub" id="seasonResetKeepTotal">Kept</summary><ul id="seasonResetKeepList"><li>Loading…</li></ul></details>
       </div>
     </div>
     <p style="font-size:0.85rem;color:#e05;margin-bottom:8px;">
@@ -1871,14 +1878,17 @@
       live leaderboard data. Users will need to draw new cards and you will need to
       re-add players via Player Management afterward.
     </p>
-    <label style="font-size:0.8rem;">Type <strong>RESET SEASON</strong> to confirm<br>
-      <input type="text" id="seasonResetConfirmInput" style="width:100%;margin-top:6px;margin-bottom:12px;" autocomplete="off">
-    </label>
-    <div style="display:flex;gap:8px;">
-      <button class="danger" style="flex:1;" onclick="confirmSeasonReset()">Reset Season</button>
-      <button class="secondary" onclick="closeSeasonResetConfirm()">Cancel</button>
     </div>
-    <div class="status" id="seasonResetModalStatus" style="margin-top:8px;"></div>
+    <div class="season-dialog-foot">
+      <label style="font-size:0.8rem;">Type <strong>RESET SEASON</strong> to confirm<br>
+        <input type="text" id="seasonResetConfirmInput" style="width:100%;margin-top:6px;margin-bottom:12px;" autocomplete="off">
+      </label>
+      <div style="display:flex;gap:8px;">
+        <button class="danger" style="flex:1;" onclick="confirmSeasonReset()">Reset Season</button>
+        <button class="secondary" onclick="closeSeasonResetConfirm()">Cancel</button>
+      </div>
+      <div class="status" id="seasonResetModalStatus" style="margin-top:8px;"></div>
+    </div>
   </div>
 </div>
 

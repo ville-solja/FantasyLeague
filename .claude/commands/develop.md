@@ -8,7 +8,7 @@ Given an approved plan slug, run the full implementation pipeline: test stubs, c
 validation. You spawn each stage as an isolated subagent. You stop on failure and report
 clearly. When the plan came from a GitHub issue and every stage passed, you label that issue
 `implemented` and comment with a summary; the issue stays open until its code is merged
-(the pull request's `Closes #N`). You do not commit, open PRs or push code — that is `/ship`.
+(the pull request's `Closes #N`). You do not commit, open PRs or push code — that is `/release`.
 
 **Usage:** `/develop <plan-slug>` — e.g. `/develop issue-47-weekly-summary-email`
 
@@ -146,7 +146,7 @@ code reaches the default branch (`Closes #N` in the pull request).
    - `Branch: <current git branch>`, and that the changes are not committed yet
    - Test result: `<N> passed` (from Stage 3 QA)
    - Any manual verification still to do (from the developer report), as a short list
-   - `Next: /ship`
+   - `Next: /release`
 
    Never put secrets, env var values, tokens or personal data in the comment.
 4. If `gh` fails (not authenticated, no network), do not retry. Report the failure and print
@@ -196,7 +196,7 @@ Always end with one line:
 Next: <invocation>
 ```
 
-- All stages passed: `/ship`.
+- All stages passed: `/release`.
 - Stage 3 Security was not run but the change is borderline: `/security-reviewer`.
 - A stage failed: the invocation that resumes after the fix is made, usually `/develop {slug}`
   again; for a High security finding, `/security-reviewer fix` first.

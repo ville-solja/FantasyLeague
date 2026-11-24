@@ -29,7 +29,7 @@ The background maintenance loop still auto-locks weeks whose start time has pass
 Body: `{"season_label": "Season 15"}`. Snapshots the current season leaderboard
 (username, points, rank; testers and Twitch viewer soft accounts excluded, issue #157) into `season_archive`, computed via the shared
 `compute_season_standings()` helper also used by `GET /leaderboard/season`. 409 if the label
-is already archived. Logged as `admin_season_archived`. The stored `points` are the standings' one-decimal display values (`scoring.display_points`, issue #149).
+is already archived, under any spelling (issue #257: case and spacing are ignored, and the message names the existing label, its date and user count). Logged as `admin_season_archived`. The stored `points` are the standings' one-decimal display values (`scoring.display_points`, issue #149).
 
 Issue #50: the body also takes optional `champions: [{division, team_name, player_account_ids}]`.
 In the same transaction the call records the season's accolades in `season_accolades`: the
@@ -67,7 +67,7 @@ fresh backup existing first. The backup is renamed to a permanent season backup,
 league players get their own player card again), plus (issue #133) the Weekly Report tables,
 `live_matches`, `match_timings`, `twitch_presence` and the demo clock override. Resets every user's `tokens` to `INITIAL_TOKENS` and
 unmonitors all leagues. Retains users, tags, audit logs, `season_archive` rows and
-`season_accolades` rows (issue #50), the season summary tables (issue #133) and every other kept table; the response's `kept` counts each of them. The finals tables `finals_brackets` and `finals_predictions` are kept too, keyed by season label (issue #237, see `core/finals-predictions.md`). Returns 409
+`season_accolades` rows (issue #50), the season summary tables (issue #133) and every other kept table; the response's `kept` counts each of them. Since issue #257 Reset also deletes the finals tables (`finals_brackets`, `finals_predictions`), promo codes and redemptions, token grant events and claims, and notifications and dismissals. Returns 409
 if any locked week exists with no `season_archive` row archived at or after that week's start
 time (unless `force=true`) — the guard that makes skipping End Season difficult. Response
 includes `{"status", "initial_tokens", "counts": {...}, "kept": {...}, "season_label", "backup_path", "backup_file"}` with a per-table
@@ -83,6 +83,11 @@ tied to a roster that no longer exists is a real risk, not just clutter. Cards a
 the new season by drawing a fresh collection with their reset tokens, rather than keeping
 cards for players who may no longer play. This is a deliberate trade-off, most relevant when
 the same instance is reused for a different league.
+
+### `GET /admin/season/archives` and `DELETE /admin/season/archive` (issue #257)
+List the archived seasons for Admin › Settings › Season, and remove one season's archived
+standings (recent re-auth, typed REMOVE ARCHIVE) so End Season can run again before Reset.
+Details in [Season Reset Clean Slate](season-reset-clean-slate.md#season-end-workflow-257).
 
 ### `GET /leaderboard/seasons`
 Lists archived seasons, one row per distinct `season_label`, newest first:
@@ -138,8 +143,50 @@ and the Div 1 and Div 2 champion pickers (issue #50) and a checkbox per part (is
 admin to type `END SEASON`; on success a result dialog offers **Continue to Reset Season**. A "Reset Season…"
 button opens a modal that lists what will be deleted and kept (`GET /admin/season/reset-preview`) above
 the type-to-confirm field (must type `RESET SEASON`; the backend checks it as
-`confirm`, issue #150), and a table of previously archived seasons. The Leaderboard tab
+`confirm`, issue #150), and a table of previously archived seasons, each with **Remove archive…**
+(issue #257). Both season dialogs fit the screen: the body scrolls, the typed field and buttons stay in view. The Leaderboard tab
 shows a "Past Seasons" panel with a season selector once at least one archive exists. The
 Profile view shows a "Past Seasons" line per archived season the user appears in
 (e.g. "Season 15 — 3rd, 1240.0 pts"). Week Management's create/edit forms use `<input
 type="date">` instead of `datetime-local`.
+
+## Season 16 → 17 runbook
+
+Issue #257. For the operator ending Season 16 and starting Season 17 in production. Season 16 was
+archived before #133, by an End Season that recorded awards and champions on top of rows entered by
+hand, so check for duplicates before Reset. Each step says what to check before going on.
+
+1. **Take a backup.** Admin › Backups › Create, then Download it (no host access needed; `bash scripts/backup-db.sh` on the server does the same).
+   Check: the new file is listed under Backups.
+2. **Download the backup and run the check on it**, never on the live database:
+   `python3 scripts/season_end_check.py ~/Downloads/fantasy.db.backup-… --label "Season 16"`.
+   It opens the file read-only. Exit 0 and "No problems found." means go on to step 4.
+3. **When the check finds duplicates**, fix them in the app, not in the file:
+   - *Matching labels* ("Season 16" and "season 16"): a second archive under the wrong spelling is
+     removed with **Remove archive…** in Admin › Settings › Season (typed REMOVE ARCHIVE). It only works
+     on the newest archive: with a later archive present it answers 409. If the misspelled archive is
+     not the newest, remove the newer one(s) first, newest first, then the misspelled one, and run End
+     Season again under the correct label for any season you removed that should stay archived (only
+     possible while the live data is there, i.e. before Reset). Removing an archive never touches
+     accolades: remove the duplicate accolades recorded under the variant label row by row in Player
+     management (the accolade rows table).
+   - *More than one champion team, or a `season_end` and an `admin` row for the same player and
+     award*: keep one and remove the other in Player management (the accolade rows table).
+   - Take a fresh backup, download it and run the check again until it reports no problems.
+4. **Open Reset Season** (Admin › Settings › Season › Reset Season…). If it says Season 16 has no
+   stored summary, press **Save season summary** (typed SAVE SUMMARY). Check: the dialog then reads
+   "Season summary stored: N players, M teams."
+5. **Read the Deleted and Kept lists.** The dialog has no label field: Reset names the season backup
+   after the newest archived label. Check that the dialog names Season 16 (the summary line and the
+   Kept list's "Season backup named after "Season 16"" line show the label) and that Kept lists the
+   accolades, the season archive and the season summaries; then type RESET SEASON and press
+   **Reset Season**.
+6. **Check the result**: the History tab shows Season 16 once, with its champions and awards; a
+   player popup shows that player's Season 16 accolades; Admin › Backups lists the season backup
+   `fantasy.db.season-Season-16-…`. Keep that file.
+7. **Never run End Season again for Season 16.** It is refused anyway, under any spelling. If an
+   archive is wrong, use **Remove archive…** *before* Reset; after Reset it is refused (409), since
+   the season's data is gone and End Season could not rebuild the standings.
+
+Then start Season 17 as in the Lifecycle Flow above: add the monitored leagues, the players and the weeks.
+
