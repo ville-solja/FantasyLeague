@@ -50,7 +50,7 @@ The lock only ever moves earlier. "After the group stage" means after the last g
 - **Picks:** one team per semi, and a grand-final pick that must be one of the user's two semi picks.
 - **Privacy:** no endpoint returns anyone else's picks. After the lock, `GET /finals` gives per series only the share of effective picks per team and the count.
 - **Rewards:** none. The stored `correct_picks` are for a later Finals prediction accolade (its own issue).
-- **Kept:** `finals_brackets` and `finals_predictions` keep their season label and are not touched by `POST /admin/season/reset`. Team names are copied into `seed_names_json`, because a reset deletes the teams.
+- **Cleared at Reset (issue #257):** `POST /admin/season/reset` deletes `finals_brackets` and `finals_predictions`; a prediction only means something for its season and the History tab doesn't show past finals. Team names are also copied into `seed_names_json`.
 
 ## Endpoints
 

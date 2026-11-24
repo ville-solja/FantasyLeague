@@ -326,6 +326,7 @@ const ADMIN_CONFIRM_PHRASES = {
   delete_user:     "DELETE USER",
   demo_scenario:   "LOAD SCENARIO",
   demo_snapshot_restore: "RESTORE SNAPSHOT",
+  season_archive_remove: "REMOVE ARCHIVE",
 };
 
 let _typedConfirmState = null;

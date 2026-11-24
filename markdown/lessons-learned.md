@@ -177,5 +177,5 @@ Format:
 **Solution:** Escape untrusted names with the extension's own `_escHtml`. For a version bump, update the submission guide, the `package.sh` example and the version tests together. Before reviewer-facing copy changes, grep the backend and panel for every rule that gates the flow being described.
 
 ### 2026-10-13 — curated — agent-config
-**Problem:** GitHub details tripped `/ship`: PR-only code-scanning alerts keep `state: null`, a stacked PR gets no CI and lands on the old base if merged after it, and a bare `#N` in a commit doesn't mean the issue merged.
+**Problem:** GitHub details tripped `/release`: PR-only code-scanning alerts keep `state: null`, a stacked PR gets no CI and lands on the old base if merged after it, and a bare `#N` in a commit doesn't mean the issue merged.
 **Solution:** List PR alerts with `ref=refs/pull/<P>/head` and read `/instances`. Open PRs against `main`. Treat an issue as merged only when a merged PR or default-branch commit closes it.

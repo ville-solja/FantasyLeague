@@ -136,7 +136,7 @@ If a category has zero findings, write "✓ No issues found" for that section.
 Be concise — one row per finding, no explanations beyond the issue column.
 
 End with `Next: <invocation>`: findings to fix → `/security-reviewer fix`; open code scanning
-alerts → `/security-patcher <N>`; nothing to fix → `/qa-engineer` or `/ship`.
+alerts → `/security-patcher <N>`; nothing to fix → `/qa-engineer` or `/release`.
 
 ## Fix mode
 `/security-reviewer fix` applies the minimum fix for every High and Medium finding of the last
@@ -145,7 +145,7 @@ For each fix, follow the conventions of `/developer`: add or adjust a regression
 CLAUDE.md's migration rule, and update the feature doc it touches. Then run
 `cd backend && python3 -m pytest tests/ -q` and the import check, re-run the review on the
 changed files, and report `fixed / not fixed (reason)` per finding, ending with
-`Next: /ship`. Without `fix`, change no files.
+`Next: /release`. Without `fix`, change no files.
 
 ## Lessons log
 

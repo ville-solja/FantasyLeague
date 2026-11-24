@@ -18,9 +18,9 @@ eliminates the reported issue.
 ## When to run
 When a new code scanning alert appears in the repository's Security tab, or after a CI
 CodeQL scan flags a regression. Can be run on a specific alert number or a full GitHub URL.
-`/ship --fix` also runs this workflow as a subagent, one alert at a time, for the alerts on its pull
-request; in that case work on the current branch, do not commit or push (`/ship` does), and end
-with the output format below so `/ship` can read the result.
+`/release --fix` also runs this workflow as a subagent, one alert at a time, for the alerts on its pull
+request; in that case work on the current branch, do not commit or push (`/release` does), and end
+with the output format below so `/release` can read the result.
 
 **Usage:**
 - `/security-patcher 19` — fix alert #19
@@ -37,7 +37,7 @@ Accept `$ARGUMENTS` as either:
 - A full GitHub URL (`https://github.com/.../security/code-scanning/N`): extract N from the path
 
 If `$ARGUMENTS` is empty, list the open alerts (step 0a-list), patch nothing, and end with
-`Next: /security-patcher <N>` for the most severe one (or `/ship --fix all` when they are all
+`Next: /security-patcher <N>` for the most severe one (or `/release --fix all` when they are all
 on one open pull request). If it is non-empty but neither form is recognised, stop and print:
 > Usage: `/security-patcher <alert-number>` or `/security-patcher <github-url>`
 
@@ -214,10 +214,10 @@ Follow-up:
   [ ] Push and confirm the alert moves to "Fixed" in GitHub Security tab (for a PR alert:
       push to the PR branch; the alert clears when the PR's next analysis no longer finds it)
 
-Next: /ship   (or /security-reviewer when sibling code may share the pattern)
+Next: /release   (or /security-reviewer when sibling code may share the pattern)
 ```
 
-When run as a `/ship --fix` subagent, leave out the `Next:` line; `/ship` continues.
+When run as a `/release --fix` subagent, leave out the `Next:` line; `/release` continues.
 
 If the patch was not applied (cannot determine safe fix or tests failed), output:
 

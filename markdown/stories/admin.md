@@ -944,3 +944,68 @@ As the league admin, I want ending a season to lead me through both steps and sh
 - The preview warns, and Reset still refuses with 409, when locked weeks exist with no archive after them (End Season not run).
 - **Missing summary:** the preview reports the label Reset will use and whether it has a stored summary. When an archived label has none (a season ended before this change), the Reset dialog says "Season <label> has no stored summary. Save it before resetting, or its player and team results are lost." with **Save season summary** (typed SAVE SUMMARY, recent re-auth), which stores it and reloads the preview; with a summary it says "Season summary stored: N players, M teams."
 - After the reset, the result lists the deleted counts and the season backup's file name.
+
+---
+
+## Season End Workflow (#257)
+
+### Archiving a Season Twice Is Refused
+**User story**
+As a league admin, I want End Season to refuse a season that is already archived, including under a slightly different spelling, so that no second copy of a season's standings and awards is created.
+
+**Acceptance criteria**
+- `POST /admin/season/end` answers 409 when an archive exists whose label equals the new one after trimming, collapsing inner spaces and ignoring case. The message names the existing label ("Season 16 is already archived (archived <date>, N users)"). Nothing is written
+- The End Season dialog checks the label as it is typed, through `GET /admin/season/accolades-preview`, which now also returns `archived: {label, archived_at, users, has_summary}` or null. For an archived label, the dialog:
+  - says so;
+  - disables **Continue to END SEASON**;
+  - points to **Save season summary** in the Reset dialog when that label has no summary
+- An exact repeat still answers 409, as today
+
+### Remove a Season's Archived Standings
+**User story**
+As a league admin, I want to remove one season's archived standings so that I can redo End Season after archiving under a wrong label or too early.
+
+**Acceptance criteria**
+- `DELETE /admin/season/archive?season_label=…` deletes that label's `season_archive` rows. It needs admin, a recent re-auth and the typed phrase REMOVE ARCHIVE, writes an `admin_season_archive_removed` audit entry (`season_label=… users=N`), and answers `{season_label, removed, kept}` (`kept` says what was not touched)
+- Accolades, `season_player_stats`, `season_team_results` and season backups are not touched; the response says so
+- 404 when the label has no archive. 409 when the season's data has been reset (no live matches, or matches without any stats rows), or a newer archive exists. End Season could then not rebuild it
+- Admin › Settings › Season shows the archived seasons (label, date, users), each with **Remove archive…** and an in-page confirmation. It never uses `confirm()`
+
+### Clear Season-Only Records at Reset
+**User story**
+As a league admin, I want Reset Season to also clear finals predictions, promo codes and redemptions, token grant events and claims, and notifications so that Season 17 starts without Season 16's leftovers.
+
+**Acceptance criteria**
+- `season_reset.TABLE_GROUPS["cleared"]` now includes these tables, deleted child-first:
+  - `finals_predictions`, `finals_brackets`
+  - `code_redemptions`, `promo_codes`
+  - `token_grant_claims`, `token_grant_events`
+  - `notification_dismissals`, `notifications`
+- The Reset preview lists their counts under Deleted, and the reset response's `counts` includes them
+- The table-coverage test still places every model table in exactly one group
+- Audit logs, accolades, season archives, summaries, tags and accounts are still kept
+
+### Reset Dialog Fits the Screen
+**User story**
+As a league admin, I want the Reset Season dialog to fit a normal screen so that I can read it and reach the confirmation without a vertical monitor.
+
+**Acceptance criteria**
+- The dialog's height is capped at the viewport (with a margin) and its body scrolls. The title, the typed-confirmation input and the buttons stay visible
+- Deleted and Kept show their totals ("Deleted: 14 tables, 12 345 rows"), with the per-table lists folded under `<details>`. Deleted is open by default, Kept closed
+- On wide screens the two lists sit side by side; at 640 px and below (`max-width: 640px`) they stack, and at phone width (360 px) nothing scrolls sideways
+- The same cap applies to the End Season dialog
+
+### End a Season Without Breaking the Data
+**User story**
+As the operator, I want a checked, written procedure for ending Season 16 and starting Season 17 so that the history stays correct and nothing is lost.
+
+**Acceptance criteria**
+- `scripts/season_end_check.py <backup file> [--label L]` opens the file read-only and prints:
+  - the archived labels with dates and user counts;
+  - labels that match after normalising;
+  - accolade counts per label, kind and source;
+  - possible duplicates: the same player and kind under two matching labels, more than one champion team per label and division, or a `season_end` and an `admin` row for the same player and award;
+  - whether each archived label has a stored summary (a missing one counts as a problem only for the newest archive while the copy still has matches, since only then can it be saved);
+  - what Reset would delete and keep.
+  It never writes, and exits 0 when clean, 1 when it finds a problem, 2 when the file is missing or unreadable
+- `markdown/features/reference/season-lifecycle.md` gets a "Season 16 → 17 runbook" with the order of steps and what to check after each, including what to do when the check finds duplicates

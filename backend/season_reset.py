@@ -22,6 +22,10 @@ TABLE_GROUPS = {
         "teams", "card_modifiers", "cards", "own_player_card_grants", "weekly_summaries",
         "weekly_summary_reveals", "weekly_summary_seen", "live_matches", "match_timings",
         "twitch_presence",
+        # Issue #257: records that only mean something for the season they were made in.
+        # Children before parents (code_id, event_id, notification_id, bracket_id).
+        "finals_predictions", "finals_brackets", "code_redemptions", "promo_codes",
+        "token_grant_claims", "token_grant_events", "notification_dismissals", "notifications",
     ),
     # Rows kept, one field reset.
     "updated": {
@@ -32,12 +36,9 @@ TABLE_GROUPS = {
     # Untouched: history, accounts, settings and records that span seasons.
     "kept": (
         "season_archive", "season_accolades", "season_player_stats", "season_team_results",
-        "tag_definitions", "user_tags", "audit_logs", "finals_brackets", "finals_predictions",
-        "team_signup_periods", "team_signups", "team_signup_players", "promo_codes",
-        "code_redemptions", "token_grant_events", "token_grant_claims", "notifications",
-        "notification_dismissals", "weights", "player_profiles", "twitch_mvp_polls",
-        "twitch_mvp_votes", "twitch_pending_tokens", "twitch_link_codes",
-        "twitch_oauth_states", "twitch_merge_log", "twitch_starter_grants",
+        "tag_definitions", "user_tags", "audit_logs", "team_signup_periods", "team_signups",
+        "team_signup_players", "weights", "player_profiles", "twitch_mvp_polls", "twitch_mvp_votes",
+        "twitch_pending_tokens", "twitch_link_codes", "twitch_oauth_states", "twitch_merge_log", "twitch_starter_grants",
         "twitch_channel_approvals", "steam_login_states", "steam_openid_nonces",
         "steam_pending_signups", "password_reset_tokens", "user_sessions",
         "toornament_sync_log", "scoring_state",

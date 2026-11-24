@@ -2088,8 +2088,12 @@ def test_backfill_clean_name_strips_control_characters():
 
 
 def test_archived_seasons_table_escapes_season_label():
-    """The archived-seasons table escapes the admin-entered season label."""
+    """The archived-seasons table never parses the admin-entered season label as markup
+    (issue 257: cells are set with textContent)."""
     import pathlib
     src = (pathlib.Path(__file__).resolve().parents[2] / "frontend" / "app-admin-season.js").read_text()
-    assert "${_escHtml(s.season_label)}" in src
+    row = src[src.index("function seasonArchiveRow("):]
+    row = row[:row.index("\n}\n")]
+    assert "td.textContent = text;" in row and "cell(s.season_label);" in row
+    assert "innerHTML" not in row
     assert "<td>${s.season_label}</td>" not in src

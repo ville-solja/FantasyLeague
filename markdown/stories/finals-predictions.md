@@ -41,7 +41,7 @@ As a player who predicted, I want my picks marked right or wrong as the games ar
   - an admin-set result wins over the matches.
 - **After lock:** each series shows the share of picks per team and the prediction count. No individual picks are shown.
 - **Marks:** own picks show as correct or wrong. After the final, the page shows "You got N of 3" and how many users got all three.
-- **Stored:** when the final is decided, each effective prediction gets `correct_picks` (0–3). A corrected result recomputes it. Brackets and predictions keep their season label and survive `POST /admin/season/reset`.
+- **Stored:** when the final is decided, each effective prediction gets `correct_picks` (0–3). A corrected result recomputes it. Since #257, `POST /admin/season/reset` deletes brackets and predictions: they only mean something for their season.
 
 ### Admin Steps In Only for Ties and Exceptions
 **User story**

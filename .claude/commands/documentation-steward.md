@@ -74,7 +74,7 @@ If a section has no findings, write "✓ Consistent".
 
 End with `Next: <invocation>`: a code system worth a feature doc → `/product-planner <description>`;
 agents citing drifted docs → `/agent-steward apply`; a doc that is accurate but hard to read →
-`/technical-writer <path>`; all consistent → `/ship`.
+`/technical-writer <path>`; all consistent → `/release`.
 
 ## Complementary agents
 Run `/security-reviewer` to catch auth and validation issues that may be undocumented.

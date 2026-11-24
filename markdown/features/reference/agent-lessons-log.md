@@ -41,7 +41,7 @@ The following agents read and write the log:
 - `/test-planner`
 - `/security-patcher`
 - `/technical-writer`
-- `/ship`
+- `/release`
 
 ## Log files
 
