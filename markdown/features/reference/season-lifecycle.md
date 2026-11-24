@@ -156,7 +156,7 @@ Issue #257. For the operator ending Season 16 and starting Season 17 in producti
 archived before #133, by an End Season that recorded awards and champions on top of rows entered by
 hand, so check for duplicates before Reset. Each step says what to check before going on.
 
-1. **Take a backup.** On the server, `bash scripts/backup-db.sh`, or Admin › Backups › Create.
+1. **Take a backup.** Admin › Backups › Create, then Download it (no host access needed; `bash scripts/backup-db.sh` on the server does the same).
    Check: the new file is listed under Backups.
 2. **Download the backup and run the check on it**, never on the live database:
    `python3 scripts/season_end_check.py ~/Downloads/fantasy.db.backup-… --label "Season 16"`.

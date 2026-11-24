@@ -6,7 +6,7 @@ When adding a column to an existing table in `backend/models.py`, add a numbered
 
 ## Pre-deploy backup
 
-Run `bash scripts/backup-db.sh` before every deploy. See `markdown/features/reference/db-sustainability.md`.
+Take a backup before every deploy: Admin › Backups › Create, then Download (the operator has no shell on the host; `bash scripts/backup-db.sh` does the same where a shell is available). Production deploys are triggered by the operator from OliveTin. See `markdown/features/reference/db-sustainability.md`.
 
 ## Tests
 
